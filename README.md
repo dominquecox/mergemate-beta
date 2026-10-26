@@ -28,7 +28,7 @@ Expo (React Native, TypeScript) for iOS and web · Hono on Cloudflare Workers ·
 | `packages/contracts` | Shared API types |
 
 ## Development
-Requires Node 20.
+Requires Node 22.
 ```bash
 npm install
 npm run check
