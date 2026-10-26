@@ -1,0 +1,47 @@
+# Secrets and local environment: never commit. Only .env.example (names, no values) is tracked.
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p8
+*.p12
+*.mobileprovision
+*.jks
+*.keystore
+.dev.vars
+.dev.vars.*
+!.dev.vars.example
+.wrangler/
+secrets/
+credentials*.json
+service-account*.json
+google-services.json
+GoogleService-Info.plist
+
+# Dependencies and build output
+node_modules/
+dist/
+build/
+coverage/
+.expo/
+.expo-shared/
+web-build/
+ios/
+android/
+.turbo/
+*.tsbuildinfo
+
+# Local planning pack and private working docs (kept off the public repo)
+/planning/
+/private/
+/*.local.md
+
+# Logs, OS and editor noise
+*.log
+npm-debug.log*
+.DS_Store
+.idea/
+.vscode/*
+!.vscode/extensions.json
+*.swp
