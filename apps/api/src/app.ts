@@ -1,27 +1,32 @@
 import { Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
-import type { AppEnv } from "./env";
+import type { AppEnv, Deps } from "./env";
 import { ApiError, ConfigError, errorResponse } from "./errors";
-import { clientIp, rateLimit } from "./middleware/rate-limit";
+import { cors } from "./middleware/cors";
+import { provideDeps } from "./middleware/deps";
 import { requestId } from "./middleware/request-id";
 import { securityHeaders } from "./middleware/security-headers";
+import { authenticate } from "./middleware/session";
+import { account } from "./routes/account";
+import { auth } from "./routes/auth";
+import { github } from "./routes/github";
 import { health } from "./routes/health";
+import { notifications } from "./routes/notifications";
+import { telemetry } from "./routes/telemetry";
 
 const MAX_BODY_BYTES = 1024 * 1024;
 
-export const createApp = () => {
+const defaultDeps: Deps = { fetch: (input, init) => fetch(input, init), now: () => new Date() };
+
+export const createApp = (deps: Deps = defaultDeps) => {
   const app = new Hono<AppEnv>();
 
   app.use(requestId());
   app.use(securityHeaders());
-  app.use(
-    rateLimit({
-      name: "IP_RATE_LIMITER",
-      limiter: (env) => env.IP_RATE_LIMITER,
-      key: clientIp,
-      retryAfter: 60,
-    }),
-  );
+  app.use(provideDeps(deps));
+  app.use(cors());
+  // Rate limits and sessions run before any route logic.
+  app.use(authenticate());
   app.use(
     bodyLimit({
       maxSize: MAX_BODY_BYTES,
@@ -30,6 +35,11 @@ export const createApp = () => {
   );
 
   app.route("/v1/health", health);
+  app.route("/v1", auth);
+  app.route("/v1", account);
+  app.route("/v1", github);
+  app.route("/v1", notifications);
+  app.route("/v1", telemetry);
 
   app.notFound((c) => errorResponse(c, "not_found", "Not found."));
 

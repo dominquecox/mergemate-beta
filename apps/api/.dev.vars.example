@@ -1,22 +1,27 @@
-# Names only. Copy to .dev.vars (git-ignored) for `wrangler dev`. Deployed values: `wrangler secret put <NAME>`.
+# Names only. Copy to .dev.vars (git-ignored) for `wrangler dev`. Deployed values: see DEPLOY.md.
 # Secrets (never commit values)
 MODEL_API_KEY=
 GITHUB_APP_CLIENT_SECRET=
 GITHUB_APP_PRIVATE_KEY=
 GITHUB_WEBHOOK_SECRET=
+# Format <version>:<base64 of 32 random bytes>, e.g. version 1. Generate the key with: openssl rand -base64 32
 TOKEN_ENCRYPTION_KEY=
+# Only while rotating: the previous TOKEN_ENCRYPTION_KEY, kept for decryption.
+TOKEN_ENCRYPTION_KEY_PREVIOUS=
 STRIPE_SECRET_KEY=
 STRIPE_WEBHOOK_SECRET=
-SESSION_SIGNING_KEY=
 RESEND_API_KEY=
 TURNSTILE_SECRET_KEY=
-# Non-secret config. The model settings are in wrangler.toml [vars]; uncomment only to override locally
-# (an empty value also overrides and makes AI routes return misconfigured).
+# Non-secret config. APP_ENV, WEB_ORIGIN, GITHUB_APP_CLIENT_ID, GITHUB_APP_SLUG and the model settings
+# are in wrangler.toml [vars]; uncomment only to override locally (an empty value also overrides).
+# APP_ENV=
+# WEB_ORIGIN=
+# GITHUB_APP_CLIENT_ID=
+# GITHUB_APP_SLUG=
 # MODEL_PROVIDER=
 # MODEL_ID=
 # MODEL_BASE_URL=
 GITHUB_APP_ID=
-GITHUB_APP_CLIENT_ID=
 STRIPE_PRICE_PRO_MONTHLY=
 STRIPE_PRICE_PRO_ANNUAL=
 EMAIL_FROM=

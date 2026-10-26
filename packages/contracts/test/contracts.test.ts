@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
+  AuthStartRequest,
   ErrorBody,
   HealthResponse,
+  TelemetryEvent,
   Notification,
   NotificationPage,
   PrRef,
@@ -44,6 +46,17 @@ describe("auth", () => {
     ).toBe(true);
     expect(Session.safeParse({ token: "t", expiresAt: "tomorrow" }).success).toBe(false);
   });
+
+  it("allows a web session with a CSRF token and no bearer token", () => {
+    expect(Session.safeParse({ expiresAt: "2026-11-01T00:00:00Z", csrfToken: "c" }).success).toBe(true);
+  });
+
+  it("requires a 43-character S256 challenge and a platform", () => {
+    const challenge = "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM";
+    expect(AuthStartRequest.safeParse({ codeChallenge: challenge, platform: "web" }).success).toBe(true);
+    expect(AuthStartRequest.safeParse({ codeChallenge: challenge }).success).toBe(false);
+    expect(AuthStartRequest.safeParse({ codeChallenge: "plain", platform: "ios" }).success).toBe(false);
+  });
 });
 
 describe("github", () => {
@@ -51,6 +64,7 @@ describe("github", () => {
     id: "n1",
     kind: "review",
     repo: "octo/repo",
+    number: 12,
     title: "Add cache",
     author: "octocat",
     status: "open",
@@ -91,5 +105,15 @@ describe("ai", () => {
     expect(TriageQueue.safeParse([{ prRef: "octo/repo#1", lane: "later", reason: "" }]).success).toBe(
       false,
     );
+  });
+});
+
+describe("telemetry", () => {
+  it("accepts allowlisted events with small props only", () => {
+    expect(TelemetryEvent.safeParse({ name: "pr_open", props: { source: "inbox" } }).success).toBe(true);
+    expect(TelemetryEvent.safeParse({ name: "anything" }).success).toBe(false);
+    expect(TelemetryEvent.safeParse({ name: "pr_open", props: { source: "x".repeat(65) } }).success).toBe(false);
+    const many = Object.fromEntries(Array.from({ length: 9 }, (_, i) => [`k${"abcdefghi"[i]}`, 1]));
+    expect(TelemetryEvent.safeParse({ name: "pr_open", props: many }).success).toBe(false);
   });
 });

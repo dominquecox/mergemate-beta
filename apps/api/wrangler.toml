@@ -1,9 +1,14 @@
 # Non-secret config only. Secrets: see DEPLOY.md (`wrangler secret put`); locally, .dev.vars (git-ignored).
+# Top level = local `wrangler dev` against the Dev GitHub App.
 name = "mergemate-api"
 main = "src/index.ts"
 compatibility_date = "2026-10-01"
 
 [vars]
+APP_ENV = "development"
+WEB_ORIGIN = "http://localhost:8081"
+GITHUB_APP_CLIENT_ID = "Iv1.submission-dev-example"
+GITHUB_APP_SLUG = "submission-production-example"
 MODEL_PROVIDER = "meta"
 MODEL_ID = "muse-spark-1.2"
 MODEL_BASE_URL = "https://api.meta.ai/v1"
@@ -13,10 +18,38 @@ name = "IP_RATE_LIMITER"
 namespace_id = "1001"
 simple = { limit = 60, period = 60 }
 
+[[ratelimits]]
+name = "SESSION_RATE_LIMITER"
+namespace_id = "1003"
+simple = { limit = 300, period = 60 }
+
+[[d1_databases]]
+binding = "DB"
+database_name = "mergemate-db"
+database_id = "local-only"
+migrations_dir = "migrations"
+
+[[durable_objects.bindings]]
+name = "TOKEN_REFRESHER"
+class_name = "TokenRefresher"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["TokenRefresher"]
+
+[[analytics_engine_datasets]]
+binding = "TELEMETRY"
+dataset = "mergemate_events"
+
+# Deployed environments. D1 database ids are added when the databases are created (DEPLOY.md).
 [env.dev]
 name = "mergemate-api-dev"
 
 [env.dev.vars]
+APP_ENV = "development"
+WEB_ORIGIN = "https://dev.mergemate.dev"
+GITHUB_APP_CLIENT_ID = "Iv1.submission-dev-example"
+GITHUB_APP_SLUG = "submission-production-example"
 MODEL_PROVIDER = "meta"
 MODEL_ID = "muse-spark-1.2"
 MODEL_BASE_URL = "https://api.meta.ai/v1"
@@ -26,10 +59,26 @@ name = "IP_RATE_LIMITER"
 namespace_id = "1001"
 simple = { limit = 60, period = 60 }
 
+[[env.dev.ratelimits]]
+name = "SESSION_RATE_LIMITER"
+namespace_id = "1003"
+simple = { limit = 300, period = 60 }
+
+[[env.dev.durable_objects.bindings]]
+name = "TOKEN_REFRESHER"
+class_name = "TokenRefresher"
+
+[[env.dev.analytics_engine_datasets]]
+binding = "TELEMETRY"
+dataset = "mergemate_events_dev"
+
 [env.production]
 name = "mergemate-api"
 
+# The production GitHub App's client id and slug are added when that app exists.
 [env.production.vars]
+APP_ENV = "production"
+WEB_ORIGIN = "https://mergemate.dev"
 MODEL_PROVIDER = "meta"
 MODEL_ID = "muse-spark-1.2"
 MODEL_BASE_URL = "https://api.meta.ai/v1"
@@ -38,3 +87,16 @@ MODEL_BASE_URL = "https://api.meta.ai/v1"
 name = "IP_RATE_LIMITER"
 namespace_id = "1002"
 simple = { limit = 60, period = 60 }
+
+[[env.production.ratelimits]]
+name = "SESSION_RATE_LIMITER"
+namespace_id = "1004"
+simple = { limit = 300, period = 60 }
+
+[[env.production.durable_objects.bindings]]
+name = "TOKEN_REFRESHER"
+class_name = "TokenRefresher"
+
+[[env.production.analytics_engine_datasets]]
+binding = "TELEMETRY"
+dataset = "mergemate_events"

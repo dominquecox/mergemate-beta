@@ -5,7 +5,8 @@ import type { Env } from "../src/env";
 import { fakeLimiter } from "./helpers";
 
 const app = createApp();
-const request = (path: string, env: Env, init?: RequestInit) => app.request(path, init, env);
+const base: Env = { APP_ENV: "development" };
+const request = (path: string, env: Env, init?: RequestInit) => app.request(path, init, { ...base, ...env });
 
 afterEach(() => vi.restoreAllMocks());
 
@@ -36,7 +37,7 @@ describe("GET /v1/health", () => {
 
 describe("errors", () => {
   it("returns not_found in the error shape with headers", async () => {
-    const res = await request("/v1/nope", { IP_RATE_LIMITER: fakeLimiter() });
+    const res = await request("/nope", { IP_RATE_LIMITER: fakeLimiter() });
     expect(res.status).toBe(404);
     const body = ErrorBody.parse(await res.json());
     expect(body.error.code).toBe("not_found");
@@ -69,7 +70,7 @@ describe("rate limiting", () => {
   });
 
   it("runs before route logic, so unknown routes are limited too", async () => {
-    const res = await request("/v1/nope", { IP_RATE_LIMITER: fakeLimiter(0) });
+    const res = await request("/nope", { IP_RATE_LIMITER: fakeLimiter(0) });
     expect(res.status).toBe(429);
   });
 

@@ -11,10 +11,12 @@ export const PrStatus = z.enum(["open", "draft", "merged", "closed"]);
 export type PrStatus = z.infer<typeof PrStatus>;
 
 export const Notification = z.object({
+  /** Opaque id; use it as-is in notification paths. */
   id: z.string(),
   kind: NotificationKind,
   /** Repository full name, `owner/repo`. */
   repo: z.string(),
+  number: z.number().int().positive(),
   title: z.string(),
   /** GitHub login of the pull request author. */
   author: z.string(),
@@ -37,9 +39,95 @@ export type SnoozeRequest = z.infer<typeof SnoozeRequest>;
 export const Repo = z.object({
   id: z.string(),
   fullName: z.string(),
+  private: z.boolean(),
   watching: z.boolean(),
 });
 export type Repo = z.infer<typeof Repo>;
 
 export const RepoPage = pageOf(Repo);
 export type RepoPage = z.infer<typeof RepoPage>;
+
+export const RepoWatchRequest = z.object({
+  watching: z.boolean(),
+});
+export type RepoWatchRequest = z.infer<typeof RepoWatchRequest>;
+
+export const InstallationStatus = z.enum(["active", "pending_approval", "suspended"]);
+export type InstallationStatus = z.infer<typeof InstallationStatus>;
+
+export const Installation = z.object({
+  id: z.string(),
+  account: z.string(),
+  accountType: z.enum(["User", "Organization"]),
+  status: InstallationStatus,
+  /** Where the user manages which repositories MergeMate can see. */
+  manageUrl: z.url(),
+});
+export type Installation = z.infer<typeof Installation>;
+
+export const InstallationList = z.object({
+  items: z.array(Installation),
+  /** Install MergeMate on another account or organization. */
+  installUrl: z.url(),
+});
+export type InstallationList = z.infer<typeof InstallationList>;
+
+export const CheckState = z.enum(["queued", "in_progress", "success", "failure", "neutral", "skipped", "cancelled"]);
+export type CheckState = z.infer<typeof CheckState>;
+
+export const PrFile = z.object({
+  path: z.string(),
+  status: z.string(),
+  additions: z.number().int().nonnegative(),
+  deletions: z.number().int().nonnegative(),
+  /** Unified diff for this file; absent for binary or very large files. */
+  patch: z.string().optional(),
+});
+export type PrFile = z.infer<typeof PrFile>;
+
+export const PrCheck = z.object({
+  name: z.string(),
+  state: CheckState,
+  url: z.url().optional(),
+});
+export type PrCheck = z.infer<typeof PrCheck>;
+
+export const PrComment = z.object({
+  id: z.string(),
+  author: z.string(),
+  body: z.string(),
+  createdAt: IsoDateTime,
+});
+export type PrComment = z.infer<typeof PrComment>;
+
+export const PrThread = z.object({
+  id: z.string(),
+  /** File path for review threads; null for the main conversation. */
+  path: z.string().nullable(),
+  line: z.number().int().nullable(),
+  comments: z.array(PrComment),
+});
+export type PrThread = z.infer<typeof PrThread>;
+
+export const PrDetail = z.object({
+  repo: z.string(),
+  number: z.number().int().positive(),
+  title: z.string(),
+  body: z.string(),
+  author: z.string(),
+  status: PrStatus,
+  baseBranch: z.string(),
+  headBranch: z.string(),
+  headSha: z.string(),
+  additions: z.number().int().nonnegative(),
+  deletions: z.number().int().nonnegative(),
+  changedFiles: z.number().int().nonnegative(),
+  /** Files listed here; `changedFiles` is the full count. */
+  files: z.array(PrFile),
+  checks: z.array(PrCheck),
+  threads: z.array(PrThread),
+  createdAt: IsoDateTime,
+  updatedAt: IsoDateTime,
+  htmlUrl: z.url(),
+});
+export type PrDetail = z.infer<typeof PrDetail>;

@@ -1,5 +1,7 @@
-import type { Env, RateLimiter } from "../src/env";
+import type { Deps, Env, RateLimiter, RefreshOutcome } from "../src/env";
 import type { ModelTransport } from "../src/ai/provider";
+import { refreshTokens } from "../src/lib/github-tokens";
+import { TestD1 } from "./d1";
 
 /** In-memory limiter: allows `max` calls per key. */
 export const fakeLimiter = (max = Number.POSITIVE_INFINITY): RateLimiter & { keys: string[] } => {
@@ -16,8 +18,10 @@ export const fakeLimiter = (max = Number.POSITIVE_INFINITY): RateLimiter & { key
   };
 };
 
-// Placeholder only; never a real key.
+// Placeholders only; never real keys.
 export const TEST_API_KEY = "test-key-not-real";
+const testEncryptionKey = (version: string) =>
+  `${version}:${Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString("base64")}`;
 
 export const validModelEnv = (): Env => ({
   MODEL_PROVIDER: "meta",
@@ -39,3 +43,121 @@ export const mockTransport = (
     },
   };
 };
+
+export interface RecordedCall {
+  method: string;
+  url: string;
+  headers: Headers;
+  body: string | null;
+}
+
+type Handler = (call: RecordedCall) => Response | Promise<Response>;
+
+/**
+ * Fake network. Routes are "METHOD url-prefix". Unmatched calls fail the test, and any
+ * non-GET to the GitHub REST API other than the grant revocation is rejected outright.
+ */
+export const fakeNetwork = () => {
+  const routes: [string, string, Handler][] = [];
+  const calls: RecordedCall[] = [];
+  const fetcher: typeof fetch = async (input, init) => {
+    const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+    const method = (init?.method ?? "GET").toUpperCase();
+    const call: RecordedCall = {
+      method,
+      url,
+      headers: new Headers(init?.headers),
+      body: typeof init?.body === "string" ? init.body : null,
+    };
+    calls.push(call);
+    if (url.startsWith("https://api.github.com/") && method !== "GET" && !/\/applications\/[^/]+\/grant$/.test(url)) {
+      throw new Error(`GitHub write attempted: ${method} ${url}`);
+    }
+    const match = routes.find(([m, prefix]) => m === method && url.startsWith(prefix));
+    if (!match) throw new Error(`Unexpected request: ${method} ${url}`);
+    return match[2](call);
+  };
+  return {
+    calls,
+    fetch: fetcher,
+    on(method: string, prefix: string, handler: Handler | unknown) {
+      routes.unshift([
+        method,
+        prefix,
+        typeof handler === "function" ? (handler as Handler) : () => json(handler),
+      ]);
+      return this;
+    },
+  };
+};
+
+export const json = (body: unknown, status = 200, headers: Record<string, string> = {}) =>
+  new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json", ...headers } });
+
+export const clock = (start = "2026-10-27T12:00:00Z") => {
+  let now = Date.parse(start);
+  return {
+    now: () => new Date(now),
+    advance(ms: number) {
+      now += ms;
+    },
+  };
+};
+
+export interface TestContext {
+  env: Env & { DB: D1Database };
+  db: TestD1;
+  net: ReturnType<typeof fakeNetwork>;
+  time: ReturnType<typeof clock>;
+  deps: Deps;
+  ipLimiter: ReturnType<typeof fakeLimiter>;
+  sessionLimiter: ReturnType<typeof fakeLimiter>;
+  refreshCalls: string[];
+  points: AnalyticsEngineDataPoint[];
+}
+
+/** A full test environment: real migrations, fake GitHub, serialized fake token refresher. */
+export const testContext = (overrides: Partial<Env> = {}): TestContext => {
+  const db = new TestD1();
+  const net = fakeNetwork();
+  const time = clock();
+  const deps: Deps = { fetch: net.fetch, now: time.now };
+  const ipLimiter = fakeLimiter();
+  const sessionLimiter = fakeLimiter();
+  const refreshCalls: string[] = [];
+  const points: AnalyticsEngineDataPoint[] = [];
+  let queue: Promise<unknown> = Promise.resolve();
+
+  const env: TestContext["env"] = {
+    APP_ENV: "development",
+    WEB_ORIGIN: "http://localhost:8081",
+    GITHUB_APP_CLIENT_ID: "Iv-test-client",
+    GITHUB_APP_CLIENT_SECRET: "test-secret-not-real",
+    GITHUB_APP_SLUG: "mergemate-test",
+    TOKEN_ENCRYPTION_KEY: testEncryptionKey("2"),
+    TURNSTILE_SECRET_KEY: "test-turnstile-not-real",
+    DB: db as unknown as D1Database,
+    IP_RATE_LIMITER: ipLimiter,
+    SESSION_RATE_LIMITER: sessionLimiter,
+    TOKEN_REFRESHER: {
+      idFromName: (name: string) => ({ toString: () => name }) as DurableObjectId,
+      get: () => ({
+        // Same guarantee as the Durable Object: one refresh at a time.
+        refresh(userId: string) {
+          const run = queue.then(() => {
+            refreshCalls.push(userId);
+            return refreshTokens(env, deps, userId);
+          });
+          queue = run.catch(() => undefined);
+          return run as Promise<RefreshOutcome>;
+        },
+      }),
+    },
+    TELEMETRY: { writeDataPoint: (point?: AnalyticsEngineDataPoint) => void (point && points.push(point)) },
+    ...overrides,
+  } as TestContext["env"];
+
+  return { env, db, net, time, deps, ipLimiter, sessionLimiter, refreshCalls, points };
+};
+
+export { testEncryptionKey };
