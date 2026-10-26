@@ -32,7 +32,9 @@ android/
 .turbo/
 *.tsbuildinfo
 
-# Local planning pack and private working docs (kept off the public repo)
+# Local planning pack, design exports and private working docs (kept off the public repo)
+design-assets/
+/design/
 /planning/
 /private/
 /*.local.md
