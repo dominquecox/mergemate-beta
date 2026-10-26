@@ -1,0 +1,10 @@
+title = "MergeMate gitleaks config"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Names-only example files"
+paths = [
+  '''\.env\.example$''',
+]
