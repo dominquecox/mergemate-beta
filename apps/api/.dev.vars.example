@@ -1,0 +1,14 @@
+# Names only. Copy to .dev.vars (git-ignored) for `wrangler dev`. Deployed values: `wrangler secret put <NAME>`.
+# Secrets (never commit values)
+MODEL_API_KEY=
+GITHUB_CLIENT_SECRET=
+SESSION_SIGNING_KEY=
+RESEND_API_KEY=
+TURNSTILE_SECRET_KEY=
+# Non-secret config (also fine as wrangler.toml [vars])
+MODEL_PROVIDER=
+MODEL_ID=
+GITHUB_CLIENT_ID=
+EMAIL_FROM=
+SUPPORT_EMAIL=
+TURNSTILE_SITE_KEY=
