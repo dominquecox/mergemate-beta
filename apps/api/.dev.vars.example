@@ -10,9 +10,11 @@ STRIPE_WEBHOOK_SECRET=
 SESSION_SIGNING_KEY=
 RESEND_API_KEY=
 TURNSTILE_SECRET_KEY=
-# Non-secret config (also fine as wrangler.toml [vars])
-MODEL_PROVIDER=
-MODEL_ID=
+# Non-secret config. The model settings are in wrangler.toml [vars]; uncomment only to override locally
+# (an empty value also overrides and makes AI routes return misconfigured).
+# MODEL_PROVIDER=
+# MODEL_ID=
+# MODEL_BASE_URL=
 GITHUB_APP_ID=
 GITHUB_APP_CLIENT_ID=
 STRIPE_PRICE_PRO_MONTHLY=

@@ -1,0 +1,40 @@
+# Non-secret config only. Secrets: see DEPLOY.md (`wrangler secret put`); locally, .dev.vars (git-ignored).
+name = "mergemate-api"
+main = "src/index.ts"
+compatibility_date = "2026-10-01"
+
+[vars]
+MODEL_PROVIDER = "meta"
+MODEL_ID = "muse-spark-1.2"
+MODEL_BASE_URL = "https://api.meta.ai/v1"
+
+[[ratelimits]]
+name = "IP_RATE_LIMITER"
+namespace_id = "1001"
+simple = { limit = 60, period = 60 }
+
+[env.dev]
+name = "mergemate-api-dev"
+
+[env.dev.vars]
+MODEL_PROVIDER = "meta"
+MODEL_ID = "muse-spark-1.2"
+MODEL_BASE_URL = "https://api.meta.ai/v1"
+
+[[env.dev.ratelimits]]
+name = "IP_RATE_LIMITER"
+namespace_id = "1001"
+simple = { limit = 60, period = 60 }
+
+[env.production]
+name = "mergemate-api"
+
+[env.production.vars]
+MODEL_PROVIDER = "meta"
+MODEL_ID = "muse-spark-1.2"
+MODEL_BASE_URL = "https://api.meta.ai/v1"
+
+[[env.production.ratelimits]]
+name = "IP_RATE_LIMITER"
+namespace_id = "1002"
+simple = { limit = 60, period = 60 }
