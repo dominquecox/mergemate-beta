@@ -15,7 +15,7 @@ describe('AI summaries preference',()=>{
     const response=await call(`/v1/prs/acme/api/7/${kind}`,post({},session.headers));
     expect(response.status).toBe(403);expect(ErrorBody.parse(await response.json()).error).toMatchObject({code:'forbidden',message:'AI summaries and risk are turned off in Settings.'});
     expect(response.headers.get('cache-control')).toBe('no-store');
-    expect(prepare.mock.calls.map(([sql])=>sql).join('\n')).not.toMatch(/consent_grants|ai_usage_daily|ai_results_cache/);
+    expect(prepare.mock.calls.map(([sql])=>sql).join('\n')).not.toMatch(/consent_grants|ai_usage_daily|ai_results_cache|user_meta_keys/);
     expect(ctx.net.calls).toHaveLength(before);
     // Re-enabling resumes the ordinary consent gate; no saved row defaults to enabled too.
     prepare.mockRestore();

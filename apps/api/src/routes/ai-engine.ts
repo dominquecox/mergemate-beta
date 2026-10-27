@@ -20,6 +20,7 @@ import type { CompletionRequest, ModelProvider, ModelTransport } from "../ai/pro
 import type { AiTask } from "../ai/routes";
 import { RISK_JSON_SCHEMA, SUMMARY_JSON_SCHEMA } from "../ai/schemas";
 import { githubGet } from "../lib/github";
+import { userModelContext } from "../lib/user-meta-key";
 import { getSettings } from "../lib/settings";
 import { getAccessToken } from "../lib/github-tokens";
 import type { SessionRecord } from "../lib/sessions";
@@ -164,7 +165,7 @@ export const cacheKey = (userId: string, prRef: string, headSha: string, kind: s
 /** Statements that delete every AI row for a user. Runs inside account deletion. */
 export const aiUserDeletion = (db: D1Database, userId: string) => [
   db.prepare("DELETE FROM consent_grants WHERE user_id = ?").bind(userId),
-  db.prepare("DELETE FROM ai_usage_daily WHERE scope IN (?, ?)").bind(userId, `${userId}:triage`),
+  db.prepare("DELETE FROM ai_usage_daily WHERE scope IN (?, ?, ?)").bind(userId, `${userId}:triage`, `${userId}:metakey`),
   db.prepare("DELETE FROM ai_results_cache WHERE user_id = ?").bind(userId),
 ];
 
@@ -408,7 +409,7 @@ const UPSTREAM_TIMEOUT_MS = 20000;
 /** Plain-fetch transport for OpenAI-compatible chat endpoints. Retries once on 429/5xx. */
 export const createFetchTransport = (fetchImpl: typeof fetch = fetch): ModelTransport => ({
   async complete({ config, apiKey, request }) {
-    const headers = { "content-type": "application/json", authorization: `Bearer ${apiKey}` };
+    const headers = { "content-type": "application/json", authorization: `Bearer ${apiKey}`, "cf-aig-collect-log": "false", "cf-aig-skip-cache": "true", "cf-aig-max-attempts": "1", "cf-aig-no-wholesale": "true" };
     const body = JSON.stringify({
       model: config.modelId,
       messages: [
@@ -423,6 +424,7 @@ export const createFetchTransport = (fetchImpl: typeof fetch = fetch): ModelTran
         headers,
         body,
         signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
+        redirect: "error",
       });
       if (res.status === 429 || res.status >= 500) {
         if (attempt === 0) {
@@ -592,17 +594,20 @@ const gateAction = async (
   limits: AiActionLimits,
   session: SessionRecord,
   env: Env,
-): Promise<{ limit: number; remaining: number }> => {
+  task: AiTask,
+): Promise<{ limit: number; remaining: number; model: Awaited<ReturnType<typeof userModelContext>>; limits: AiActionLimits }> => {
   const key = userKey(session);
   await requireConsent(stores.consent, key);
   const plan = (await getBillingPlan(env, key)).plan;
   const userCheck = await stores.usage.check(key, plan === "pro" ? limits.pro : limits.free);
   if (userCheck.limited) throw limitError(USER_LIMIT_MESSAGE);
-  if (limits.global !== undefined) {
-    const globalCheck = await stores.globalBudget.check("global", limits.global);
+  const model = await userModelContext(env, key, task);
+  const effectiveLimits = model.ownsMetaKey ? { ...limits, global: undefined } : limits;
+  if (effectiveLimits.global !== undefined) {
+    const globalCheck = await stores.globalBudget.check("global", effectiveLimits.global);
     if (globalCheck.limited) throw limitError(GLOBAL_LIMIT_MESSAGE);
   }
-  return { limit: userCheck.limit, remaining: userCheck.remaining };
+  return { limit: userCheck.limit, remaining: userCheck.remaining, model, limits: effectiveLimits };
 };
 
 /**
@@ -734,18 +739,19 @@ export const summarizePr = async (
     throw new ApiError("forbidden", "AI summaries and risk are turned off in Settings.");
   }
   const stores = storesFor(deps.db);
-  const { limit, remaining } = await gateAction(stores, deps.limits, session, { ...env, DB: deps.db });
+  const { limit, remaining, model, limits } = await gateAction(stores, deps.limits, session, { ...env, DB: deps.db }, "summary");
+
   const data = await deps.prSource(session, ref);
   if (!data) throw new ApiError("upstream_unavailable", "PR data is unavailable right now. Try again later.");
   const refStr = prRefString(ref);
   const key = cacheKey(userId, refStr, data.headSha, "summary");
   const hit = await stores.cache.get<PrSummary>(key);
   if (hit) return { body: hit, limit, remaining };
-  const provider = createModelProvider(env, "summary", deps);
+  const provider = createModelProvider(model.env, "summary", deps);
   // Each route gets only as much PR context as its model's window holds; coverage reports the rest.
   const { context, coverage } = buildDiffContext(data, provider.config.maxInputChars);
   const { text } = redactSecrets(context);
-  const { value: body, remaining: left } = await withReservation(stores, deps.limits, userId, limit, async () => {
+  const { value: body, remaining: left } = await withReservation(stores, limits, userId, limit, async () => {
     const answer = await runModelTask(
       env,
       provider,
@@ -777,7 +783,8 @@ export const assessPrRisk = async (
     throw new ApiError("forbidden", "AI summaries and risk are turned off in Settings.");
   }
   const stores = storesFor(deps.db);
-  const { limit, remaining } = await gateAction(stores, deps.limits, session, { ...env, DB: deps.db });
+  const { limit, remaining, model, limits } = await gateAction(stores, deps.limits, session, { ...env, DB: deps.db }, "risk");
+
   const data = await deps.prSource(session, ref);
   if (!data) throw new ApiError("upstream_unavailable", "PR data is unavailable right now. Try again later.");
   const refStr = prRefString(ref);
@@ -785,11 +792,11 @@ export const assessPrRisk = async (
   const hit = await stores.cache.get<PrRisk>(key);
   if (hit) return { body: hit, limit, remaining };
   const signals = commonSignals(data);
-  const provider = createModelProvider(env, "risk", deps);
+  const provider = createModelProvider(model.env, "risk", deps);
   // Each route gets only as much PR context as its model's window holds; coverage reports the rest.
   const { context, coverage } = buildDiffContext(data, provider.config.maxInputChars);
   const { text } = redactSecrets(context);
-  const { value: body, remaining: left } = await withReservation(stores, deps.limits, userId, limit, async () => {
+  const { value: body, remaining: left } = await withReservation(stores, limits, userId, limit, async () => {
     const answer = await runModelTask(
       env,
       provider,

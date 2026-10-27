@@ -7,6 +7,7 @@ import { provideDeps } from "./middleware/deps";
 import { requestId } from "./middleware/request-id";
 import { securityHeaders } from "./middleware/security-headers";
 import { authenticate } from "./middleware/session";
+import { metaKey } from './routes/meta-key';
 import { settings } from './routes/settings';
 import { push } from './routes/push';
 import { billing } from "./routes/billing";
@@ -60,6 +61,7 @@ export const createApp = (deps: Deps = defaultDeps) => {
   app.route("/v1", account);
   app.route("/v1", billing);
   app.route("/v1", settings);
+  app.route("/v1", metaKey);
   app.route("/v1", push);
   app.route("/v1", billingWebhooks);
   app.route("/v1", github);
