@@ -44,10 +44,19 @@ export type PrRisk = z.infer<typeof PrRisk>;
 export const TriageLane = z.enum(["needs_you", "fyi", "ignore"]);
 export type TriageLane = z.infer<typeof TriageLane>;
 
+/** Where a lane came from: deterministic rules, or rules raised by the model. */
+export const TriageSource = z.enum(["rules", "ai"]);
+export type TriageSource = z.infer<typeof TriageSource>;
+
 export const TriageItem = z.object({
   prRef: PrRef,
   lane: TriageLane,
   reason: z.string(),
+  /** Plain reasons behind the lane. Rendered as plain text. */
+  reasons: z.array(z.string()).optional(),
+  source: TriageSource.optional(),
+  title: z.string().optional(),
+  author: z.string().optional(),
 });
 export type TriageItem = z.infer<typeof TriageItem>;
 
@@ -106,3 +115,10 @@ export const ModelRisk = z.object({
   reasons: z.array(z.string()).min(1),
 });
 export type ModelRisk = z.infer<typeof ModelRisk>;
+
+/** Exact shape the model must return for triage. The lane can only raise the deterministic lane server-side. */
+export const ModelTriage = z.object({
+  lane: TriageLane,
+  reasons: z.array(z.string()).min(1),
+});
+export type ModelTriage = z.infer<typeof ModelTriage>;

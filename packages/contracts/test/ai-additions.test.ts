@@ -2,8 +2,10 @@ import {
   ConsentState,
   ConsentUpdate,
   HighlightResult,
+  ModelTriage,
   QualityCheck,
   SecretFinding,
+  TriageItem,
   TriageRecord,
 } from "../src/index";
 import { describe, expect, it } from "vitest";
@@ -27,5 +29,14 @@ describe("MM-009 contract additions", () => {
     expect(HighlightResult.parse({ insight: "moved", requestId: "r1" }).insight).toBe("moved");
     expect(TriageRecord.parse({ prRef: "octo/demo#1", lane: "ignore" }).lane).toBe("ignore");
     expect(TriageRecord.safeParse({ prRef: "bad", lane: "ignore" }).success).toBe(false);
+  });
+
+  it("adds optional triage reasons and source without changing the old shape", () => {
+    expect(TriageItem.parse({ prRef: "octo/demo#1", lane: "fyi", reason: "x" }).source).toBeUndefined();
+    const full = TriageItem.parse({ prRef: "octo/demo#1", lane: "fyi", reason: "x", reasons: ["x"], source: "ai", title: "t", author: "a" });
+    expect(full.source).toBe("ai");
+    expect(TriageItem.safeParse({ prRef: "octo/demo#1", lane: "fyi", reason: "x", source: "other" }).success).toBe(false);
+    expect(ModelTriage.safeParse({ lane: "needs_you", reasons: [] }).success).toBe(false);
+    expect(ModelTriage.parse({ lane: "ignore", reasons: ["r"] }).lane).toBe("ignore");
   });
 });

@@ -1,28 +1,41 @@
 import { PrRef, TriageChoice, TriageQueue, TriageRecord } from "@mergemate/contracts";
-import type { TriageLane } from "@mergemate/contracts";
 import { Hono } from "hono";
-import { FIXTURE_TRIAGE, noStore, userKey } from "./ai-engine";
+import { requireBinding } from "../config";
+import { FIXTURE_TRIAGE, createFetchTransport, noStore } from "./ai-engine";
+import type { AiRouterDeps } from "./ai";
+import { buildTriageQueue, splitPrRef, triageItemId } from "./triage-engine";
 import type { AppEnv } from "../env";
 import { ApiError } from "../errors";
 
-/** Per-isolate triage choices, keyed by user then PR reference. */
-export const createChoiceStore = () => new Map<string, Map<string, TriageLane>>();
-export type ChoiceStore = ReturnType<typeof createChoiceStore>;
-
-export const createTriageRouter = (choices: ChoiceStore = createChoiceStore()) => {
+export const createTriageRouter = (deps: AiRouterDeps = {}) => {
   const router = new Hono<AppEnv>();
   router.use(noStore);
 
-  router.get("/", (c) => {
+  router.get("/", async (c) => {
     const session = c.get("session");
     if (session.demo) return c.json(TriageQueue.parse(FIXTURE_TRIAGE));
-    // The inbox queue lands with the notification data layer; until then it is empty.
-    return c.json(TriageQueue.parse([]));
+    const userId = session.userId;
+    if (!userId) throw new ApiError("forbidden", "Not available in the demo.");
+    const requestDeps = c.get("deps");
+    const items = await buildTriageQueue({
+      env: c.env,
+      deps: requestDeps,
+      userId,
+      model: {
+        transport: deps.transport ?? createFetchTransport(requestDeps.fetch),
+        ai: deps.ai ?? c.env.AI,
+      },
+      requestId: c.get("requestId"),
+    });
+    return c.json(items);
   });
 
   router.post("/:prRef", async (c) => {
     const session = c.get("session");
-    if (!PrRef.safeParse(c.req.param("prRef")).success) {
+    const userId = session.userId;
+    if (session.demo || !userId) throw new ApiError("forbidden", "Not available in the demo.");
+    const prRef = c.req.param("prRef");
+    if (!PrRef.safeParse(prRef).success) {
       throw new ApiError(
         "validation_failed",
         "That pull request reference is not valid. Send it URL-encoded as owner/repo#number.",
@@ -30,14 +43,15 @@ export const createTriageRouter = (choices: ChoiceStore = createChoiceStore()) =
     }
     const parsed = TriageChoice.safeParse(await c.req.json().catch(() => null));
     if (!parsed.success) throw new ApiError("validation_failed", "That triage choice is not valid.");
-    const prRef = c.req.param("prRef");
-    const userId = userKey(session);
-    let byUser = choices.get(userId);
-    if (!byUser) {
-      byUser = new Map<string, TriageLane>();
-      choices.set(userId, byUser);
-    }
-    byUser.set(prRef, parsed.data.lane);
+    const { repo, number } = splitPrRef(prRef);
+    // The row belongs to the session user; the reference only says which pull request.
+    await requireBinding(c.env, "DB")
+      .prepare(
+        `INSERT INTO triage_choices (user_id, item_id, lane, decided_at) VALUES (?, ?, ?, ?)
+         ON CONFLICT (user_id, item_id) DO UPDATE SET lane = excluded.lane, decided_at = excluded.decided_at`,
+      )
+      .bind(userId, triageItemId(repo, number), parsed.data.lane, c.get("deps").now().toISOString())
+      .run();
     return c.json(TriageRecord.parse({ prRef, lane: parsed.data.lane }));
   });
 

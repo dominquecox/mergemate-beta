@@ -28,6 +28,8 @@ export interface Env {
   MODEL_ROUTE_SUMMARY?: string;
   MODEL_ROUTE_RISK?: string;
   MODEL_ROUTE_TRIAGE?: string;
+  AI_DAILY_TRIAGE_FREE?: string;
+  AI_DAILY_TRIAGE_PRO?: string;
   MODEL_ROUTE_HIGHLIGHT?: string;
   MODEL_BASE_URL?: string;
   MODEL_API_KEY?: string;
