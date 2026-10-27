@@ -180,6 +180,78 @@ const completeWithWorkersAi = async (
   return usage ? { text, usage } : { text };
 };
 
+/**
+ * Muse Voice Transcribe on Meta Model API. Verified 2026-10-27 against Meta's model page
+ * and developer docs via a third-party reference: model id `muse-voice-transcribe-1.0`,
+ * $0.18 per audio hour ($3.00 per 1,000 minutes, same for streaming and file), batch
+ * endpoint POST `{base}/asr/transcribe` as multipart with an Authorization Bearer header.
+ * The file path takes mono 16-bit PCM WAV at 16 or 24 kHz only, max 32 MB and 10 minutes
+ * per request. Multipart field names and the response shape follow the OpenAI-compatible
+ * transcription convention (`file` + `model` fields, `{text}` reply); confirm both on the
+ * first live call, since this track makes none.
+ */
+export const VOICE_TRANSCRIBE_MODEL_ID = "muse-voice-transcribe-1.0";
+
+/** Transcription gives minutes-long audio room; chat calls use the shorter transport timeout. */
+const TRANSCRIBE_TIMEOUT_MS = 120_000;
+
+const transcribeRejected = () =>
+  new ApiError("validation_failed", "The audio was not accepted. Try a shorter note.");
+
+const transcribeUnavailable = () =>
+  new ApiError("upstream_unavailable", "Transcription is unavailable right now. Try again later.");
+
+/**
+ * Sends one recording to Muse Voice Transcribe. Same auth, timeout, retry-once and
+ * redirect rules as the Meta chat transport; only the body shape differs (multipart).
+ * The audio is never logged, cached, or stored.
+ */
+export const transcribeWithMeta = async (args: {
+  env: Env;
+  fetchImpl: typeof fetch;
+  audio: Uint8Array;
+  contentType: string;
+  fileName: string;
+}): Promise<{ text: string }> => {
+  const { env, fetchImpl, audio, contentType, fileName } = args;
+  const apiKey = requireApiKey(env);
+  const form = new FormData();
+  form.append("file", new File([audio], fileName, { type: contentType }));
+  form.append("model", VOICE_TRANSCRIBE_MODEL_ID);
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    let res: Response;
+    try {
+      res = await fetchImpl(`${resolveBaseUrl(env)}/asr/transcribe`, {
+        method: "POST",
+        headers: { authorization: `Bearer ${apiKey}` },
+        body: form,
+        signal: AbortSignal.timeout(TRANSCRIBE_TIMEOUT_MS),
+        redirect: "error",
+      });
+    } catch {
+      throw transcribeUnavailable();
+    }
+    if (res.status === 429 || res.status >= 500) {
+      if (attempt === 0) {
+        await new Promise((resolve) => setTimeout(resolve, 500));
+        continue;
+      }
+      throw transcribeUnavailable();
+    }
+    if (res.status >= 400) throw transcribeRejected();
+    let data: unknown;
+    try {
+      data = (await res.json()) as unknown;
+    } catch {
+      throw transcribeUnavailable();
+    }
+    const text = (data as { text?: unknown })?.text;
+    if (typeof text !== "string" || !text.trim()) throw transcribeRejected();
+    return { text: text.trim() };
+  }
+  throw transcribeUnavailable();
+};
+
 /** Builds the provider for one task from Worker config. Fails before any call when config is missing or invalid. */
 export const createModelProvider = (env: Env, task: AiTask, deps: ProviderDeps): ModelProvider => {
   const config = resolveModelConfig(env, task);

@@ -3,6 +3,20 @@ import { Hono } from 'hono';
 import type { AppEnv } from '../env';
 import { clientIp, limit } from '../middleware/rate-limit';
 
+/**
+ * Reads the allowlisted boolean flags for server-side gating. Unknown or missing flags
+ * are off; an unavailable or malformed document fails closed. Same source as GET /v1/flags.
+ */
+export const readFeatureFlags = async (env: AppEnv['Bindings']): Promise<FeatureFlags> => {
+  let value: unknown;
+  try {
+    const raw = await env.POSTS?.get('flags:v1', { cacheTtl: 60 });
+    value = raw && raw.length <= 2048 ? JSON.parse(raw) : null;
+  } catch { value = null; }
+  const record = value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {};
+  return { voice_readout: record.voice_readout === true, voice_notes: record.voice_notes === true };
+};
+
 /** Mounted before session authentication: these switches carry no user data. */
 export const flags = new Hono<AppEnv>().get('/flags', async c => {
   await limit(c, { name:'IP_RATE_LIMITER', limiter:c.env.IP_RATE_LIMITER, key:clientIp(c), retryAfter:60 });

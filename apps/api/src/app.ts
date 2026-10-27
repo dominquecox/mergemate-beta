@@ -21,6 +21,7 @@ import { createConsentRouter } from "./routes/consent";
 import { github } from "./routes/github";
 import { health } from "./routes/health";
 import { createHighlightRouter } from "./routes/highlight";
+import { createVoiceNotesRouter } from "./routes/voice-notes";
 import { notifications } from "./routes/notifications";
 import { publicContent } from "./routes/public";
 import { telemetry } from "./routes/telemetry";
@@ -53,7 +54,7 @@ export const createApp = (deps: Deps = defaultDeps) => {
   // The GitHub webhook enforces its own cap on the raw body; uploads keep a 5 MB cap here.
   app.use((c, next) => {
     if (c.req.path === "/v1/webhooks/github") return next();
-    return c.req.path === "/v1/highlight" || c.req.path === "/v1/webhooks/stripe"
+    return c.req.path === "/v1/highlight" || c.req.path === "/v1/voice-notes" || c.req.path === "/v1/webhooks/stripe"
       ? uploadLimit(c, next)
       : jsonLimit(c, next);
   });
@@ -76,6 +77,7 @@ export const createApp = (deps: Deps = defaultDeps) => {
   app.route("/v1/prs", createAiRouter());
   app.route("/v1/triage", createTriageRouter());
   app.route("/v1/highlight", createHighlightRouter());
+  app.route("/v1/voice-notes", createVoiceNotesRouter());
 
   app.notFound((c) => errorResponse(c, "not_found", "Not found."));
 

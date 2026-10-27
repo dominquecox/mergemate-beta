@@ -138,6 +138,13 @@ export const ModelHighlight = z.object({
 });
 export type ModelHighlight = z.infer<typeof ModelHighlight>;
 
+/** Transcribed voice note. The request id matches the `x-request-id` response header. */
+export const VoiceNoteResult = z.object({
+  text: z.string().min(1),
+  requestId: z.string().min(1),
+});
+export type VoiceNoteResult = z.infer<typeof VoiceNoteResult>;
+
 /** Exact shape the model must return for triage. The lane can only raise the deterministic lane server-side. */
 export const ModelTriage = z.object({
   lane: TriageLane,

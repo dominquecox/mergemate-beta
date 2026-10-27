@@ -9,6 +9,7 @@ import {
   SecretFinding,
   TriageItem,
   TriageRecord,
+  VoiceNoteResult,
 } from "../src/index";
 import { describe, expect, it } from "vitest";
 
@@ -32,6 +33,11 @@ describe("MM-009 contract additions", () => {
     expect(HighlightResult.parse({ insight: "moved", requestId: "r1" }).regions).toEqual([]);
     expect(TriageRecord.parse({ prRef: "octo/demo#1", lane: "ignore" }).lane).toBe("ignore");
     expect(TriageRecord.safeParse({ prRef: "bad", lane: "ignore" }).success).toBe(false);
+  });
+
+  it("parses voice-note results", () => {
+    expect(VoiceNoteResult.parse({ text: "fix it", requestId: "r1" }).text).toBe("fix it");
+    expect(VoiceNoteResult.safeParse({ text: "", requestId: "r1" }).success).toBe(false);
   });
 
   it("validates highlight regions as non-empty 0-1000 boxes", () => {
