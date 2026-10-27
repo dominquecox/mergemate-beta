@@ -1,6 +1,6 @@
 import type { Context } from "hono";
 import { requireBinding } from "../config";
-import type { AppEnv } from "../env";
+import type { AppEnv, Deps, Env } from "../env";
 import { githubGet } from "./github";
 import { getAccessToken } from "./github-tokens";
 
@@ -17,16 +17,21 @@ interface Installations {
  * webhook-derived data is shown only for repositories in this list.
  */
 export const refreshRepoAccess = async (c: Context<AppEnv>, userId: string) => {
-  const db = requireBinding(c.env, "DB");
-  const deps = c.get("deps");
+  return refreshUserRepoAccess(c.env, c.get("deps"), userId);
+};
+
+/** Shared by authenticated HTTP reads and background notification delivery. */
+export const refreshUserRepoAccess = async (env: Env, deps: Deps, userId: string) => {
+  const db = requireBinding(env, "DB");
   const now = deps.now();
   const check = await db
     .prepare("SELECT checked_at FROM user_access_checks WHERE user_id = ?")
     .bind(userId)
     .first<{ checked_at: string }>();
-  if (check && now.getTime() - Date.parse(check.checked_at) < ACCESS_TTL_MS) return;
+  const age = check ? now.getTime() - Date.parse(check.checked_at) : NaN;
+  if (age >= 0 && age < ACCESS_TTL_MS) return;
 
-  const token = await getAccessToken(c.env, userId, now);
+  const token = await getAccessToken(env, userId, now);
   const { installations } = await githubGet<Installations>(deps, token, "/user/installations?per_page=100");
   const names = new Set<string>();
   for (const inst of installations.filter((i) => !i.suspended_at)) {

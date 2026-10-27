@@ -9,7 +9,8 @@ import { type Context, Hono } from "hono";
 import { requireBinding } from "../config";
 import type { AppEnv } from "../env";
 import { ApiError } from "../errors";
-import { base64url } from "../lib/crypto";
+import { notificationId } from "../lib/notification-id";
+export { notificationId } from "../lib/notification-id";
 import { githubGet } from "../lib/github";
 import { getAccessToken } from "../lib/github-tokens";
 import { parseBody, parseValue } from "../lib/validate";
@@ -39,10 +40,6 @@ interface SearchItem {
 }
 
 const ITEM_ID = /^[A-Za-z0-9_-]{8,400}$/;
-
-/** Opaque, URL-safe id derived from `owner/repo#number`. */
-export const notificationId = (repo: string, number: number) =>
-  base64url(new TextEncoder().encode(`${repo}#${number}`));
 
 const parseItemId = (id: string) => {
   if (!ITEM_ID.test(id) && !/^demo\.[A-Za-z0-9_.-]+$/.test(id)) {

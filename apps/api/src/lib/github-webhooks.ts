@@ -1,5 +1,6 @@
 import type { ActivityEvent } from "@mergemate/contracts";
-import type { Env } from "../env";
+import type { Deps, Env } from "../env";
+import { deliverGitHubPush } from "./github-push";
 import { timingSafeEqual } from "./crypto";
 
 const encoder = new TextEncoder();
@@ -214,7 +215,7 @@ export const applyGitHubEvent = async (db: D1Database, message: GitHubEventMessa
 };
 
 /** Queue consumer: ack each applied message, retry failures (the queue dead-letters after its retry limit). */
-export const consumeGitHubEvents = async (batch: MessageBatch<GitHubEventMessage>, env: Env, now: Date) => {
+export const consumeGitHubEvents = async (batch: MessageBatch<GitHubEventMessage>, env: Env, now: Date, deps: Deps = { fetch, now: () => new Date() }) => {
   const db = env.DB;
   if (!db) {
     batch.retryAll();
@@ -223,6 +224,8 @@ export const consumeGitHubEvents = async (batch: MessageBatch<GitHubEventMessage
   for (const msg of batch.messages) {
     try {
       await applyGitHubEvent(db, msg.body);
+      // Event writes can retry; push delivery is best effort and independently claimed.
+      try { await deliverGitHubPush(env, deps, msg.body); } catch { /* Never retry an applied event for push failures. */ }
       msg.ack();
     } catch {
       msg.retry();

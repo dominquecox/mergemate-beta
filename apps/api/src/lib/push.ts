@@ -26,6 +26,7 @@ class Suppressed extends Error {}
 async function expoRequest(
   env: Env, deps: Deps, endpoint: 'send' | 'getReceipts', body: unknown,
   permitted: () => Promise<boolean> = async () => true,
+  retry = true,
 ): Promise<unknown> {
   const accessToken = env.EXPO_ACCESS_TOKEN?.trim();
   if (!accessToken) throw new ConfigError('EXPO_ACCESS_TOKEN is not set');
@@ -43,7 +44,7 @@ async function expoRequest(
       // Delivery may already have been accepted. Do not blindly retry an ambiguous send.
       throw new ApiError('upstream_unavailable', 'The push service is unavailable.');
     }
-    if (attempt === 0 && (response.status === 429 || response.status >= 500)) {
+    if (retry && attempt === 0 && (response.status === 429 || response.status >= 500)) {
       await new Promise((resolve) => setTimeout(resolve, 250));
       continue;
     }
@@ -58,7 +59,7 @@ export interface PushNotice { userId: string; kind: Kind; notificationId: string
 interface Device { user_id: string; device_id: string; token: string }
 
 /** Internal sender: callers must resolve the recipient's repository access before calling. */
-export async function sendPushNotification(env: Env, deps: Deps, notice: PushNotice) {
+export async function sendPushNotification(env: Env, deps: Deps, notice: PushNotice, options: { retry?: boolean } = {}) {
   if (!NotificationKind.safeParse(notice.kind).success || !/^[A-Za-z0-9_-]{8,400}$/.test(notice.notificationId)) {
     throw new ApiError('validation_failed', 'Invalid push notification.');
   }
@@ -87,7 +88,7 @@ export async function sendPushNotification(env: Env, deps: Deps, notice: PushNot
     data: { notificationId: notice.notificationId }, expiration,
   }));
   let raw: unknown;
-  try { raw = await expoRequest(env, deps, 'send', payload, permitted); }
+  try { raw = await expoRequest(env, deps, 'send', payload, permitted, options.retry); }
   catch (error) {
     if (error instanceof Suppressed) return { accepted: 0, removed: 0, failed: 0, suppressed: true };
     throw error;
