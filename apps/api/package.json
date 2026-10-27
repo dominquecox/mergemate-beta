@@ -11,7 +11,8 @@
     "db:migrate:local": "wrangler d1 migrations apply mergemate-db --local",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
-    "test": "vitest run"
+    "test": "vitest run",
+    "check:env": "node scripts/check-env.mjs"
   },
   "dependencies": {
     "@mergemate/contracts": "*",

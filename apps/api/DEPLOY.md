@@ -10,7 +10,6 @@ Run from the repository root. Each command sets one secret for the `dev` environ
 | --- | --- |
 | `MODEL_API_KEY` | AI provider key (server-side only) |
 | `GITHUB_APP_CLIENT_SECRET` | GitHub App sign-in |
-| `GITHUB_APP_PRIVATE_KEY` | GitHub App installation tokens (PKCS8 PEM) |
 | `GITHUB_WEBHOOK_SECRET` | GitHub webhook signature check |
 | `GITHUB_WEBHOOK_SECRET_NEXT` | Only while rotating the webhook secret: the new value, accepted alongside the current one |
 | `TOKEN_ENCRYPTION_KEY` | Encrypting stored GitHub tokens. Format `<version>:<base64 32 bytes>`; to rotate, move the old value to `TOKEN_ENCRYPTION_KEY_PREVIOUS` and set a new version |
@@ -24,7 +23,6 @@ Run from the repository root. Each command sets one secret for the `dev` environ
 ```bash
 npm exec -w @mergemate/api -- wrangler secret put MODEL_API_KEY --env dev
 npm exec -w @mergemate/api -- wrangler secret put GITHUB_APP_CLIENT_SECRET --env dev
-npm exec -w @mergemate/api -- wrangler secret put GITHUB_APP_PRIVATE_KEY --env dev
 npm exec -w @mergemate/api -- wrangler secret put GITHUB_WEBHOOK_SECRET --env dev
 npm exec -w @mergemate/api -- wrangler secret put TOKEN_ENCRYPTION_KEY --env dev
 npm exec -w @mergemate/api -- wrangler secret put STRIPE_SECRET_KEY --env dev
@@ -34,6 +32,10 @@ npm exec -w @mergemate/api -- wrangler secret put EMAIL_FROM --env dev
 npm exec -w @mergemate/api -- wrangler secret put SUPPORT_EMAIL --env dev
 npm exec -w @mergemate/api -- wrangler secret put TURNSTILE_SECRET_KEY --env dev
 ```
+
+## Check variable names
+
+`npm run check:env -w @mergemate/api` compares variable names (never values) in the code, `.dev.vars.example` and your local `apps/api/.dev.vars`. It fails on a name the code never reads, which usually means a typo or an old name, and warns about names missing locally. A test also pins the approved names, so a rename can't slip into a PR unnoticed.
 
 ## AI models
 
