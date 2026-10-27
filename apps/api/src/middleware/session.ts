@@ -8,6 +8,7 @@ import { clientIp, limit } from "./rate-limit";
 
 const PUBLIC_PATHS = [
   /^\/v1\/health$/,
+  /^\/v1\/flags$/,
   /^\/v1\/auth\/github\/(start|callback)$/,
   /^\/v1\/auth\/demo$/,
   /^\/v1\/public\//,
@@ -23,6 +24,16 @@ const DEMO_FIXTURE_POSTS = [/^\/v1\/prs\/[^/]+\/[^/]+\/\d+\/(summary|risk)$/];
 
 const limitIp = (c: Context<AppEnv>) =>
   limit(c, { name: "IP_RATE_LIMITER", limiter: c.env.IP_RATE_LIMITER, key: clientIp(c), retryAfter: 60 });
+
+/**
+ * Counts CORS preflights (OPTIONS) against the IP limit. Runs before CORS because CORS
+ * answers preflights without reaching later middleware; without this a preflight flood
+ * is free. Other requests pass through untouched and are charged once in authenticate().
+ */
+export const limitPreflight = (): MiddlewareHandler<AppEnv> => async (c, next) => {
+  if (c.req.method === "OPTIONS") await limitIp(c);
+  return next();
+};
 
 const readCredential = (c: Context<AppEnv>) => {
   const auth = c.req.header("authorization");

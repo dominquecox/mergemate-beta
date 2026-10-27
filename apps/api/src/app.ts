@@ -7,7 +7,7 @@ import { provideDeps } from "./middleware/deps";
 import { requestId } from "./middleware/request-id";
 import { securityHeaders } from "./middleware/security-headers";
 import { flags } from "./routes/flags";
-import { authenticate } from "./middleware/session";
+import { authenticate, limitPreflight } from "./middleware/session";
 import { metaKey } from './routes/meta-key';
 import { settings } from './routes/settings';
 import { push } from './routes/push';
@@ -39,9 +39,11 @@ export const createApp = (deps: Deps = defaultDeps) => {
   app.use(requestId());
   app.use(securityHeaders());
   app.use(provideDeps(deps));
+  // Preflights are answered by CORS without reaching later middleware, so they are
+  // IP-limited here; everything else is limited in authenticate(). CORS stays before
+  // authenticate so 401/429 responses keep Access-Control-Allow-Origin for the web app.
+  app.use(limitPreflight());
   app.use(cors());
-  app.route("/v1", flags);
-  // Other routes retain their existing rate limits and session rules.
   app.use(authenticate());
   const jsonLimit = bodyLimit({
     maxSize: MAX_BODY_BYTES,
@@ -60,6 +62,8 @@ export const createApp = (deps: Deps = defaultDeps) => {
   });
 
   app.route("/v1/health", health);
+  // Flags rides the same IP limit as every other public route via authenticate().
+  app.route("/v1", flags);
   app.route("/v1", auth);
   app.route("/v1", account);
   app.route("/v1", billing);

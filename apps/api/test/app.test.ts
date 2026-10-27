@@ -74,6 +74,46 @@ describe("rate limiting", () => {
     expect(res.status).toBe(429);
   });
 
+  it("429s a 172-request burst at the production 60/min IP limit", async () => {
+    const env = { IP_RATE_LIMITER: fakeLimiter(60) };
+    const init = { headers: { "cf-connecting-ip": "203.0.113.7" } };
+    let ok = 0;
+    let limited = 0;
+    for (let i = 0; i < 172; i++) {
+      const res = await request("/v1/health", env, init);
+      if (res.status === 200) ok++;
+      else if (res.status === 429) {
+        limited++;
+        expect(res.headers.get("retry-after")).toBe("60");
+        expect(res.headers.get("cache-control")).toBe("no-store");
+        expect(ErrorBody.parse(await res.json()).error.code).toBe("rate_limited");
+      } else throw new Error(`unexpected status ${res.status} on burst request ${i}`);
+    }
+    expect(ok).toBe(60);
+    expect(limited).toBe(112);
+    expect(env.IP_RATE_LIMITER.keys).toHaveLength(172);
+  });
+
+  it("limits CORS preflights too, not just real requests", async () => {
+    const env = { IP_RATE_LIMITER: fakeLimiter(1) };
+    const init = {
+      method: "OPTIONS",
+      headers: { origin: "https://dev.mergemate.dev", "access-control-request-method": "GET" },
+    };
+    expect((await request("/v1/health", env, init)).status).toBe(204);
+    expect((await request("/v1/health", env, init)).status).toBe(429);
+  });
+
+  it("keeps Access-Control-Allow-Origin on 401 and 429 to an allowed origin", async () => {
+    const origin = { origin: "https://dev.mergemate.dev" };
+    const unauth = await request("/v1/settings", { IP_RATE_LIMITER: fakeLimiter() }, { headers: origin });
+    expect(unauth.status).toBe(401);
+    expect(unauth.headers.get("access-control-allow-origin")).toBe("https://dev.mergemate.dev");
+    const limited = await request("/v1/health", { IP_RATE_LIMITER: fakeLimiter(0) }, { headers: origin });
+    expect(limited.status).toBe(429);
+    expect(limited.headers.get("access-control-allow-origin")).toBe("https://dev.mergemate.dev");
+  });
+
   it("fails closed with misconfigured when the binding is missing", async () => {
     const log = vi.spyOn(console, "error").mockImplementation(() => {});
     const res = await request("/v1/health", {});

@@ -1,7 +1,6 @@
 import { FeatureFlags } from '@mergemate/contracts';
 import { Hono } from 'hono';
 import type { AppEnv } from '../env';
-import { clientIp, limit } from '../middleware/rate-limit';
 
 /**
  * Reads the allowlisted boolean flags for server-side gating. Unknown or missing flags
@@ -17,9 +16,8 @@ export const readFeatureFlags = async (env: AppEnv['Bindings']): Promise<Feature
   return { voice_readout: record.voice_readout === true, voice_notes: record.voice_notes === true };
 };
 
-/** Mounted before session authentication: these switches carry no user data. */
+/** Mounted after session authentication: these switches carry no user data, and the per-IP limit runs in that middleware. */
 export const flags = new Hono<AppEnv>().get('/flags', async c => {
-  await limit(c, { name:'IP_RATE_LIMITER', limiter:c.env.IP_RATE_LIMITER, key:clientIp(c), retryAfter:60 });
   let value: unknown;
   try {
     // KV owns the cross-invocation cache. No mutable per-user/isolate cache.
