@@ -1,5 +1,6 @@
 import React, { useState } from "react";
-import { View, Text, StyleSheet, Platform } from "react-native";
+import { View, StyleSheet, Platform } from "react-native";
+import { Text } from "../../src/components/Text";
 import { useRouter, Redirect } from "expo-router";
 import { useTheme } from "../../src/context/ThemeContext";
 import { Header } from "../../src/components/Header";
@@ -7,6 +8,7 @@ import { Button } from "../../src/components/Button";
 import { EmptyState } from "../../src/components/EmptyState";
 import { ErrorState } from "../../src/components/ErrorState";
 import { LoadingState } from "../../src/components/LoadingState";
+import { Icon } from "../../src/components/Icon";
 
 export default function BillingSuccessScreen() {
   if (Platform.OS !== "web") {
@@ -39,7 +41,7 @@ export default function BillingSuccessScreen() {
         <ErrorState title="Couldn't open inbox" message={error} onRetry={handleContinue} />
       ) : !hasPlan ? (
         <EmptyState
-          icon="💳"
+          icon="card-outline"
           title="No active checkout found"
           message="Return to the billing page to view your current subscription."
           actionTitle="View Plans"
@@ -50,7 +52,7 @@ export default function BillingSuccessScreen() {
         />
       ) : (
         <View style={[styles.content, { padding: spacing.xl }]}>
-          <Text style={{ fontSize: 48 }}>🎉</Text>
+          <Icon name="checkmark-circle" size={52} color={colors.riskLow} />
           <Text
             style={[typography.title1, { color: colors.text, marginTop: spacing.md, textAlign: "center" }]}
             accessibilityRole="header"

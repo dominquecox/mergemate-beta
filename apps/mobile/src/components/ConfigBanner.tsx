@@ -1,5 +1,6 @@
 import React from "react";
-import { View, Text, StyleSheet } from "react-native";
+import { View, StyleSheet } from "react-native";
+import { Text } from "./Text";
 import { apiMode } from "../api";
 import { useTheme } from "../context/ThemeContext";
 

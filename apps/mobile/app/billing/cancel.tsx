@@ -1,5 +1,6 @@
 import React, { useState } from "react";
-import { View, Text, StyleSheet, Platform } from "react-native";
+import { View, StyleSheet, Platform } from "react-native";
+import { Text } from "../../src/components/Text";
 import { useRouter, Redirect } from "expo-router";
 import { useTheme } from "../../src/context/ThemeContext";
 import { Header } from "../../src/components/Header";
@@ -7,6 +8,7 @@ import { Button } from "../../src/components/Button";
 import { EmptyState } from "../../src/components/EmptyState";
 import { ErrorState } from "../../src/components/ErrorState";
 import { LoadingState } from "../../src/components/LoadingState";
+import { Icon } from "../../src/components/Icon";
 
 export default function BillingCancelScreen() {
   if (Platform.OS !== "web") {
@@ -39,7 +41,7 @@ export default function BillingCancelScreen() {
         <ErrorState title="Navigation failed" message={error} onRetry={handleReturn} />
       ) : dismissed ? (
         <EmptyState
-          icon="ℹ️"
+          icon="information-circle-outline"
           title="Checkout cancelled"
           message="Your account remains on the Free plan."
           actionTitle="Back to Billing"
@@ -50,7 +52,7 @@ export default function BillingCancelScreen() {
         />
       ) : (
         <View style={[styles.content, { padding: spacing.xl }]}>
-          <Text style={{ fontSize: 48 }}>ℹ️</Text>
+          <Icon name="information-circle-outline" size={52} color={colors.brandLight} />
           <Text
             style={[typography.title1, { color: colors.text, marginTop: spacing.md, textAlign: "center" }]}
             accessibilityRole="header"

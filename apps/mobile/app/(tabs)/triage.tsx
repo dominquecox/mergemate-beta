@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from "react";
-import { View, Text, StyleSheet, TouchableOpacity } from "react-native";
+import { View, StyleSheet, TouchableOpacity, Platform } from "react-native";
+import { Text } from "../../src/components/Text";
 import { useTheme } from "../../src/context/ThemeContext";
 import { api } from "../../src/api";
 import { toUserMessage } from "../../src/api/errors";
@@ -10,6 +11,7 @@ import { Button } from "../../src/components/Button";
 import { EmptyState } from "../../src/components/EmptyState";
 import { ErrorState } from "../../src/components/ErrorState";
 import { LoadingState } from "../../src/components/LoadingState";
+import { Icon } from "../../src/components/Icon";
 
 export default function TriageScreen() {
   const { colors, typography, spacing, radius } = useTheme();
@@ -110,7 +112,7 @@ export default function TriageScreen() {
           />
         ) : !currentItem ? (
           <EmptyState
-            icon="✨"
+            icon="checkmark-done-outline"
             title="All Caught Up!"
             message={`You've sorted all ${totalCount} pull requests. Great job staying on top of code review.`}
             actionTitle="Reload Deck"
@@ -124,7 +126,7 @@ export default function TriageScreen() {
 
             <Card style={styles.triageCard}>
               <View style={styles.cardHeader}>
-                <Text style={[typography.caption, { color: colors.brandLight, fontFamily: "monospace" }]}>
+                <Text style={[typography.caption, { color: colors.brandLight, fontFamily: Platform.OS === "web" ? typography.code.fontFamily : "monospace" }]}>
                   {currentItem.prRef}
                 </Text>
                 <View style={[styles.lanePill, { backgroundColor: colors.brandSubtle }]}>
@@ -142,9 +144,12 @@ export default function TriageScreen() {
               </Text>
 
               <View style={[styles.reasonBox, { backgroundColor: colors.surfaceElevated, borderRadius: radius.md, marginTop: spacing.md }]}>
-                <Text style={[typography.subhead, { color: colors.textSecondary }]}>
-                  💡 {currentItem.reason}
-                </Text>
+                <View style={styles.reasonRow}>
+                  <Icon name="bulb-outline" size={16} color={colors.textSecondary} style={styles.reasonIcon} />
+                  <Text style={[typography.subhead, { color: colors.textSecondary, flex: 1 }]}>
+                    {currentItem.reason}
+                  </Text>
+                </View>
               </View>
 
               <Text style={[typography.footnote, { color: colors.textMuted, marginTop: spacing.lg }]}>
@@ -179,6 +184,14 @@ export default function TriageScreen() {
 }
 
 const styles = StyleSheet.create({
+  reasonRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 8,
+  },
+  reasonIcon: {
+    marginTop: 1,
+  },
   root: {
     flex: 1,
   },

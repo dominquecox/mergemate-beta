@@ -1,11 +1,13 @@
 import React, { useState } from "react";
-import { View, Text, Image, TouchableOpacity, StyleSheet } from "react-native";
+import { View, Image, TouchableOpacity, StyleSheet } from "react-native";
+import { Text } from "../../src/components/Text";
 import { useRouter } from "expo-router";
 import { useTheme } from "../../src/context/ThemeContext";
 import { Button } from "../../src/components/Button";
 import { EmptyState } from "../../src/components/EmptyState";
 import { ErrorState } from "../../src/components/ErrorState";
 import { LoadingState } from "../../src/components/LoadingState";
+import { Icon, IconName } from "../../src/components/Icon";
 
 const CARDS = [
   {
@@ -13,21 +15,21 @@ const CARDS = [
     title: "Catch up fast",
     subtitle:
       "One unified inbox sorted by priority. Read plain-language pull request summaries in seconds instead of digging through long notifications.",
-    icon: "⚡",
+    icon: "flash-outline" as IconName,
   },
   {
     step: "02",
     title: "Know what's risky",
     subtitle:
       "Clear risk ratings with exact reasons. Spot possible secret leaks, schema changes, and auth edits before you review.",
-    icon: "🛡",
+    icon: "shield-checkmark-outline" as IconName,
   },
   {
     step: "03",
     title: "You stay in control",
     subtitle:
       "Strictly read-only GitHub access. MergeMate never merges, approves, or comments on your behalf, and never stores your code.",
-    icon: "🔒",
+    icon: "lock-closed-outline" as IconName,
   },
 ];
 
@@ -111,9 +113,7 @@ export default function WelcomeScreen() {
 
       <View style={styles.content}>
         <View style={[styles.iconCircle, { backgroundColor: colors.surfaceElevated, borderColor: colors.border }]}>
-          <Text style={styles.cardIcon} accessibilityElementsHidden>
-            {card.icon}
-          </Text>
+          <Icon name={card.icon} size={42} color={colors.brandLight} />
         </View>
 
         <Text style={[typography.caption, { color: colors.brandLight, fontWeight: "700", marginTop: spacing.lg }]}>
@@ -207,9 +207,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 1,
-  },
-  cardIcon: {
-    fontSize: 42,
   },
   footer: {
     alignItems: "center",

@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from "react";
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet } from "react-native";
+import { View, ScrollView, TouchableOpacity, StyleSheet, Platform } from "react-native";
+import { Text } from "../../src/components/Text";
 import { useTheme } from "../../src/context/ThemeContext";
 import { api } from "../../src/api";
 import { toUserMessage } from "../../src/api/errors";
@@ -10,9 +11,12 @@ import { RiskBadge } from "../../src/components/RiskBadge";
 import { EmptyState } from "../../src/components/EmptyState";
 import { ErrorState } from "../../src/components/ErrorState";
 import { LoadingState } from "../../src/components/LoadingState";
+import { useLayout } from "../../src/layout/useLayout";
+import { Icon } from "../../src/components/Icon";
 
 export default function NotificationsScreen() {
   const { colors, typography, spacing, radius } = useTheme();
+  const {isDesktop}=useLayout();
 
   const [filter, setFilter] = useState<NotificationFilter>("all");
   const [items, setItems] = useState<Notification[]>([]);
@@ -96,9 +100,12 @@ export default function NotificationsScreen() {
 
       {/* Quiet Hours Banner (US-17) */}
       <View style={[styles.quietBanner, { backgroundColor: colors.surfaceElevated, borderColor: colors.border }]}>
-        <Text style={[typography.caption, { color: colors.textSecondary }]}>
-          🌙 Quiet Hours active (22:00 – 08:00). High-priority review alerts will sound after 08:00.
-        </Text>
+        <View style={styles.quietRow}>
+          <Icon name="moon-outline" size={14} color={colors.textSecondary} />
+          <Text style={[typography.caption, { color: colors.textSecondary, flex: 1 }]}>
+            Quiet Hours active (22:00 – 08:00). High-priority review alerts will sound after 08:00.
+          </Text>
+        </View>
       </View>
 
       {isLoading ? (
@@ -114,17 +121,17 @@ export default function NotificationsScreen() {
         />
       ) : items.length === 0 ? (
         <EmptyState
-          icon="🔔"
+          icon="notifications-off-outline"
           title="No Alerts"
           message="No notification events match your selected filter."
           actionTitle="Check Again"
           onAction={loadNotifications}
         />
       ) : (
-        <ScrollView contentContainerStyle={{ padding: spacing.base, paddingBottom: 60 }}>
+        <ScrollView contentContainerStyle={{ padding: isDesktop ? 24 : spacing.base, paddingBottom: 60, flexDirection:isDesktop?"row":"column",flexWrap:isDesktop?"wrap":"nowrap",columnGap:isDesktop?16:0 }}>
           {/* Grouped by Day */}
           <Text
-            style={[typography.caption, { color: colors.textMuted, textTransform: "uppercase", marginBottom: 8 }]}
+            style={[typography.caption, { color: colors.textMuted, textTransform: "uppercase", marginBottom: 8 }, isDesktop && { flexBasis: "100%" }]}
             accessibilityRole="header"
           >
             Today
@@ -135,6 +142,7 @@ export default function NotificationsScreen() {
               key={item.id}
               style={[
                 styles.notifCard,
+                isDesktop && { flexBasis:"47%",flexGrow:1,minWidth:280 },
                 {
                   backgroundColor: colors.surface,
                   borderColor: colors.border,
@@ -150,7 +158,7 @@ export default function NotificationsScreen() {
                       accessibilityLabel="Unread"
                     />
                   )}
-                  <Text style={[typography.caption, { color: colors.textMuted, fontFamily: "monospace" }]}>
+                  <Text style={[typography.caption, { color: colors.textMuted, fontFamily: Platform.OS === "web" ? typography.code.fontFamily : "monospace" }]}>
                     {item.repo}
                   </Text>
                 </View>
@@ -182,6 +190,11 @@ export default function NotificationsScreen() {
 }
 
 const styles = StyleSheet.create({
+  quietRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
   root: {
     flex: 1,
   },

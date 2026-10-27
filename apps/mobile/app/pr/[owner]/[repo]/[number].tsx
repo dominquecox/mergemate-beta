@@ -1,15 +1,8 @@
 import React, { useState, useEffect, useCallback } from "react";
-import {
-  View,
-  Text,
-  ScrollView,
-  TouchableOpacity,
-  TextInput,
-  StyleSheet,
-  Linking,
-  Share,
-} from "react-native";
+import { View, ScrollView, TouchableOpacity, TextInput, StyleSheet, Linking, Share, Platform } from "react-native";
+import { Text } from "../../../../src/components/Text";
 import { useLocalSearchParams } from "expo-router";
+import { useLayout } from "../../../../src/layout/useLayout";
 import { useTheme } from "../../../../src/context/ThemeContext";
 import { api } from "../../../../src/api";
 import { toUserMessage } from "../../../../src/api/errors";
@@ -23,6 +16,7 @@ import { Button } from "../../../../src/components/Button";
 import { EmptyState } from "../../../../src/components/EmptyState";
 import { ErrorState } from "../../../../src/components/ErrorState";
 import { LoadingState } from "../../../../src/components/LoadingState";
+import { Icon } from "../../../../src/components/Icon";
 
 export default function PrDetailScreen() {
   const { owner, repo, number } = useLocalSearchParams<{
@@ -32,6 +26,7 @@ export default function PrDetailScreen() {
   }>();
 
   const { colors, typography, spacing, radius } = useTheme();
+  const {isDesktop}=useLayout();
   const { aiConsentGranted } = useConsent();
 
   const [detail, setDetail] = useState<PrDetail | null>(null);
@@ -93,7 +88,7 @@ export default function PrDetailScreen() {
             accessibilityLabel="Share pull request"
             style={styles.shareBtn}
           >
-            <Text style={{ fontSize: 18 }}>📤</Text>
+            <Icon name="share-outline" size={22} color={colors.textSecondary} />
           </TouchableOpacity>
         }
       />
@@ -111,7 +106,7 @@ export default function PrDetailScreen() {
         />
       ) : !detail ? (
         <EmptyState
-          icon="📄"
+          icon="document-text-outline"
           title="Pull request not found"
           message="This pull request may have been removed or moved in GitHub."
           actionTitle="Try Again"
@@ -119,11 +114,11 @@ export default function PrDetailScreen() {
         />
       ) : (
         <>
-          <ScrollView contentContainerStyle={{ padding: spacing.base, paddingBottom: 120 }}>
+          <ScrollView contentContainerStyle={{ padding:isDesktop?24:spacing.base, paddingBottom:120 }}>
             {/* PR Header */}
             <View style={[styles.headerCard, { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.lg }]}>
               <View style={styles.topRow}>
-                <Text style={[typography.caption, { color: colors.textMuted, fontFamily: "monospace" }]}>
+                <Text style={[typography.caption, { color: colors.textMuted, fontFamily: Platform.OS === "web" ? typography.code.fontFamily : "monospace" }]}>
                   {detail.owner}/{detail.repo} · #{detail.number}
                 </Text>
                 <StatusPill status={detail.status} />
@@ -161,7 +156,7 @@ export default function PrDetailScreen() {
                 accessibilityRole="alert"
               >
                 <View style={styles.secretTitleRow}>
-                  <Text style={[styles.warningIcon, { color: colors.secretWarning }]}>⚠</Text>
+                  <Icon name="warning" size={18} color={colors.secretWarning} />
                   <Text style={[typography.headline, { color: colors.secretWarning, fontWeight: "700" }]}>
                     POSSIBLE SECRET DETECTED
                   </Text>
@@ -178,6 +173,8 @@ export default function PrDetailScreen() {
               </View>
             )}
 
+            <View style={isDesktop ? styles.analysisGrid : undefined}>
+            <View style={isDesktop ? {flex:1.45,minWidth:0} : undefined}>
             {/* AI Summary Card (US-09) */}
             {detail.summary && (
               <View style={{ marginTop: spacing.sm }}>
@@ -228,6 +225,8 @@ export default function PrDetailScreen() {
               </View>
             )}
 
+            </View>
+            <View style={isDesktop ? {flex:1,minWidth:0} : undefined}>
             {/* Risk Assessment Card (US-10) */}
             {detail.risk && (
               <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.lg, marginTop: spacing.sm }]}>
@@ -241,9 +240,12 @@ export default function PrDetailScreen() {
                 <View style={{ marginTop: spacing.sm }}>
                   {detail.risk.reasons.map((reason: string, idx: number) => (
                     <View key={idx} style={styles.reasonRow}>
-                      <Text style={{ color: detail.risk!.level === "high" ? colors.riskHigh : colors.riskMedium }}>
-                        ●
-                      </Text>
+                      <Icon
+                        name="ellipse"
+                        size={8}
+                        color={detail.risk!.level === "high" ? colors.riskHigh : colors.riskMedium}
+                        style={styles.reasonDot}
+                      />
                       <Text style={[typography.body, { color: colors.text, flex: 1 }]}>{reason}</Text>
                     </View>
                   ))}
@@ -268,9 +270,17 @@ export default function PrDetailScreen() {
                 <View style={{ marginTop: spacing.xs }}>
                   {detail.checks.map((chk) => (
                     <View key={chk.id} style={styles.checkRow}>
-                      <Text style={{ color: chk.conclusion === "success" ? colors.riskLow : chk.conclusion === "failure" ? colors.riskHigh : colors.textMuted }}>
-                        {chk.conclusion === "success" ? "✓" : chk.conclusion === "failure" ? "✕" : "…"}
-                      </Text>
+                      <Icon
+                        name={
+                          chk.conclusion === "success"
+                            ? "checkmark-circle"
+                            : chk.conclusion === "failure"
+                              ? "close-circle"
+                              : "ellipsis-horizontal-circle-outline"
+                        }
+                        size={18}
+                        color={chk.conclusion === "success" ? colors.riskLow : chk.conclusion === "failure" ? colors.riskHigh : colors.textMuted}
+                      />
                       <Text style={[typography.subhead, { color: colors.text, flex: 1 }]}>{chk.name}</Text>
                       <Text style={[typography.caption, { color: colors.textMuted }]}>{chk.conclusion}</Text>
                     </View>
@@ -279,6 +289,8 @@ export default function PrDetailScreen() {
               )}
             </View>
 
+            </View>
+            </View>
             {/* Changed Files List */}
             <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.lg, marginTop: spacing.sm }]}>
               <Text style={[typography.headline, { color: colors.text }]} accessibilityRole="header">
@@ -383,6 +395,7 @@ export default function PrDetailScreen() {
 }
 
 const styles = StyleSheet.create({
+  analysisGrid: { flexDirection:"row",gap:16,alignItems:"flex-start" },
   root: {
     flex: 1,
   },
@@ -419,9 +432,8 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 6,
   },
-  warningIcon: {
-    fontSize: 16,
-    fontWeight: "700",
+  reasonDot: {
+    marginTop: 6,
   },
   codeBox: {
     padding: 8,

@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from "react";
-import { View, Text, TextInput, ScrollView, TouchableOpacity, StyleSheet } from "react-native";
+import { View, TextInput, ScrollView, TouchableOpacity, StyleSheet, Platform } from "react-native";
+import { Text } from "../src/components/Text";
 import { useRouter } from "expo-router";
 import { useTheme } from "../src/context/ThemeContext";
 import { StorageService } from "../src/storage";
@@ -12,6 +13,7 @@ import { RiskBadge } from "../src/components/RiskBadge";
 import { EmptyState } from "../src/components/EmptyState";
 import { ErrorState } from "../src/components/ErrorState";
 import { LoadingState } from "../src/components/LoadingState";
+import { Icon } from "../src/components/Icon";
 
 export default function SearchScreen() {
   const router = useRouter();
@@ -70,7 +72,7 @@ export default function SearchScreen() {
       <View style={{ padding: spacing.base }}>
         {/* Search Input Bar */}
         <View style={[styles.searchBar, { backgroundColor: colors.surfaceElevated, borderColor: colors.border, borderRadius: radius.md }]}>
-          <Text style={{ fontSize: 16 }}>🔍</Text>
+          <Icon name="search-outline" size={18} color={colors.textMuted} />
           <TextInput
             value={query}
             onChangeText={setQuery}
@@ -88,7 +90,7 @@ export default function SearchScreen() {
               accessibilityLabel="Clear search query"
               style={styles.clearBtn}
             >
-              <Text style={{ color: colors.textMuted, fontSize: 16 }}>✕</Text>
+              <Icon name="close-circle" size={18} color={colors.textMuted} />
             </TouchableOpacity>
           )}
         </View>
@@ -160,7 +162,7 @@ export default function SearchScreen() {
         <ScrollView contentContainerStyle={{ paddingHorizontal: spacing.base, paddingBottom: 60 }}>
           {filteredPrs.length === 0 ? (
             <EmptyState
-              icon="🔎"
+              icon="search-outline"
               title="No matching pull requests"
               message={
                 query.trim()
@@ -191,7 +193,7 @@ export default function SearchScreen() {
                 ]}
               >
                 <View style={styles.cardHeader}>
-                  <Text style={[typography.caption, { color: colors.textMuted, fontFamily: "monospace" }]}>
+                  <Text style={[typography.caption, { color: colors.textMuted, fontFamily: Platform.OS === "web" ? typography.code.fontFamily : "monospace" }]}>
                     {item.repo}
                   </Text>
                   {item.risk && <RiskBadge level={item.risk} compact />}

@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from "react";
-import { View, Text, ScrollView, StyleSheet } from "react-native";
+import { View, ScrollView, StyleSheet } from "react-native";
+import { Text } from "../../src/components/Text";
 import { useTheme } from "../../src/context/ThemeContext";
 import { api } from "../../src/api";
 import { toUserMessage } from "../../src/api/errors";
@@ -50,7 +51,7 @@ export default function ChangelogScreen() {
         />
       ) : posts.length === 0 ? (
         <EmptyState
-          icon="📋"
+          icon="list-outline"
           title="No releases published yet"
           message="All new updates and improvements will be listed here."
           actionTitle="Refresh"

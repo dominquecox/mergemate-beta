@@ -1,22 +1,24 @@
 import React from "react";
-import { View, Text, StyleSheet } from "react-native";
+import { View, StyleSheet } from "react-native";
+import { Text } from "./Text";
 import { useTheme } from "../context/ThemeContext";
 import { Button } from "./Button";
+import { Icon, IconName } from "./Icon";
 
 interface EmptyStateProps {
-  icon?: string;
+  icon?: IconName;
   title: string;
   message: string;
   actionTitle?: string;
   onAction?: () => void;
 }
 
-export function EmptyState({ icon = "✦", title, message, actionTitle, onAction }: EmptyStateProps) {
+export function EmptyState({ icon = "sparkles-outline", title, message, actionTitle, onAction }: EmptyStateProps) {
   const { colors, typography, spacing } = useTheme();
 
   return (
     <View style={[styles.container, { padding: spacing.xxl }]}>
-      <Text style={[styles.icon, { color: colors.textMuted }]}>{icon}</Text>
+      <Icon name={icon} size={40} color={colors.textMuted} />
       <Text style={[typography.title2, { color: colors.text, marginTop: spacing.md, textAlign: "center" }]}>
         {title}
       </Text>
@@ -40,8 +42,5 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     minHeight: 240,
-  },
-  icon: {
-    fontSize: 36,
   },
 });

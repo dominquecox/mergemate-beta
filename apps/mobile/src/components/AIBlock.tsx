@@ -1,8 +1,10 @@
 import React, { useState } from "react";
-import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
+import { View, TouchableOpacity, StyleSheet } from "react-native";
+import { Text } from "./Text";
 import { useTheme } from "../context/ThemeContext";
 import { useConsent } from "../context/ConsentContext";
 import { AnalysisCoverage } from "../types";
+import { Icon } from "./Icon";
 
 interface AIBlockProps {
   title?: string;
@@ -35,7 +37,7 @@ export function AIBlock({
         ]}
       >
         <View style={styles.header}>
-          <Text style={styles.sparkle}>✦</Text>
+          <Icon name="sparkles" size={14} color={colors.textMuted} />
           <Text style={[typography.subhead, { color: colors.textSecondary }]}>
             AI Insights Off
           </Text>
@@ -71,7 +73,7 @@ export function AIBlock({
     >
       <View style={styles.header}>
         <View style={styles.titleRow}>
-          <Text style={[styles.sparkle, { color: colors.brandLight }]}>✦</Text>
+          <Icon name="sparkles" size={14} color={colors.brandLight} />
           <Text style={[typography.subhead, { color: colors.brandLight, fontWeight: "600" }]}>
             {title}
           </Text>
@@ -89,9 +91,11 @@ export function AIBlock({
             accessibilityLabel="Mark summary as helpful"
             accessibilityState={{ selected: voted === "up" }}
           >
-            <Text style={{ color: voted === "up" ? colors.brandLight : colors.textMuted, fontSize: 15 }}>
-              👍
-            </Text>
+            <Icon
+              name={voted === "up" ? "thumbs-up" : "thumbs-up-outline"}
+              size={18}
+              color={voted === "up" ? colors.brandLight : colors.textMuted}
+            />
           </TouchableOpacity>
           <TouchableOpacity
             onPress={() => setVoted(voted === "down" ? null : "down")}
@@ -100,9 +104,11 @@ export function AIBlock({
             accessibilityLabel="Mark summary as not helpful"
             accessibilityState={{ selected: voted === "down" }}
           >
-            <Text style={{ color: voted === "down" ? colors.riskHigh : colors.textMuted, fontSize: 15 }}>
-              👎
-            </Text>
+            <Icon
+              name={voted === "down" ? "thumbs-down" : "thumbs-down-outline"}
+              size={18}
+              color={voted === "down" ? colors.riskHigh : colors.textMuted}
+            />
           </TouchableOpacity>
         </View>
       </View>
@@ -134,9 +140,6 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
-  },
-  sparkle: {
-    fontSize: 14,
   },
   actionsRow: {
     flexDirection: "row",

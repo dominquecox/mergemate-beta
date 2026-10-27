@@ -1,7 +1,11 @@
 import React from "react";
-import { View, Text, TouchableOpacity, Image, StyleSheet } from "react-native";
+import { View, TouchableOpacity, Image, StyleSheet } from "react-native";
+import { Text } from "./Text";
 import { useRouter } from "expo-router";
 import { useTheme } from "../context/ThemeContext";
+import { useLayout } from "../layout/useLayout";
+import { Platform } from "react-native";
+import { Icon } from "./Icon";
 
 interface HeaderProps {
   title?: string;
@@ -12,11 +16,12 @@ interface HeaderProps {
 
 export function Header({ title, showBack = false, showLogo = false, rightAction }: HeaderProps) {
   const router = useRouter();
+  const {isDesktop}=useLayout();
   const { colors, typography, isDark } = useTheme();
 
   return (
     <View style={[styles.header, { backgroundColor: colors.background, borderBottomColor: colors.border }]}>
-      <View style={styles.left}>
+      <View style={[styles.left,isDesktop && !showBack && {minWidth:0}]}>
         {showBack && (
           <TouchableOpacity
             onPress={() => router.back()}
@@ -24,7 +29,10 @@ export function Header({ title, showBack = false, showLogo = false, rightAction 
             accessibilityRole="button"
             accessibilityLabel="Go back"
           >
-            <Text style={[typography.headline, { color: colors.brandLight }]}>‹ Back</Text>
+            <View style={styles.backContent}>
+              <Icon name="chevron-back" size={22} color={colors.brandLight} />
+              <Text style={[typography.headline, { color: colors.brandLight }]}>Back</Text>
+            </View>
           </TouchableOpacity>
         )}
         {showLogo && (
@@ -44,7 +52,7 @@ export function Header({ title, showBack = false, showLogo = false, rightAction 
 
       {title && !showLogo && (
         <Text
-          style={[typography.headline, { color: colors.text, textAlign: "center", flex: 1 }]}
+          style={[Platform.OS === "web" ? typography.title2 : typography.headline, { color: colors.text, textAlign: isDesktop ? "left" : "center", flex: 1 }]}
           numberOfLines={1}
           accessibilityRole="header"
         >
@@ -76,6 +84,10 @@ const styles = StyleSheet.create({
     minWidth: 44,
     paddingHorizontal: 4,
     justifyContent: "center",
+  },
+  backContent: {
+    flexDirection: "row",
+    alignItems: "center",
   },
   logo: {
     width: 142,

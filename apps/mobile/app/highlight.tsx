@@ -1,5 +1,6 @@
 import React, { useState } from "react";
-import { View, Text, ScrollView, TextInput, StyleSheet, Image, Platform, TouchableOpacity } from "react-native";
+import { View, ScrollView, TextInput, StyleSheet, Image, Platform, TouchableOpacity } from "react-native";
+import { Text } from "../src/components/Text";
 import * as ImagePicker from "expo-image-picker";
 import { useTheme } from "../src/context/ThemeContext";
 import { api } from "../src/api";
@@ -11,6 +12,7 @@ import { Card } from "../src/components/Card";
 import { EmptyState } from "../src/components/EmptyState";
 import { ErrorState } from "../src/components/ErrorState";
 import { LoadingState } from "../src/components/LoadingState";
+import { Icon } from "../src/components/Icon";
 
 const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp"];
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
@@ -99,7 +101,7 @@ export default function HighlightScreen() {
               </>
             ) : (
               <>
-                <Text style={{ fontSize: 32 }}>🖼</Text>
+                <Icon name="image-outline" size={34} color={colors.brandLight} />
                 <Text style={[typography.headline, { color: colors.brandLight, marginTop: 8 }]}>Choose a screenshot</Text>
                 <Text style={[typography.caption, { color: colors.textMuted }]}>JPEG, PNG or WebP · up to 5 MB</Text>
               </>
@@ -154,9 +156,12 @@ export default function HighlightScreen() {
         ) : result ? (
           <View style={{ marginTop: spacing.base }}>
             <Card>
-              <Text style={[typography.headline, { color: colors.brandLight }]} accessibilityRole="header">
-                ✦ AI Visual Insight
-              </Text>
+              <View style={styles.insightTitleRow}>
+                <Icon name="sparkles" size={16} color={colors.brandLight} />
+                <Text style={[typography.headline, { color: colors.brandLight }]} accessibilityRole="header">
+                  AI Visual Insight
+                </Text>
+              </View>
               <Text style={[typography.body, { color: colors.text, marginTop: 6, lineHeight: 22 }]}>
                 {result.insight}
               </Text>
@@ -189,14 +194,17 @@ export default function HighlightScreen() {
                 </View>
               ))}
 
-              <Text style={[typography.caption, { color: colors.textMuted, marginTop: spacing.md }]}>
-                🔒 Privacy safe: Screenshot image was evaluated server-side and deleted immediately after processing.
-              </Text>
+              <View style={[styles.noticeRow, { marginTop: spacing.md }]}>
+                <Icon name="lock-closed-outline" size={14} color={colors.textMuted} style={styles.noticeIcon} />
+                <Text style={[typography.caption, { color: colors.textMuted, flex: 1 }]}>
+                  Privacy safe: Screenshot image was evaluated server-side and deleted immediately after processing.
+                </Text>
+              </View>
             </Card>
           </View>
         ) : (
           <EmptyState
-            icon="🔍"
+            icon="scan-outline"
             title="No screenshot analyzed yet"
             message="Choose a screenshot above and tap Analyze Screenshot with AI to inspect layout and contrast regions."
             actionTitle="Choose Screenshot"
@@ -209,6 +217,19 @@ export default function HighlightScreen() {
 }
 
 const styles = StyleSheet.create({
+  noticeRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 8,
+  },
+  noticeIcon: {
+    marginTop: 1,
+  },
+  insightTitleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
   root: {
     flex: 1,
   },

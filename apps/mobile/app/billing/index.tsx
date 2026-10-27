@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from "react";
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Linking, Platform } from "react-native";
+import { View, ScrollView, TouchableOpacity, StyleSheet, Linking, Platform } from "react-native";
+import { Text } from "../../src/components/Text";
 import { Redirect } from "expo-router";
 import { useTheme } from "../../src/context/ThemeContext";
 import { api } from "../../src/api";
@@ -12,6 +13,7 @@ import { Card } from "../../src/components/Card";
 import { EmptyState } from "../../src/components/EmptyState";
 import { ErrorState } from "../../src/components/ErrorState";
 import { LoadingState } from "../../src/components/LoadingState";
+import { Icon } from "../../src/components/Icon";
 
 export default function BillingScreen() {
   if (Platform.OS !== "web") {
@@ -93,7 +95,7 @@ export default function BillingScreen() {
         />
       ) : !billing ? (
         <EmptyState
-          icon="💳"
+          icon="card-outline"
           title="Plan details unavailable"
           message="We couldn't find subscription details for this account."
           actionTitle="Reload Plan"
@@ -224,7 +226,7 @@ export default function BillingScreen() {
                 <View style={{ marginTop: spacing.md, gap: 8 }}>
                   {BILLING_CONFIG.pro.features.map((feat, idx) => (
                     <View key={idx} style={styles.featRow}>
-                      <Text style={{ color: colors.riskLow }}>✓</Text>
+                      <Icon name="checkmark-circle" size={16} color={colors.riskLow} />
                       <Text style={[typography.callout, { color: colors.text }]}>{feat}</Text>
                     </View>
                   ))}

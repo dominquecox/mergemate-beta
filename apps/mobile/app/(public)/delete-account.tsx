@@ -1,5 +1,6 @@
 import React, { useState } from "react";
-import { View, Text, ScrollView, StyleSheet } from "react-native";
+import { View, ScrollView, StyleSheet } from "react-native";
+import { Text } from "../../src/components/Text";
 import { useRouter } from "expo-router";
 import { useTheme } from "../../src/context/ThemeContext";
 import { Header } from "../../src/components/Header";
@@ -24,7 +25,7 @@ export default function PublicDeleteAccountScreen() {
       ) : error ? (
         <ErrorState title="Couldn't load instructions" message={error} onRetry={() => setError(null)} />
       ) : !showInstructions ? (
-        <EmptyState icon="🗑" title="Instructions unavailable" message="Email support@mergemate.dev to request account deletion." />
+        <EmptyState icon="trash-outline" title="Instructions unavailable" message="Email support@mergemate.dev to request account deletion." />
       ) : (
         <ScrollView contentContainerStyle={{ padding: spacing.base, paddingBottom: 60 }}>
           <Text style={[typography.title1, { color: colors.text }]} accessibilityRole="header">

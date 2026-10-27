@@ -157,11 +157,12 @@ describe("HttpApiClient on web (cookie session)", () => {
       if (req.method === "DELETE") return new Response(null, { status: 204 });
       return jsonResponse({ configured: true });
     });
-    await client.saveMetaKey("  abcdefghijklmnop1234  ");
+    const sampleKey = "test-only-".repeat(3);
+    await client.saveMetaKey(`  ${sampleKey}  `);
     await client.removeMetaKey();
     const put = calls.find((c) => c.method === "PUT");
     expect(put?.path).toBe("/settings/meta-key");
-    expect(put?.body).toEqual({ key: "abcdefghijklmnop1234" });
+    expect(put?.body).toEqual({ key: sampleKey });
     expect(calls.find((c) => c.method === "DELETE")?.headers["x-csrf-token"]).toBe(CSRF_A);
 
     await expect(client.saveMetaKey("short")).rejects.toMatchObject({ code: "validation_failed" });

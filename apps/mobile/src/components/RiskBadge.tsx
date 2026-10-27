@@ -1,7 +1,9 @@
 import React from "react";
-import { View, Text, StyleSheet } from "react-native";
+import { View, StyleSheet } from "react-native";
+import { Text } from "./Text";
 import { useTheme } from "../context/ThemeContext";
 import { RiskLevel, SecretLeakWarning } from "../types";
+import { Icon, IconName } from "./Icon";
 
 interface RiskBadgeProps {
   level: RiskLevel;
@@ -18,18 +20,18 @@ export function RiskBadge({ level, secretWarning, compact }: RiskBadgeProps) {
 
   let bg = colors.riskLowBg;
   let text = colors.riskLow;
-  let icon = "✓";
+  let icon: IconName = "checkmark-circle";
   let label = "Low risk";
 
   if (effectiveLevel === "medium") {
     bg = colors.riskMediumBg;
     text = colors.riskMedium;
-    icon = "▲";
+    icon = "alert-circle";
     label = "Medium risk";
   } else if (effectiveLevel === "high") {
     bg = isSecretLeak ? colors.secretWarningBg : colors.riskHighBg;
     text = isSecretLeak ? colors.secretWarning : colors.riskHigh;
-    icon = isSecretLeak ? "⚠" : "✕";
+    icon = isSecretLeak ? "warning" : "close-circle";
     label = isSecretLeak ? "Secret Alert · High risk" : "High risk";
   }
 
@@ -47,7 +49,7 @@ export function RiskBadge({ level, secretWarning, compact }: RiskBadgeProps) {
       accessibilityRole="text"
       accessibilityLabel={`Risk level: ${label}`}
     >
-      <Text style={[styles.icon, { color: text, fontSize: compact ? 10 : 12 }]}>{icon}</Text>
+      <Icon name={icon} size={compact ? 11 : 13} color={text} />
       <Text style={[typography.caption, { color: text, fontWeight: "600" }]}>{label}</Text>
     </View>
   );
@@ -59,8 +61,5 @@ const styles = StyleSheet.create({
     alignItems: "center",
     alignSelf: "flex-start",
     gap: 4,
-  },
-  icon: {
-    fontWeight: "700",
   },
 });

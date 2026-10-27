@@ -1,5 +1,6 @@
 import React, { useState } from "react";
-import { View, Text, ScrollView, StyleSheet, Alert, Platform } from "react-native";
+import { View, ScrollView, StyleSheet, Alert, Platform } from "react-native";
+import { Text } from "../../src/components/Text";
 import { useRouter } from "expo-router";
 import { useTheme } from "../../src/context/ThemeContext";
 import { useAuth } from "../../src/context/AuthContext";
@@ -10,6 +11,7 @@ import { Card } from "../../src/components/Card";
 import { EmptyState } from "../../src/components/EmptyState";
 import { ErrorState } from "../../src/components/ErrorState";
 import { LoadingState } from "../../src/components/LoadingState";
+import { Icon } from "../../src/components/Icon";
 
 export default function DeleteAccountScreen() {
   const router = useRouter();
@@ -63,7 +65,7 @@ export default function DeleteAccountScreen() {
         />
       ) : !user ? (
         <EmptyState
-          icon="👤"
+          icon="person-outline"
           title="No active account signed in"
           message="Sign in to manage or delete your MergeMate account."
           actionTitle="Go to Sign In"
@@ -72,7 +74,7 @@ export default function DeleteAccountScreen() {
       ) : (
         <ScrollView contentContainerStyle={[styles.content, { padding: spacing.xl }]}>
           <View style={[styles.iconCircle, { backgroundColor: colors.riskHighBg }]}>
-            <Text style={{ fontSize: 32 }}>⚠️</Text>
+            <Icon name="warning" size={34} color={colors.riskHigh} />
           </View>
 
           <Text

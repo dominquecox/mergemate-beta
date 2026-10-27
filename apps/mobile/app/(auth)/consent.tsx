@@ -1,5 +1,6 @@
 import React, { useState } from "react";
-import { View, Text, StyleSheet, ScrollView } from "react-native";
+import { View, StyleSheet, ScrollView } from "react-native";
+import { Text } from "../../src/components/Text";
 import { useRouter } from "expo-router";
 import { useTheme } from "../../src/context/ThemeContext";
 import { useConsent } from "../../src/context/ConsentContext";
@@ -7,6 +8,7 @@ import { Button } from "../../src/components/Button";
 import { Header } from "../../src/components/Header";
 import { EmptyState } from "../../src/components/EmptyState";
 import { LoadingState } from "../../src/components/LoadingState";
+import { Icon } from "../../src/components/Icon";
 import { ErrorState } from "../../src/components/ErrorState";
 
 export default function ConsentScreen() {
@@ -53,7 +55,7 @@ export default function ConsentScreen() {
         />
       ) : saved ? (
         <EmptyState
-          icon="✓"
+          icon="checkmark-circle-outline"
           title="Preference saved"
           message="Your AI summary setting has been updated."
           actionTitle="Continue to Inbox"
@@ -62,9 +64,7 @@ export default function ConsentScreen() {
       ) : (
         <ScrollView contentContainerStyle={[styles.content, { padding: spacing.xl }]}>
           <View style={[styles.iconCircle, { backgroundColor: colors.brandSubtle, borderColor: colors.brandMuted }]}>
-            <Text style={[styles.sparkleIcon, { color: colors.brandLight }]} accessibilityElementsHidden>
-              ✦
-            </Text>
+            <Icon name="sparkles" size={36} color={colors.brandLight} />
           </View>
 
           <Text
@@ -94,7 +94,10 @@ export default function ConsentScreen() {
               },
             ]}
           >
-            <Text style={[typography.headline, { color: colors.riskLow }]}>✓ What is sent to the model</Text>
+            <View style={styles.boxTitleRow}>
+              <Icon name="checkmark-circle" size={18} color={colors.riskLow} />
+              <Text style={[typography.headline, { color: colors.riskLow }]}>What is sent to the model</Text>
+            </View>
             <Text style={[typography.callout, { color: colors.textSecondary, marginTop: 4, lineHeight: 20 }]}>
               • Pull request title and description{"\n"}
               • Selected changed filenames and patch diffs{"\n"}
@@ -113,7 +116,10 @@ export default function ConsentScreen() {
               },
             ]}
           >
-            <Text style={[typography.headline, { color: colors.riskHigh }]}>✕ What is NEVER sent</Text>
+            <View style={styles.boxTitleRow}>
+              <Icon name="close-circle" size={18} color={colors.riskHigh} />
+              <Text style={[typography.headline, { color: colors.riskHigh }]}>What is NEVER sent</Text>
+            </View>
             <Text style={[typography.callout, { color: colors.textSecondary, marginTop: 4, lineHeight: 20 }]}>
               • Passwords, API keys, or secrets (automatically masked first){"\n"}
               • Full git history or untouched repository files{"\n"}
@@ -122,9 +128,12 @@ export default function ConsentScreen() {
           </View>
 
           <View style={[styles.notice, { backgroundColor: colors.surfaceElevated, borderRadius: radius.md, marginTop: spacing.md }]}>
-            <Text style={[typography.caption, { color: colors.textMuted, lineHeight: 18 }]}>
-              🔒 Your code is never stored and never used to train AI models. You can turn AI summaries on or off anytime in Settings.
-            </Text>
+            <View style={styles.noticeRow}>
+              <Icon name="lock-closed-outline" size={14} color={colors.textMuted} style={styles.noticeIcon} />
+              <Text style={[typography.caption, { color: colors.textMuted, lineHeight: 18, flex: 1 }]}>
+                Your code is never stored and never used to train AI models. You can turn AI summaries on or off anytime in Settings.
+              </Text>
+            </View>
           </View>
 
           <View style={[styles.actions, { marginTop: spacing.xl }]}>
@@ -148,6 +157,19 @@ export default function ConsentScreen() {
 }
 
 const styles = StyleSheet.create({
+  noticeRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 8,
+  },
+  noticeIcon: {
+    marginTop: 1,
+  },
+  boxTitleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
   root: {
     flex: 1,
   },
@@ -162,9 +184,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 1,
-  },
-  sparkleIcon: {
-    fontSize: 28,
   },
   box: {
     width: "100%",

@@ -1,5 +1,6 @@
 import React from "react";
-import { View, Text, StyleSheet } from "react-native";
+import { View, StyleSheet, Platform } from "react-native";
+import { Text } from "./Text";
 import { useTheme } from "../context/ThemeContext";
 import { PrStatus } from "../types";
 
@@ -22,7 +23,7 @@ export function StatusPill({ status }: { status: PrStatus }) {
   }
 
   return (
-    <View style={[styles.pill, { backgroundColor: bg, borderRadius: radius.sm }]}>
+    <View style={[styles.pill, { backgroundColor: bg, borderRadius: Platform.OS === "web" ? radius.full : radius.sm }]}>
       <Text style={[typography.caption, { color: text, fontWeight: "700", letterSpacing: 0.5 }]}>
         {label}
       </Text>

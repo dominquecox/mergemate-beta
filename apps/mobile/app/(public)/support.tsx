@@ -1,5 +1,6 @@
 import React, { useState } from "react";
-import { View, Text, TextInput, ScrollView, StyleSheet } from "react-native";
+import { View, TextInput, ScrollView, StyleSheet } from "react-native";
+import { Text } from "../../src/components/Text";
 import { useTheme } from "../../src/context/ThemeContext";
 import { api } from "../../src/api";
 import { toUserMessage } from "../../src/api/errors";
@@ -9,6 +10,7 @@ import { Card } from "../../src/components/Card";
 import { EmptyState } from "../../src/components/EmptyState";
 import { ErrorState } from "../../src/components/ErrorState";
 import { LoadingState } from "../../src/components/LoadingState";
+import { Icon } from "../../src/components/Icon";
 
 export default function SupportScreen() {
   const { colors, typography, spacing, radius } = useTheme();
@@ -52,7 +54,7 @@ export default function SupportScreen() {
         />
       ) : sent ? (
         <EmptyState
-          icon="✉️"
+          icon="mail-outline"
           title="Message sent"
           message={`Thank you! We received your message and will reply to ${email} within 24 hours.`}
           actionTitle="Send Another Message"
@@ -117,9 +119,12 @@ export default function SupportScreen() {
               ]}
             />
 
-            <Text style={[typography.caption, { color: colors.textMuted, marginTop: spacing.sm }]}>
-              🛡 Protected by Cloudflare Turnstile rate limiting against automated spam.
-            </Text>
+            <View style={[styles.noticeRow, { marginTop: spacing.sm }]}>
+              <Icon name="shield-checkmark-outline" size={14} color={colors.textMuted} />
+              <Text style={[typography.caption, { color: colors.textMuted, flex: 1 }]}>
+                Protected by Cloudflare Turnstile rate limiting against automated spam.
+              </Text>
+            </View>
 
             <Button
               title="Send Message"
@@ -136,6 +141,11 @@ export default function SupportScreen() {
 }
 
 const styles = StyleSheet.create({
+  noticeRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
   root: {
     flex: 1,
   },

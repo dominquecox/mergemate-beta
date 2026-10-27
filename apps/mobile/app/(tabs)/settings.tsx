@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from "react";
-import { View, Text, ScrollView, TouchableOpacity, Switch, StyleSheet, Platform, Linking, Alert, TextInput } from "react-native";
+import { View, ScrollView, TouchableOpacity, Switch, StyleSheet, Platform, Linking, Alert, TextInput } from "react-native";
+import { Text } from "../../src/components/Text";
 import { useRouter } from "expo-router";
 import { useTheme } from "../../src/context/ThemeContext";
 import { useAuth } from "../../src/context/AuthContext";
@@ -15,9 +16,12 @@ import { Button } from "../../src/components/Button";
 import { EmptyState } from "../../src/components/EmptyState";
 import { ErrorState } from "../../src/components/ErrorState";
 import { LoadingState } from "../../src/components/LoadingState";
+import { useLayout } from "../../src/layout/useLayout";
+import { Icon } from "../../src/components/Icon";
 
 export default function SettingsScreen() {
   const router = useRouter();
+  const {isDesktop}=useLayout();
   const { colors, typography, spacing, radius, themeMode, setThemeMode } = useTheme();
   const { user, signOut, isDemo } = useAuth();
   const { aiConsentGranted, grantConsent, revokeConsent, error: consentError } = useConsent();
@@ -181,17 +185,17 @@ export default function SettingsScreen() {
         />
       ) : !user && !isDemo && !settings ? (
         <EmptyState
-          icon="⚙️"
+          icon="settings-outline"
           title="Not signed in"
           message="Sign in with GitHub or start demo mode to manage your MergeMate settings."
           actionTitle="Go to Sign In"
           onAction={() => router.replace("/(auth)/sign-in")}
         />
       ) : (
-        <ScrollView contentContainerStyle={{ padding: spacing.base, paddingBottom: 60 }}>
+        <ScrollView contentContainerStyle={{ padding: isDesktop ? 24 : spacing.base, paddingBottom: 60, flexDirection:isDesktop?"row":"column",flexWrap:isDesktop?"wrap":"nowrap",gap:isDesktop?16:0 }}>
           {(notice || consentError) && (
             <View
-              style={[styles.sectionCard, { backgroundColor: colors.surfaceElevated, borderColor: colors.border, borderRadius: radius.lg, marginBottom: spacing.base }]}
+              style={[styles.sectionCard, isDesktop && styles.webSectionCard, { backgroundColor: colors.surfaceElevated, borderColor: colors.border, borderRadius: radius.lg, marginBottom: spacing.base }]}
               accessibilityRole="alert"
             >
               <Text style={[typography.callout, { color: colors.text }]}>{notice ?? consentError}</Text>
@@ -199,12 +203,10 @@ export default function SettingsScreen() {
           )}
 
           {/* Account Profile Card */}
-          <View style={[styles.sectionCard, { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.lg }]}>
+          <View style={[styles.sectionCard, isDesktop && styles.webSectionCard, { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.lg }]}>
             <View style={styles.userRow}>
               <View style={[styles.avatar, { backgroundColor: colors.surfaceElevated, borderColor: colors.border }]}>
-                <Text style={{ fontSize: 24 }} accessibilityElementsHidden>
-                  👤
-                </Text>
+                <Icon name="person-outline" size={24} color={colors.textSecondary} />
               </View>
               <View style={{ flex: 1, marginLeft: spacing.md }}>
                 <Text style={[typography.headline, { color: colors.text }]}>
@@ -232,7 +234,7 @@ export default function SettingsScreen() {
           </View>
 
           {/* Subscription Plan (US-20, US-21) */}
-          <View style={[styles.sectionCard, { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.lg, marginTop: spacing.base }]}>
+          <View style={[styles.sectionCard, isDesktop && styles.webSectionCard, { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.lg, marginTop: isDesktop ? 0 : spacing.base }]}>
             <Text
               style={[typography.subhead, { color: colors.textMuted, textTransform: "uppercase" }]}
               accessibilityRole="header"
@@ -267,7 +269,7 @@ export default function SettingsScreen() {
           </View>
 
           {/* AI & Privacy (US-05) */}
-          <View style={[styles.sectionCard, { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.lg, marginTop: spacing.base }]}>
+          <View style={[styles.sectionCard, isDesktop && styles.webSectionCard, { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.lg, marginTop: isDesktop ? 0 : spacing.base }]}>
             <Text
               style={[typography.subhead, { color: colors.textMuted, textTransform: "uppercase" }]}
               accessibilityRole="header"
@@ -293,7 +295,7 @@ export default function SettingsScreen() {
           </View>
 
           {/* Notifications & Quiet Hours (US-17) */}
-          <View style={[styles.sectionCard, { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.lg, marginTop: spacing.base }]}>
+          <View style={[styles.sectionCard, isDesktop && styles.webSectionCard, { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.lg, marginTop: isDesktop ? 0 : spacing.base }]}>
             <Text
               style={[typography.subhead, { color: colors.textMuted, textTransform: "uppercase" }]}
               accessibilityRole="header"
@@ -364,7 +366,7 @@ export default function SettingsScreen() {
 
           {/* Bring your own Meta key: entered on the web only, never shown again; iOS shows whether one is set */}
           {metaKey && !isDemo && (
-            <View style={[styles.sectionCard, { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.lg, marginTop: spacing.base }]}>
+            <View style={[styles.sectionCard, isDesktop && styles.webSectionCard, { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.lg, marginTop: isDesktop ? 0 : spacing.base }]}>
               <Text
                 style={[typography.subhead, { color: colors.textMuted, textTransform: "uppercase" }]}
                 accessibilityRole="header"
@@ -412,7 +414,7 @@ export default function SettingsScreen() {
           )}
 
           {/* Appearance */}
-          <View style={[styles.sectionCard, { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.lg, marginTop: spacing.base }]}>
+          <View style={[styles.sectionCard, isDesktop && styles.webSectionCard, { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.lg, marginTop: isDesktop ? 0 : spacing.base }]}>
             <Text
               style={[typography.subhead, { color: colors.textMuted, textTransform: "uppercase" }]}
               accessibilityRole="header"
@@ -453,7 +455,7 @@ export default function SettingsScreen() {
           </View>
 
           {/* Legal & Support Links (US-18, US-23) */}
-          <View style={[styles.sectionCard, { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.lg, marginTop: spacing.base }]}>
+          <View style={[styles.sectionCard, isDesktop && styles.webSectionCard, { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.lg, marginTop: isDesktop ? 0 : spacing.base }]}>
             <Text
               style={[typography.subhead, { color: colors.textMuted, textTransform: "uppercase", marginBottom: spacing.xs }]}
               accessibilityRole="header"
@@ -476,9 +478,7 @@ export default function SettingsScreen() {
                 accessibilityLabel={item.label}
               >
                 <Text style={[typography.body, { color: colors.text }]}>{item.label}</Text>
-                <Text style={[typography.headline, { color: colors.textMuted }]} accessibilityElementsHidden>
-                  ›
-                </Text>
+                <Icon name="chevron-forward" size={18} color={colors.textMuted} />
               </TouchableOpacity>
             ))}
           </View>
@@ -502,6 +502,7 @@ const styles = StyleSheet.create({
   root: {
     flex: 1,
   },
+  webSectionCard: { flexBasis:"47%", flexGrow:1, minWidth:280 },
   sectionCard: {
     padding: 16,
     borderWidth: 1,

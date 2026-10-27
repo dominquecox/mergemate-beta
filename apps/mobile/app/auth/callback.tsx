@@ -71,7 +71,7 @@ export default function AuthCallbackScreen() {
         />
       ) : missingParams ? (
         <EmptyState
-          icon="🔑"
+          icon="key-outline"
           title="Sign-in link expired"
           message="Start a new sign-in from the MergeMate sign-in screen."
           actionTitle="Go to Sign In"

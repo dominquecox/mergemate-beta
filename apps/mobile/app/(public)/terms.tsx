@@ -1,5 +1,6 @@
 import React, { useState } from "react";
-import { View, Text, ScrollView, StyleSheet } from "react-native";
+import { View, ScrollView, StyleSheet } from "react-native";
+import { Text } from "../../src/components/Text";
 import { useTheme } from "../../src/context/ThemeContext";
 import { Header } from "../../src/components/Header";
 import { EmptyState } from "../../src/components/EmptyState";
@@ -38,7 +39,7 @@ export default function TermsScreen() {
       ) : error ? (
         <ErrorState title="Couldn't load terms" message={error} onRetry={() => setError(null)} />
       ) : TERMS_SECTIONS.length === 0 ? (
-        <EmptyState icon="📄" title="Terms unavailable" message="Please contact support@mergemate.dev for our terms of service." />
+        <EmptyState icon="document-text-outline" title="Terms unavailable" message="Please contact support@mergemate.dev for our terms of service." />
       ) : (
         <ScrollView contentContainerStyle={{ padding: spacing.base, paddingBottom: 60 }}>
           <Text style={[typography.title1, { color: colors.text }]} accessibilityRole="header">

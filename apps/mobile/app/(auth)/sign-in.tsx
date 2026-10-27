@@ -1,5 +1,6 @@
 import React, { useState } from "react";
-import { View, Text, Image, TouchableOpacity, StyleSheet, Platform, ScrollView } from "react-native";
+import { View, Image, TouchableOpacity, StyleSheet, Platform, ScrollView } from "react-native";
+import { Text } from "../../src/components/Text";
 import { useRouter } from "expo-router";
 import { useAuth } from "../../src/context/AuthContext";
 import { useTheme } from "../../src/context/ThemeContext";
@@ -7,6 +8,7 @@ import { Button } from "../../src/components/Button";
 import { EmptyState } from "../../src/components/EmptyState";
 import { ErrorState } from "../../src/components/ErrorState";
 import { LoadingState } from "../../src/components/LoadingState";
+import { Icon } from "../../src/components/Icon";
 
 export default function SignInScreen() {
   const router = useRouter();
@@ -72,7 +74,7 @@ export default function SignInScreen() {
         />
       ) : offlineState ? (
         <EmptyState
-          icon="📡"
+          icon="cloud-offline-outline"
           title="Network offline"
           message="You can still explore MergeMate using sample pull requests in Demo Mode."
           actionTitle="Try the Demo"
@@ -122,9 +124,12 @@ export default function SignInScreen() {
       )}
 
       <View style={[styles.footer, { marginTop: spacing.xl }]}>
-        <Text style={[typography.caption, { color: colors.textMuted, textAlign: "center", lineHeight: 18 }]}>
-          🔒 We never store your code. Your GitHub token stays encrypted on our server, never on this device.
-        </Text>
+        <View style={styles.privacyRow}>
+          <Icon name="lock-closed-outline" size={14} color={colors.textMuted} style={styles.privacyIcon} />
+          <Text style={[typography.caption, { color: colors.textMuted, textAlign: "center", lineHeight: 18, flexShrink: 1 }]}>
+            We never store your code. Your GitHub token stays encrypted on our server, never on this device.
+          </Text>
+        </View>
 
         <View style={[styles.linksRow, { marginTop: spacing.sm }]}>
           <TouchableOpacity
@@ -203,6 +208,15 @@ const styles = StyleSheet.create({
   footer: {
     alignItems: "center",
     paddingBottom: 24,
+  },
+  privacyRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    justifyContent: "center",
+    gap: 6,
+  },
+  privacyIcon: {
+    marginTop: 2,
   },
   linksRow: {
     flexDirection: "row",

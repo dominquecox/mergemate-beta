@@ -1,5 +1,6 @@
 import React, { useState } from "react";
-import { View, Text, ScrollView, StyleSheet } from "react-native";
+import { View, ScrollView, StyleSheet } from "react-native";
+import { Text } from "../../src/components/Text";
 import { useTheme } from "../../src/context/ThemeContext";
 import { Header } from "../../src/components/Header";
 import { EmptyState } from "../../src/components/EmptyState";
@@ -38,7 +39,7 @@ export default function PrivacyScreen() {
       ) : error ? (
         <ErrorState title="Couldn't load privacy policy" message={error} onRetry={() => setError(null)} />
       ) : PRIVACY_SECTIONS.length === 0 ? (
-        <EmptyState icon="🔒" title="Policy unavailable" message="Please contact privacy@mergemate.dev for our privacy policy." />
+        <EmptyState icon="lock-closed-outline" title="Policy unavailable" message="Please contact privacy@mergemate.dev for our privacy policy." />
       ) : (
         <ScrollView contentContainerStyle={{ padding: spacing.base, paddingBottom: 60 }}>
           <Text style={[typography.title1, { color: colors.text }]} accessibilityRole="header">

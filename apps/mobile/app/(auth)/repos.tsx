@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Linking } from "react-native";
+import { View, ScrollView, TouchableOpacity, StyleSheet, Linking } from "react-native";
+import { Text } from "../../src/components/Text";
 import { useRouter } from "expo-router";
 import { useTheme } from "../../src/context/ThemeContext";
 import { api } from "../../src/api";
@@ -10,6 +11,7 @@ import { Button } from "../../src/components/Button";
 import { EmptyState } from "../../src/components/EmptyState";
 import { ErrorState } from "../../src/components/ErrorState";
 import { LoadingState } from "../../src/components/LoadingState";
+import { Icon } from "../../src/components/Icon";
 
 export default function ReposScreen() {
   const router = useRouter();
@@ -98,9 +100,12 @@ export default function ReposScreen() {
         <ScrollView contentContainerStyle={{ padding: spacing.base }}>
           {/* GitHub App Configuration Notice */}
           <View style={[styles.infoBanner, { backgroundColor: colors.surfaceElevated, borderColor: colors.border, borderRadius: radius.md }]}>
-            <Text style={[typography.callout, { color: colors.text }]}>
-              🔐 Repository access is managed on GitHub. Choose individual repositories or whole organizations.
-            </Text>
+            <View style={styles.noticeRow}>
+              <Icon name="lock-closed-outline" size={16} color={colors.textSecondary} style={styles.noticeIcon} />
+              <Text style={[typography.callout, { color: colors.text, flex: 1 }]}>
+                Repository access is managed on GitHub. Choose individual repositories or whole organizations.
+              </Text>
+            </View>
             <TouchableOpacity
               onPress={openGitHubAppConfig}
               style={styles.configLinkBtn}
@@ -208,7 +213,7 @@ export default function ReposScreen() {
 
             {repos.length === 0 ? (
               <EmptyState
-                icon="📁"
+                icon="folder-open-outline"
                 title="No repositories selected"
                 message="You haven't connected any repositories yet. Add one on GitHub to start seeing pull requests."
                 actionTitle="Add Repositories on GitHub"
@@ -227,9 +232,16 @@ export default function ReposScreen() {
                     <Text style={[typography.headline, { color: colors.text }]} numberOfLines={1}>
                       {repo.fullName}
                     </Text>
-                    <Text style={[typography.caption, { color: repo.watching ? colors.riskLow : colors.textMuted, marginTop: 2 }]}>
-                      {repo.watching ? "● Watching for review requests" : "○ Muted"}
-                    </Text>
+                    <View style={styles.watchRow}>
+                      <Icon
+                        name={repo.watching ? "eye-outline" : "eye-off-outline"}
+                        size={13}
+                        color={repo.watching ? colors.riskLow : colors.textMuted}
+                      />
+                      <Text style={[typography.caption, { color: repo.watching ? colors.riskLow : colors.textMuted }]}>
+                        {repo.watching ? "Watching for review requests" : "Muted"}
+                      </Text>
+                    </View>
                   </View>
 
                   <TouchableOpacity
@@ -266,6 +278,20 @@ export default function ReposScreen() {
 }
 
 const styles = StyleSheet.create({
+  noticeRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 8,
+  },
+  noticeIcon: {
+    marginTop: 1,
+  },
+  watchRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    marginTop: 2,
+  },
   root: {
     flex: 1,
   },

@@ -1,18 +1,27 @@
 import React, { useEffect, useRef } from "react";
-import { Stack, useRouter } from "expo-router";
+import { Stack, useRouter, useSegments } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
-import { View, StyleSheet, Platform } from "react-native";
+import { View, StyleSheet, Platform, useWindowDimensions } from "react-native";
 import { ThemeProvider, useTheme } from "../src/context/ThemeContext";
 import { AuthProvider, useAuth } from "../src/context/AuthContext";
 import { ConsentProvider } from "../src/context/ConsentContext";
 import { DemoBanner } from "../src/components/DemoBanner";
 import { ConfigErrorScreen, SampleDataBanner, isApiMisconfigured } from "../src/components/ConfigBanner";
+import { WebFonts } from "../src/components/WebFonts";
+import { Sidebar } from "../src/components/Sidebar";
+import { SIDEBAR_WIDTH, resolveShell } from "../src/layout/breakpoints";
 
 function AppContent() {
   const { colors, isDark } = useTheme();
   const router = useRouter();
   const { session, isLoading } = useAuth();
+  const { width } = useWindowDimensions();
+  const segments = useSegments() as string[];
+
+  // Web only: phone column, centered tablet column, or sidebar + wide column on desktop. Native is untouched.
+  const shell = resolveShell({ width, segments, signedIn: Boolean(session), isWeb: Platform.OS === "web" });
+  const isPhoneFrame = shell.mode === "phone" && Platform.OS === "web";
 
   // If the session ends while the app is open (expired, revoked), go back to sign-in.
   const hadSession = useRef(false);
@@ -46,31 +55,69 @@ function AppContent() {
   // A production build without an API address must fail visibly, never fall back to sample data.
   if (isApiMisconfigured) return <ConfigErrorScreen />;
 
+  // Phone and native keep the banners inside the frame, as before. Wider web layouts show them above the column.
+  const bannersAbove = Platform.OS === "web" && !isPhoneFrame;
+  const banners = (
+    <>
+      <SampleDataBanner />
+      <DemoBanner />
+    </>
+  );
+
+  // The gutter beside the column only shows when the column is narrower than the space it sits in.
+  const available = width - (shell.sidebar ? SIDEBAR_WIDTH : 0);
+  const hasGutter = shell.kind === "public" && shell.columnMaxWidth !== undefined && !isPhoneFrame && available > shell.columnMaxWidth;
+
+  const stack = (
+    <Stack
+      screenOptions={{
+        headerShown: false,
+        contentStyle: { backgroundColor: colors.background },
+        animation: "slide_from_right",
+      }}
+    >
+      <Stack.Screen name="index" />
+      <Stack.Screen name="(auth)" options={{ headerShown: false }} />
+      <Stack.Screen name="auth/callback" options={{ headerShown: false }} />
+      <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+      <Stack.Screen name="pr/[owner]/[repo]/[number]" options={{ headerShown: false }} />
+      <Stack.Screen name="highlight" options={{ headerShown: false }} />
+      <Stack.Screen name="search" options={{ headerShown: false }} />
+      <Stack.Screen name="account/delete" options={{ presentation: "modal", headerShown: false }} />
+      <Stack.Screen name="billing" options={{ headerShown: false }} />
+      <Stack.Screen name="(public)" options={{ headerShown: false }} />
+    </Stack>
+  );
+
   return (
     <View style={[styles.root, { backgroundColor: colors.background }]}>
       <StatusBar style={isDark ? "light" : "dark"} />
-      <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background }]} edges={["top", "left", "right"]}>
-        <View style={[styles.webFrame, { backgroundColor: colors.background }]}>
-          <SampleDataBanner />
-          <DemoBanner />
-          <Stack
-            screenOptions={{
-              headerShown: false,
-              contentStyle: { backgroundColor: colors.background },
-              animation: "slide_from_right",
-            }}
-          >
-            <Stack.Screen name="index" />
-            <Stack.Screen name="(auth)" options={{ headerShown: false }} />
-            <Stack.Screen name="auth/callback" options={{ headerShown: false }} />
-            <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-            <Stack.Screen name="pr/[owner]/[repo]/[number]" options={{ headerShown: false }} />
-            <Stack.Screen name="highlight" options={{ headerShown: false }} />
-            <Stack.Screen name="search" options={{ headerShown: false }} />
-            <Stack.Screen name="account/delete" options={{ presentation: "modal", headerShown: false }} />
-            <Stack.Screen name="billing" options={{ headerShown: false }} />
-            <Stack.Screen name="(public)" options={{ headerShown: false }} />
-          </Stack>
+      <SafeAreaView
+        style={[styles.safeArea, shell.sidebar && styles.safeAreaRow, { backgroundColor: colors.background }]}
+        edges={["top", "left", "right"]}
+      >
+        {shell.sidebar && <Sidebar />}
+        <View style={styles.main}>
+          {bannersAbove && banners}
+          <View style={[styles.mainInner, shell.card && styles.mainCard]}>
+            <View
+              style={[
+                styles.webFrame,
+                { backgroundColor: colors.background },
+                shell.columnMaxWidth !== undefined && { maxWidth: shell.columnMaxWidth },
+
+                hasGutter && !shell.card && { borderLeftWidth: 1, borderRightWidth: 1, borderColor: colors.border },
+                shell.card && {
+                  ...styles.authCard,
+                  borderColor: colors.border,
+                  backgroundColor: colors.background,
+                },
+              ]}
+            >
+              {!bannersAbove && banners}
+              {stack}
+            </View>
+          </View>
         </View>
       </SafeAreaView>
     </View>
@@ -79,6 +126,7 @@ function AppContent() {
 
 export default function RootLayout() {
   return (
+    <WebFonts>
     <SafeAreaProvider>
       <ThemeProvider>
         <AuthProvider>
@@ -88,6 +136,7 @@ export default function RootLayout() {
         </AuthProvider>
       </ThemeProvider>
     </SafeAreaProvider>
+    </WebFonts>
   );
 }
 
@@ -98,18 +147,29 @@ const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
   },
+  safeAreaRow: {
+    flexDirection: "row",
+  },
+  main: {
+    flex: 1,
+  },
+  mainInner: {
+    flex: 1,
+  },
+  mainCard: {
+    justifyContent: "center",
+    paddingHorizontal: 24,
+    paddingVertical: 24,
+  },
   webFrame: {
     flex: 1,
     width: "100%",
-    maxWidth: Platform.OS === "web" ? 540 : undefined,
     alignSelf: "center",
-    ...Platform.select({
-      web: {
-        shadowColor: "#000",
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.15,
-        shadowRadius: 12,
-      },
-    }),
+  },
+  authCard: {
+    maxHeight: 760,
+    borderWidth: 1,
+    borderRadius: 16,
+    overflow: "hidden",
   },
 });

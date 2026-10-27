@@ -1,7 +1,9 @@
 import React from "react";
-import { View, Text, StyleSheet } from "react-native";
+import { View, StyleSheet } from "react-native";
+import { Text } from "./Text";
 import { useTheme } from "../context/ThemeContext";
 import { Button } from "./Button";
+import { Icon } from "./Icon";
 
 interface ErrorStateProps {
   title?: string;
@@ -24,7 +26,7 @@ export function ErrorState({
       accessibilityRole="alert"
       accessibilityLiveRegion="assertive"
     >
-      <Text style={[styles.icon, { color: colors.riskHigh }]}>⚠</Text>
+      <Icon name="warning-outline" size={40} color={colors.riskHigh} />
       <Text style={[typography.title2, { color: colors.text, marginTop: spacing.md, textAlign: "center" }]}>
         {title}
       </Text>
@@ -46,8 +48,5 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     minHeight: 240,
-  },
-  icon: {
-    fontSize: 36,
   },
 });

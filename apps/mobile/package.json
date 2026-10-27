@@ -14,11 +14,15 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@expo-google-fonts/geist": "0.4.2",
+    "@expo-google-fonts/jetbrains-mono": "0.4.1",
     "@expo/metro-runtime": "~58.0.15",
+    "@expo/vector-icons": "15.1.1",
     "@mergemate/contracts": "*",
     "expo": "~58.0.19",
     "expo-constants": "~58.0.13",
     "expo-crypto": "58.0.7",
+    "expo-font": "58.0.10",
     "expo-image-picker": "58.0.10",
     "expo-linking": "~58.0.14",
     "expo-notifications": "58.1.6",
@@ -36,6 +40,7 @@
   },
   "devDependencies": {
     "@eslint/js": "9.39.5",
+    "@playwright/test": "1.64.1",
     "@types/react": "~19.3.0",
     "@types/react-dom": "~19.3.0",
     "eslint": "9.39.5",

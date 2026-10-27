@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from "react";
-import { View, Text, ScrollView, StyleSheet } from "react-native";
+import { View, ScrollView, StyleSheet } from "react-native";
+import { Text } from "../../src/components/Text";
 import { useTheme } from "../../src/context/ThemeContext";
 import { api } from "../../src/api";
 import { toUserMessage } from "../../src/api/errors";
@@ -50,7 +51,7 @@ export default function NewsScreen() {
         />
       ) : posts.length === 0 ? (
         <EmptyState
-          icon="📰"
+          icon="newspaper-outline"
           title="No news articles yet"
           message="Check back soon for product announcements and feature guides."
           actionTitle="Refresh"

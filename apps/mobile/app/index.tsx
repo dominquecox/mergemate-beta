@@ -37,7 +37,7 @@ export default function IndexScreen() {
         />
       ) : timedOut ? (
         <EmptyState
-          icon="🚀"
+          icon="rocket-outline"
           title="Ready to get started"
           message="Continue to sign in or explore MergeMate in demo mode."
           actionTitle="Continue"
