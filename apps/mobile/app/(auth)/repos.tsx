@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet, ActivityIndicator, Linking } from "react-native";
+import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Linking } from "react-native";
 import { useRouter } from "expo-router";
 import { useTheme } from "../../src/context/ThemeContext";
 import { api } from "../../src/api";
@@ -9,6 +9,7 @@ import { Header } from "../../src/components/Header";
 import { Button } from "../../src/components/Button";
 import { EmptyState } from "../../src/components/EmptyState";
 import { ErrorState } from "../../src/components/ErrorState";
+import { LoadingState } from "../../src/components/LoadingState";
 
 export default function ReposScreen() {
   const router = useRouter();
@@ -34,7 +35,7 @@ export default function ReposScreen() {
       setOrgs(installations.items);
       setInstallUrl(installations.installUrl);
     } catch (e) {
-      setError(toUserMessage(e, "Failed to load repositories."));
+      setError(toUserMessage(e, "We couldn't load your connected repositories. Please try again."));
       if (isApiClientError(e, "sso_required") && e.ssoUrl) setSsoUrl(e.ssoUrl);
     } finally {
       setIsLoading(false);
@@ -50,7 +51,7 @@ export default function ReposScreen() {
       const updated = await api.toggleWatchRepo(id, !current);
       setRepos((prev) => prev.map((r) => (r.id === id ? updated : r)));
     } catch (e) {
-      alert(toUserMessage(e, "Failed to update watch status"));
+      setError(toUserMessage(e, "We couldn't update the watch setting for that repository. Please try again."));
     }
   };
 
@@ -64,24 +65,31 @@ export default function ReposScreen() {
         title="Choose Repositories"
         showBack
         rightAction={
-          <TouchableOpacity onPress={() => router.replace("/(tabs)/inbox")}>
-            <Text style={[typography.headline, { color: colors.brandLight }]}>Done</Text>
+          <TouchableOpacity
+            onPress={() => router.replace("/(tabs)/inbox")}
+            style={styles.doneBtn}
+            accessibilityRole="button"
+            accessibilityLabel="Done choosing repositories"
+          >
+            <Text style={[typography.headline, { color: colors.brandLight, fontWeight: "600" }]}>Done</Text>
           </TouchableOpacity>
         }
       />
 
       {isLoading ? (
-        <View style={styles.center}>
-          <ActivityIndicator size="large" color={colors.brandLight} />
-          <Text style={[typography.body, { color: colors.textSecondary, marginTop: spacing.md }]}>
-            Loading connected repositories...
-          </Text>
-        </View>
+        <LoadingState
+          title="Loading your repositories..."
+          message="Checking which repositories and organizations are connected to MergeMate."
+        />
       ) : error ? (
         <View>
-          <ErrorState message={error} onRetry={loadData} />
+          <ErrorState
+            title="Could not load repositories"
+            message={error}
+            onRetry={loadData}
+          />
           {ssoUrl && (
-            <View style={{ alignItems: "center" }}>
+            <View style={{ alignItems: "center", paddingHorizontal: spacing.base }}>
               <Button title="Authorize single sign-on on GitHub" onPress={() => Linking.openURL(ssoUrl)} variant="primary" />
             </View>
           )}
@@ -91,9 +99,14 @@ export default function ReposScreen() {
           {/* GitHub App Configuration Notice */}
           <View style={[styles.infoBanner, { backgroundColor: colors.surfaceElevated, borderColor: colors.border, borderRadius: radius.md }]}>
             <Text style={[typography.callout, { color: colors.text }]}>
-              🔐 Repository access is managed securely on GitHub. Select individual repositories or entire organizations.
+              🔐 Repository access is managed on GitHub. Choose individual repositories or whole organizations.
             </Text>
-            <TouchableOpacity onPress={openGitHubAppConfig} style={{ marginTop: spacing.xs }}>
+            <TouchableOpacity
+              onPress={openGitHubAppConfig}
+              style={styles.configLinkBtn}
+              accessibilityRole="link"
+              accessibilityLabel="Configure repository access in GitHub Settings"
+            >
               <Text style={[typography.subhead, { color: colors.brandLight, fontWeight: "600" }]}>
                 Configure in GitHub Settings →
               </Text>
@@ -103,7 +116,10 @@ export default function ReposScreen() {
           {/* Org Approval & SSO States (US-04) */}
           {orgs.length > 0 && (
             <View style={{ marginTop: spacing.base }}>
-              <Text style={[typography.subhead, { color: colors.textMuted, textTransform: "uppercase", marginBottom: spacing.xs }]}>
+              <Text
+                style={[typography.subhead, { color: colors.textMuted, textTransform: "uppercase", marginBottom: spacing.xs }]}
+                accessibilityRole="header"
+              >
                 Organization Status
               </Text>
 
@@ -151,7 +167,12 @@ export default function ReposScreen() {
                     </Text>
 
                     {org.manageUrl && (
-                      <TouchableOpacity onPress={() => Linking.openURL(org.manageUrl!)} style={{ marginTop: spacing.xs }}>
+                      <TouchableOpacity
+                        onPress={() => Linking.openURL(org.manageUrl!)}
+                        style={styles.configLinkBtn}
+                        accessibilityRole="link"
+                        accessibilityLabel={`Manage ${org.org} repositories on GitHub`}
+                      >
                         <Text style={[typography.caption, { color: colors.brandLight, fontWeight: "600" }]}>
                           Manage repositories on GitHub →
                         </Text>
@@ -162,6 +183,8 @@ export default function ReposScreen() {
                       <TouchableOpacity
                         onPress={() => Linking.openURL(org.ssoUrl!)}
                         style={[styles.ssoBtn, { backgroundColor: colors.brand, borderRadius: radius.sm }]}
+                        accessibilityRole="link"
+                        accessibilityLabel={`Authorize SSO for ${org.org}`}
                       >
                         <Text style={[typography.caption, { color: "#FFFFFF", fontWeight: "700" }]}>
                           Authorize SSO for {org.org}
@@ -176,7 +199,10 @@ export default function ReposScreen() {
 
           {/* Connected Repositories */}
           <View style={{ marginTop: spacing.lg }}>
-            <Text style={[typography.subhead, { color: colors.textMuted, textTransform: "uppercase", marginBottom: spacing.xs }]}>
+            <Text
+              style={[typography.subhead, { color: colors.textMuted, textTransform: "uppercase", marginBottom: spacing.xs }]}
+              accessibilityRole="header"
+            >
               Connected Repositories ({repos.length})
             </Text>
 
@@ -184,7 +210,7 @@ export default function ReposScreen() {
               <EmptyState
                 icon="📁"
                 title="No repositories selected"
-                message="You haven't granted MergeMate access to any repositories yet."
+                message="You haven't connected any repositories yet. Add one on GitHub to start seeing pull requests."
                 actionTitle="Add Repositories on GitHub"
                 onAction={openGitHubAppConfig}
               />
@@ -197,7 +223,7 @@ export default function ReposScreen() {
                     { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.md },
                   ]}
                 >
-                  <View style={{ flex: 1 }}>
+                  <View style={{ flex: 1, paddingRight: spacing.sm }}>
                     <Text style={[typography.headline, { color: colors.text }]} numberOfLines={1}>
                       {repo.fullName}
                     </Text>
@@ -216,6 +242,9 @@ export default function ReposScreen() {
                         borderRadius: radius.sm,
                       },
                     ]}
+                    accessibilityRole="switch"
+                    accessibilityState={{ checked: repo.watching }}
+                    accessibilityLabel={`${repo.watching ? "Stop watching" : "Watch"} ${repo.fullName}`}
                   >
                     <Text
                       style={[
@@ -240,14 +269,22 @@ const styles = StyleSheet.create({
   root: {
     flex: 1,
   },
-  center: {
-    flex: 1,
-    alignItems: "center",
+  doneBtn: {
+    minHeight: 44,
+    minWidth: 52,
+    paddingHorizontal: 8,
+    alignItems: "flex-end",
     justifyContent: "center",
   },
   infoBanner: {
     padding: 12,
     borderWidth: 1,
+  },
+  configLinkBtn: {
+    minHeight: 44,
+    justifyContent: "center",
+    alignSelf: "flex-start",
+    marginTop: 4,
   },
   orgCard: {
     padding: 12,
@@ -265,9 +302,11 @@ const styles = StyleSheet.create({
     borderRadius: 4,
   },
   ssoBtn: {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
+    minHeight: 44,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
     alignSelf: "flex-start",
+    justifyContent: "center",
     marginTop: 8,
   },
   repoRow: {
@@ -279,8 +318,12 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   toggleBtn: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+    minHeight: 44,
+    minWidth: 88,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
     borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
   },
 });

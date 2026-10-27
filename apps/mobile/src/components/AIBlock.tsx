@@ -41,11 +41,13 @@ export function AIBlock({
           </Text>
         </View>
         <Text style={[typography.body, { color: colors.text, marginVertical: spacing.sm }]}>
-          Enable AI summaries to review diffs and risk factors in seconds.
+          Turn on AI summaries to see what changed and why it matters in seconds.
         </Text>
         <TouchableOpacity
           onPress={grantConsent}
           style={[styles.turnOnBtn, { backgroundColor: colors.brand, borderRadius: radius.md }]}
+          accessibilityRole="button"
+          accessibilityLabel="Turn on AI Insights"
         >
           <Text style={[typography.subhead, { color: "#FFFFFF", fontWeight: "600" }]}>
             Turn on AI Insights
@@ -83,18 +85,22 @@ export function AIBlock({
           <TouchableOpacity
             onPress={() => setVoted(voted === "up" ? null : "up")}
             style={styles.voteBtn}
-            accessibilityLabel="Helpful summary"
+            accessibilityRole="button"
+            accessibilityLabel="Mark summary as helpful"
+            accessibilityState={{ selected: voted === "up" }}
           >
-            <Text style={{ color: voted === "up" ? colors.brandLight : colors.textMuted, fontSize: 13 }}>
+            <Text style={{ color: voted === "up" ? colors.brandLight : colors.textMuted, fontSize: 15 }}>
               👍
             </Text>
           </TouchableOpacity>
           <TouchableOpacity
             onPress={() => setVoted(voted === "down" ? null : "down")}
             style={styles.voteBtn}
-            accessibilityLabel="Unhelpful summary"
+            accessibilityRole="button"
+            accessibilityLabel="Mark summary as not helpful"
+            accessibilityState={{ selected: voted === "down" }}
           >
-            <Text style={{ color: voted === "down" ? colors.riskHigh : colors.textMuted, fontSize: 13 }}>
+            <Text style={{ color: voted === "down" ? colors.riskHigh : colors.textMuted, fontSize: 15 }}>
               👎
             </Text>
           </TouchableOpacity>
@@ -135,15 +141,19 @@ const styles = StyleSheet.create({
   actionsRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
+    gap: 4,
   },
   voteBtn: {
-    padding: 4,
+    minWidth: 44,
+    minHeight: 44,
+    alignItems: "center",
+    justifyContent: "center",
   },
   turnOnBtn: {
     alignSelf: "flex-start",
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    minHeight: 44,
+    paddingHorizontal: 14,
+    justifyContent: "center",
     marginTop: 4,
   },
   footer: {

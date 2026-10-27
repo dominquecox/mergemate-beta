@@ -25,6 +25,24 @@ function AppContent() {
     }
   }, [session, isLoading, router]);
 
+  useEffect(() => {
+    if (Platform.OS === "web" && typeof document !== "undefined") {
+      const id = "mergemate-a11y-focus-style";
+      let styleEl = document.getElementById(id) as HTMLStyleElement | null;
+      if (!styleEl) {
+        styleEl = document.createElement("style");
+        styleEl.id = id;
+        document.head.appendChild(styleEl);
+      }
+      styleEl.textContent = `
+        *:focus-visible {
+          outline: 2px solid ${colors.brandLight} !important;
+          outline-offset: 2px !important;
+        }
+      `;
+    }
+  }, [colors.brandLight]);
+
   // A production build without an API address must fail visibly, never fall back to sample data.
   if (isApiMisconfigured) return <ConfigErrorScreen />;
 

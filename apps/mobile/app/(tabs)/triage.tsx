@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from "react";
-import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator } from "react-native";
+import { View, Text, StyleSheet, TouchableOpacity } from "react-native";
 import { useTheme } from "../../src/context/ThemeContext";
 import { api } from "../../src/api";
 import { toUserMessage } from "../../src/api/errors";
@@ -9,6 +9,7 @@ import { Card } from "../../src/components/Card";
 import { Button } from "../../src/components/Button";
 import { EmptyState } from "../../src/components/EmptyState";
 import { ErrorState } from "../../src/components/ErrorState";
+import { LoadingState } from "../../src/components/LoadingState";
 
 export default function TriageScreen() {
   const { colors, typography, spacing, radius } = useTheme();
@@ -27,7 +28,7 @@ export default function TriageScreen() {
       setQueue(items);
       setTotalCount(items.length);
     } catch (e) {
-      setError(toUserMessage(e, "Failed to load triage queue."));
+      setError(toUserMessage(e, "We couldn't load your triage deck right now. Please try again."));
     } finally {
       setIsLoading(false);
     }
@@ -69,7 +70,12 @@ export default function TriageScreen() {
         title="Triage Deck"
         rightAction={
           undoStack.length > 0 ? (
-            <TouchableOpacity onPress={handleUndo} accessibilityLabel="Undo last triage choice">
+            <TouchableOpacity
+              onPress={handleUndo}
+              style={styles.undoBtn}
+              accessibilityRole="button"
+              accessibilityLabel="Undo last triage choice"
+            >
               <Text style={[typography.subhead, { color: colors.brandLight, fontWeight: "600" }]}>Undo</Text>
             </TouchableOpacity>
           ) : undefined
@@ -77,7 +83,11 @@ export default function TriageScreen() {
       />
 
       {/* Progress Bar */}
-      <View style={[styles.progressTrack, { backgroundColor: colors.surfaceSecondary }]}>
+      <View
+        style={[styles.progressTrack, { backgroundColor: colors.surfaceSecondary }]}
+        accessibilityRole="progressbar"
+        accessibilityValue={{ min: 0, max: totalCount || 1, now: processedCount }}
+      >
         <View
           style={[
             styles.progressBar,
@@ -88,26 +98,28 @@ export default function TriageScreen() {
 
       <View style={[styles.content, { padding: spacing.base }]}>
         {isLoading ? (
-          <View style={styles.center}>
-            <ActivityIndicator size="large" color={colors.brandLight} />
-            <Text style={[typography.body, { color: colors.textSecondary, marginTop: spacing.md }]}>
-              Analyzing triage queue...
-            </Text>
-          </View>
+          <LoadingState
+            title="Loading triage deck..."
+            message="Sorting your pull requests by review priority."
+          />
         ) : error ? (
-          <ErrorState message={error} onRetry={loadQueue} />
+          <ErrorState
+            title="Could not load triage deck"
+            message={error}
+            onRetry={loadQueue}
+          />
         ) : !currentItem ? (
           <EmptyState
             icon="✨"
             title="All Caught Up!"
-            message={`You've triaged all ${totalCount} pull requests. Great job staying on top of code review.`}
-            actionTitle="Reset Deck"
+            message={`You've sorted all ${totalCount} pull requests. Great job staying on top of code review.`}
+            actionTitle="Reload Deck"
             onAction={loadQueue}
           />
         ) : (
           <View style={styles.deckContainer}>
             <Text style={[typography.caption, { color: colors.textMuted, marginBottom: 8 }]}>
-              QUEUE {processedCount + 1} OF {totalCount}
+              CARD {processedCount + 1} OF {totalCount}
             </Text>
 
             <Card style={styles.triageCard}>
@@ -122,7 +134,10 @@ export default function TriageScreen() {
                 </View>
               </View>
 
-              <Text style={[typography.title2, { color: colors.text, marginTop: spacing.md }]}>
+              <Text
+                style={[typography.title2, { color: colors.text, marginTop: spacing.md }]}
+                accessibilityRole="header"
+              >
                 {currentItem.title ?? currentItem.prRef.split("#")[0]}
               </Text>
 
@@ -133,7 +148,7 @@ export default function TriageScreen() {
               </View>
 
               <Text style={[typography.footnote, { color: colors.textMuted, marginTop: spacing.lg }]}>
-                Choose a lane below to sort this PR instantly:
+                Choose a lane below to sort this pull request:
               </Text>
 
               {/* Triage Action Buttons */}
@@ -167,6 +182,13 @@ const styles = StyleSheet.create({
   root: {
     flex: 1,
   },
+  undoBtn: {
+    minHeight: 44,
+    minWidth: 52,
+    paddingHorizontal: 8,
+    alignItems: "flex-end",
+    justifyContent: "center",
+  },
   progressTrack: {
     height: 4,
     width: "100%",
@@ -176,11 +198,6 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
-  },
-  center: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
   },
   deckContainer: {
     flex: 1,

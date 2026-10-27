@@ -13,7 +13,7 @@ export default function TabsLayout() {
         tabBarStyle: {
           backgroundColor: colors.surface,
           borderTopColor: colors.border,
-          height: 60,
+          height: 62,
           paddingBottom: 8,
           paddingTop: 8,
         },
@@ -29,28 +29,48 @@ export default function TabsLayout() {
         name="inbox"
         options={{
           title: "Inbox",
-          tabBarIcon: ({ color }) => <Text style={{ color, fontSize: 18 }}>📥</Text>,
+          tabBarAccessibilityLabel: "Inbox tab",
+          tabBarIcon: ({ color }) => (
+            <Text style={{ color, fontSize: 18 }} accessibilityElementsHidden>
+              📥
+            </Text>
+          ),
         }}
       />
       <Tabs.Screen
         name="triage"
         options={{
           title: "Triage",
-          tabBarIcon: ({ color }) => <Text style={{ color, fontSize: 18 }}>⚡</Text>,
+          tabBarAccessibilityLabel: "Triage deck tab",
+          tabBarIcon: ({ color }) => (
+            <Text style={{ color, fontSize: 18 }} accessibilityElementsHidden>
+              ⚡
+            </Text>
+          ),
         }}
       />
       <Tabs.Screen
         name="notifications"
         options={{
           title: "Alerts",
-          tabBarIcon: ({ color }) => <Text style={{ color, fontSize: 18 }}>🔔</Text>,
+          tabBarAccessibilityLabel: "Alerts tab",
+          tabBarIcon: ({ color }) => (
+            <Text style={{ color, fontSize: 18 }} accessibilityElementsHidden>
+              🔔
+            </Text>
+          ),
         }}
       />
       <Tabs.Screen
         name="settings"
         options={{
           title: "Settings",
-          tabBarIcon: ({ color }) => <Text style={{ color, fontSize: 18 }}>⚙</Text>,
+          tabBarAccessibilityLabel: "Settings tab",
+          tabBarIcon: ({ color }) => (
+            <Text style={{ color, fontSize: 18 }} accessibilityElementsHidden>
+              ⚙
+            </Text>
+          ),
         }}
       />
     </Tabs>

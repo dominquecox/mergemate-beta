@@ -1,56 +1,73 @@
-import React from "react";
+import React, { useState } from "react";
 import { View, Text, ScrollView, StyleSheet } from "react-native";
 import { useTheme } from "../../src/context/ThemeContext";
 import { Header } from "../../src/components/Header";
+import { EmptyState } from "../../src/components/EmptyState";
+import { ErrorState } from "../../src/components/ErrorState";
+import { LoadingState } from "../../src/components/LoadingState";
+
+const TERMS_SECTIONS = [
+  {
+    title: "1. Overview",
+    body: "MergeMate is provided by Ploonu LLC as an intelligent companion for GitHub pull request triage and automated risk assessment. By connecting your GitHub account or using MergeMate, you agree to these terms.",
+  },
+  {
+    title: "2. Read-Only GitHub Authorization",
+    body: "MergeMate requests strictly read-only GitHub App permissions. MergeMate will never merge, approve, comment, commit, or close pull requests or repositories on your behalf.",
+  },
+  {
+    title: "3. User Data & Zero Code Storage",
+    body: "We do not store your repository source code or history. Patch diffs are inspected in memory for AI evaluation and immediately discarded. Access tokens remain encrypted at rest using server-side keys.",
+  },
+  {
+    title: "4. Subscriptions & Cancellation",
+    body: "Pro subscriptions are processed via Stripe. You can cancel at any time through the customer portal, and your plan remains active until the end of the billing cycle.",
+  },
+];
 
 export default function TermsScreen() {
   const { colors, typography, spacing } = useTheme();
+  const [isLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   return (
     <View style={[styles.root, { backgroundColor: colors.background }]}>
       <Header title="Terms of Service" showBack />
-      <ScrollView contentContainerStyle={{ padding: spacing.base, paddingBottom: 60 }}>
-        <Text style={[typography.title1, { color: colors.text }]}>Terms of Service</Text>
-        <Text style={[typography.caption, { color: colors.textMuted, marginTop: 4 }]}>
-          Last updated: October 26, 2026 · Ploonu LLC
-        </Text>
+      {isLoading ? (
+        <LoadingState title="Loading terms of service..." message="Preparing terms document." />
+      ) : error ? (
+        <ErrorState title="Couldn't load terms" message={error} onRetry={() => setError(null)} />
+      ) : TERMS_SECTIONS.length === 0 ? (
+        <EmptyState icon="📄" title="Terms unavailable" message="Please contact support@mergemate.dev for our terms of service." />
+      ) : (
+        <ScrollView contentContainerStyle={{ padding: spacing.base, paddingBottom: 60 }}>
+          <Text style={[typography.title1, { color: colors.text }]} accessibilityRole="header">
+            Terms of Service
+          </Text>
+          <Text style={[typography.caption, { color: colors.textMuted, marginTop: 4 }]}>
+            Last updated: October 26, 2026 · Ploonu LLC
+          </Text>
 
-        <View style={{ marginTop: spacing.md, gap: 16 }}>
-          <View>
-            <Text style={[typography.headline, { color: colors.text }]}>1. Overview</Text>
-            <Text style={[typography.body, { color: colors.textSecondary, marginTop: 4, lineHeight: 22 }]}>
-              MergeMate is provided by Ploonu LLC as an intelligent companion for GitHub pull request triage and automated risk assessment. By connecting your GitHub account or using MergeMate, you agree to these terms.
-            </Text>
-          </View>
+          <View style={{ marginTop: spacing.md, gap: 16 }}>
+            {TERMS_SECTIONS.map((sec) => (
+              <View key={sec.title}>
+                <Text style={[typography.headline, { color: colors.text }]} accessibilityRole="header">
+                  {sec.title}
+                </Text>
+                <Text style={[typography.body, { color: colors.textSecondary, marginTop: 4, lineHeight: 22 }]}>
+                  {sec.body}
+                </Text>
+              </View>
+            ))}
 
-          <View>
-            <Text style={[typography.headline, { color: colors.text }]}>2. Read-Only GitHub Authorization</Text>
-            <Text style={[typography.body, { color: colors.textSecondary, marginTop: 4, lineHeight: 22 }]}>
-              MergeMate requests strictly read-only GitHub App permissions. MergeMate will never merge, approve, comment, commit, or close pull requests or repositories on your behalf.
-            </Text>
+            <View style={[styles.footer, { borderTopColor: colors.border }]}>
+              <Text style={[typography.caption, { color: colors.textMuted }]}>
+                Ploonu LLC · 1007 N Orange St, Wilmington, DE · support@mergemate.dev
+              </Text>
+            </View>
           </View>
-
-          <View>
-            <Text style={[typography.headline, { color: colors.text }]}>3. User Data & Zero Code Storage</Text>
-            <Text style={[typography.body, { color: colors.textSecondary, marginTop: 4, lineHeight: 22 }]}>
-              We do not store your repository source code or history. Patch diffs are inspected in memory for AI evaluation and immediately discarded. Access tokens remain encrypted at rest using server-side keys.
-            </Text>
-          </View>
-
-          <View>
-            <Text style={[typography.headline, { color: colors.text }]}>4. Subscriptions & Cancellation</Text>
-            <Text style={[typography.body, { color: colors.textSecondary, marginTop: 4, lineHeight: 22 }]}>
-              Pro subscriptions are processed via Stripe. You can cancel at any time through the customer portal, and your plan remains active until the end of the billing cycle.
-            </Text>
-          </View>
-
-          <View style={[styles.footer, { borderTopColor: colors.border }]}>
-            <Text style={[typography.caption, { color: colors.textMuted }]}>
-              Ploonu LLC · 1007 N Orange St, Wilmington, DE · support@mergemate.dev
-            </Text>
-          </View>
-        </View>
-      </ScrollView>
+        </ScrollView>
+      )}
     </View>
   );
 }

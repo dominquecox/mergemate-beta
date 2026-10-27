@@ -17,16 +17,16 @@ export function DemoBanner() {
           backgroundColor: colors.demoBadgeBg,
           borderColor: colors.demoBadge,
           paddingHorizontal: spacing.base,
-          paddingVertical: spacing.sm,
+          paddingVertical: spacing.xs,
         },
       ]}
       accessibilityRole="alert"
-      accessibilityLabel="Demo mode active with seeded sample data"
+      accessibilityLabel="Demo mode active with sample data only"
     >
       <View style={styles.content}>
         <View style={[styles.dot, { backgroundColor: colors.demoBadge }]} />
         <Text style={[typography.footnote, { color: colors.demoBadge, fontWeight: "600" }]}>
-          DEMO MODE · Seeded Data Only
+          DEMO MODE · Sample Data Only
         </Text>
       </View>
       <TouchableOpacity
@@ -49,6 +49,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
     borderBottomWidth: 1,
+    minHeight: 48,
     zIndex: 999,
   },
   content: {
@@ -62,8 +63,11 @@ const styles = StyleSheet.create({
     borderRadius: 4,
   },
   exitBtn: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
+    minHeight: 44,
+    minWidth: 76,
+    paddingHorizontal: 10,
+    alignItems: "center",
+    justifyContent: "center",
     borderWidth: 1,
   },
 });

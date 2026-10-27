@@ -11,6 +11,7 @@ interface ButtonProps {
   style?: ViewStyle;
   textStyle?: TextStyle;
   icon?: React.ReactNode;
+  accessibilityLabel?: string;
 }
 
 export function Button({
@@ -22,6 +23,7 @@ export function Button({
   style,
   textStyle,
   icon,
+  accessibilityLabel,
 }: ButtonProps) {
   const { colors, typography, radius } = useTheme();
 
@@ -34,7 +36,7 @@ export function Button({
     text = colors.text;
     border = colors.border;
   } else if (variant === "destructive") {
-    bg = colors.riskHigh;
+    bg = "#B91C1C";
     text = "#FFFFFF";
   } else if (variant === "ghost") {
     bg = "transparent";
@@ -53,13 +55,13 @@ export function Button({
           borderColor: border,
           borderWidth: variant === "secondary" ? 1 : 0,
           borderRadius: radius.md,
-          opacity: disabled ? 0.5 : 1,
+          opacity: disabled ? 0.55 : 1,
         },
         style,
       ]}
       accessibilityRole="button"
-      accessibilityLabel={title}
-      accessibilityState={{ disabled: disabled || loading }}
+      accessibilityLabel={accessibilityLabel || title}
+      accessibilityState={{ disabled: disabled || loading, busy: loading }}
     >
       {loading ? (
         <ActivityIndicator color={text} size="small" />
@@ -78,6 +80,7 @@ export function Button({
 const styles = StyleSheet.create({
   btn: {
     minHeight: 44,
+    minWidth: 44,
     paddingHorizontal: 16,
     paddingVertical: 12,
     flexDirection: "row",

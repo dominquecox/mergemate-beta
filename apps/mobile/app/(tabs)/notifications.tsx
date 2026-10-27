@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from "react";
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet, ActivityIndicator } from "react-native";
+import { View, Text, ScrollView, TouchableOpacity, StyleSheet } from "react-native";
 import { useTheme } from "../../src/context/ThemeContext";
 import { api } from "../../src/api";
 import { toUserMessage } from "../../src/api/errors";
@@ -9,6 +9,7 @@ import { StatusPill } from "../../src/components/StatusPill";
 import { RiskBadge } from "../../src/components/RiskBadge";
 import { EmptyState } from "../../src/components/EmptyState";
 import { ErrorState } from "../../src/components/ErrorState";
+import { LoadingState } from "../../src/components/LoadingState";
 
 export default function NotificationsScreen() {
   const { colors, typography, spacing, radius } = useTheme();
@@ -25,7 +26,7 @@ export default function NotificationsScreen() {
       const data = await api.getNotifications(filter);
       setItems(data);
     } catch (e) {
-      setError(toUserMessage(e, "Failed to load notifications."));
+      setError(toUserMessage(e, "We couldn't load your notifications right now. Please try again."));
     } finally {
       setIsLoading(false);
     }
@@ -44,14 +45,19 @@ export default function NotificationsScreen() {
       <Header
         title="Notifications"
         rightAction={
-          <TouchableOpacity onPress={markAllRead} accessibilityLabel="Mark all as read">
-            <Text style={[typography.subhead, { color: colors.brandLight }]}>Mark all read</Text>
+          <TouchableOpacity
+            onPress={markAllRead}
+            style={styles.markReadBtn}
+            accessibilityRole="button"
+            accessibilityLabel="Mark all notifications as read"
+          >
+            <Text style={[typography.subhead, { color: colors.brandLight, fontWeight: "600" }]}>Mark all read</Text>
           </TouchableOpacity>
         }
       />
 
       {/* Filter Chips */}
-      <View style={[styles.chipsRow, { borderBottomColor: colors.border }]}>
+      <View style={[styles.chipsRow, { borderBottomColor: colors.border }]} accessibilityRole="tablist">
         {(["all", "review", "mentions", "mine"] as NotificationFilter[]).map((tab) => {
           const active = filter === tab;
           let label = "All";
@@ -71,7 +77,8 @@ export default function NotificationsScreen() {
                   borderRadius: radius.full,
                 },
               ]}
-              accessibilityRole="button"
+              accessibilityRole="tab"
+              accessibilityLabel={`${label} notifications`}
               accessibilityState={{ selected: active }}
             >
               <Text
@@ -95,23 +102,31 @@ export default function NotificationsScreen() {
       </View>
 
       {isLoading ? (
-        <View style={styles.center}>
-          <ActivityIndicator size="large" color={colors.brandLight} />
-        </View>
+        <LoadingState
+          title="Loading notifications..."
+          message="Checking for recent pull request activity."
+        />
       ) : error ? (
-        <ErrorState message={error} onRetry={loadNotifications} />
+        <ErrorState
+          title="Could not load notifications"
+          message={error}
+          onRetry={loadNotifications}
+        />
       ) : items.length === 0 ? (
         <EmptyState
           icon="🔔"
           title="No Alerts"
-          message="No new notification events match your filter."
+          message="No notification events match your selected filter."
           actionTitle="Check Again"
           onAction={loadNotifications}
         />
       ) : (
         <ScrollView contentContainerStyle={{ padding: spacing.base, paddingBottom: 60 }}>
           {/* Grouped by Day */}
-          <Text style={[typography.caption, { color: colors.textMuted, textTransform: "uppercase", marginBottom: 8 }]}>
+          <Text
+            style={[typography.caption, { color: colors.textMuted, textTransform: "uppercase", marginBottom: 8 }]}
+            accessibilityRole="header"
+          >
             Today
           </Text>
 
@@ -129,7 +144,12 @@ export default function NotificationsScreen() {
             >
               <View style={styles.notifHeader}>
                 <View style={styles.leftMeta}>
-                  {!item.read && <View style={[styles.unreadDot, { backgroundColor: colors.brandLight }]} />}
+                  {!item.read && (
+                    <View
+                      style={[styles.unreadDot, { backgroundColor: colors.brandLight }]}
+                      accessibilityLabel="Unread"
+                    />
+                  )}
                   <Text style={[typography.caption, { color: colors.textMuted, fontFamily: "monospace" }]}>
                     {item.repo}
                   </Text>
@@ -165,27 +185,32 @@ const styles = StyleSheet.create({
   root: {
     flex: 1,
   },
+  markReadBtn: {
+    minHeight: 44,
+    paddingHorizontal: 8,
+    alignItems: "flex-end",
+    justifyContent: "center",
+  },
   chipsRow: {
     flexDirection: "row",
     paddingHorizontal: 16,
-    paddingVertical: 10,
+    paddingVertical: 8,
     borderBottomWidth: 1,
     gap: 8,
   },
   chip: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+    minHeight: 44,
+    minWidth: 64,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
     borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
   },
   quietBanner: {
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderBottomWidth: 1,
-  },
-  center: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
   },
   notifCard: {
     padding: 12,

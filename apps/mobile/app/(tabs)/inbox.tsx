@@ -6,7 +6,6 @@ import {
   RefreshControl,
   TouchableOpacity,
   StyleSheet,
-  ActivityIndicator,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { useTheme } from "../../src/context/ThemeContext";
@@ -18,6 +17,7 @@ import { RiskBadge } from "../../src/components/RiskBadge";
 import { StatusPill } from "../../src/components/StatusPill";
 import { EmptyState } from "../../src/components/EmptyState";
 import { ErrorState } from "../../src/components/ErrorState";
+import { LoadingState } from "../../src/components/LoadingState";
 
 export default function InboxScreen() {
   const router = useRouter();
@@ -36,7 +36,7 @@ export default function InboxScreen() {
       setItems(data);
       setError(null);
     } catch (e) {
-      setError(toUserMessage(e, "Could not fetch inbox items."));
+      setError(toUserMessage(e, "We couldn't load your inbox right now. Please try again."));
     } finally {
       setIsLoading(false);
       setIsRefreshing(false);
@@ -100,23 +100,29 @@ export default function InboxScreen() {
             <TouchableOpacity
               onPress={() => router.push("/search")}
               style={styles.iconBtn}
+              accessibilityRole="button"
               accessibilityLabel="Search pull requests"
             >
-              <Text style={{ fontSize: 18 }}>🔍</Text>
+              <Text style={{ fontSize: 18 }} accessibilityElementsHidden>
+                🔍
+              </Text>
             </TouchableOpacity>
             <TouchableOpacity
               onPress={() => router.push("/highlight")}
               style={styles.iconBtn}
+              accessibilityRole="button"
               accessibilityLabel="Highlight screenshot"
             >
-              <Text style={{ fontSize: 18 }}>📸</Text>
+              <Text style={{ fontSize: 18 }} accessibilityElementsHidden>
+                📸
+              </Text>
             </TouchableOpacity>
           </View>
         }
       />
 
       {/* Segmented Filter Control */}
-      <View style={[styles.filterBar, { borderBottomColor: colors.border }]}>
+      <View style={[styles.filterBar, { borderBottomColor: colors.border }]} accessibilityRole="tablist">
         {(["all", "review", "mentions", "mine"] as NotificationFilter[]).map((tab) => {
           const isSelected = filter === tab;
           let label = "All";
@@ -136,6 +142,7 @@ export default function InboxScreen() {
                 },
               ]}
               accessibilityRole="tab"
+              accessibilityLabel={`${label} pull requests`}
               accessibilityState={{ selected: isSelected }}
             >
               <Text
@@ -156,26 +163,39 @@ export default function InboxScreen() {
 
       {/* Undo Toast */}
       {undoItem && (
-        <View style={[styles.undoToast, { backgroundColor: colors.surfaceElevated, borderColor: colors.border }]}>
-          <Text style={[typography.footnote, { color: colors.text }]}>Item moved out of inbox</Text>
-          <TouchableOpacity onPress={handleUndo}>
+        <View
+          style={[styles.undoToast, { backgroundColor: colors.surfaceElevated, borderColor: colors.border }]}
+          accessibilityLiveRegion="polite"
+        >
+          <Text style={[typography.footnote, { color: colors.text }]}>Moved out of your inbox</Text>
+          <TouchableOpacity
+            onPress={handleUndo}
+            style={styles.undoBtn}
+            accessibilityRole="button"
+            accessibilityLabel={`Undo moving ${undoItem.title}`}
+          >
             <Text style={[typography.footnote, { color: colors.brandLight, fontWeight: "700" }]}>Undo</Text>
           </TouchableOpacity>
         </View>
       )}
 
       {isLoading ? (
-        <View style={styles.center}>
-          <ActivityIndicator size="large" color={colors.brandLight} />
-        </View>
+        <LoadingState
+          title="Loading your inbox..."
+          message="Fetching pull requests, status checks, and AI summaries."
+        />
       ) : error ? (
-        <ErrorState message={error} onRetry={fetchItems} />
+        <ErrorState
+          title="Could not load your inbox"
+          message={error}
+          onRetry={fetchItems}
+        />
       ) : items.length === 0 ? (
         <EmptyState
           icon="🎉"
           title="Inbox Zero"
-          message="You're all caught up! No pull requests require your attention right now."
-          actionTitle="Refresh"
+          message="You're all caught up! No pull requests need your attention in this view."
+          actionTitle="Refresh Inbox"
           onAction={fetchItems}
         />
       ) : (
@@ -184,7 +204,10 @@ export default function InboxScreen() {
           refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} tintColor={colors.brandLight} />}
         >
           {/* Summary Strip Card */}
-          <View style={[styles.summaryStrip, { backgroundColor: colors.surfaceElevated, borderColor: colors.border, borderRadius: radius.md }]}>
+          <View
+            style={[styles.summaryStrip, { backgroundColor: colors.surfaceElevated, borderColor: colors.border, borderRadius: radius.md }]}
+            accessibilityLabel={`Summary: ${items.filter((i) => i.kind === "review").length} needs you, ${items.filter((i) => i.kind === "mention").length} FYI, ${items.filter((i) => i.kind === "mine").length} mine`}
+          >
             <View style={styles.stripCol}>
               <Text style={[typography.headline, { color: colors.laneNeedsYou }]}>
                 {items.filter((i) => i.kind === "review").length}
@@ -207,10 +230,8 @@ export default function InboxScreen() {
 
           {/* PR Items List */}
           {items.map((item) => (
-            <TouchableOpacity
+            <View
               key={item.id}
-              onPress={() => navigateToPr(item)}
-              activeOpacity={0.85}
               style={[
                 styles.itemCard,
                 {
@@ -221,34 +242,42 @@ export default function InboxScreen() {
                   borderLeftWidth: item.risk === "high" ? 4 : 1,
                 },
               ]}
-              accessibilityRole="button"
-              accessibilityLabel={`Pull request ${item.title} in ${item.repo}`}
             >
-              <View style={styles.cardTop}>
-                <Text style={[typography.caption, { color: colors.textMuted, fontFamily: "monospace" }]}>
-                  {item.repo}
-                </Text>
-                <View style={styles.badgeGroup}>
-                  <StatusPill status={item.status} />
-                  {item.risk && <RiskBadge level={item.risk} compact />}
-                </View>
-              </View>
-
-              <Text style={[typography.headline, { color: colors.text, marginTop: 4 }]} numberOfLines={2}>
-                {item.title}
-              </Text>
-
-              {item.summaryLine && (
-                <View style={styles.summaryRow}>
-                  <Text style={[typography.caption, { color: colors.brandLight }]}>✦</Text>
-                  <Text style={[typography.footnote, { color: colors.textSecondary, flex: 1 }]} numberOfLines={2}>
-                    {item.summaryLine}
+              <TouchableOpacity
+                onPress={() => navigateToPr(item)}
+                activeOpacity={0.85}
+                style={styles.cardMainTouch}
+                accessibilityRole="button"
+                accessibilityLabel={`Open pull request #${item.number}: ${item.title} in ${item.repo}, ${item.risk || "normal"} risk`}
+              >
+                <View style={styles.cardTop}>
+                  <Text style={[typography.caption, { color: colors.textMuted, fontFamily: "monospace" }]}>
+                    {item.repo} #{item.number}
                   </Text>
+                  <View style={styles.badgeGroup}>
+                    <StatusPill status={item.status} />
+                    {item.risk && <RiskBadge level={item.risk} compact />}
+                  </View>
                 </View>
-              )}
+
+                <Text style={[typography.headline, { color: colors.text, marginTop: 4 }]} numberOfLines={2}>
+                  {item.title}
+                </Text>
+
+                {item.summaryLine && (
+                  <View style={styles.summaryRow}>
+                    <Text style={[typography.caption, { color: colors.brandLight }]} accessibilityElementsHidden>
+                      ✦
+                    </Text>
+                    <Text style={[typography.footnote, { color: colors.textSecondary, flex: 1 }]} numberOfLines={2}>
+                      {item.summaryLine}
+                    </Text>
+                  </View>
+                )}
+              </TouchableOpacity>
 
               <View style={styles.cardBottom}>
-                <Text style={[typography.caption, { color: colors.textMuted }]}>
+                <Text style={[typography.caption, { color: colors.textMuted, flex: 1 }]}>
                   By @{item.author} · {new Date(item.updatedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
                 </Text>
 
@@ -256,20 +285,22 @@ export default function InboxScreen() {
                   <TouchableOpacity
                     onPress={() => handleSnooze(item)}
                     style={[styles.actionBtn, { borderColor: colors.border }]}
-                    accessibilityLabel="Snooze"
+                    accessibilityRole="button"
+                    accessibilityLabel={`Snooze ${item.title}`}
                   >
-                    <Text style={[typography.caption, { color: colors.textSecondary }]}>Snooze</Text>
+                    <Text style={[typography.caption, { color: colors.textSecondary, fontWeight: "600" }]}>Snooze</Text>
                   </TouchableOpacity>
                   <TouchableOpacity
                     onPress={() => handleDone(item)}
                     style={[styles.actionBtn, { borderColor: colors.border, backgroundColor: colors.surfaceInteractive }]}
-                    accessibilityLabel="Done"
+                    accessibilityRole="button"
+                    accessibilityLabel={`Mark ${item.title} as done`}
                   >
                     <Text style={[typography.caption, { color: colors.text, fontWeight: "600" }]}>Done</Text>
                   </TouchableOpacity>
                 </View>
               </View>
-            </TouchableOpacity>
+            </View>
           ))}
         </ScrollView>
       )}
@@ -284,10 +315,13 @@ const styles = StyleSheet.create({
   headerIcons: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
+    gap: 4,
   },
   iconBtn: {
-    padding: 6,
+    minWidth: 44,
+    minHeight: 44,
+    alignItems: "center",
+    justifyContent: "center",
   },
   filterBar: {
     flexDirection: "row",
@@ -298,11 +332,8 @@ const styles = StyleSheet.create({
   },
   filterTab: {
     flex: 1,
-    paddingVertical: 6,
-    alignItems: "center",
-  },
-  center: {
-    flex: 1,
+    minHeight: 44,
+    paddingVertical: 8,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -320,6 +351,9 @@ const styles = StyleSheet.create({
     padding: 14,
     borderWidth: 1,
     marginBottom: 10,
+  },
+  cardMainTouch: {
+    minHeight: 44,
   },
   cardTop: {
     flexDirection: "row",
@@ -348,13 +382,17 @@ const styles = StyleSheet.create({
   },
   quickActions: {
     flexDirection: "row",
-    gap: 6,
+    gap: 8,
   },
   actionBtn: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
+    minHeight: 44,
+    minWidth: 64,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
     borderWidth: 1,
-    borderRadius: 4,
+    borderRadius: 6,
+    alignItems: "center",
+    justifyContent: "center",
   },
   undoToast: {
     flexDirection: "row",
@@ -362,9 +400,16 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     marginHorizontal: 16,
     marginTop: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    paddingLeft: 12,
+    paddingRight: 4,
     borderWidth: 1,
     borderRadius: 6,
+  },
+  undoBtn: {
+    minHeight: 44,
+    minWidth: 56,
+    paddingHorizontal: 10,
+    alignItems: "center",
+    justifyContent: "center",
   },
 });

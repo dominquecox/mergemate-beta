@@ -1,26 +1,32 @@
 import React, { useState } from "react";
-import { View, Text, Image, TouchableOpacity, StyleSheet, ScrollView } from "react-native";
+import { View, Text, Image, TouchableOpacity, StyleSheet } from "react-native";
 import { useRouter } from "expo-router";
 import { useTheme } from "../../src/context/ThemeContext";
 import { Button } from "../../src/components/Button";
+import { EmptyState } from "../../src/components/EmptyState";
+import { ErrorState } from "../../src/components/ErrorState";
+import { LoadingState } from "../../src/components/LoadingState";
 
 const CARDS = [
   {
     step: "01",
     title: "Catch up fast",
-    subtitle: "One unified inbox sorted by priority. Read AI-generated pull request summaries in seconds instead of drowning in notifications.",
+    subtitle:
+      "One unified inbox sorted by priority. Read plain-language pull request summaries in seconds instead of digging through long notifications.",
     icon: "⚡",
   },
   {
     step: "02",
     title: "Know what's risky",
-    subtitle: "Clear risk ratings with exact reasons. Detect credential leaks, un-migrated schemas, and auth modifications before they hit main.",
+    subtitle:
+      "Clear risk ratings with exact reasons. Spot possible secret leaks, schema changes, and auth edits before you review.",
     icon: "🛡",
   },
   {
     step: "03",
     title: "You stay in control",
-    subtitle: "Strictly read-only GitHub access. MergeMate never merges, approves, or comments on your behalf. Your code is never stored.",
+    subtitle:
+      "Strictly read-only GitHub access. MergeMate never merges, approves, or comments on your behalf, and never stores your code.",
     icon: "🔒",
   },
 ];
@@ -29,16 +35,59 @@ export default function WelcomeScreen() {
   const router = useRouter();
   const { colors, typography, spacing, radius, isDark } = useTheme();
   const [activeStep, setActiveStep] = useState(0);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const goToSignIn = () => {
+    try {
+      setIsLoading(true);
+      setError(null);
+      router.push("/(auth)/sign-in");
+      setIsLoading(false);
+    } catch (e: any) {
+      setIsLoading(false);
+      setError(e?.message || "Could not open sign-in screen. Please try again.");
+    }
+  };
 
   const next = () => {
     if (activeStep < CARDS.length - 1) {
       setActiveStep(activeStep + 1);
     } else {
-      router.push("/(auth)/sign-in");
+      goToSignIn();
     }
   };
 
   const card = CARDS[activeStep];
+
+  if (isLoading) {
+    return (
+      <View style={[styles.container, { backgroundColor: colors.background, padding: spacing.xl }]}>
+        <LoadingState title="Opening sign in..." message="Preparing your sign-in options." />
+      </View>
+    );
+  }
+
+  if (error) {
+    return (
+      <View style={[styles.container, { backgroundColor: colors.background, padding: spacing.xl }]}>
+        <ErrorState title="Could not continue" message={error} onRetry={goToSignIn} />
+      </View>
+    );
+  }
+
+  if (!card) {
+    return (
+      <View style={[styles.container, { backgroundColor: colors.background, padding: spacing.xl }]}>
+        <EmptyState
+          title="Welcome to MergeMate"
+          message="Continue to sign in or try the demo with sample pull requests."
+          actionTitle="Continue to Sign In"
+          onAction={goToSignIn}
+        />
+      </View>
+    );
+  }
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background, padding: spacing.xl }]}>
@@ -47,34 +96,41 @@ export default function WelcomeScreen() {
           source={isDark ? require("../../assets/logo-dark.png") : require("../../assets/logo-light.png")}
           style={styles.logo}
           resizeMode="contain"
+          accessibilityRole="image"
           accessibilityLabel="MergeMate"
         />
         <TouchableOpacity
-          onPress={() => router.push("/(auth)/sign-in")}
+          onPress={goToSignIn}
+          style={styles.skipBtn}
           accessibilityRole="button"
-          accessibilityLabel="Skip onboarding"
+          accessibilityLabel="Skip intro and go to sign in"
         >
-          <Text style={[typography.subhead, { color: colors.textSecondary }]}>Skip</Text>
+          <Text style={[typography.subhead, { color: colors.textSecondary, fontWeight: "600" }]}>Skip</Text>
         </TouchableOpacity>
       </View>
 
       <View style={styles.content}>
         <View style={[styles.iconCircle, { backgroundColor: colors.surfaceElevated, borderColor: colors.border }]}>
-          <Text style={styles.cardIcon}>{card.icon}</Text>
+          <Text style={styles.cardIcon} accessibilityElementsHidden>
+            {card.icon}
+          </Text>
         </View>
 
         <Text style={[typography.caption, { color: colors.brandLight, fontWeight: "700", marginTop: spacing.lg }]}>
           STEP {card.step} OF 03
         </Text>
 
-        <Text style={[typography.largeTitle, { color: colors.text, marginTop: spacing.xs, textAlign: "center" }]}>
+        <Text
+          style={[typography.largeTitle, { color: colors.text, marginTop: spacing.xs, textAlign: "center" }]}
+          accessibilityRole="header"
+        >
           {card.title}
         </Text>
 
         <Text
           style={[
             typography.body,
-            { color: colors.textSecondary, marginTop: spacing.md, textAlign: "center", maxWidth: 320 },
+            { color: colors.textSecondary, marginTop: spacing.md, textAlign: "center", maxWidth: 340 },
           ]}
         >
           {card.subtitle}
@@ -82,21 +138,27 @@ export default function WelcomeScreen() {
       </View>
 
       <View style={styles.footer}>
-        <View style={styles.dots}>
-          {CARDS.map((_, i) => (
+        <View style={styles.dots} accessibilityRole="tablist">
+          {CARDS.map((item, i) => (
             <TouchableOpacity
-              key={i}
+              key={item.step}
               onPress={() => setActiveStep(i)}
-              style={[
-                styles.dot,
-                {
-                  backgroundColor: i === activeStep ? colors.brandLight : colors.surfaceSecondary,
-                  width: i === activeStep ? 24 : 8,
-                  borderRadius: radius.full,
-                },
-              ]}
-              accessibilityLabel={`Go to step ${i + 1}`}
-            />
+              style={styles.dotHitBox}
+              accessibilityRole="tab"
+              accessibilityLabel={`Step ${i + 1}: ${item.title}`}
+              accessibilityState={{ selected: i === activeStep }}
+            >
+              <View
+                style={[
+                  styles.dot,
+                  {
+                    backgroundColor: i === activeStep ? colors.brandLight : colors.borderLight,
+                    width: i === activeStep ? 24 : 8,
+                    borderRadius: radius.full,
+                  },
+                ]}
+              />
+            </TouchableOpacity>
           ))}
         </View>
 
@@ -104,7 +166,7 @@ export default function WelcomeScreen() {
           title={activeStep === CARDS.length - 1 ? "Get Started" : "Continue"}
           onPress={next}
           variant="primary"
-          style={{ width: "100%", marginTop: spacing.lg }}
+          style={{ width: "100%", marginTop: spacing.md }}
         />
       </View>
     </View>
@@ -123,8 +185,15 @@ const styles = StyleSheet.create({
     paddingTop: 8,
   },
   logo: {
-    width: 140,
+    width: 148,
     height: 36,
+  },
+  skipBtn: {
+    minHeight: 44,
+    minWidth: 56,
+    paddingHorizontal: 8,
+    alignItems: "flex-end",
+    justifyContent: "center",
   },
   content: {
     alignItems: "center",
@@ -148,7 +217,14 @@ const styles = StyleSheet.create({
   },
   dots: {
     flexDirection: "row",
-    gap: 6,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  dotHitBox: {
+    minWidth: 44,
+    minHeight: 44,
+    alignItems: "center",
+    justifyContent: "center",
   },
   dot: {
     height: 8,

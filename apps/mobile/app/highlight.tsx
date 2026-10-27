@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { View, Text, ScrollView, TextInput, StyleSheet, ActivityIndicator, Image, Platform, TouchableOpacity } from "react-native";
+import { View, Text, ScrollView, TextInput, StyleSheet, Image, Platform, TouchableOpacity } from "react-native";
 import * as ImagePicker from "expo-image-picker";
 import { useTheme } from "../src/context/ThemeContext";
 import { api } from "../src/api";
@@ -8,7 +8,9 @@ import { HighlightResult } from "../src/types";
 import { Header } from "../src/components/Header";
 import { Button } from "../src/components/Button";
 import { Card } from "../src/components/Card";
+import { EmptyState } from "../src/components/EmptyState";
 import { ErrorState } from "../src/components/ErrorState";
+import { LoadingState } from "../src/components/LoadingState";
 
 const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp"];
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
@@ -75,7 +77,9 @@ export default function HighlightScreen() {
       <ScrollView contentContainerStyle={{ padding: spacing.base, paddingBottom: 60 }}>
         {/* Intro Card */}
         <Card>
-          <Text style={[typography.headline, { color: colors.text }]}>Meta AI Vision Analysis</Text>
+          <Text style={[typography.headline, { color: colors.text }]} accessibilityRole="header">
+            Meta AI Vision Analysis
+          </Text>
           <Text style={[typography.body, { color: colors.textSecondary, marginTop: 4 }]}>
             Capture or upload a PR screenshot or UI diff. MergeMate locates key UI regions and highlights bugs, spacing mismatches, or contrast regressions.
           </Text>
@@ -113,6 +117,7 @@ export default function HighlightScreen() {
             onChangeText={setNote}
             placeholder="e.g. Check button padding on mobile"
             placeholderTextColor={colors.textMuted}
+            accessibilityLabel="Optional reviewer note"
             style={[
               styles.input,
               {
@@ -135,18 +140,23 @@ export default function HighlightScreen() {
         </Card>
 
         {isAnalyzing ? (
-          <View style={styles.center}>
-            <ActivityIndicator size="large" color={colors.brandLight} />
-            <Text style={[typography.body, { color: colors.textSecondary, marginTop: spacing.md }]}>
-              Evaluating image with Meta multimodal models...
-            </Text>
-          </View>
+          <LoadingState
+            title="Analyzing screenshot..."
+            message="Checking layout, spacing, and contrast regions with Meta AI."
+          />
         ) : error ? (
-          <ErrorState message={error} onRetry={handleAnalyze} />
+          <ErrorState
+            title="Couldn't analyze screenshot"
+            message={error}
+            onRetry={image ? handleAnalyze : pickFromLibrary}
+            retryLabel={image ? "Try Again" : "Choose Screenshot"}
+          />
         ) : result ? (
           <View style={{ marginTop: spacing.base }}>
             <Card>
-              <Text style={[typography.headline, { color: colors.brandLight }]}>✦ AI Visual Insight</Text>
+              <Text style={[typography.headline, { color: colors.brandLight }]} accessibilityRole="header">
+                ✦ AI Visual Insight
+              </Text>
               <Text style={[typography.body, { color: colors.text, marginTop: 6, lineHeight: 22 }]}>
                 {result.insight}
               </Text>
@@ -184,7 +194,15 @@ export default function HighlightScreen() {
               </Text>
             </Card>
           </View>
-        ) : null}
+        ) : (
+          <EmptyState
+            icon="🔍"
+            title="No screenshot analyzed yet"
+            message="Choose a screenshot above and tap Analyze Screenshot with AI to inspect layout and contrast regions."
+            actionTitle="Choose Screenshot"
+            onAction={pickFromLibrary}
+          />
+        )}
       </ScrollView>
     </View>
   );
@@ -195,6 +213,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   uploadBox: {
+    minHeight: 88,
     padding: 24,
     borderWidth: 1,
     borderStyle: "dashed",
@@ -202,17 +221,14 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   input: {
-    padding: 12,
+    minHeight: 44,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
     borderWidth: 1,
   },
   preview: {
     width: "100%",
     height: 200,
-  },
-  center: {
-    alignItems: "center",
-    justifyContent: "center",
-    padding: 32,
   },
   regionCard: {
     padding: 12,

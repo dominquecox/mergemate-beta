@@ -7,17 +7,23 @@ interface ErrorStateProps {
   title?: string;
   message?: string;
   onRetry?: () => void;
+  retryLabel?: string;
 }
 
 export function ErrorState({
-  title = "Something went wrong",
-  message = "Could not load data. Check your connection and try again.",
+  title = "Could not load this screen",
+  message = "Something went wrong while loading. Please check your connection and try again.",
   onRetry,
+  retryLabel = "Try Again",
 }: ErrorStateProps) {
   const { colors, typography, spacing } = useTheme();
 
   return (
-    <View style={[styles.container, { padding: spacing.xxl }]}>
+    <View
+      style={[styles.container, { padding: spacing.xxl }]}
+      accessibilityRole="alert"
+      accessibilityLiveRegion="assertive"
+    >
       <Text style={[styles.icon, { color: colors.riskHigh }]}>⚠</Text>
       <Text style={[typography.title2, { color: colors.text, marginTop: spacing.md, textAlign: "center" }]}>
         {title}
@@ -25,12 +31,12 @@ export function ErrorState({
       <Text
         style={[
           typography.body,
-          { color: colors.textSecondary, marginTop: spacing.xs, marginBottom: spacing.lg, textAlign: "center" },
+          { color: colors.textSecondary, marginTop: spacing.xs, marginBottom: spacing.lg, textAlign: "center", maxWidth: 320 },
         ]}
       >
         {message}
       </Text>
-      {onRetry && <Button title="Try Again" onPress={onRetry} variant="secondary" />}
+      {onRetry && <Button title={retryLabel} onPress={onRetry} variant="secondary" />}
     </View>
   );
 }

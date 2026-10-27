@@ -36,13 +36,18 @@ export function Header({ title, showBack = false, showLogo = false, rightAction 
             }
             style={styles.logo}
             resizeMode="contain"
-            accessibilityLabel="MergeMate Logo"
+            accessibilityRole="image"
+            accessibilityLabel="MergeMate"
           />
         )}
       </View>
 
       {title && !showLogo && (
-        <Text style={[typography.headline, { color: colors.text, textAlign: "center" }]} numberOfLines={1}>
+        <Text
+          style={[typography.headline, { color: colors.text, textAlign: "center", flex: 1 }]}
+          numberOfLines={1}
+          accessibilityRole="header"
+        >
           {title}
         </Text>
       )}
@@ -54,7 +59,7 @@ export function Header({ title, showBack = false, showLogo = false, rightAction 
 
 const styles = StyleSheet.create({
   header: {
-    height: 54,
+    minHeight: 56,
     paddingHorizontal: 16,
     flexDirection: "row",
     alignItems: "center",
@@ -64,18 +69,21 @@ const styles = StyleSheet.create({
   left: {
     flexDirection: "row",
     alignItems: "center",
-    minWidth: 60,
+    minWidth: 64,
   },
   backBtn: {
-    paddingVertical: 6,
-    paddingRight: 10,
+    minHeight: 44,
+    minWidth: 44,
+    paddingHorizontal: 4,
+    justifyContent: "center",
   },
   logo: {
-    width: 130,
-    height: 32,
+    width: 142,
+    height: 34,
   },
   right: {
-    minWidth: 60,
+    minWidth: 64,
     alignItems: "flex-end",
+    justifyContent: "center",
   },
 });

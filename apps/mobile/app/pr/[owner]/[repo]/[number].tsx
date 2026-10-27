@@ -4,8 +4,8 @@ import {
   Text,
   ScrollView,
   TouchableOpacity,
+  TextInput,
   StyleSheet,
-  ActivityIndicator,
   Linking,
   Share,
 } from "react-native";
@@ -20,7 +20,9 @@ import { StatusPill } from "../../../../src/components/StatusPill";
 import { RiskBadge } from "../../../../src/components/RiskBadge";
 import { AIBlock } from "../../../../src/components/AIBlock";
 import { Button } from "../../../../src/components/Button";
+import { EmptyState } from "../../../../src/components/EmptyState";
 import { ErrorState } from "../../../../src/components/ErrorState";
+import { LoadingState } from "../../../../src/components/LoadingState";
 
 export default function PrDetailScreen() {
   const { owner, repo, number } = useLocalSearchParams<{
@@ -36,7 +38,7 @@ export default function PrDetailScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [notes, setNotes] = useState<string[]>([]);
-  const [showNoteModal, setShowNoteModal] = useState(false);
+  const [showNoteInput, setShowNoteInput] = useState(false);
   const [newNote, setNewNote] = useState("");
 
   const loadPr = useCallback(async () => {
@@ -46,7 +48,7 @@ export default function PrDetailScreen() {
       const data = await api.getPrDetail(owner || "owner", repo || "repo", parseInt(number || "1", 10));
       setDetail(data);
     } catch (e) {
-      setError(toUserMessage(e, "Failed to load pull request detail."));
+      setError(toUserMessage(e, "We couldn't load this pull request right now. Please try again."));
     } finally {
       setIsLoading(false);
     }
@@ -75,34 +77,49 @@ export default function PrDetailScreen() {
     if (newNote.trim()) {
       setNotes((prev) => [...prev, newNote.trim()]);
       setNewNote("");
-      setShowNoteModal(false);
+      setShowNoteInput(false);
     }
   };
 
   return (
     <View style={[styles.root, { backgroundColor: colors.background }]}>
       <Header
-        title={`${repo}#${number}`}
+        title={`${repo || "repo"}#${number || "1"}`}
         showBack
         rightAction={
-          <TouchableOpacity onPress={handleShare} accessibilityLabel="Share pull request">
+          <TouchableOpacity
+            onPress={handleShare}
+            accessibilityRole="button"
+            accessibilityLabel="Share pull request"
+            style={styles.shareBtn}
+          >
             <Text style={{ fontSize: 18 }}>📤</Text>
           </TouchableOpacity>
         }
       />
 
       {isLoading ? (
-        <View style={styles.center}>
-          <ActivityIndicator size="large" color={colors.brandLight} />
-          <Text style={[typography.body, { color: colors.textSecondary, marginTop: spacing.md }]}>
-            Loading review analysis...
-          </Text>
-        </View>
-      ) : error || !detail ? (
-        <ErrorState message={error || "PR not found."} onRetry={loadPr} />
+        <LoadingState
+          title="Loading pull request..."
+          message="Fetching AI summary, risk checks, and changed files."
+        />
+      ) : error ? (
+        <ErrorState
+          title="Couldn't load pull request"
+          message={error}
+          onRetry={loadPr}
+        />
+      ) : !detail ? (
+        <EmptyState
+          icon="📄"
+          title="Pull request not found"
+          message="This pull request may have been removed or moved in GitHub."
+          actionTitle="Try Again"
+          onAction={loadPr}
+        />
       ) : (
         <>
-          <ScrollView contentContainerStyle={{ padding: spacing.base, paddingBottom: 100 }}>
+          <ScrollView contentContainerStyle={{ padding: spacing.base, paddingBottom: 120 }}>
             {/* PR Header */}
             <View style={[styles.headerCard, { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.lg }]}>
               <View style={styles.topRow}>
@@ -112,7 +129,10 @@ export default function PrDetailScreen() {
                 <StatusPill status={detail.status} />
               </View>
 
-              <Text style={[typography.title2, { color: colors.text, marginTop: spacing.xs }]}>
+              <Text
+                style={[typography.title2, { color: colors.text, marginTop: spacing.xs }]}
+                accessibilityRole="header"
+              >
                 {detail.title}
               </Text>
 
@@ -146,11 +166,11 @@ export default function PrDetailScreen() {
                     POSSIBLE SECRET DETECTED
                   </Text>
                 </View>
-                <Text style={[typography.footnote, { color: "#FFFFFF", marginTop: 4, lineHeight: 18 }]}>
+                <Text style={[typography.footnote, { color: colors.text, marginTop: 4, lineHeight: 18 }]}>
                   Pattern matched {detail.secretWarning.rule} at {detail.secretWarning.file}:
                   {detail.secretWarning.line}. Raw secret values are always masked and never sent to AI.
                 </Text>
-                <View style={[styles.codeBox, { backgroundColor: "rgba(0,0,0,0.4)", borderRadius: radius.sm, marginTop: 6 }]}>
+                <View style={[styles.codeBox, { backgroundColor: "rgba(0,0,0,0.45)", borderRadius: radius.sm, marginTop: 6 }]}>
                   <Text style={[typography.code, { color: "#FEE2E2" }]}>
                     {detail.secretWarning.maskedSnippet}
                   </Text>
@@ -197,7 +217,9 @@ export default function PrDetailScreen() {
                   </AIBlock>
                 ) : (
                   <View style={[styles.card, { backgroundColor: colors.surfaceElevated, borderColor: colors.border, borderRadius: radius.lg }]}>
-                    <Text style={[typography.headline, { color: colors.text }]}>AI summary unavailable</Text>
+                    <Text style={[typography.headline, { color: colors.text }]} accessibilityRole="header">
+                      AI summary unavailable
+                    </Text>
                     <Text style={[typography.body, { color: colors.textSecondary, marginTop: 4 }]}>
                       {detail.aiNotice.message}
                     </Text>
@@ -210,7 +232,9 @@ export default function PrDetailScreen() {
             {detail.risk && (
               <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.lg, marginTop: spacing.sm }]}>
                 <View style={styles.riskHeader}>
-                  <Text style={[typography.headline, { color: colors.text }]}>Risk Assessment</Text>
+                  <Text style={[typography.headline, { color: colors.text }]} accessibilityRole="header">
+                    Risk Assessment
+                  </Text>
                   <RiskBadge level={detail.risk.level} secretWarning={detail.secretWarning} />
                 </View>
 
@@ -233,44 +257,101 @@ export default function PrDetailScreen() {
 
             {/* CI Checks List */}
             <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.lg, marginTop: spacing.sm }]}>
-              <Text style={[typography.headline, { color: colors.text }]}>
+              <Text style={[typography.headline, { color: colors.text }]} accessibilityRole="header">
                 Checks ({detail.checks.filter((c) => c.conclusion === "success").length}/{detail.checks.length})
               </Text>
-              <View style={{ marginTop: spacing.xs }}>
-                {detail.checks.map((chk) => (
-                  <View key={chk.id} style={styles.checkRow}>
-                    <Text style={{ color: chk.conclusion === "success" ? colors.riskLow : chk.conclusion === "failure" ? colors.riskHigh : colors.textMuted }}>
-                      {chk.conclusion === "success" ? "✓" : chk.conclusion === "failure" ? "✕" : "…"}
-                    </Text>
-                    <Text style={[typography.subhead, { color: colors.text, flex: 1 }]}>{chk.name}</Text>
-                    <Text style={[typography.caption, { color: colors.textMuted }]}>{chk.conclusion}</Text>
-                  </View>
-                ))}
-              </View>
+              {detail.checks.length === 0 ? (
+                <Text style={[typography.footnote, { color: colors.textMuted, marginTop: spacing.xs }]}>
+                  No status checks have been reported for this pull request yet.
+                </Text>
+              ) : (
+                <View style={{ marginTop: spacing.xs }}>
+                  {detail.checks.map((chk) => (
+                    <View key={chk.id} style={styles.checkRow}>
+                      <Text style={{ color: chk.conclusion === "success" ? colors.riskLow : chk.conclusion === "failure" ? colors.riskHigh : colors.textMuted }}>
+                        {chk.conclusion === "success" ? "✓" : chk.conclusion === "failure" ? "✕" : "…"}
+                      </Text>
+                      <Text style={[typography.subhead, { color: colors.text, flex: 1 }]}>{chk.name}</Text>
+                      <Text style={[typography.caption, { color: colors.textMuted }]}>{chk.conclusion}</Text>
+                    </View>
+                  ))}
+                </View>
+              )}
             </View>
 
             {/* Changed Files List */}
             <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.lg, marginTop: spacing.sm }]}>
-              <Text style={[typography.headline, { color: colors.text }]}>
+              <Text style={[typography.headline, { color: colors.text }]} accessibilityRole="header">
                 Files Changed ({detail.files.length})
               </Text>
-              <View style={{ marginTop: spacing.xs }}>
-                {detail.files.map((file, idx) => (
-                  <View key={idx} style={[styles.fileRow, { borderBottomColor: colors.border, borderBottomWidth: idx === detail.files.length - 1 ? 0 : 1 }]}>
-                    <Text style={[typography.code, { color: colors.text, flex: 1 }]} numberOfLines={1}>
-                      {file.filename}
-                    </Text>
-                    <Text style={[typography.caption, { color: colors.riskLow }]}>+{file.additions}</Text>
-                    <Text style={[typography.caption, { color: colors.riskHigh }]}>-{file.deletions}</Text>
-                  </View>
-                ))}
-              </View>
+              {detail.files.length === 0 ? (
+                <Text style={[typography.footnote, { color: colors.textMuted, marginTop: spacing.xs }]}>
+                  No changed files reported for this pull request.
+                </Text>
+              ) : (
+                <View style={{ marginTop: spacing.xs }}>
+                  {detail.files.map((file, idx) => (
+                    <View key={idx} style={[styles.fileRow, { borderBottomColor: colors.border, borderBottomWidth: idx === detail.files.length - 1 ? 0 : 1 }]}>
+                      <Text style={[typography.code, { color: colors.text, flex: 1 }]} numberOfLines={1}>
+                        {file.filename}
+                      </Text>
+                      <Text style={[typography.caption, { color: colors.riskLow }]}>+{file.additions}</Text>
+                      <Text style={[typography.caption, { color: colors.riskHigh }]}>-{file.deletions}</Text>
+                    </View>
+                  ))}
+                </View>
+              )}
             </View>
+
+            {/* Inline Note Editor */}
+            {showNoteInput && (
+              <View style={[styles.card, { backgroundColor: colors.surfaceElevated, borderColor: colors.border, borderRadius: radius.lg, marginTop: spacing.sm }]}>
+                <Text style={[typography.headline, { color: colors.text }]} accessibilityRole="header">
+                  Add Private Note
+                </Text>
+                <TextInput
+                  value={newNote}
+                  onChangeText={setNewNote}
+                  placeholder="Write a personal review note..."
+                  placeholderTextColor={colors.textMuted}
+                  accessibilityLabel="Personal review note"
+                  style={[
+                    styles.noteInput,
+                    {
+                      backgroundColor: colors.surface,
+                      borderColor: colors.border,
+                      color: colors.text,
+                      borderRadius: radius.md,
+                      marginTop: spacing.xs,
+                    },
+                  ]}
+                />
+                <View style={styles.noteActions}>
+                  <Button
+                    title="Cancel"
+                    onPress={() => {
+                      setShowNoteInput(false);
+                      setNewNote("");
+                    }}
+                    variant="secondary"
+                    style={{ flex: 1 }}
+                  />
+                  <Button
+                    title="Save Note"
+                    onPress={addLocalNote}
+                    variant="primary"
+                    style={{ flex: 1 }}
+                  />
+                </View>
+              </View>
+            )}
 
             {/* Local Notes */}
             {notes.length > 0 && (
               <View style={[styles.card, { backgroundColor: colors.surfaceElevated, borderColor: colors.border, borderRadius: radius.lg, marginTop: spacing.sm }]}>
-                <Text style={[typography.headline, { color: colors.text }]}>My Notes</Text>
+                <Text style={[typography.headline, { color: colors.text }]} accessibilityRole="header">
+                  My Notes ({notes.length})
+                </Text>
                 {notes.map((note, idx) => (
                   <Text key={idx} style={[typography.body, { color: colors.textSecondary, marginTop: 4 }]}>
                     • {note}
@@ -283,11 +364,8 @@ export default function PrDetailScreen() {
           {/* Bottom Bar: Open in GitHub and Add note. STRICTLY NO MERGE, APPROVE, OR COMMENT CONTROLS ON GITHUB (US-12) */}
           <View style={[styles.bottomBar, { backgroundColor: colors.surface, borderTopColor: colors.border }]}>
             <Button
-              title="Add Note"
-              onPress={() => {
-                const note = prompt("Enter note for this PR:") || "";
-                if (note.trim()) setNotes((prev) => [...prev, note.trim()]);
-              }}
+              title={showNoteInput ? "Hide Note" : "Add Note"}
+              onPress={() => setShowNoteInput((prev) => !prev)}
               variant="secondary"
               style={{ flex: 1 }}
             />
@@ -308,8 +386,9 @@ const styles = StyleSheet.create({
   root: {
     flex: 1,
   },
-  center: {
-    flex: 1,
+  shareBtn: {
+    minWidth: 44,
+    minHeight: 44,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -373,6 +452,17 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 8,
     paddingVertical: 8,
+  },
+  noteInput: {
+    minHeight: 44,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderWidth: 1,
+  },
+  noteActions: {
+    flexDirection: "row",
+    gap: 10,
+    marginTop: 10,
   },
   bottomBar: {
     position: "absolute",

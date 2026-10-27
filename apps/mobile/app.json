@@ -21,6 +21,13 @@
         "applinks:dev.mergemate.dev"
       ]
     },
+    "android": {
+      "package": "dev.mergemate.app",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#0B0B12"
+      }
+    },
     "web": {
       "bundler": "metro",
       "output": "single",

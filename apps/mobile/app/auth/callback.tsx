@@ -1,9 +1,12 @@
-import React, { useEffect, useRef } from "react";
-import { View, Text, ActivityIndicator, StyleSheet } from "react-native";
+import React, { useEffect, useRef, useState } from "react";
+import { View, StyleSheet } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useAuth } from "../../src/context/AuthContext";
 import { useTheme } from "../../src/context/ThemeContext";
 import { api } from "../../src/api";
+import { EmptyState } from "../../src/components/EmptyState";
+import { ErrorState } from "../../src/components/ErrorState";
+import { LoadingState } from "../../src/components/LoadingState";
 
 /**
  * GitHub sends the person back here with `code` and `state` (or `error` if they said no).
@@ -12,10 +15,12 @@ import { api } from "../../src/api";
  */
 export default function AuthCallbackScreen() {
   const router = useRouter();
-  const { colors, typography, spacing } = useTheme();
+  const { colors } = useTheme();
   const { completeGithubSignIn, setError } = useAuth();
   const params = useLocalSearchParams<{ code?: string | string[]; state?: string | string[]; error?: string | string[] }>();
   const started = useRef(false);
+  const [localError, setLocalError] = useState<string | null>(null);
+  const [missingParams, setMissingParams] = useState(false);
 
   useEffect(() => {
     if (started.current) return;
@@ -28,16 +33,19 @@ export default function AuthCallbackScreen() {
     const run = async () => {
       if (first(params.error)) {
         setError("Sign-in was cancelled.");
+        setLocalError("Sign-in was cancelled.");
         router.replace("/(auth)/sign-in");
         return;
       }
       if (!code || !state) {
         setError("That sign-in link isn't valid. Start again.");
+        setMissingParams(true);
         router.replace("/(auth)/sign-in");
         return;
       }
       const ok = await completeGithubSignIn(code, state);
       if (!ok) {
+        setLocalError("Could not complete GitHub sign-in. Please try again.");
         router.replace("/(auth)/sign-in");
         return;
       }
@@ -54,8 +62,27 @@ export default function AuthCallbackScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <ActivityIndicator size="large" color={colors.brandLight} />
-      <Text style={[typography.body, { color: colors.textSecondary, marginTop: spacing.md }]}>Finishing sign-in...</Text>
+      {localError ? (
+        <ErrorState
+          title="Could not finish sign-in"
+          message={localError}
+          onRetry={() => router.replace("/(auth)/sign-in")}
+          retryLabel="Back to Sign In"
+        />
+      ) : missingParams ? (
+        <EmptyState
+          icon="🔑"
+          title="Sign-in link expired"
+          message="Start a new sign-in from the MergeMate sign-in screen."
+          actionTitle="Go to Sign In"
+          onAction={() => router.replace("/(auth)/sign-in")}
+        />
+      ) : (
+        <LoadingState
+          title="Finishing sign-in..."
+          message="Verifying your GitHub authorization and loading your inbox."
+        />
+      )}
     </View>
   );
 }
