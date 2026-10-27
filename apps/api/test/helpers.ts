@@ -137,6 +137,7 @@ export const testContext = (overrides: Partial<Env> = {}): TestContext => {
   const env: TestContext["env"] = {
     APP_ENV: "development",
     WEB_ORIGIN: "http://localhost:8081",
+    SITE_ORIGIN: "https://dev.mergemate.dev",
     GITHUB_APP_CLIENT_ID: "Iv-test-client",
     GITHUB_APP_CLIENT_SECRET: "test-secret-not-real",
     GITHUB_APP_SLUG: "mergemate-test",

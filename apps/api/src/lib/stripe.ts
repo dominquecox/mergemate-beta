@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { Deps, Env } from "../env";
+import { billingReturnOrigins } from "../config";
 import { ApiError, ConfigError } from "../errors";
 export const STRIPE_API = "https://api.stripe.com/v1";
 const version = "2025-06-30.basil";
@@ -37,9 +38,9 @@ export function stripePrice(env: Env, key: "pro_monthly" | "pro_annual") {
   return price;
 }
 export function billingOrigin(env: Env) {
-  const origin = env.WEB_ORIGIN;
-  if (!(env.APP_ENV === "development" ? ["http://localhost:8081","https://dev.mergemate.dev"] : ["https://mergemate.dev"]).includes(origin ?? "")) throw new ConfigError("Billing return origin is not allowed");
-  return origin as string;
+  const origin = env.WEB_ORIGIN?.trim() ?? "";
+  if (!billingReturnOrigins(env).includes(origin)) throw new ConfigError("Billing return origin is not allowed");
+  return origin;
 }
 const List = z.object({ data: z.array(z.unknown()), has_more: z.boolean() });
 export async function stripeList(env: Env, deps: Deps, path: string, customer: string, params: Record<string,string> = {}) {

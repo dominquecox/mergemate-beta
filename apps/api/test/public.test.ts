@@ -75,13 +75,13 @@ describe("public posts", () => {
     }
   });
 
-  it("publishes an escaped RSS feed linking to the web app", async () => {
+  it("publishes an escaped RSS feed linking to the public site", async () => {
     const ctx = testContext();
     seed(ctx);
     const res = await appFor(ctx)("/v1/public/posts/rss.xml");
     expect(res.headers.get("content-type")).toBe("application/rss+xml; charset=utf-8");
     const xml = await res.text();
-    expect(xml).toContain("<link>http://localhost:8081/news/latest-news</link>");
+    expect(xml).toContain("<link>https://dev.mergemate.dev/news/latest-news</link>");
     expect(xml).toContain("Title latest-news &amp; &lt;more&gt;");
     expect(xml).not.toContain("<more>");
     expect(xml.match(/<item>/g)).toHaveLength(3);

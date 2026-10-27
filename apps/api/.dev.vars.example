@@ -18,11 +18,12 @@ TURNSTILE_SECRET_KEY=
 # Support mail addresses (not secret, but kept out of the repo)
 EMAIL_FROM=
 SUPPORT_EMAIL=
-# Non-secret config. APP_ENV, WEB_ORIGIN, GITHUB_APP_CLIENT_ID, GITHUB_APP_SLUG and the model settings
+# Non-secret config. APP_ENV, WEB_ORIGIN, SITE_ORIGIN, GITHUB_APP_CLIENT_ID, GITHUB_APP_SLUG and the model settings
 # are in wrangler.toml [vars]; uncomment only to override locally (an empty value also overrides).
 # STRIPE_MODE=
 # APP_ENV=
 # WEB_ORIGIN=
+# SITE_ORIGIN=
 # GITHUB_APP_CLIENT_ID=
 # GITHUB_APP_SLUG=
 # MODEL_PROVIDER=

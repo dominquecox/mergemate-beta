@@ -18,6 +18,7 @@ export interface TokenRefresherNamespace {
 export interface Env {
   APP_ENV?: string;
   WEB_ORIGIN?: string;
+  SITE_ORIGIN?: string;
   MODEL_PROVIDER?: string;
   MODEL_ID?: string;
   MODEL_BASE_URL?: string;

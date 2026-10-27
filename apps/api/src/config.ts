@@ -7,13 +7,19 @@ export type Platform = "ios" | "web";
 // Fixed allowlists. Config picks among these; it can never add an origin or callback.
 const WEB_ORIGINS: Record<AppEnvName, readonly string[]> = {
   development: ["https://dev.mergemate.dev", "http://localhost:8081"],
+  production: ["https://app.mergemate.dev"],
+};
+
+// Public site origin, used for post and RSS links. Not a web app origin, so it is never a CORS or auth origin.
+const SITE_ORIGINS: Record<AppEnvName, readonly string[]> = {
+  development: ["https://dev.mergemate.dev"],
   production: ["https://mergemate.dev"],
 };
 
 // iOS returns through the https universal link only, never a custom scheme.
 const IOS_CALLBACKS: Record<AppEnvName, string> = {
   development: "https://dev.mergemate.dev/auth/callback",
-  production: "https://mergemate.dev/auth/callback",
+  production: "https://app.mergemate.dev/auth/callback",
 };
 
 export const appEnv = (env: Env): AppEnvName => {
@@ -29,6 +35,17 @@ export const webOrigin = (env: Env) => {
   const origin = env.WEB_ORIGIN?.trim();
   if (!origin) throw new ConfigError("WEB_ORIGIN is not set");
   if (!WEB_ORIGINS[appEnv(env)].includes(origin)) throw new ConfigError("WEB_ORIGIN is not allowed for APP_ENV");
+  return origin;
+};
+
+/** Origins Stripe Checkout and Portal may return to: the same fixed list as the web app origins. */
+export const billingReturnOrigins = (env: Env) => WEB_ORIGINS[appEnv(env)];
+
+/** The public site's origin for post and RSS links, checked against its own allowlist. */
+export const siteOrigin = (env: Env) => {
+  const origin = env.SITE_ORIGIN?.trim();
+  if (!origin) throw new ConfigError("SITE_ORIGIN is not set");
+  if (!SITE_ORIGINS[appEnv(env)].includes(origin)) throw new ConfigError("SITE_ORIGIN is not allowed for APP_ENV");
   return origin;
 };
 

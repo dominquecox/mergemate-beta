@@ -279,7 +279,7 @@ describe("CORS", () => {
   });
 
   it("does not allow development origins in production", async () => {
-    const call = appFor(testContext({ APP_ENV: "production", WEB_ORIGIN: "https://mergemate.dev" }));
+    const call = appFor(testContext({ APP_ENV: "production", WEB_ORIGIN: "https://app.mergemate.dev" }));
     const res = await call("/v1/health", { headers: { origin: "https://dev.mergemate.dev" } });
     expect(res.headers.get("access-control-allow-origin")).toBeNull();
   });

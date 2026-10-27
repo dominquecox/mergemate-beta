@@ -1,6 +1,6 @@
 import { Post, type PostList, PostSlug, PostSummary, PostType, SupportRequest } from "@mergemate/contracts";
 import { type Context, Hono } from "hono";
-import { requireBinding, requireVar, webOrigin } from "../config";
+import { requireBinding, requireVar, siteOrigin } from "../config";
 import type { AppEnv } from "../env";
 import { ApiError } from "../errors";
 import { clientIp, limit } from "../middleware/rate-limit";
@@ -41,7 +41,7 @@ export const sanitizeMarkdown = (md: string) =>
 const xml = (s: string) =>
   s.replace(/[<>&'"]/g, (ch) => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;", "'": "&apos;", '"': "&quot;" })[ch] ?? ch);
 
-const postUrl = (c: Context<AppEnv>, post: PostSummary) => `${webOrigin(c.env)}/${post.type}/${post.slug}`;
+const postUrl = (c: Context<AppEnv>, post: PostSummary) => `${siteOrigin(c.env)}/${post.type}/${post.slug}`;
 
 export const publicContent = new Hono<AppEnv>()
   .get("/public/posts", async (c) => {
@@ -60,7 +60,7 @@ export const publicContent = new Hono<AppEnv>()
   })
 
   .get("/public/posts/rss.xml", async (c) => {
-    const origin = webOrigin(c.env);
+    const origin = siteOrigin(c.env);
     const items = (await readIndex(c)).slice(0, RSS_ITEMS);
     const body = `<?xml version="1.0" encoding="UTF-8"?>
 <rss version="2.0">
