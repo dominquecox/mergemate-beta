@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from "react";
-import { View, ScrollView, RefreshControl, TouchableOpacity, StyleSheet, Platform } from "react-native";
+import { View, ScrollView, RefreshControl, TouchableOpacity, StyleSheet } from "react-native";
 import { Text } from "../../src/components/Text";
 import { useRouter } from "expo-router";
 import { useTheme } from "../../src/context/ThemeContext";
@@ -19,7 +19,6 @@ export default function InboxScreen() {
   const router = useRouter();
   const { colors, typography, spacing, radius } = useTheme();
   const { isDesktop } = useLayout();
-  const isWeb = Platform.OS === "web";
 
   const [filter, setFilter] = useState<NotificationFilter>("all");
   const [items, setItems] = useState<Notification[]>([]);
@@ -116,7 +115,7 @@ export default function InboxScreen() {
         }
       />
 
-      {isWeb && (
+      {(
         <View style={[styles.webHeading,{paddingHorizontal:isDesktop?24:spacing.base}]}>
           <View style={{flex:1,minWidth:0}}>
             <Text style={[typography.title1,{color:colors.text}]} accessibilityRole="header">Inbox</Text>
@@ -130,11 +129,11 @@ export default function InboxScreen() {
       )}
 
       {/* Segmented Filter Control */}
-      <View style={[styles.filterBar, { borderBottomColor: colors.border }, isWeb && { marginHorizontal:16, borderBottomWidth:0, paddingHorizontal:4, paddingVertical:4, backgroundColor:colors.surfaceElevated, borderRadius:radius.lg }]} accessibilityRole="tablist">
+      <View style={[styles.filterBar, { borderBottomColor: colors.border }, { marginHorizontal:16, borderBottomWidth:0, paddingHorizontal:4, paddingVertical:4, backgroundColor:colors.surfaceElevated, borderRadius:radius.lg }]} accessibilityRole="tablist">
         {(["all", "review", "mentions", "mine"] as NotificationFilter[]).map((tab) => {
           const isSelected = filter === tab;
           let label = "All";
-          if (tab === "review") label = isWeb ? "Needs review" : "Review";
+          if (tab === "review") label = "Needs review";
           if (tab === "mentions") label = "Mentions";
           if (tab === "mine") label = "Mine";
 
@@ -145,7 +144,7 @@ export default function InboxScreen() {
               style={[
                 styles.filterTab,
                 {
-                  backgroundColor: isSelected ? (isWeb ? colors.brandSubtle : colors.surfaceInteractive) : "transparent",
+                  backgroundColor: isSelected ? colors.brandSubtle : "transparent",
                   borderRadius: radius.md,
                 },
               ]}
@@ -157,7 +156,7 @@ export default function InboxScreen() {
                 style={[
                   typography.subhead,
                   {
-                    color: isSelected && isWeb ? colors.brandLight : isSelected ? colors.text : colors.textSecondary,
+                    color: isSelected ? colors.brandLight : colors.textSecondary,
                     fontWeight: isSelected ? "700" : "500",
                   },
                 ]}
@@ -213,23 +212,23 @@ export default function InboxScreen() {
         >
           {/* Summary Strip Card */}
           <View
-            style={[styles.summaryStrip, { backgroundColor: isWeb ? colors.surface : colors.surfaceElevated, borderColor: colors.border, borderRadius: radius.lg }, isWeb && { padding:16, marginBottom:16 }]}
+            style={[styles.summaryStrip, { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.lg }, { padding:16, marginBottom:16 }]}
             accessibilityLabel={`Summary: ${items.filter((i) => i.kind === "review").length} needs you, ${items.filter((i) => i.kind === "mention").length} FYI, ${items.filter((i) => i.kind === "mine").length} mine`}
           >
             <View style={styles.stripCol}>
-              <Text style={[typography.headline, { color: isWeb ? colors.text : colors.laneNeedsYou }]}>
+              <Text style={[typography.headline, { color: colors.text }]}>
                 {items.filter((i) => i.kind === "review").length}
               </Text>
               <Text style={[typography.caption, { color: colors.textSecondary }]}>Needs you</Text>
             </View>
             <View style={styles.stripCol}>
-              <Text style={[typography.headline, { color: isWeb ? colors.text : colors.laneFyi }]}>
+              <Text style={[typography.headline, { color: colors.text }]}>
                 {items.filter((i) => i.kind === "mention").length}
               </Text>
               <Text style={[typography.caption, { color: colors.textSecondary }]}>FYI</Text>
             </View>
             <View style={styles.stripCol}>
-              <Text style={[typography.headline, { color: isWeb ? colors.text : colors.laneIgnore }]}>
+              <Text style={[typography.headline, { color: colors.text }]}>
                 {items.filter((i) => i.kind === "mine").length}
               </Text>
               <Text style={[typography.caption, { color: colors.textSecondary }]}>Mine</Text>
@@ -244,7 +243,7 @@ export default function InboxScreen() {
                 style={[
                   styles.itemCard,
                   isDesktop && styles.itemCardGrid,
-                  isWeb && { padding:16, marginBottom:16 },
+                  { padding:16, marginBottom:16 },
                   {
                     backgroundColor: colors.surface,
                     borderColor: colors.border,
@@ -261,8 +260,8 @@ export default function InboxScreen() {
                   accessibilityRole="button"
                   accessibilityLabel={`Open pull request #${item.number}: ${item.title} in ${item.repo}, ${item.risk || "normal"} risk`}
                 >
-                  <View style={[styles.cardTop,isWeb && {flexWrap:"wrap",gap:8}]}>
-                    <Text style={[typography.caption, { color: colors.textMuted, fontFamily: Platform.OS === "web" ? typography.code.fontFamily : "monospace", flexShrink:isWeb?1:undefined }]}>
+                  <View style={[styles.cardTop,{flexWrap:"wrap",gap:8}]}>
+                    <Text style={[typography.caption, { color: colors.textMuted, fontFamily: typography.code.fontFamily, flexShrink:1 }]}>
                       {item.repo} #{item.number}
                     </Text>
                     <View style={styles.badgeGroup}>
@@ -276,7 +275,7 @@ export default function InboxScreen() {
                   </Text>
   
                   {item.summaryLine && (
-                    <View style={[styles.summaryRow,isWeb && {padding:12,backgroundColor:colors.surfaceElevated,borderRadius:radius.sm,marginTop:12}]}>
+                    <View style={[styles.summaryRow,{padding:12,backgroundColor:colors.surfaceElevated,borderRadius:radius.sm,marginTop:12}]}>
                       <Icon name="sparkles" size={12} color={colors.brandLight} style={styles.summaryIcon} />
                       <Text style={[typography.footnote, { color: colors.textSecondary, flex: 1 }]} numberOfLines={2}>
                         {item.summaryLine}
@@ -285,7 +284,7 @@ export default function InboxScreen() {
                   )}
                 </TouchableOpacity>
   
-                <View style={[styles.cardBottom,isWeb && {flexWrap:"wrap",gap:8,borderTopColor:colors.border,marginTop:12,paddingTop:12}]}>
+                <View style={[styles.cardBottom,{flexWrap:"wrap",gap:8,borderTopColor:colors.border,marginTop:12,paddingTop:12}]}>
                   <Text style={[typography.caption, { color: colors.textMuted, flex: 1 }]}>
                     By @{item.author} · {new Date(item.updatedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
                   </Text>
@@ -293,7 +292,7 @@ export default function InboxScreen() {
                   <View style={styles.quickActions}>
                     <TouchableOpacity
                       onPress={() => handleSnooze(item)}
-                      style={[styles.actionBtn, { borderColor: colors.border },isWeb && {borderRadius:radius.md}]}
+                      style={[styles.actionBtn, { borderColor: colors.border },{borderRadius:radius.md}]}
                       accessibilityRole="button"
                       accessibilityLabel={`Snooze ${item.title}`}
                     >
@@ -301,7 +300,7 @@ export default function InboxScreen() {
                     </TouchableOpacity>
                     <TouchableOpacity
                       onPress={() => handleDone(item)}
-                      style={[styles.actionBtn, { borderColor: colors.border, backgroundColor: colors.surfaceInteractive },isWeb && {borderRadius:radius.md}]}
+                      style={[styles.actionBtn, { borderColor: colors.border, backgroundColor: colors.surfaceInteractive },{borderRadius:radius.md}]}
                       accessibilityRole="button"
                       accessibilityLabel={`Mark ${item.title} as done`}
                     >

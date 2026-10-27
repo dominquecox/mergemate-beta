@@ -8,7 +8,7 @@ import { AuthProvider, useAuth } from "../src/context/AuthContext";
 import { ConsentProvider } from "../src/context/ConsentContext";
 import { DemoBanner } from "../src/components/DemoBanner";
 import { ConfigErrorScreen, SampleDataBanner, isApiMisconfigured } from "../src/components/ConfigBanner";
-import { WebFonts } from "../src/components/WebFonts";
+import { AppFonts } from "../src/components/AppFonts";
 import { Sidebar } from "../src/components/Sidebar";
 import { SIDEBAR_WIDTH, resolveShell } from "../src/layout/breakpoints";
 
@@ -126,7 +126,7 @@ function AppContent() {
 
 export default function RootLayout() {
   return (
-    <WebFonts>
+    <AppFonts>
     <SafeAreaProvider>
       <ThemeProvider>
         <AuthProvider>
@@ -136,7 +136,7 @@ export default function RootLayout() {
         </AuthProvider>
       </ThemeProvider>
     </SafeAreaProvider>
-    </WebFonts>
+    </AppFonts>
   );
 }
 

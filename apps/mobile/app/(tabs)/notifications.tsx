@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { View, ScrollView, TouchableOpacity, StyleSheet, Platform } from "react-native";
 import { Text } from "../../src/components/Text";
+import { useRouter } from "expo-router";
+import { ScreenIntro } from "../../src/components/ScreenDesign";
 import { useTheme } from "../../src/context/ThemeContext";
 import { api } from "../../src/api";
 import { toUserMessage } from "../../src/api/errors";
@@ -17,6 +19,7 @@ import { Icon } from "../../src/components/Icon";
 export default function NotificationsScreen() {
   const { colors, typography, spacing, radius } = useTheme();
   const {isDesktop}=useLayout();
+  const router = useRouter();
 
   const [filter, setFilter] = useState<NotificationFilter>("all");
   const [items, setItems] = useState<Notification[]>([]);
@@ -98,16 +101,6 @@ export default function NotificationsScreen() {
         })}
       </View>
 
-      {/* Quiet Hours Banner (US-17) */}
-      <View style={[styles.quietBanner, { backgroundColor: colors.surfaceElevated, borderColor: colors.border }]}>
-        <View style={styles.quietRow}>
-          <Icon name="moon-outline" size={14} color={colors.textSecondary} />
-          <Text style={[typography.caption, { color: colors.textSecondary, flex: 1 }]}>
-            Quiet Hours active (22:00 – 08:00). High-priority review alerts will sound after 08:00.
-          </Text>
-        </View>
-      </View>
-
       {isLoading ? (
         <LoadingState
           title="Loading notifications..."
@@ -128,61 +121,21 @@ export default function NotificationsScreen() {
           onAction={loadNotifications}
         />
       ) : (
-        <ScrollView contentContainerStyle={{ padding: isDesktop ? 24 : spacing.base, paddingBottom: 60, flexDirection:isDesktop?"row":"column",flexWrap:isDesktop?"wrap":"nowrap",columnGap:isDesktop?16:0 }}>
-          {/* Grouped by Day */}
-          <Text
-            style={[typography.caption, { color: colors.textMuted, textTransform: "uppercase", marginBottom: 8 }, isDesktop && { flexBasis: "100%" }]}
-            accessibilityRole="header"
-          >
-            Today
-          </Text>
-
-          {items.map((item) => (
-            <View
-              key={item.id}
-              style={[
-                styles.notifCard,
-                isDesktop && { flexBasis:"47%",flexGrow:1,minWidth:280 },
-                {
-                  backgroundColor: colors.surface,
-                  borderColor: colors.border,
-                  borderRadius: radius.md,
-                },
-              ]}
-            >
-              <View style={styles.notifHeader}>
-                <View style={styles.leftMeta}>
-                  {!item.read && (
-                    <View
-                      style={[styles.unreadDot, { backgroundColor: colors.brandLight }]}
-                      accessibilityLabel="Unread"
-                    />
-                  )}
-                  <Text style={[typography.caption, { color: colors.textMuted, fontFamily: Platform.OS === "web" ? typography.code.fontFamily : "monospace" }]}>
-                    {item.repo}
-                  </Text>
+        <ScrollView contentContainerStyle={{padding:isDesktop?24:16,paddingBottom:48}}>
+          <ScreenIntro eyebrow="Your review activity" title="Activity Feed" description={`${items.filter(item=>!item.read).length} unread updates across your connected repositories.`} icon="notifications-outline"/>
+          {Array.from(new Set(items.map(item=>new Date(item.updatedAt).toLocaleDateString()))).map(day=><View key={day} style={{marginTop:20}}>
+            <View style={{flexDirection:"row",alignItems:"center",justifyContent:"space-between",marginBottom:12}}><Text accessibilityRole="header" style={[typography.subhead,{color:colors.text,fontWeight:"600"}]}>{day===new Date().toLocaleDateString()?"Today":day}</Text><Text style={[typography.caption,{color:colors.textSecondary}]}>{items.filter(item=>new Date(item.updatedAt).toLocaleDateString()===day && !item.read).length} unread</Text></View>
+            <View style={{borderWidth:1,borderColor:colors.border,borderRadius:16,overflow:"hidden"}}>
+              {items.filter(item=>new Date(item.updatedAt).toLocaleDateString()===day).map((item,index)=><TouchableOpacity key={item.id} accessibilityRole="button" accessibilityLabel={`Review ${item.title}`} onPress={()=>router.push(`/pr/${item.repo}/${item.number}`)} style={{backgroundColor:item.read?colors.surface:colors.surfaceElevated,padding:16,borderTopWidth:index?1:0,borderTopColor:colors.border}}>
+                <View style={{flexDirection:"row",gap:12,alignItems:"flex-start"}}>
+                  <View style={{width:36,height:36,borderRadius:12,backgroundColor:colors.brandSubtle,alignItems:"center",justifyContent:"center"}}><Icon name={item.kind==="mention"?"at-outline":item.kind==="review"?"git-pull-request-outline":"person-outline"} size={18} color={colors.brandLight}/></View>
+                  <View style={{flex:1,minWidth:0}}><View style={{flexDirection:"row",gap:6,alignItems:"center"}}>{!item.read && <View accessibilityLabel="Unread" style={{width:6,height:6,borderRadius:3,backgroundColor:colors.brandLight}}/>}<Text style={[typography.code,{color:colors.textSecondary,fontSize:11,flexShrink:1}]}>{item.repo} · #{item.number}</Text></View><Text style={[typography.headline,{color:colors.text,marginTop:8}]}>{item.title}</Text><Text style={[typography.footnote,{color:colors.textSecondary,marginTop:6}]}>{item.summaryLine || `Activity from @${item.author}`}</Text>
+                  <View style={{flexDirection:"row",gap:8,alignItems:"center",flexWrap:"wrap",marginTop:12}}><StatusPill status={item.status}/>{item.risk && <RiskBadge level={item.risk} compact/>}<Text style={[typography.caption,{color:colors.textSecondary}]}>{new Date(item.updatedAt).toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"})}</Text></View></View>
+                  <Icon name="chevron-forward" size={16} color={colors.textMuted}/>
                 </View>
-                {item.risk && <RiskBadge level={item.risk} compact />}
-              </View>
-
-              <Text style={[typography.headline, { color: colors.text, marginTop: 4 }]} numberOfLines={2}>
-                {item.title}
-              </Text>
-
-              {item.summaryLine && (
-                <Text style={[typography.footnote, { color: colors.textSecondary, marginTop: 4 }]} numberOfLines={2}>
-                  {item.summaryLine}
-                </Text>
-              )}
-
-              <View style={styles.notifFooter}>
-                <StatusPill status={item.status} />
-                <Text style={[typography.caption, { color: colors.textMuted }]}>
-                  {new Date(item.updatedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-                </Text>
-              </View>
+              </TouchableOpacity>)}
             </View>
-          ))}
+          </View>)}
         </ScrollView>
       )}
     </View>

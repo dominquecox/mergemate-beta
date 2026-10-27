@@ -1,3 +1,4 @@
+import { ScreenIntro, Section } from "../src/components/ScreenDesign";
 import React, { useState } from "react";
 import { View, ScrollView, TextInput, StyleSheet, Image, Platform, TouchableOpacity } from "react-native";
 import { Text } from "../src/components/Text";
@@ -77,8 +78,9 @@ export default function HighlightScreen() {
     <View style={[styles.root, { backgroundColor: colors.background }]}>
       <Header title="Screenshot Highlight" showBack />
       <ScrollView contentContainerStyle={{ padding: spacing.base, paddingBottom: 60 }}>
+        <ScreenIntro eyebrow="Visual review workspace" title="Screenshot Insight" description="Bring visual context into your review. Inspect a screenshot with Meta AI." icon="scan-outline"/>
         {/* Intro Card */}
-        <Card>
+        <Section title="Screenshot" icon="image-outline">
           <Text style={[typography.headline, { color: colors.text }]} accessibilityRole="header">
             Meta AI Vision Analysis
           </Text>
@@ -111,6 +113,7 @@ export default function HighlightScreen() {
             <Button title="Take a photo" onPress={takePhoto} variant="secondary" style={{ marginTop: spacing.sm }} />
           )}
 
+          <View style={{flexDirection:"row",alignItems:"center",gap:8,marginTop:16,padding:12,backgroundColor:colors.riskLowBg,borderRadius:12}}><Icon name="shield-checkmark-outline" size={16} color={colors.riskLow}/><Text style={[typography.footnote,{color:colors.riskLow,flex:1}]}>Images are processed for this request and removed afterward.</Text></View>
           <Text style={[typography.subhead, { color: colors.textSecondary, marginTop: spacing.md }]}>
             Optional Reviewer Note
           </Text>
@@ -139,7 +142,7 @@ export default function HighlightScreen() {
             variant="primary"
             style={{ marginTop: spacing.md }}
           />
-        </Card>
+        </Section>
 
         {isAnalyzing ? (
           <LoadingState
@@ -234,7 +237,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   uploadBox: {
-    minHeight: 88,
+    minHeight: 220,
     padding: 24,
     borderWidth: 1,
     borderStyle: "dashed",
@@ -242,6 +245,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   input: {
+    fontFamily: "Geist_400Regular",
     minHeight: 44,
     paddingHorizontal: 12,
     paddingVertical: 10,
@@ -249,7 +253,7 @@ const styles = StyleSheet.create({
   },
   preview: {
     width: "100%",
-    height: 200,
+    height: 260,
   },
   regionCard: {
     padding: 12,

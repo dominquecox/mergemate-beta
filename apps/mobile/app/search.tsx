@@ -1,5 +1,6 @@
+import { ScreenIntro } from "../src/components/ScreenDesign";
 import React, { useState, useEffect, useCallback } from "react";
-import { View, TextInput, ScrollView, TouchableOpacity, StyleSheet, Platform } from "react-native";
+import { View, TextInput, ScrollView, TouchableOpacity, StyleSheet } from "react-native";
 import { Text } from "../src/components/Text";
 import { useRouter } from "expo-router";
 import { useTheme } from "../src/context/ThemeContext";
@@ -70,6 +71,7 @@ export default function SearchScreen() {
     <View style={[styles.root, { backgroundColor: colors.background }]}>
       <Header title="Search & Filter" showBack />
       <View style={{ padding: spacing.base }}>
+        <ScreenIntro eyebrow="Find your next review" title="Search & Filters" description="Search your review inbox by title, repository or author." icon="search-outline"/>
         {/* Search Input Bar */}
         <View style={[styles.searchBar, { backgroundColor: colors.surfaceElevated, borderColor: colors.border, borderRadius: radius.md }]}>
           <Icon name="search-outline" size={18} color={colors.textMuted} />
@@ -77,7 +79,7 @@ export default function SearchScreen() {
             value={query}
             onChangeText={setQuery}
             onSubmitEditing={handleSearchSubmit}
-            placeholder="Search title, repo, author, or diff..."
+            placeholder="Search title, repository, author..."
             placeholderTextColor={colors.textMuted}
             accessibilityLabel="Search pull requests by title, repository, or author"
             style={[styles.input, { color: colors.text }]}
@@ -160,6 +162,7 @@ export default function SearchScreen() {
         />
       ) : (
         <ScrollView contentContainerStyle={{ paddingHorizontal: spacing.base, paddingBottom: 60 }}>
+          <View style={{flexDirection:"row",alignItems:"center",justifyContent:"space-between",marginBottom:16}}><Text style={[typography.headline,{color:colors.text}]}>Results</Text><Text style={[typography.code,{color:colors.textSecondary}]}>{filteredPrs.length} pull requests</Text></View>
           {filteredPrs.length === 0 ? (
             <EmptyState
               icon="search-outline"
@@ -193,14 +196,15 @@ export default function SearchScreen() {
                 ]}
               >
                 <View style={styles.cardHeader}>
-                  <Text style={[typography.caption, { color: colors.textMuted, fontFamily: Platform.OS === "web" ? typography.code.fontFamily : "monospace" }]}>
-                    {item.repo}
+                  <Text style={[typography.caption, { color: colors.textMuted, fontFamily: typography.code.fontFamily }]}>
+                    #{item.number} · {item.repo}
                   </Text>
                   {item.risk && <RiskBadge level={item.risk} compact />}
                 </View>
                 <Text style={[typography.headline, { color: colors.text, marginTop: 4 }]}>
                   {item.title}
                 </Text>
+                {item.summaryLine && <View style={{padding:12,backgroundColor:colors.surfaceElevated,borderRadius:8,marginTop:12}}><Text style={[typography.footnote,{color:colors.textSecondary}]}>{item.summaryLine}</Text></View>}
                 <View style={styles.cardFooter}>
                   <StatusPill status={item.status} />
                   <Text style={[typography.caption, { color: colors.textMuted }]}>
@@ -230,6 +234,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   input: {
+    fontFamily: "Geist_400Regular",
     flex: 1,
     minHeight: 44,
   },
@@ -271,15 +276,17 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   resultCard: {
-    padding: 12,
+    padding: 20,
     borderWidth: 1,
-    marginBottom: 8,
+    marginBottom: 16,
     minHeight: 44,
   },
   cardHeader: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
+    flexWrap: "wrap",
+    gap: 8,
   },
   cardFooter: {
     flexDirection: "row",

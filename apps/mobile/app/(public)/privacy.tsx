@@ -1,3 +1,4 @@
+import { ScreenIntro, Section } from "../../src/components/ScreenDesign";
 import React, { useState } from "react";
 import { View, ScrollView, StyleSheet } from "react-native";
 import { Text } from "../../src/components/Text";
@@ -42,23 +43,21 @@ export default function PrivacyScreen() {
         <EmptyState icon="lock-closed-outline" title="Policy unavailable" message="Please contact privacy@mergemate.dev for our privacy policy." />
       ) : (
         <ScrollView contentContainerStyle={{ padding: spacing.base, paddingBottom: 60 }}>
-          <Text style={[typography.title1, { color: colors.text }]} accessibilityRole="header">
-            Privacy Policy
-          </Text>
+          <ScreenIntro eyebrow="MergeMate · Ploonu LLC" title="Privacy Policy" description="How your data is handled, and the choices you control." icon="shield-checkmark-outline"/>
           <Text style={[typography.caption, { color: colors.textMuted, marginTop: 4 }]}>
             Effective date: October 26, 2026 · Ploonu LLC
           </Text>
 
           <View style={{ marginTop: spacing.md, gap: 16 }}>
             {PRIVACY_SECTIONS.map((sec) => (
-              <View key={sec.title}>
+              <Section key={sec.title}>
                 <Text style={[typography.headline, { color: colors.text }]} accessibilityRole="header">
                   {sec.title}
                 </Text>
                 <Text style={[typography.body, { color: colors.textSecondary, marginTop: 4, lineHeight: 22 }]}>
                   {sec.body}
                 </Text>
-              </View>
+              </Section>
             ))}
 
             <View style={[styles.footer, { borderTopColor: colors.border }]}>

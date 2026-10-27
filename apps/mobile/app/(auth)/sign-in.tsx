@@ -8,6 +8,7 @@ import { Button } from "../../src/components/Button";
 import { EmptyState } from "../../src/components/EmptyState";
 import { ErrorState } from "../../src/components/ErrorState";
 import { LoadingState } from "../../src/components/LoadingState";
+import { Section, InfoLine } from "../../src/components/ScreenDesign";
 import { Icon } from "../../src/components/Icon";
 
 export default function SignInScreen() {
@@ -53,10 +54,10 @@ export default function SignInScreen() {
           style={[typography.title2, { color: colors.text, marginTop: spacing.base, textAlign: "center" }]}
           accessibilityRole="header"
         >
-          Sign in to start
+          Connect your GitHub
         </Text>
         <Text style={[typography.body, { color: colors.textSecondary, marginTop: spacing.xs, textAlign: "center" }]}>
-          Your intelligent pull request companion.
+          Stay ahead of incoming pull requests, risk assessments, and code reviews.
         </Text>
       </View>
 
@@ -123,6 +124,12 @@ export default function SignInScreen() {
         </View>
       )}
 
+      <Section title="What MergeMate accesses" icon="shield-checkmark-outline" style={{width:"100%",marginTop:24}}>
+        <InfoLine icon="git-pull-request-outline" title="Read-only pull requests" detail="Review selected diffs, comments and check results from repositories you connect."/>
+        <InfoLine icon="folder-open-outline" title="Repository metadata" detail="Only the repositories you choose on GitHub are available to MergeMate."/>
+        <InfoLine icon="person-outline" title="You stay in control" detail="MergeMate never merges, approves or closes a pull request. Take those actions in GitHub."/>
+      </Section>
+
       <View style={[styles.footer, { marginTop: spacing.xl }]}>
         <View style={styles.privacyRow}>
           <Icon name="lock-closed-outline" size={14} color={colors.textMuted} style={styles.privacyIcon} />
@@ -175,7 +182,7 @@ export default function SignInScreen() {
 const styles = StyleSheet.create({
   container: {
     flexGrow: 1,
-    justifyContent: "space-between",
+    justifyContent: "flex-start",
     alignItems: "center",
   },
   header: {

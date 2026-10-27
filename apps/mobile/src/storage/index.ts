@@ -49,6 +49,19 @@ function isPendingSignIn(value: unknown): value is PendingSignIn {
 }
 
 export const StorageService = {
+  async getThemeMode(): Promise<"dark" | "light" | "system"> {
+    try {
+      const value = Platform.OS === "web" ? getWebStorage()?.getItem("mergemate_theme") : await SecureStore.getItemAsync("mergemate_theme");
+      return value === "light" || value === "system" ? value : "dark";
+    } catch { return "dark"; }
+  },
+  async setThemeMode(mode: "dark" | "light" | "system"): Promise<void> {
+    try {
+      if (Platform.OS === "web") getWebStorage()?.setItem("mergemate_theme", mode);
+      else await SecureStore.setItemAsync("mergemate_theme", mode);
+    } catch { /* The current preference still applies if persistence is unavailable. */ }
+  },
+
   /**
    * Session tokens:
    * Web must NEVER store or read the session token in JavaScript or localStorage.

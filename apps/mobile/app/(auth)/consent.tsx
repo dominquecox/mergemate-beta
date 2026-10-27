@@ -1,3 +1,4 @@
+import { ScreenIntro, InfoLine } from "../../src/components/ScreenDesign";
 import React, { useState } from "react";
 import { View, StyleSheet, ScrollView } from "react-native";
 import { Text } from "../../src/components/Text";
@@ -63,25 +64,8 @@ export default function ConsentScreen() {
         />
       ) : (
         <ScrollView contentContainerStyle={[styles.content, { padding: spacing.xl }]}>
-          <View style={[styles.iconCircle, { backgroundColor: colors.brandSubtle, borderColor: colors.brandMuted }]}>
-            <Icon name="sparkles" size={36} color={colors.brandLight} />
-          </View>
-
-          <Text
-            style={[typography.title1, { color: colors.text, marginTop: spacing.base, textAlign: "center" }]}
-            accessibilityRole="header"
-          >
-            How MergeMate Uses AI
-          </Text>
-
-          <Text
-            style={[
-              typography.body,
-              { color: colors.textSecondary, marginTop: spacing.sm, textAlign: "center", lineHeight: 22 },
-            ]}
-          >
-            MergeMate uses Meta AI models to write plain-language summaries, spot risky changes, and help you sort pull requests. You stay in control.
-          </Text>
+          <ScreenIntro eyebrow="Your data · Your choice" title="AI, with your permission" description="Understand what is shared before you turn on summaries and risk insights." icon="shield-checkmark-outline"/>
+          <InfoLine icon="person-outline" title="Always human in the loop" detail="AI helps you review. Every action on a pull request happens in GitHub."/>
 
           <View
             style={[
@@ -175,7 +159,7 @@ const styles = StyleSheet.create({
   },
   content: {
     flexGrow: 1,
-    alignItems: "center",
+    alignItems: "stretch",
   },
   iconCircle: {
     width: 64,

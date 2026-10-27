@@ -1,3 +1,4 @@
+import { ScreenIntro, InfoLine } from "../../src/components/ScreenDesign";
 import React, { useState, useEffect, useCallback } from "react";
 import { View, ScrollView, TouchableOpacity, Switch, StyleSheet, Platform, Linking, Alert, TextInput } from "react-native";
 import { Text } from "../../src/components/Text";
@@ -193,6 +194,7 @@ export default function SettingsScreen() {
         />
       ) : (
         <ScrollView contentContainerStyle={{ padding: isDesktop ? 24 : spacing.base, paddingBottom: 60, flexDirection:isDesktop?"row":"column",flexWrap:isDesktop?"wrap":"nowrap",gap:isDesktop?16:0 }}>
+          <View style={{width:"100%"}}><ScreenIntro eyebrow="Personal workspace" title="Settings" description="Your repositories, review preferences and account." icon="options-outline"/></View>
           {(notice || consentError) && (
             <View
               style={[styles.sectionCard, isDesktop && styles.webSectionCard, { backgroundColor: colors.surfaceElevated, borderColor: colors.border, borderRadius: radius.lg, marginBottom: spacing.base }]}
@@ -231,6 +233,11 @@ export default function SettingsScreen() {
               variant="secondary"
               style={{ marginTop: spacing.md }}
             />
+          </View>
+
+          <View style={[styles.sectionCard,isDesktop && styles.webSectionCard,{backgroundColor:colors.surface,borderColor:colors.border,borderRadius:16,marginTop:isDesktop?0:16}]}>
+            <InfoLine icon="folder-open-outline" title="Manage Repositories" detail="Choose what appears in your review inbox."/>
+            <Button title="Configure repositories" variant="secondary" onPress={()=>router.push("/(auth)/repos")}/>
           </View>
 
           {/* Subscription Plan (US-20, US-21) */}
@@ -276,7 +283,7 @@ export default function SettingsScreen() {
             >
               AI & Processing
             </Text>
-            <View style={styles.row}>
+            <View style={[styles.row,{borderTopWidth:1,borderTopColor:colors.border,marginTop:12,paddingTop:16}]}>
               <View style={{ flex: 1, paddingRight: spacing.md }}>
                 <Text style={[typography.headline, { color: colors.text }]}>AI Summaries & Risk Scoring</Text>
                 <Text style={[typography.footnote, { color: colors.textSecondary, marginTop: 2 }]}>
@@ -308,7 +315,7 @@ export default function SettingsScreen() {
               ["mention", "Mentions", "When someone mentions you."],
               ["mine", "My pull requests", "Activity on pull requests you opened."],
             ] as const).map(([kind, label, hint]) => (
-              <View key={kind} style={styles.row}>
+              <View key={kind} style={[styles.row,{borderTopWidth:1,borderTopColor:colors.border,marginTop:12,paddingTop:16}]}>
                 <View style={{ flex: 1, paddingRight: spacing.md }}>
                   <Text style={[typography.headline, { color: colors.text }]}>{label}</Text>
                   <Text style={[typography.footnote, { color: colors.textSecondary, marginTop: 2 }]}>{hint}</Text>
@@ -326,7 +333,7 @@ export default function SettingsScreen() {
               </View>
             ))}
 
-            <View style={styles.row}>
+            <View style={[styles.row,{borderTopWidth:1,borderTopColor:colors.border,marginTop:12,paddingTop:16}]}>
               <View style={{ flex: 1, paddingRight: spacing.md }}>
                 <Text style={[typography.headline, { color: colors.text }]}>Quiet Hours</Text>
                 <Text style={[typography.footnote, { color: colors.textSecondary, marginTop: 2 }]}>
@@ -346,7 +353,7 @@ export default function SettingsScreen() {
             </View>
 
             {Platform.OS !== "web" && !isDemo && (
-              <View style={styles.row}>
+              <View style={[styles.row,{borderTopWidth:1,borderTopColor:colors.border,marginTop:12,paddingTop:16}]}>
                 <View style={{ flex: 1, paddingRight: spacing.md }}>
                   <Text style={[typography.headline, { color: colors.text }]}>Push on this device</Text>
                   <Text style={[typography.footnote, { color: colors.textSecondary, marginTop: 2 }]}>
@@ -477,7 +484,7 @@ export default function SettingsScreen() {
                 accessibilityRole="link"
                 accessibilityLabel={item.label}
               >
-                <Text style={[typography.body, { color: colors.text }]}>{item.label}</Text>
+                <View style={{flexDirection:"row",gap:10,alignItems:"center",flex:1}}><Icon name={idx===2?"help-circle-outline":idx===3?"shield-checkmark-outline":"document-text-outline"} size={18} color={colors.textSecondary}/><Text style={[typography.body,{color:colors.text,flex:1}]}>{item.label}</Text></View>
                 <Icon name="chevron-forward" size={18} color={colors.textMuted} />
               </TouchableOpacity>
             ))}
@@ -504,7 +511,7 @@ const styles = StyleSheet.create({
   },
   webSectionCard: { flexBasis:"47%", flexGrow:1, minWidth:280 },
   sectionCard: {
-    padding: 16,
+    padding: 20,
     borderWidth: 1,
   },
   userRow: {
@@ -544,6 +551,7 @@ const styles = StyleSheet.create({
     minHeight: 44,
   },
   keyInput: {
+    fontFamily: "Geist_400Regular",
     minHeight: 44,
     padding: 12,
     borderWidth: 1,

@@ -1,3 +1,4 @@
+import { ScreenIntro, Section } from "../../src/components/ScreenDesign";
 import React, { useState } from "react";
 import { View, TextInput, ScrollView, StyleSheet } from "react-native";
 import { Text } from "../../src/components/Text";
@@ -65,15 +66,13 @@ export default function SupportScreen() {
         />
       ) : (
         <ScrollView contentContainerStyle={{ padding: spacing.base, paddingBottom: 60 }}>
-          <Text style={[typography.title1, { color: colors.text }]} accessibilityRole="header">
-            How can we help?
-          </Text>
+          <ScreenIntro eyebrow="MergeMate · Ploonu LLC" title="Support & Contact" description="Tell us what happened. We will help you get back to reviewing." icon="help-circle-outline"/>
           <Text style={[typography.body, { color: colors.textSecondary, marginTop: 4 }]}>
             Reach the engineering team directly at{" "}
             <Text style={{ color: colors.brandLight, fontWeight: "600" }}>support@mergemate.dev</Text>.
           </Text>
 
-          <Card style={{ marginTop: spacing.lg }}>
+          <Section style={{ marginTop: spacing.lg }}>
             <Text style={[typography.subhead, { color: colors.textSecondary }]}>Your Email Address</Text>
             <TextInput
               value={email}
@@ -133,7 +132,7 @@ export default function SupportScreen() {
               variant="primary"
               style={{ marginTop: spacing.md }}
             />
-          </Card>
+          </Section>
         </ScrollView>
       )}
     </View>
@@ -150,11 +149,13 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   input: {
+    fontFamily: "Geist_400Regular",
     minHeight: 44,
     padding: 12,
     borderWidth: 1,
   },
   textArea: {
+    fontFamily: "Geist_400Regular",
     minHeight: 110,
     textAlignVertical: "top",
   },

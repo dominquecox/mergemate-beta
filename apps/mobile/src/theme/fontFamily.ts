@@ -1,5 +1,5 @@
 /** Choose bundled static font faces without relying on synthetic browser bold. */
-export function webFontFamily(family?: string, weight?: string | number): string {
+export function fontFamilyForWeight(family?: string, weight?: string | number): string {
   if (family && !family.startsWith('Geist_')) return family;
   if (weight === undefined) return family ?? 'Geist_400Regular';
   const numeric = weight === 'bold' ? 700 : weight === 'normal' ? 400 : Number(weight);

@@ -1,3 +1,4 @@
+import { Section, InfoLine } from "../../src/components/ScreenDesign";
 import React, { useState } from "react";
 import { View, StyleSheet, Platform } from "react-native";
 import { Text } from "../../src/components/Text";
@@ -8,7 +9,6 @@ import { Button } from "../../src/components/Button";
 import { EmptyState } from "../../src/components/EmptyState";
 import { ErrorState } from "../../src/components/ErrorState";
 import { LoadingState } from "../../src/components/LoadingState";
-import { Icon } from "../../src/components/Icon";
 
 export default function BillingSuccessScreen() {
   if (Platform.OS !== "web") {
@@ -52,21 +52,7 @@ export default function BillingSuccessScreen() {
         />
       ) : (
         <View style={[styles.content, { padding: spacing.xl }]}>
-          <Icon name="checkmark-circle" size={52} color={colors.riskLow} />
-          <Text
-            style={[typography.title1, { color: colors.text, marginTop: spacing.md, textAlign: "center" }]}
-            accessibilityRole="header"
-          >
-            Welcome to MergeMate Pro!
-          </Text>
-          <Text
-            style={[
-              typography.body,
-              { color: colors.textSecondary, marginTop: spacing.xs, textAlign: "center", maxWidth: 320 },
-            ]}
-          >
-            Enjoy more AI summaries and risk checks every day, triage deck, secret alerts, and live pull request updates.
-          </Text>
+          <Section title="Checkout received" icon="checkmark-circle-outline" style={{width:"100%",maxWidth:480}}><Text style={{color:colors.textSecondary,...typography.body}}>Return to your inbox or check your current plan in billing.</Text><InfoLine icon="shield-checkmark-outline" title="Secure billing" detail="Subscription status is managed through the billing portal."/></Section>
 
           <Button
             title="Return to Inbox"

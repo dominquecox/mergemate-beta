@@ -1,142 +1,36 @@
+/** Shared Stitch design tokens. iOS and web use the same surfaces, type and shapes. */
 export const palette = {
-  // Dark mode surfaces (calm dark slate, zero harsh neon glows, WCAG AA >= 4.5:1 text contrast)
   dark: {
-    background: "#0B0B12",
-    surface: "#14141F",
-    surfaceElevated: "#1C1C2B",
-    surfaceSecondary: "#232336",
-    surfaceInteractive: "#2B2B42",
-    border: "#28283D",
-    borderLight: "#35354F",
-    text: "#F3F4F6",
-    textSecondary: "#CBD5E1",
-    textMuted: "#A1A9B8",
-    // Calmed Brand Indigo (comfortable >= 4.5:1 contrast on dark surfaces)
-    brand: "#4F46E5",
-    brandLight: "#93C5FD",
-    brandMuted: "#312E81",
-    brandSubtle: "#1E1B4B",
-    // Risk colors (with clear icon/label pairing and >= 4.5:1 contrast)
-    riskLow: "#4ADE80",
-    riskLowBg: "#064E3B",
-    riskMedium: "#FBBF24",
-    riskMediumBg: "#451A03",
-    riskHigh: "#FCA5A5",
-    riskHighBg: "#450A0A",
-    // US-25 Secret Leak Warning
-    secretWarning: "#FDA4AF",
-    secretWarningBg: "#4C0519",
-    // Triage lanes (high contrast with #FFFFFF button text)
-    laneNeedsYou: "#4338CA",
-    laneFyi: "#0369A1",
-    laneIgnore: "#A1A9B8",
-    // Demo badge
-    demoBadge: "#FBBF24",
-    demoBadgeBg: "#451A03",
+    background:'#0B0F17', surface:'#131B2A', surfaceElevated:'#1B2538',
+    surfaceSecondary:'#1B2538', surfaceInteractive:'#253248', border:'#253248', borderLight:'#475569',
+    text:'#F8FAFC', textSecondary:'#94A3B8', textMuted:'#94A3B8',
+    brand:'#4F46E5', brandLight:'#A5B4FC', brandMuted:'#3730A3', brandSubtle:'#202947',
+    riskLow:'#6EE7B7', riskLowBg:'#123A32', riskMedium:'#FCD34D', riskMediumBg:'#3B2D18',
+    riskHigh:'#FCA5A5', riskHighBg:'#42212A', secretWarning:'#FDA4AF', secretWarningBg:'#4C0519',
+    laneNeedsYou:'#4F46E5', laneFyi:'#0369A1', laneIgnore:'#94A3B8', demoBadge:'#FBBF24', demoBadgeBg:'#451A03',
   },
-  // Light mode surfaces (WCAG AA >= 4.5:1 text contrast on all light surfaces)
   light: {
-    background: "#F9FAFB",
-    surface: "#FFFFFF",
-    surfaceElevated: "#F3F4F6",
-    surfaceSecondary: "#E5E7EB",
-    surfaceInteractive: "#E5E7EB",
-    border: "#D1D5DB",
-    borderLight: "#9CA3AF",
-    text: "#111827",
-    textSecondary: "#374151",
-    textMuted: "#4B5563",
-    brand: "#4338CA",
-    brandLight: "#3730A3",
-    brandMuted: "#E0E7FF",
-    brandSubtle: "#EEF2FF",
-    riskLow: "#065F46",
-    riskLowBg: "#D1FAE5",
-    riskMedium: "#92400E",
-    riskMediumBg: "#FEF3C7",
-    riskHigh: "#991B1B",
-    riskHighBg: "#FEE2E2",
-    secretWarning: "#9F1239",
-    secretWarningBg: "#FFE4E6",
-    laneNeedsYou: "#4338CA",
-    laneFyi: "#0369A1",
-    laneIgnore: "#4B5563",
-    demoBadge: "#92400E",
-    demoBadgeBg: "#FEF3C7",
+    background:'#F8FAFC', surface:'#FFFFFF', surfaceElevated:'#F1F5F9',
+    surfaceSecondary:'#E2E8F0', surfaceInteractive:'#E2E8F0', border:'#E2E8F0', borderLight:'#CBD5E1',
+    text:'#0F172A', textSecondary:'#475569', textMuted:'#475569',
+    brand:'#4F46E5', brandLight:'#4F46E5', brandSubtle:'#EEF2FF', brandMuted:'#E0E7FF',
+    riskLow:'#047857', riskLowBg:'#D1FAE5', riskMedium:'#92400E', riskMediumBg:'#FEF3C7',
+    riskHigh:'#B91C1C', riskHighBg:'#FEE2E2', secretWarning:'#9F1239', secretWarningBg:'#FFE4E6',
+    laneNeedsYou:'#4F46E5', laneFyi:'#0369A1', laneIgnore:'#475569', demoBadge:'#92400E', demoBadgeBg:'#FEF3C7',
   },
 };
 
-export const spacing = {
-  xs: 4,
-  sm: 8,
-  md: 12,
-  base: 16,
-  lg: 20,
-  xl: 24,
-  xxl: 32,
-  gutter: 16,
-};
-
+export const spacing = {xs:4,sm:8,md:12,base:16,lg:20,xl:24,xxl:32,gutter:16};
 export const typography = {
-  largeTitle: {
-    fontSize: 32,
-    lineHeight: 38,
-    fontWeight: "700" as const,
-    letterSpacing: -0.5,
-  },
-  title1: {
-    fontSize: 24,
-    lineHeight: 30,
-    fontWeight: "700" as const,
-    letterSpacing: -0.3,
-  },
-  title2: {
-    fontSize: 20,
-    lineHeight: 26,
-    fontWeight: "600" as const,
-    letterSpacing: -0.2,
-  },
-  headline: {
-    fontSize: 17,
-    lineHeight: 22,
-    fontWeight: "600" as const,
-  },
-  body: {
-    fontSize: 15,
-    lineHeight: 20,
-    fontWeight: "400" as const,
-  },
-  callout: {
-    fontSize: 14,
-    lineHeight: 18,
-    fontWeight: "400" as const,
-  },
-  subhead: {
-    fontSize: 13,
-    lineHeight: 18,
-    fontWeight: "500" as const,
-  },
-  footnote: {
-    fontSize: 12,
-    lineHeight: 16,
-    fontWeight: "400" as const,
-  },
-  caption: {
-    fontSize: 11,
-    lineHeight: 14,
-    fontWeight: "400" as const,
-  },
-  code: {
-    fontFamily: "Courier, monospace",
-    fontSize: 13,
-    lineHeight: 18,
-  },
+  largeTitle:{fontFamily:'Geist_700Bold',fontSize:34,lineHeight:41,fontWeight:'700' as const,letterSpacing:-0.5},
+  title1:{fontFamily:'Geist_700Bold',fontSize:28,lineHeight:34,fontWeight:'700' as const,letterSpacing:-0.3},
+  title2:{fontFamily:'Geist_600SemiBold',fontSize:22,lineHeight:28,fontWeight:'600' as const,letterSpacing:-0.2},
+  headline:{fontFamily:'Geist_600SemiBold',fontSize:17,lineHeight:22,fontWeight:'600' as const},
+  body:{fontFamily:'Geist_400Regular',fontSize:15,lineHeight:20,fontWeight:'400' as const},
+  callout:{fontFamily:'Geist_400Regular',fontSize:14,lineHeight:20,fontWeight:'400' as const},
+  subhead:{fontFamily:'Geist_500Medium',fontSize:13,lineHeight:18,fontWeight:'500' as const},
+  footnote:{fontFamily:'Geist_400Regular',fontSize:13,lineHeight:18,fontWeight:'400' as const},
+  caption:{fontFamily:'Geist_500Medium',fontSize:12,lineHeight:16,fontWeight:'500' as const},
+  code:{fontFamily:'JetBrainsMono_400Regular',fontSize:13,lineHeight:18,fontVariant:['tabular-nums'] as 'tabular-nums'[]},
 };
-
-export const radius = {
-  sm: 6,
-  md: 10,
-  lg: 14,
-  xl: 20,
-  full: 9999,
-};
+export const radius = {sm:8,md:12,lg:16,xl:16,full:9999};

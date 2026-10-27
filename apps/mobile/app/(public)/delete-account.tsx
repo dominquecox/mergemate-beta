@@ -1,3 +1,4 @@
+import { ScreenIntro, Section } from "../../src/components/ScreenDesign";
 import React, { useState } from "react";
 import { View, ScrollView, StyleSheet } from "react-native";
 import { Text } from "../../src/components/Text";
@@ -28,14 +29,12 @@ export default function PublicDeleteAccountScreen() {
         <EmptyState icon="trash-outline" title="Instructions unavailable" message="Email support@mergemate.dev to request account deletion." />
       ) : (
         <ScrollView contentContainerStyle={{ padding: spacing.base, paddingBottom: 60 }}>
-          <Text style={[typography.title1, { color: colors.text }]} accessibilityRole="header">
-            How to Delete Your Account
-          </Text>
+          <ScreenIntro eyebrow="MergeMate · Ploonu LLC" title="Account deletion" description="A clear path to removing your account and revoking access." icon="trash-outline"/>
           <Text style={[typography.body, { color: colors.textSecondary, marginTop: 4 }]}>
             MergeMate respects your data rights. You can delete your account and all associated tokens at any time.
           </Text>
 
-          <Card style={{ marginTop: spacing.lg }}>
+          <Section style={{ marginTop: spacing.lg }}>
             <Text style={[typography.headline, { color: colors.text }]} accessibilityRole="header">
               Option 1: In the App
             </Text>
@@ -49,16 +48,16 @@ export default function PublicDeleteAccountScreen() {
               variant="destructive"
               style={{ marginTop: spacing.md }}
             />
-          </Card>
+          </Section>
 
-          <Card style={{ marginTop: spacing.base }}>
+          <Section style={{ marginTop: spacing.base }}>
             <Text style={[typography.headline, { color: colors.text }]} accessibilityRole="header">
               Option 2: Direct Support Request
             </Text>
             <Text style={[typography.callout, { color: colors.textSecondary, marginTop: 4, lineHeight: 20 }]}>
               If you cannot log in, email <Text style={{ color: colors.brandLight }}>support@mergemate.dev</Text> from the email tied to your GitHub account with the subject "Delete Account". All associated data will be removed within 24 hours.
             </Text>
-          </Card>
+          </Section>
         </ScrollView>
       )}
     </View>

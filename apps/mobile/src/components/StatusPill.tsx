@@ -23,7 +23,7 @@ export function StatusPill({ status }: { status: PrStatus }) {
   }
 
   return (
-    <View style={[styles.pill, { backgroundColor: bg, borderRadius: Platform.OS === "web" ? radius.full : radius.sm }]}>
+    <View style={[styles.pill, { backgroundColor: bg, borderRadius: radius.full }]}>
       <Text style={[typography.caption, { color: text, fontWeight: "700", letterSpacing: 0.5 }]}>
         {label}
       </Text>

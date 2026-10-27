@@ -17,8 +17,8 @@ export function EmptyState({ icon = "sparkles-outline", title, message, actionTi
   const { colors, typography, spacing } = useTheme();
 
   return (
-    <View style={[styles.container, { padding: spacing.xxl }]}>
-      <Icon name={icon} size={40} color={colors.textMuted} />
+    <View style={[styles.container, { padding: spacing.xl, margin:16, borderRadius:16, borderWidth:1, borderColor:colors.border, backgroundColor:colors.surface }]}>
+      <View style={{width:64,height:64,borderRadius:32,backgroundColor:colors.riskLowBg,alignItems:"center",justifyContent:"center"}}><Icon name={icon} size={28} color={colors.riskLow}/></View>
       <Text style={[typography.title2, { color: colors.text, marginTop: spacing.md, textAlign: "center" }]}>
         {title}
       </Text>

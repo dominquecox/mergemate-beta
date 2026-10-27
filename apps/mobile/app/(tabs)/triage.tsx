@@ -1,13 +1,12 @@
 import React, { useState, useEffect, useCallback } from "react";
-import { View, StyleSheet, TouchableOpacity, Platform } from "react-native";
+import { View, StyleSheet, TouchableOpacity, ScrollView } from "react-native";
 import { Text } from "../../src/components/Text";
 import { useTheme } from "../../src/context/ThemeContext";
 import { api } from "../../src/api";
 import { toUserMessage } from "../../src/api/errors";
 import { TriageItem, TriageLane } from "../../src/types";
 import { Header } from "../../src/components/Header";
-import { Card } from "../../src/components/Card";
-import { Button } from "../../src/components/Button";
+import { ScreenIntro, Section } from "../../src/components/ScreenDesign";
 import { EmptyState } from "../../src/components/EmptyState";
 import { ErrorState } from "../../src/components/ErrorState";
 import { LoadingState } from "../../src/components/LoadingState";
@@ -84,101 +83,35 @@ export default function TriageScreen() {
         }
       />
 
-      {/* Progress Bar */}
-      <View
-        style={[styles.progressTrack, { backgroundColor: colors.surfaceSecondary }]}
-        accessibilityRole="progressbar"
-        accessibilityValue={{ min: 0, max: totalCount || 1, now: processedCount }}
-      >
-        <View
-          style={[
-            styles.progressBar,
-            { backgroundColor: colors.brand, width: `${Math.min(100, Math.max(0, progressPercent))}%` },
-          ]}
-        />
-      </View>
-
-      <View style={[styles.content, { padding: spacing.base }]}>
-        {isLoading ? (
-          <LoadingState
-            title="Loading triage deck..."
-            message="Sorting your pull requests by review priority."
-          />
-        ) : error ? (
-          <ErrorState
-            title="Could not load triage deck"
-            message={error}
-            onRetry={loadQueue}
-          />
-        ) : !currentItem ? (
-          <EmptyState
-            icon="checkmark-done-outline"
-            title="All Caught Up!"
-            message={`You've sorted all ${totalCount} pull requests. Great job staying on top of code review.`}
-            actionTitle="Reload Deck"
-            onAction={loadQueue}
-          />
-        ) : (
-          <View style={styles.deckContainer}>
-            <Text style={[typography.caption, { color: colors.textMuted, marginBottom: 8 }]}>
-              CARD {processedCount + 1} OF {totalCount}
-            </Text>
-
-            <Card style={styles.triageCard}>
-              <View style={styles.cardHeader}>
-                <Text style={[typography.caption, { color: colors.brandLight, fontFamily: Platform.OS === "web" ? typography.code.fontFamily : "monospace" }]}>
-                  {currentItem.prRef}
-                </Text>
-                <View style={[styles.lanePill, { backgroundColor: colors.brandSubtle }]}>
-                  <Text style={[typography.caption, { color: colors.brandLight, fontWeight: "700" }]}>
-                    SUGGESTED: {currentItem.lane.replace("_", " ").toUpperCase()}
-                  </Text>
-                </View>
+      <ScrollView contentContainerStyle={{padding:16,paddingBottom:32,flexGrow:1}}>
+        <ScreenIntro eyebrow="One pull request at a time" title="Triage Deck" description="Focus on what needs you. Sort the rest for later." icon="layers-outline"/>
+        <View style={{flexDirection:"row",justifyContent:"space-between",marginVertical:12}}>
+          <Text style={[typography.code,{color:colors.textSecondary}]}>{processedCount} of {totalCount} reviewed</Text>
+          <Text style={[typography.caption,{color:colors.brandLight}]}>{queue.length} remaining</Text>
+        </View>
+        <View style={[styles.progressTrack,{backgroundColor:colors.surfaceElevated}]} accessibilityRole="progressbar" accessibilityValue={{min:0,max:totalCount||1,now:processedCount}}>
+          <View style={[styles.progressBar,{backgroundColor:colors.brand,width:`${progressPercent}%`}]} />
+        </View>
+        {isLoading ? <LoadingState title="Loading triage deck..." message="Sorting your pull requests by review priority."/> : error ? <ErrorState title="Could not load triage deck" message={error} onRetry={loadQueue}/> : !currentItem ? <EmptyState icon="checkmark-done-outline" title="All Caught Up!" message={`You've sorted all ${totalCount} pull requests.`} actionTitle="Reload Deck" onAction={loadQueue}/> : (
+          <View style={{marginTop:32}}>
+            <View style={{height:12,marginHorizontal:24,backgroundColor:colors.surfaceElevated,borderRadius:16}}/>
+            <View style={{height:12,marginHorizontal:12,marginTop:-4,backgroundColor:colors.surfaceSecondary,borderRadius:16}}/>
+            <Section style={{padding:24}}>
+              <View style={{flexDirection:"row",gap:8,alignItems:"center",flexWrap:"wrap"}}><Icon name="git-pull-request-outline" size={18} color={colors.brandLight}/><Text style={[typography.code,{color:colors.textSecondary,flexShrink:1}]}>{currentItem.prRef}</Text></View>
+              <Text accessibilityRole="header" style={[typography.title2,{color:colors.text,marginTop:20}]}>{currentItem.title ?? currentItem.prRef}</Text>
+              <View style={{backgroundColor:colors.brandSubtle,padding:16,borderRadius:12,marginTop:24}}>
+                <View style={{flexDirection:"row",gap:8,alignItems:"center",marginBottom:8}}><Icon name="sparkles" size={16} color={colors.brandLight}/><Text style={[typography.caption,{color:colors.brandLight}]}>AI TRIAGE INSIGHT</Text></View>
+                <Text style={[typography.body,{color:colors.text}]}>{currentItem.reason}</Text>
               </View>
-
-              <Text
-                style={[typography.title2, { color: colors.text, marginTop: spacing.md }]}
-                accessibilityRole="header"
-              >
-                {currentItem.title ?? currentItem.prRef.split("#")[0]}
-              </Text>
-
-              <View style={[styles.reasonBox, { backgroundColor: colors.surfaceElevated, borderRadius: radius.md, marginTop: spacing.md }]}>
-                <View style={styles.reasonRow}>
-                  <Icon name="bulb-outline" size={16} color={colors.textSecondary} style={styles.reasonIcon} />
-                  <Text style={[typography.subhead, { color: colors.textSecondary, flex: 1 }]}>
-                    {currentItem.reason}
-                  </Text>
-                </View>
-              </View>
-
-              <Text style={[typography.footnote, { color: colors.textMuted, marginTop: spacing.lg }]}>
-                Choose a lane below to sort this pull request:
-              </Text>
-
-              {/* Triage Action Buttons */}
-              <View style={[styles.actions, { marginTop: spacing.md }]}>
-                <Button
-                  title="Needs you"
-                  onPress={() => handleDecision("needs_you")}
-                  style={{ backgroundColor: colors.laneNeedsYou, width: "100%" }}
-                />
-                <Button
-                  title="FYI (Read Later)"
-                  onPress={() => handleDecision("fyi")}
-                  style={{ backgroundColor: colors.laneFyi, width: "100%", marginTop: spacing.sm }}
-                />
-                <Button
-                  title="Ignore / Mute"
-                  onPress={() => handleDecision("ignore")}
-                  variant="secondary"
-                  style={{ width: "100%", marginTop: spacing.sm }}
-                />
-              </View>
-            </Card>
+              <View style={{flexDirection:"row",gap:8,alignItems:"center",marginTop:20}}><Icon name="pricetag-outline" size={16} color={colors.textSecondary}/><Text style={[typography.footnote,{color:colors.textSecondary}]}>Suggested: {currentItem.lane.replace("_"," ")}</Text></View>
+            </Section>
+            <View style={{flexDirection:"row",justifyContent:"space-around",gap:12,marginTop:28}}>
+              {([{lane:"ignore",label:"Ignore",icon:"close",color:colors.textSecondary},{lane:"fyi",label:"FYI · Later",icon:"time-outline",color:colors.riskMedium},{lane:"needs_you",label:"Needs you",icon:"flash",color:colors.brandLight}] as const).map(action=><TouchableOpacity key={action.lane} onPress={()=>handleDecision(action.lane)} accessibilityRole="button" accessibilityLabel={action.label} style={{alignItems:"center",gap:10,minWidth:80,minHeight:84}}><View style={{width:56,height:56,borderRadius:28,backgroundColor:colors.surfaceElevated,borderWidth:1,borderColor:colors.border,alignItems:"center",justifyContent:"center"}}><Icon name={action.icon} size={24} color={action.color}/></View><Text style={[typography.caption,{color:action.color}]}>{action.label}</Text></TouchableOpacity>)}
+            </View>
+            <Text style={[typography.footnote,{color:colors.textSecondary,textAlign:"center",marginTop:24}]}>Your choices organize MergeMate. They never change the pull request on GitHub.</Text>
           </View>
         )}
-      </View>
+      </ScrollView>
     </View>
   );
 }

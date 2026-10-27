@@ -1,7 +1,7 @@
-import React, { createContext, useContext, useState } from "react";
-import { Platform, useColorScheme } from "react-native";
+import { StorageService } from "../storage";
+import React, { createContext, useContext, useState, useEffect } from "react";
+import { useColorScheme } from "react-native";
 import { palette, spacing, typography, radius } from "../theme";
-import { webPalette, webTypography, webRadius } from "../theme/web";
 import { ThemeMode } from "../types";
 
 interface ThemeContextType {
@@ -18,11 +18,12 @@ const ThemeContext = createContext<ThemeContextType | null>(null);
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const systemScheme = useColorScheme();
-  const [themeMode, setThemeMode] = useState<ThemeMode>("dark");
+  const [themeMode, updateThemeMode] = useState<ThemeMode>("dark");
 
+  useEffect(() => { void StorageService.getThemeMode().then(updateThemeMode); }, []);
+  const setThemeMode = (mode:ThemeMode) => { updateThemeMode(mode); void StorageService.setThemeMode(mode); };
   const isDark = themeMode === "system" ? systemScheme === "dark" : themeMode === "dark";
-  const currentPalette = Platform.OS === "web" ? webPalette : palette;
-  const colors = isDark ? currentPalette.dark : currentPalette.light;
+  const colors = isDark ? palette.dark : palette.light;
 
   return (
     <ThemeContext.Provider
@@ -31,8 +32,8 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
         isDark,
         colors,
         spacing,
-        typography: Platform.OS === "web" ? webTypography : typography,
-        radius: Platform.OS === "web" ? webRadius : radius,
+        typography: typography,
+        radius: radius,
         setThemeMode,
       }}
     >

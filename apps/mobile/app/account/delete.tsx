@@ -1,3 +1,4 @@
+import { ScreenIntro, InfoLine, Section } from "../../src/components/ScreenDesign";
 import React, { useState } from "react";
 import { View, ScrollView, StyleSheet, Alert, Platform } from "react-native";
 import { Text } from "../../src/components/Text";
@@ -7,11 +8,9 @@ import { useAuth } from "../../src/context/AuthContext";
 import { toUserMessage } from "../../src/api/errors";
 import { Header } from "../../src/components/Header";
 import { Button } from "../../src/components/Button";
-import { Card } from "../../src/components/Card";
 import { EmptyState } from "../../src/components/EmptyState";
 import { ErrorState } from "../../src/components/ErrorState";
 import { LoadingState } from "../../src/components/LoadingState";
-import { Icon } from "../../src/components/Icon";
 
 export default function DeleteAccountScreen() {
   const router = useRouter();
@@ -73,32 +72,13 @@ export default function DeleteAccountScreen() {
         />
       ) : (
         <ScrollView contentContainerStyle={[styles.content, { padding: spacing.xl }]}>
-          <View style={[styles.iconCircle, { backgroundColor: colors.riskHighBg }]}>
-            <Icon name="warning" size={34} color={colors.riskHigh} />
-          </View>
-
-          <Text
-            style={[typography.title1, { color: colors.riskHigh, marginTop: spacing.md, textAlign: "center" }]}
-            accessibilityRole="header"
-          >
-            Delete Your Account
-          </Text>
-
-          <Text style={[typography.body, { color: colors.textSecondary, marginTop: spacing.sm, textAlign: "center" }]}>
-            Account: @{user.login || "demo-developer"}
-          </Text>
-
-          <Card style={{ marginTop: spacing.lg, width: "100%" }}>
-            <Text style={[typography.headline, { color: colors.text }]} accessibilityRole="header">
-              What happens when you delete:
-            </Text>
-            <Text style={[typography.callout, { color: colors.textSecondary, marginTop: 8, lineHeight: 22 }]}>
-              • Any active Stripe subscription is canceled immediately.{"\n"}
-              • All sessions, cached summaries, and stored data are purged.{"\n"}
-              • MergeMate's GitHub App authorization grant is revoked.{"\n"}
-              • This action is permanent and cannot be undone.
-            </Text>
-          </Card>
+          <ScreenIntro eyebrow="Account & security" title="Delete your account" description={`Signed in as @${user.login}. This is permanent. Review what will be removed before continuing.`} icon="warning-outline"/>
+          <Section title="What will be removed" style={{width:"100%"}}>
+            <InfoLine icon="card-outline" title="Subscription canceled" detail="Any active subscription ends as part of deletion."/>
+            <InfoLine icon="lock-closed-outline" title="GitHub access revoked" detail="MergeMate's authorization is revoked and your sessions are ended."/>
+            <InfoLine icon="trash-outline" title="Stored data removed" detail="Cached summaries, settings and review metadata are purged."/>
+          </Section>
+          <View style={{padding:16,backgroundColor:colors.riskHighBg,borderRadius:12,width:"100%",marginTop:16}}><Text style={[typography.body,{color:colors.riskHigh}]}>This action cannot be undone. Your repositories and pull requests on GitHub are not deleted.</Text></View>
 
           <View style={[styles.actions, { marginTop: spacing.xl }]}>
             <Button

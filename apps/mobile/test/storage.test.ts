@@ -38,6 +38,17 @@ describe("StorageService", () => {
     (Platform as any).OS = "ios";
   });
 
+  it("persists the selected native appearance and rejects unknown stored values", async () => {
+    Platform.OS = "ios";
+    expect(await StorageService.getThemeMode()).toBe("dark");
+    await StorageService.setThemeMode("light");
+    expect(await StorageService.getThemeMode()).toBe("light");
+    await StorageService.setThemeMode("system");
+    expect(await StorageService.getThemeMode()).toBe("system");
+    mockSecureStore.set("mergemate_theme", "unexpected");
+    expect(await StorageService.getThemeMode()).toBe("dark");
+  });
+
   it("stores and updates AI consent status", async () => {
     await StorageService.setAiConsent(true);
     expect(await StorageService.getAiConsent()).toBe(true);

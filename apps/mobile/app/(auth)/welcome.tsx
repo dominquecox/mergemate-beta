@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { View, Image, TouchableOpacity, StyleSheet } from "react-native";
+import { View, ScrollView, Image, TouchableOpacity, StyleSheet } from "react-native";
 import { Text } from "../../src/components/Text";
 import { useRouter } from "expo-router";
 import { useTheme } from "../../src/context/ThemeContext";
@@ -7,6 +7,7 @@ import { Button } from "../../src/components/Button";
 import { EmptyState } from "../../src/components/EmptyState";
 import { ErrorState } from "../../src/components/ErrorState";
 import { LoadingState } from "../../src/components/LoadingState";
+import { OnboardingPreview } from "../../src/components/OnboardingPreview";
 import { Icon, IconName } from "../../src/components/Icon";
 
 const CARDS = [
@@ -111,31 +112,13 @@ export default function WelcomeScreen() {
         </TouchableOpacity>
       </View>
 
-      <View style={styles.content}>
-        <View style={[styles.iconCircle, { backgroundColor: colors.surfaceElevated, borderColor: colors.border }]}>
-          <Icon name={card.icon} size={42} color={colors.brandLight} />
-        </View>
-
-        <Text style={[typography.caption, { color: colors.brandLight, fontWeight: "700", marginTop: spacing.lg }]}>
-          STEP {card.step} OF 03
-        </Text>
-
-        <Text
-          style={[typography.largeTitle, { color: colors.text, marginTop: spacing.xs, textAlign: "center" }]}
-          accessibilityRole="header"
-        >
-          {card.title}
-        </Text>
-
-        <Text
-          style={[
-            typography.body,
-            { color: colors.textSecondary, marginTop: spacing.md, textAlign: "center", maxWidth: 340 },
-          ]}
-        >
-          {card.subtitle}
-        </Text>
-      </View>
+      <ScrollView contentContainerStyle={{paddingVertical:20,gap:20}}>
+        <Text style={[typography.caption,{color:colors.brandLight,letterSpacing:1.5}]}>STEP {card.step} OF 03</Text>
+        <OnboardingPreview step={activeStep}/>
+        <View style={{gap:10}}><View style={{flexDirection:"row",gap:8,alignItems:"center"}}><Icon name={card.icon} size={16} color={colors.brandLight}/><Text style={[typography.caption,{color:colors.brandLight}]}>{["LIGHTNING REVIEWS","RISK MATRIX","HUMAN IN THE LOOP"][activeStep]}</Text></View>
+        <Text style={[typography.largeTitle,{color:colors.text}]} accessibilityRole="header">{card.title}</Text>
+        <Text style={[typography.body,{color:colors.textSecondary}]}>{card.subtitle}</Text></View>
+      </ScrollView>
 
       <View style={styles.footer}>
         <View style={styles.dots} accessibilityRole="tablist">

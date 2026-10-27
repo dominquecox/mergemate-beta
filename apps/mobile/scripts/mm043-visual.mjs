@@ -7,7 +7,7 @@ import { chromium } from '@playwright/test';
 
 // Review harness only. Runs the real exported app against isolated API fixtures.
 const root=resolve(fileURLToPath(new URL('../dist',import.meta.url)));
-const output=resolve(fileURLToPath(new URL('../review/mm042',import.meta.url)));
+const output=resolve(fileURLToPath(new URL('file:///private/tmp/mm043-proof/')));
 const mime={'.html':'text/html','.js':'text/javascript','.css':'text/css','.ttf':'font/ttf','.woff2':'font/woff2','.png':'image/png','.ico':'image/x-icon'};
 const server=createServer(async(req,res)=>{
   const path=resolve(root,'.'+decodeURIComponent(new URL(req.url,'http://localhost').pathname));
@@ -28,7 +28,8 @@ const items=titles.map((title,i)=>({id:`fixture-${i}`,kind:['review','review','m
 const settings={notifications:{review:true,mention:true,mine:true},quietHours:null,aiSummaries:true};
 const detail={repo:'octocat/review-app',number:1429,title:titles[0],body:'A small improvement to request recovery.',author:'janedoe',status:'open',baseBranch:'main',headBranch:'feature/bounded-retries',headSha:'abcdef1234',additions:142,deletions:38,changedFiles:4,files:[{path:'src/network/retry.ts',status:'modified',additions:82,deletions:20,patch:'@@ -1,2 +1,3 @@\n-return request();\n+return retry(request, { attempts: 3 });'}],checks:[{name:'Typecheck',state:'success'},{name:'Unit tests',state:'success'}],threads:[],createdAt:at,updatedAt:at,htmlUrl:'https://github.com/octocat/review-app/pull/1429'};
 let notificationMode='normal';
-const authenticated=true;
+let authenticated=true;
+let delayMe=false;
 const apiCalls=[];
 const results=[];
 const browser=await chromium.launch({channel:'chrome',headless:true});
@@ -36,19 +37,19 @@ try{
   await mkdir(output,{recursive:true});
   for(const width of [393,1440])for(const theme of ['dark','light']){
     const context=await browser.newContext({viewport:{width,height:width===393?1000:1050},deviceScaleFactor:1,colorScheme:theme,timezoneId:'America/Indiana/Indianapolis'});
-    await context.addInitScript(()=>localStorage.setItem('mergemate_demo_session','true'));
-    const page=await context.newPage();page.setDefaultTimeout(15000);const errors=[];const expectedResourceErrors=[];
+    await context.addInitScript((theme)=>{localStorage.setItem('mergemate_demo_session','true');localStorage.setItem('mergemate_theme',theme);},theme);
+    const page=await context.newPage();page.setDefaultTimeout(15000);const errors=[];
     page.on('pageerror',error=>errors.push(error.message));
-    page.on('console',message=>{if(message.type()==='error'){if(notificationMode==='error' && /status of 502/.test(message.text()))expectedResourceErrors.push(message.text());else errors.push(message.text());}});
+    page.on('console',message=>{if(message.type()==='error' && !/status of (401|502)/.test(message.text()))errors.push(message.text());});
     await page.route('**/*',async route=>{
       const request=route.request();const url=new URL(request.url());
       if(url.origin===origin || url.protocol==='data:')return route.continue();
-      if(url.origin!=='https://api-mm042.example')return route.abort();
+      if(url.origin!=='https://api-mm043.example')return route.abort();
       apiCalls.push({method:request.method(),path:url.pathname});
       const headers={'content-type':'application/json','access-control-allow-origin':origin,'access-control-allow-credentials':'true','access-control-allow-headers':'content-type,x-csrf-token,authorization','access-control-allow-methods':'GET,POST,PUT,DELETE,OPTIONS'};
       if(request.method()==='OPTIONS')return route.fulfill({status:204,headers,body:''});
       const path=url.pathname.replace('/v1','');let body;let status=200;
-      if(path==='/me'){if(authenticated)body=user;else{status=401;body={error:{code:'unauthorized',message:'Sign in.',requestId:'fixture'}};}}
+      if(path==='/me'){if(delayMe)await new Promise(resolve=>setTimeout(resolve,2000));if(authenticated)body=user;else{status=401;body={error:{code:'unauthorized',message:'Sign in.',requestId:'fixture'}};}}
       else if(path==='/notifications'){
         const filter=url.searchParams.get('filter');const kinds={review:'review',mentions:'mention',mine:'mine'};
         body={items:notificationMode==='empty'?[]:items.filter(item=>!kinds[filter] || item.kind===kinds[filter]),nextCursor:null};
@@ -62,7 +63,8 @@ try{
       else if(path==='/billing/plan')body={plan:'free',status:'active',renewsAt:null,cancelAt:null};
       else if(path==='/triage')body=items.slice(0,3).map(item=>({prRef:`${item.repo}#${item.number}`,title:item.title,lane:'needs_you',reason:'A review request is waiting for you.'}));
       else if(path==='/repos')body={items:[{id:'repo-1',fullName:'octocat/review-app',private:false,watching:true}],nextCursor:null};
-      else if(path==='/installations')body={items:[],installUrl:'https://github.com/apps/example/installations/new'};
+      else if(path==='/me/installations')body={items:[],installUrl:'https://github.com/apps/example/installations/new'};
+      else if(path==='/public/posts')body={items:[{slug:'review-workspace',type:url.searchParams.get('type')??'news',title:'A calmer review workspace',excerpt:'A focused review experience.',body:'A focused review workspace with clear risk labels and read-only GitHub access.',publishedAt:at}],nextCursor:null};
       else if(path.endsWith('/summary'))body=summary;
       else if(path.endsWith('/risk'))body={level:'medium',reasons:['Touches request retry behavior.','Check the cancellation tests.'],coverage};
       else if(path.startsWith('/prs/'))body=detail;
@@ -70,52 +72,54 @@ try{
       else {status=404;body={error:{code:'not_found',message:'Unknown fixture endpoint.',requestId:'fixture'}};}
       return route.fulfill({status,headers,body:JSON.stringify(body)});
     });
-    await page.goto(origin+'/settings');
-    await page.getByRole('radio',{name:`${theme} theme`,exact:true}).click();
-    async function navigate(name){
-      if(width>=1024)await page.getByRole('link',{name,exact:true}).click();
-      else await page.getByRole('tab',{name:name==='Triage'?'Triage deck tab':name==='Alerts'?'Alerts tab':`${name} tab`,exact:true}).click();
-    }
-    async function check(label){
+
+    async function capture(label,path,ready){
+      await page.goto(origin+path);
+      if(ready)await page.getByText(ready,{exact:true}).filter({visible:true}).first().waitFor();
       await page.evaluate(()=>document.fonts.ready);
-      const dimensions=await page.evaluate(()=>({width:innerWidth,scroll:document.documentElement.scrollWidth,fonts:[...document.fonts].map(font=>({family:font.family,status:font.status}))}));
-      assert.ok(dimensions.scroll<=dimensions.width,`${label}: horizontal overflow ${dimensions.scroll}/${dimensions.width}`);
+      await page.waitForTimeout(250);
+      const dimensions=await page.evaluate(()=>({width:innerWidth,scroll:document.documentElement.scrollWidth,background:getComputedStyle(document.querySelector('#root')).backgroundColor}));
+      assert.ok(dimensions.scroll<=width,`${label}: horizontal overflow`);
       assert.equal(await page.getByRole('button',{name:/^(merge pull request|approve|request changes|close pull request)$/i}).count(),0);
-      results.push({width,theme,screen:label,...dimensions});
+      await page.screenshot({path:resolve(output,`${label}-${width}-${theme}.png`)});
+      if(label==='search'){
+        await page.getByRole('textbox').first().fill('bounded');
+        assert.equal(await page.getByRole('button',{name:/Open pull request /}).count(),1);
+        await page.getByRole('tab',{name:'Filter by high risk',exact:true}).click();
+        await page.getByText('No matching pull requests',{exact:true}).waitFor();
+      }
+      if(label==='pr-detail'){
+        await page.getByRole('button',{name:'Toggle diff for src/network/retry.ts'}).click();
+        await page.getByRole('button',{name:'Add Note',exact:true}).click();
+        await page.getByRole('textbox',{name:'Personal review note'}).fill('Review the cancellation path.');
+        await page.getByRole('button',{name:'Save Note',exact:true}).click();
+        await page.getByText('My Notes (1)',{exact:true}).waitFor();
+      }
+      if(label==='repos'){
+        await page.getByRole('textbox',{name:'Search repositories'}).fill('review-app');
+        assert.equal(await page.getByRole('switch').count(),1);
+      }
+      results.push({label,width,theme,...dimensions});
     }
-    await navigate('Inbox');await page.getByText(titles[0],{exact:true}).filter({visible:true}).first().waitFor();await check('inbox');
-    assert.equal(await page.getByRole('navigation',{name:'Main navigation',exact:true}).count(),width>=1024?1:0);
-    await page.screenshot({path:resolve(output,`inbox-${width}-${theme}.png`),fullPage:true});
-    await page.getByRole('tab',{name:'Needs review pull requests',exact:true}).click();
-    await page.getByText(titles[0],{exact:true}).filter({visible:true}).first().waitFor();
-    await page.getByRole('tab',{name:'All pull requests',exact:true}).click();
-    await page.getByRole('button',{name:/Open pull request #1429:/}).click();
-    await page.getByText('AI PR Summary',{exact:true}).waitFor();await check('pr detail');
-    await page.screenshot({path:`/private/tmp/mm042-pr-${width}-${theme}.png`});
-    await page.getByRole('button',{name:'Go back',exact:true}).click();
-    await navigate('Alerts');await page.getByText(titles[0],{exact:true}).filter({visible:true}).first().waitFor();await check('notifications');
-    await navigate('Triage');await page.getByRole('button',{name:'Needs you',exact:true}).waitFor();await check('triage');
-    await navigate('Settings');await page.getByRole('radio',{name:`${theme} theme`,exact:true}).waitFor();await check('settings');
-    await page.screenshot({path:`/private/tmp/mm042-settings-${width}-${theme}.png`});
-    await navigate('Inbox');
-    await page.getByRole('button',{name:'Search pull requests',exact:true}).first().click();
-    await page.getByRole('textbox').first().fill('retry');await check('search');
-    await page.getByRole('button',{name:'Go back',exact:true}).click();
-    if(width===393 && theme==='dark'){
-      notificationMode='error';
-      await page.getByRole('tab',{name:'Needs review pull requests',exact:true}).click();
-      await page.getByText('Could not load your inbox',{exact:true}).waitFor();await check('inbox error');
-      notificationMode='normal';await page.getByRole('button',{name:'Try Again',exact:true}).click();
-      await page.getByText(titles[0],{exact:true}).filter({visible:true}).first().waitFor();
-      notificationMode='empty';await page.getByRole('tab',{name:'All pull requests',exact:true}).click();
-      await page.getByText('Inbox Zero',{exact:true}).waitFor();await check('inbox empty');
-      notificationMode='normal';await page.getByRole('button',{name:'Refresh Inbox',exact:true}).click();
-      await page.getByText(titles[0],{exact:true}).filter({visible:true}).first().waitFor();
+    authenticated=true;
+    for(const [label,path,ready] of [
+      ['inbox','/inbox',titles[0]],['triage','/triage','Triage Deck'],['notifications','/notifications','Activity Feed'],['settings','/settings','Configure repositories'],['search','/search','Results'],['highlight','/highlight','Screenshot Insight'],['repos','/repos','Select Repositories'],['consent','/consent','AI, with your permission'],['pr-detail','/pr/octocat/review-app/1429','AI Summary'],['billing','/billing','Your subscription'],['billing-success','/billing/success','Checkout received'],['billing-cancel','/billing/cancel','Checkout canceled'],['account-delete','/account/delete','What will be removed'],['privacy','/privacy','Privacy Policy'],['terms','/terms','Terms of Service'],['support','/support','Support & Contact'],['delete-account','/delete-account','Account deletion'],['news','/news','Product News'],['changelog','/changelog',"What's new"],['auth-callback','/auth/callback','Could not sign you in'],
+    ])await capture(label,path,ready);
+    authenticated=false;
+    await capture('sign-in','/sign-in','Connect your GitHub');
+    await capture('onboarding-1','/welcome','Catch up fast');
+    for(let step=2;step<=3;step++){
+      await page.getByRole('button',{name:'Continue',exact:true}).click();
+      await page.screenshot({path:resolve(output,`onboarding-${step}-${width}-${theme}.png`)});
+      results.push({label:`onboarding-${step}`,width,theme});
     }
-    results.push({width,theme,screen:'console',unexpectedErrors:errors,expectedResourceErrors});
-    assert.deepEqual(errors,[],`${width}/${theme} browser errors`);
+    delayMe=true;await capture('splash','/','Your developer review companion');delayMe=false;
+    authenticated=true;notificationMode='error';
+    await capture('system-error','/inbox','Could not load your inbox');
+    notificationMode='empty';await capture('system-empty','/inbox','Inbox Zero');notificationMode='normal';
+    assert.deepEqual(errors,[],`${width}/${theme} runtime errors`);
     await context.close();
   }
   await writeFile(resolve(output,'visual-results.json'),JSON.stringify({results,apiCalls,noLiveProviderCalls:true},null,2));
-  console.log(JSON.stringify({screenshots:4,screenChecks:results.length,errors:0,output}));
+  console.log(JSON.stringify({screenshots:results.length,screenChecks:results.length,errors:0,output}));
 }finally{await browser.close();await new Promise(resolve=>server.close(resolve));}

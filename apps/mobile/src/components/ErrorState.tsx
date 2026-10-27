@@ -22,11 +22,11 @@ export function ErrorState({
 
   return (
     <View
-      style={[styles.container, { padding: spacing.xxl }]}
+      style={[styles.container, { padding: spacing.xl, margin:16, borderRadius:16, borderWidth:1, borderColor:colors.border, backgroundColor:colors.surface }]}
       accessibilityRole="alert"
       accessibilityLiveRegion="assertive"
     >
-      <Icon name="warning-outline" size={40} color={colors.riskHigh} />
+      <View style={{width:64,height:64,borderRadius:32,backgroundColor:colors.riskHighBg,alignItems:"center",justifyContent:"center"}}><Icon name="warning-outline" size={28} color={colors.riskHigh}/></View>
       <Text style={[typography.title2, { color: colors.text, marginTop: spacing.md, textAlign: "center" }]}>
         {title}
       </Text>

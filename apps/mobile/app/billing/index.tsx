@@ -1,3 +1,4 @@
+import { ScreenIntro, Section } from "../../src/components/ScreenDesign";
 import React, { useState, useEffect, useCallback } from "react";
 import { View, ScrollView, TouchableOpacity, StyleSheet, Linking, Platform } from "react-native";
 import { Text } from "../../src/components/Text";
@@ -9,7 +10,6 @@ import { BillingPlan } from "../../src/types";
 import { BILLING_CONFIG } from "../../src/config/billing";
 import { Header } from "../../src/components/Header";
 import { Button } from "../../src/components/Button";
-import { Card } from "../../src/components/Card";
 import { EmptyState } from "../../src/components/EmptyState";
 import { ErrorState } from "../../src/components/ErrorState";
 import { LoadingState } from "../../src/components/LoadingState";
@@ -103,9 +103,10 @@ export default function BillingScreen() {
         />
       ) : (
         <ScrollView contentContainerStyle={{ padding: spacing.base, paddingBottom: 60 }}>
-          {/* Current Plan Card */}
-          <Card>
-            <View style={styles.planHeader}>
+          <ScreenIntro eyebrow="Your workspace plan" title="Plans & Billing" description="Choose the review support that fits your workflow." icon="card-outline"/>
+         {/* Current Plan Card */}
+          <Section title="Your subscription" icon="card-outline">
+            <View style={[styles.planHeader,{flexWrap:"wrap",gap:12}]}>
               <View>
                 <Text style={[typography.caption, { color: colors.textMuted, textTransform: "uppercase" }]}>
                   Current Subscription
@@ -139,7 +140,7 @@ export default function BillingScreen() {
                 style={{ marginTop: spacing.md }}
               />
             )}
-          </Card>
+          </Section>
 
           {/* Pricing Comparison (US-19) */}
           {billing.plan === "free" && (
@@ -196,8 +197,8 @@ export default function BillingScreen() {
               </View>
 
               {/* Pro Card */}
-              <Card elevated style={{ marginTop: spacing.md }}>
-                <View style={styles.planHeader}>
+              <Section style={{marginTop:16,borderColor:colors.brand,padding:24}}>
+                <View style={[styles.planHeader,{flexWrap:"wrap",gap:12}]}>
                   <View>
                     <Text style={[typography.title2, { color: colors.text }]} accessibilityRole="header">
                       {BILLING_CONFIG.pro.name}
@@ -206,7 +207,7 @@ export default function BillingScreen() {
                       7-day free trial included
                     </Text>
                   </View>
-                  <View style={{ alignItems: "flex-end" }}>
+                  <View style={{alignItems:"flex-start",width:"100%",marginTop:12}}>
                     <Text style={[typography.title1, { color: colors.brandLight, fontWeight: "700" }]}>
                       {billingCycle === "monthly"
                         ? `$${BILLING_CONFIG.pro.monthly.priceDollars}`
@@ -215,7 +216,7 @@ export default function BillingScreen() {
                         /{billingCycle === "monthly" ? "mo" : "yr"}
                       </Text>
                     </Text>
-                    <Text style={[typography.caption, { color: colors.textMuted }]}>
+                    <Text style={[typography.caption, { color: colors.textMuted,flexShrink:1 }]}>
                       {billingCycle === "monthly"
                         ? BILLING_CONFIG.pro.monthly.billingText
                         : BILLING_CONFIG.pro.annual.billingText}
@@ -249,7 +250,7 @@ export default function BillingScreen() {
                   variant="primary"
                   style={{ marginTop: spacing.lg }}
                 />
-              </Card>
+              </Section>
             </View>
           )}
         </ScrollView>
@@ -275,10 +276,13 @@ const styles = StyleSheet.create({
   cycleRow: {
     flexDirection: "row",
     padding: 4,
-    alignSelf: "center",
+    alignSelf: "stretch",
+    flexWrap: "wrap",
   },
   cycleTab: {
-    paddingHorizontal: 16,
+    flexGrow: 1,
+    flexBasis: "45%",
+    paddingHorizontal: 12,
     paddingVertical: 10,
     minHeight: 44,
     minWidth: 44,

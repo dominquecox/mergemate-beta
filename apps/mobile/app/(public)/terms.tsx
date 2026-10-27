@@ -1,3 +1,4 @@
+import { ScreenIntro, Section } from "../../src/components/ScreenDesign";
 import React, { useState } from "react";
 import { View, ScrollView, StyleSheet } from "react-native";
 import { Text } from "../../src/components/Text";
@@ -42,23 +43,21 @@ export default function TermsScreen() {
         <EmptyState icon="document-text-outline" title="Terms unavailable" message="Please contact support@mergemate.dev for our terms of service." />
       ) : (
         <ScrollView contentContainerStyle={{ padding: spacing.base, paddingBottom: 60 }}>
-          <Text style={[typography.title1, { color: colors.text }]} accessibilityRole="header">
-            Terms of Service
-          </Text>
+          <ScreenIntro eyebrow="MergeMate · Ploonu LLC" title="Terms of Service" description="The agreement for using MergeMate." icon="document-text-outline"/>
           <Text style={[typography.caption, { color: colors.textMuted, marginTop: 4 }]}>
             Last updated: October 26, 2026 · Ploonu LLC
           </Text>
 
           <View style={{ marginTop: spacing.md, gap: 16 }}>
             {TERMS_SECTIONS.map((sec) => (
-              <View key={sec.title}>
+              <Section key={sec.title}>
                 <Text style={[typography.headline, { color: colors.text }]} accessibilityRole="header">
                   {sec.title}
                 </Text>
                 <Text style={[typography.body, { color: colors.textSecondary, marginTop: 4, lineHeight: 22 }]}>
                   {sec.body}
                 </Text>
-              </View>
+              </Section>
             ))}
 
             <View style={[styles.footer, { borderTopColor: colors.border }]}>

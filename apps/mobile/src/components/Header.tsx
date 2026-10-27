@@ -52,7 +52,7 @@ export function Header({ title, showBack = false, showLogo = false, rightAction 
 
       {title && !showLogo && (
         <Text
-          style={[Platform.OS === "web" ? typography.title2 : typography.headline, { color: colors.text, textAlign: isDesktop ? "left" : "center", flex: 1 }]}
+          style={[typography.headline, { color: colors.text, textAlign: isDesktop ? "left" : "center", flex: 1 }]}
           numberOfLines={1}
           accessibilityRole="header"
         >

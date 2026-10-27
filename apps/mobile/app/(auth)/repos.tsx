@@ -1,5 +1,6 @@
+import { ScreenIntro } from "../../src/components/ScreenDesign";
 import React, { useState, useEffect } from "react";
-import { View, ScrollView, TouchableOpacity, StyleSheet, Linking } from "react-native";
+import { View, ScrollView, TouchableOpacity, StyleSheet, Linking, TextInput, Switch } from "react-native";
 import { Text } from "../../src/components/Text";
 import { useRouter } from "expo-router";
 import { useTheme } from "../../src/context/ThemeContext";
@@ -17,6 +18,7 @@ export default function ReposScreen() {
   const router = useRouter();
   const { colors, typography, spacing, radius } = useTheme();
 
+  const [query,setQuery] = useState("");
   const [repos, setRepos] = useState<Repo[]>([]);
   const [orgs, setOrgs] = useState<OrgInstallation[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -98,6 +100,9 @@ export default function ReposScreen() {
         </View>
       ) : (
         <ScrollView contentContainerStyle={{ padding: spacing.base }}>
+          <ScreenIntro eyebrow="Setup flow · 01 / 02" title="Select Repositories" description="Choose the repositories you want MergeMate to monitor for reviews and risk." icon="folder-open-outline"/>
+          <View style={{height:4,backgroundColor:colors.brand,borderRadius:4,marginVertical:16}}/>
+          <View style={{flexDirection:"row",alignItems:"center",gap:10,backgroundColor:colors.surfaceElevated,borderRadius:12,paddingHorizontal:12,marginBottom:16}}><Icon name="search-outline" color={colors.textSecondary} size={18}/><TextInput value={query} onChangeText={setQuery} placeholder="Search repositories, organizations..." placeholderTextColor={colors.textSecondary} accessibilityLabel="Search repositories" style={{flex:1,minHeight:48,color:colors.text,fontFamily:typography.body.fontFamily}}/></View>
           {/* GitHub App Configuration Notice */}
           <View style={[styles.infoBanner, { backgroundColor: colors.surfaceElevated, borderColor: colors.border, borderRadius: radius.md }]}>
             <View style={styles.noticeRow}>
@@ -220,7 +225,7 @@ export default function ReposScreen() {
                 onAction={openGitHubAppConfig}
               />
             ) : (
-              repos.map((repo) => (
+              repos.filter(repo=>repo.fullName.toLowerCase().includes(query.toLowerCase())).map((repo) => (
                 <View
                   key={repo.id}
                   style={[
@@ -244,33 +249,13 @@ export default function ReposScreen() {
                     </View>
                   </View>
 
-                  <TouchableOpacity
-                    onPress={() => toggleWatch(repo.id, repo.watching)}
-                    style={[
-                      styles.toggleBtn,
-                      {
-                        backgroundColor: repo.watching ? colors.brandSubtle : colors.surfaceSecondary,
-                        borderColor: repo.watching ? colors.brandLight : colors.border,
-                        borderRadius: radius.sm,
-                      },
-                    ]}
-                    accessibilityRole="switch"
-                    accessibilityState={{ checked: repo.watching }}
-                    accessibilityLabel={`${repo.watching ? "Stop watching" : "Watch"} ${repo.fullName}`}
-                  >
-                    <Text
-                      style={[
-                        typography.caption,
-                        { color: repo.watching ? colors.brandLight : colors.textSecondary, fontWeight: "600" },
-                      ]}
-                    >
-                      {repo.watching ? "Watching" : "Watch"}
-                    </Text>
-                  </TouchableOpacity>
+                  <Switch value={repo.watching} onValueChange={()=>toggleWatch(repo.id,repo.watching)} accessibilityLabel={`${repo.watching?"Stop watching":"Watch"} ${repo.fullName}`} trackColor={{false:colors.surfaceSecondary,true:colors.brand}} thumbColor="#FFFFFF"/>
                 </View>
               ))
             )}
           </View>
+          <Button title={`Continue to Inbox (${repos.filter(repo=>repo.watching).length} repos)`} onPress={()=>router.replace("/(tabs)/inbox")} style={{marginVertical:24}}/>
+          <Text style={[typography.caption,{color:colors.textSecondary,textAlign:"center",paddingBottom:16}]}>You can change repository access at any time in GitHub.</Text>
         </ScrollView>
       )}
     </View>
@@ -313,9 +298,9 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   orgCard: {
-    padding: 12,
+    padding: 16,
     borderWidth: 1,
-    marginTop: 8,
+    marginTop: 12,
   },
   orgHeader: {
     flexDirection: "row",
@@ -339,9 +324,9 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    padding: 12,
+    padding: 16,
     borderWidth: 1,
-    marginTop: 8,
+    marginTop: 12,
   },
   toggleBtn: {
     minHeight: 44,

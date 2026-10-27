@@ -1,3 +1,4 @@
+import { ScreenIntro, Section } from "../../src/components/ScreenDesign";
 import React, { useState, useEffect, useCallback } from "react";
 import { View, ScrollView, StyleSheet } from "react-native";
 import { Text } from "../../src/components/Text";
@@ -59,8 +60,9 @@ export default function ChangelogScreen() {
         />
       ) : (
         <ScrollView contentContainerStyle={{ padding: spacing.base, paddingBottom: 60 }}>
+          <ScreenIntro eyebrow="MergeMate · Ploonu LLC" title="What's new" description="Product updates and improvements, in one place." icon="list-outline"/>
           {posts.map((post) => (
-            <Card key={post.slug} style={{ marginBottom: spacing.md }}>
+            <Section key={post.slug} style={{ marginBottom: spacing.md }}>
               <Text style={[typography.caption, { color: colors.brandLight, fontWeight: "600" }]}>
                 {post.date}
               </Text>
@@ -73,7 +75,7 @@ export default function ChangelogScreen() {
               <Text style={[typography.body, { color: colors.textSecondary, marginTop: 6, lineHeight: 22 }]}>
                 {post.content}
               </Text>
-            </Card>
+            </Section>
           ))}
         </ScrollView>
       )}

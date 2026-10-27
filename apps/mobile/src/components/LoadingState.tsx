@@ -16,12 +16,13 @@ export function LoadingState({
 
   return (
     <View
-      style={[styles.container, { padding: spacing.xxl }]}
+      style={[styles.container, { padding: spacing.xl }]}
       accessibilityRole="progressbar"
       accessibilityLiveRegion="polite"
       accessibilityLabel={`${title}. ${message}`}
     >
-      <ActivityIndicator size="large" color={colors.brandLight} />
+      <View style={{width:"100%",maxWidth:480,gap:12,marginBottom:24}}>{[100,80,92].map((width,index)=><View key={index} style={{height:index===0?100:18,width:`${width}%`,backgroundColor:colors.surfaceElevated,borderRadius:12}}/>)}</View>
+      <ActivityIndicator size="small" color={colors.brandLight} />
       <Text style={[typography.headline, { color: colors.text, marginTop: spacing.md, textAlign: "center" }]}>
         {title}
       </Text>

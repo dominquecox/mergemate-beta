@@ -4,7 +4,7 @@ import { useFonts } from 'expo-font';
 import { Ionicons } from '@expo/vector-icons';
 
 /** All typefaces are bundled locally, with no external font or CDN requests. */
-export function WebFonts({children}:{children:React.ReactNode}) {
+export function AppFonts({children}:{children:React.ReactNode}) {
   const [ready,error]=useFonts({
     ...Ionicons.font,
     Geist_400Regular:require('@expo-google-fonts/geist/400Regular/Geist_400Regular.ttf'),
