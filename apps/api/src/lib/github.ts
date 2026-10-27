@@ -105,6 +105,15 @@ export const requestTokens = async (
   } catch {
     throw unavailable("token exchange fetch failed");
   }
+  if (res.status === 429) {
+    // GitHub throttles repeated token exchanges for one app. Say so, with the wait, instead of "unavailable".
+    throw new ApiError(
+      "rate_limited",
+      "GitHub is limiting sign-in attempts right now. Wait a few minutes, then sign in once.",
+      { "retry-after": res.headers.get("retry-after") ?? "300" },
+      "token exchange status 429",
+    );
+  }
   if (res.status >= 500) throw unavailable(`token exchange status ${res.status}`);
   const body = (await res.json().catch(() => null)) as Record<string, unknown> | null;
   if (!body) throw unavailable(`token exchange status ${res.status}, body not JSON (${res.headers.get("content-type") ?? "no type"})`);

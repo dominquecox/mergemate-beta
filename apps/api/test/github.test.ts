@@ -309,3 +309,18 @@ describe("merge state", () => {
     expect(mergeStateOf({ state: "closed", merged_at: "2026-10-27T00:00:00Z", mergeable: null })).toBeUndefined();
   });
 });
+
+describe("token exchange rate limit", () => {
+  it("reports GitHub's 429 on sign-in as rate_limited with a wait, not as unavailable", async () => {
+    const { requestTokens } = await import("../src/lib/github");
+    const deps = {
+      fetch: (async () => new Response("", { status: 429, headers: { "retry-after": "120" } })) as unknown as typeof fetch,
+      now: () => new Date("2026-10-27T00:00:00Z"),
+    } as unknown as Parameters<typeof requestTokens>[0];
+    await expect(requestTokens(deps, { code: "c" })).rejects.toMatchObject({
+      code: "rate_limited",
+      headers: { "retry-after": "120" },
+      logDetail: "token exchange status 429",
+    });
+  });
+});
