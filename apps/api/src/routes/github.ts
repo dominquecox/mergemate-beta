@@ -11,7 +11,7 @@ import {
 } from "@mergemate/contracts";
 import { type Context, Hono } from "hono";
 import { requireBinding, requireVar } from "../config";
-import type { AppEnv } from "../env";
+import type { AppEnv, Deps } from "../env";
 import { ApiError } from "../errors";
 import { base64url } from "../lib/crypto";
 import { GITHUB_WEB, githubGet } from "../lib/github";
@@ -163,6 +163,66 @@ const toThreads = (review: GhComment[], conversation: GhComment[]): PrThread[] =
   return result;
 };
 
+/**
+ * Fetches pull request detail with the user's own token, so GitHub enforces
+ * their access to the repository. Up to 300 files with patches, plus checks
+ * and threads.
+ */
+export const fetchPrDetail = async (
+  deps: Deps,
+  token: string,
+  owner: string,
+  repo: string,
+  number: number,
+): Promise<PrDetail> => {
+  const base = `/repos/${owner}/${repo}`;
+  const pull = await githubGet<GhPull>(deps, token, `${base}/pulls/${number}`);
+
+  const filePages = Math.min(FILE_PAGES, Math.max(1, Math.ceil(pull.changed_files / 100)));
+  const [files, checkRuns, statuses, review, conversation] = await Promise.all([
+    Promise.all(
+      Array.from({ length: filePages }, (_, i) =>
+        githubGet<GhFile[]>(deps, token, `${base}/pulls/${number}/files?per_page=100&page=${i + 1}`),
+      ),
+    ).then((pages) => pages.flat()),
+    githubGet<{ check_runs: GhCheckRun[] }>(deps, token, `${base}/commits/${pull.head.sha}/check-runs?per_page=100`),
+    githubGet<{ statuses: GhStatus[] }>(deps, token, `${base}/commits/${pull.head.sha}/status?per_page=100`),
+    githubGet<GhComment[]>(deps, token, `${base}/pulls/${number}/comments?per_page=100`),
+    githubGet<GhComment[]>(deps, token, `${base}/issues/${number}/comments?per_page=100`),
+  ]);
+
+  const checks: PrCheck[] = [
+    ...checkRuns.check_runs.map((run) => ({ name: run.name, state: checkRunState(run), ...httpsUrl(run.html_url) })),
+    ...statuses.statuses.map((s) => ({ name: s.context, state: STATUS_STATE[s.state], ...httpsUrl(s.target_url) })),
+  ];
+  return {
+    repo: `${owner}/${repo}`,
+    number: pull.number,
+    title: pull.title,
+    body: pull.body ?? "",
+    author: pull.user?.login ?? "ghost",
+    status: prStatus(pull),
+    baseBranch: pull.base.ref,
+    headBranch: pull.head.ref,
+    headSha: pull.head.sha,
+    additions: pull.additions,
+    deletions: pull.deletions,
+    changedFiles: pull.changed_files,
+    files: files.map((f) => ({
+      path: f.filename,
+      status: f.status,
+      additions: f.additions,
+      deletions: f.deletions,
+      ...(f.patch ? { patch: f.patch } : {}),
+    })),
+    checks,
+    threads: toThreads(review, conversation),
+    createdAt: pull.created_at,
+    updatedAt: pull.updated_at,
+    htmlUrl: pull.html_url,
+  };
+};
+
 export const github = new Hono<AppEnv>()
   .get("/me/installations", async (c) => {
     if (c.get("session").demo) {
@@ -266,52 +326,5 @@ export const github = new Hono<AppEnv>()
 
     // The user's own token: GitHub enforces their access to this repository.
     const token = await userToken(c);
-    const deps = c.get("deps");
-    const base = `/repos/${owner}/${repo}`;
-    const pull = await githubGet<GhPull>(deps, token, `${base}/pulls/${number}`);
-
-    const filePages = Math.min(FILE_PAGES, Math.max(1, Math.ceil(pull.changed_files / 100)));
-    const [files, checkRuns, statuses, review, conversation] = await Promise.all([
-      Promise.all(
-        Array.from({ length: filePages }, (_, i) =>
-          githubGet<GhFile[]>(deps, token, `${base}/pulls/${number}/files?per_page=100&page=${i + 1}`),
-        ),
-      ).then((pages) => pages.flat()),
-      githubGet<{ check_runs: GhCheckRun[] }>(deps, token, `${base}/commits/${pull.head.sha}/check-runs?per_page=100`),
-      githubGet<{ statuses: GhStatus[] }>(deps, token, `${base}/commits/${pull.head.sha}/status?per_page=100`),
-      githubGet<GhComment[]>(deps, token, `${base}/pulls/${number}/comments?per_page=100`),
-      githubGet<GhComment[]>(deps, token, `${base}/issues/${number}/comments?per_page=100`),
-    ]);
-
-    const checks: PrCheck[] = [
-      ...checkRuns.check_runs.map((run) => ({ name: run.name, state: checkRunState(run), ...httpsUrl(run.html_url) })),
-      ...statuses.statuses.map((s) => ({ name: s.context, state: STATUS_STATE[s.state], ...httpsUrl(s.target_url) })),
-    ];
-    const res: PrDetail = {
-      repo: fullName,
-      number: pull.number,
-      title: pull.title,
-      body: pull.body ?? "",
-      author: pull.user?.login ?? "ghost",
-      status: prStatus(pull),
-      baseBranch: pull.base.ref,
-      headBranch: pull.head.ref,
-      headSha: pull.head.sha,
-      additions: pull.additions,
-      deletions: pull.deletions,
-      changedFiles: pull.changed_files,
-      files: files.map((f) => ({
-        path: f.filename,
-        status: f.status,
-        additions: f.additions,
-        deletions: f.deletions,
-        ...(f.patch ? { patch: f.patch } : {}),
-      })),
-      checks,
-      threads: toThreads(review, conversation),
-      createdAt: pull.created_at,
-      updatedAt: pull.updated_at,
-      htmlUrl: pull.html_url,
-    };
-    return c.json(res);
+    return c.json(await fetchPrDetail(c.get("deps"), token, owner, repo, Number(number)));
   });

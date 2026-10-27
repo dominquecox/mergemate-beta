@@ -17,6 +17,9 @@ const PUBLIC_PATHS = [
 const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
 // The only write a demo session may make.
 const DEMO_WRITES = new Set(["/v1/auth/logout"]);
+// Fixture-only AI endpoints: demo sessions get pre-generated results here and their
+// handlers return before any provider or data call, so no live call is possible.
+const DEMO_FIXTURE_POSTS = [/^\/v1\/prs\/[^/]+\/[^/]+\/\d+\/(summary|risk)$/];
 
 const limitIp = (c: Context<AppEnv>) =>
   limit(c, { name: "IP_RATE_LIMITER", limiter: c.env.IP_RATE_LIMITER, key: clientIp(c), retryAfter: 60 });
@@ -70,7 +73,12 @@ export const authenticate = (): MiddlewareHandler<AppEnv> => async (c, next) => 
       throw new ApiError("forbidden", "Missing or invalid CSRF token.");
     }
   }
-  if (session.demo && write && !DEMO_WRITES.has(path)) {
+  if (
+    session.demo &&
+    write &&
+    !DEMO_WRITES.has(path) &&
+    !DEMO_FIXTURE_POSTS.some((pattern) => pattern.test(path))
+  ) {
     throw new ApiError("forbidden", "Not available in the demo.");
   }
   if (!session.demo && session.userStatus !== "active") {

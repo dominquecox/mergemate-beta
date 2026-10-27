@@ -22,6 +22,12 @@ export interface Env {
   MODEL_ID?: string;
   MODEL_BASE_URL?: string;
   MODEL_API_KEY?: string;
+  /** Daily AI actions per user on the free plan. Defaults to 30. */
+  AI_DAILY_ACTIONS_FREE?: string;
+  /** Daily AI actions per user on the paid plan. Defaults to 500. */
+  AI_DAILY_ACTIONS_PRO?: string;
+  /** Global daily AI actions. Absent means unenforced. */
+  AI_GLOBAL_DAILY_ACTIONS?: string;
   GITHUB_APP_CLIENT_ID?: string;
   GITHUB_APP_CLIENT_SECRET?: string;
   GITHUB_APP_SLUG?: string;

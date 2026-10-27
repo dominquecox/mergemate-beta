@@ -13,6 +13,8 @@ GITHUB_APP_SLUG = "submission-production-example"
 MODEL_PROVIDER = "meta"
 MODEL_ID = "muse-spark-1.2"
 MODEL_BASE_URL = "https://api.meta.ai/v1"
+# Initial value; confirm before launch.
+AI_GLOBAL_DAILY_ACTIONS = "300"
 
 [[ratelimits]]
 name = "IP_RATE_LIMITER"
@@ -78,6 +80,8 @@ GITHUB_APP_SLUG = "submission-production-example"
 MODEL_PROVIDER = "meta"
 MODEL_ID = "muse-spark-1.2"
 MODEL_BASE_URL = "https://api.meta.ai/v1"
+# Initial value; confirm before launch.
+AI_GLOBAL_DAILY_ACTIONS = "300"
 
 [[env.dev.ratelimits]]
 name = "IP_RATE_LIMITER"
@@ -126,6 +130,8 @@ WEB_ORIGIN = "https://mergemate.dev"
 MODEL_PROVIDER = "meta"
 MODEL_ID = "muse-spark-1.2"
 MODEL_BASE_URL = "https://api.meta.ai/v1"
+# Initial value; confirm before launch.
+AI_GLOBAL_DAILY_ACTIONS = "300"
 
 [[env.production.ratelimits]]
 name = "IP_RATE_LIMITER"

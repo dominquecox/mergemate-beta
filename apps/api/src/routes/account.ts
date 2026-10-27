@@ -6,6 +6,7 @@ import { GITHUB_API } from "../lib/github";
 import { cancelBillingBeforeDelete } from "../lib/stripe-billing";
 import { getAccessToken } from "../lib/github-tokens";
 import { clearedSessionCookie } from "../lib/sessions";
+import { aiUserDeletion } from "./ai-engine";
 
 /**
  * Revokes the user's grant for this GitHub App (an app-level call authenticated with the
@@ -70,6 +71,7 @@ export const account = new Hono<AppEnv>().delete("/account", async (c) => {
     db.prepare("DELETE FROM user_access_checks WHERE user_id = ?").bind(userId),
     db.prepare("DELETE FROM github_tokens WHERE user_id = ?").bind(userId),
     db.prepare("DELETE FROM sessions WHERE user_id = ?").bind(userId),
+    ...aiUserDeletion(db, userId),
     db.prepare("DELETE FROM users WHERE id = ?").bind(userId),
   ]);
   if (session.transport === "cookie") c.header("set-cookie", clearedSessionCookie());
