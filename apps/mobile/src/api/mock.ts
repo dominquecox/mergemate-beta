@@ -395,6 +395,11 @@ export class MockApiClient implements ApiClient {
     this.notifications = this.notifications.filter((n) => n.id !== id);
   }
 
+  async getPrMetadata(owner: string, repo: string, number: number): Promise<PrDetail> {
+    const { summary: _summary, risk: _risk, ...metadata } = await this.getPrDetail(owner, repo, number);
+    return metadata;
+  }
+
   async getPrDetail(owner: string, repo: string, number: number): Promise<PrDetail> {
     const key = `${owner}/${repo}/${number}`;
     if (this.prDetails[key]) {

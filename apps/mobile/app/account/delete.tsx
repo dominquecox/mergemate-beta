@@ -1,4 +1,4 @@
-import { ScreenIntro, InfoLine, Section } from "../../src/components/ScreenDesign";
+import { InfoLine, Section } from "../../src/components/ScreenDesign";
 import React, { useState } from "react";
 import { View, ScrollView, StyleSheet, Alert, Platform } from "react-native";
 import { Text } from "../../src/components/Text";
@@ -72,7 +72,8 @@ export default function DeleteAccountScreen() {
         />
       ) : (
         <ScrollView contentContainerStyle={[styles.content, { padding: spacing.xl }]}>
-          <ScreenIntro eyebrow="Account & security" title="Delete your account" description={`Signed in as @${user.login}. This is permanent. Review what will be removed before continuing.`} icon="warning-outline"/>
+
+          <Text style={[typography.footnote,{color:colors.textSecondary,marginBottom:12,alignSelf:"flex-start"}]}>Account: @{user.login}</Text>
           <Section title="What will be removed" style={{width:"100%"}}>
             <InfoLine icon="card-outline" title="Subscription canceled" detail="Any active subscription ends as part of deletion."/>
             <InfoLine icon="lock-closed-outline" title="GitHub access revoked" detail="MergeMate's authorization is revoked and your sessions are ended."/>

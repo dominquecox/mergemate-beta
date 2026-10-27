@@ -1,4 +1,4 @@
-import { ScreenIntro, InfoLine } from "../../src/components/ScreenDesign";
+import { InfoLine } from "../../src/components/ScreenDesign";
 import React, { useState } from "react";
 import { View, StyleSheet, ScrollView } from "react-native";
 import { Text } from "../../src/components/Text";
@@ -42,7 +42,7 @@ export default function ConsentScreen() {
 
   return (
     <View style={[styles.root, { backgroundColor: colors.background }]}>
-      <Header title="AI Transparency & Consent" showBack />
+      <Header title="AI Consent" showBack />
       {isSaving ? (
         <LoadingState
           title="Saving your preference..."
@@ -64,7 +64,7 @@ export default function ConsentScreen() {
         />
       ) : (
         <ScrollView contentContainerStyle={[styles.content, { padding: spacing.xl }]}>
-          <ScreenIntro eyebrow="Your data · Your choice" title="AI, with your permission" description="Understand what is shared before you turn on summaries and risk insights." icon="shield-checkmark-outline"/>
+
           <InfoLine icon="person-outline" title="Always human in the loop" detail="AI helps you review. Every action on a pull request happens in GitHub."/>
 
           <View

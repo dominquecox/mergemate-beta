@@ -1,4 +1,4 @@
-import { ScreenIntro, Section } from "../src/components/ScreenDesign";
+import { Section } from "../src/components/ScreenDesign";
 import React, { useState } from "react";
 import { View, ScrollView, TextInput, StyleSheet, Image, Platform, TouchableOpacity } from "react-native";
 import { Text } from "../src/components/Text";
@@ -76,9 +76,9 @@ export default function HighlightScreen() {
 
   return (
     <View style={[styles.root, { backgroundColor: colors.background }]}>
-      <Header title="Screenshot Highlight" showBack />
+      <Header title="Screenshot Insight" showBack />
       <ScrollView contentContainerStyle={{ padding: spacing.base, paddingBottom: 60 }}>
-        <ScreenIntro eyebrow="Visual review workspace" title="Screenshot Insight" description="Bring visual context into your review. Inspect a screenshot with Meta AI." icon="scan-outline"/>
+
         {/* Intro Card */}
         <Section title="Screenshot" icon="image-outline">
           <Text style={[typography.headline, { color: colors.text }]} accessibilityRole="header">

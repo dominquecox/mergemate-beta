@@ -1,3 +1,6 @@
+import { Avatar } from "../../../../src/components/Avatar";
+import { relativeTime } from "../../../../src/format/activity";
+import { SummarySection } from "../../../../src/components/SummarySection";
 import React, { useState, useEffect, useCallback } from "react";
 import { View, ScrollView, TouchableOpacity, TextInput, StyleSheet, Linking, Share, Platform } from "react-native";
 import { Text } from "../../../../src/components/Text";
@@ -29,6 +32,7 @@ export default function PrDetailScreen() {
   const {isDesktop}=useLayout();
   const { aiConsentGranted } = useConsent();
 
+  const [assessmentOpen,setAssessmentOpen]=useState(false);
   const [expandedFiles,setExpandedFiles]=useState<string[]>([]);
   const [detail, setDetail] = useState<PrDetail | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -80,7 +84,7 @@ export default function PrDetailScreen() {
   return (
     <View style={[styles.root, { backgroundColor: colors.background }]}>
       <Header
-        title={`${repo || "repo"}#${number || "1"}`}
+        title="PR Review Detail"
         showBack
         rightAction={
           <TouchableOpacity
@@ -132,17 +136,13 @@ export default function PrDetailScreen() {
                 {detail.title}
               </Text>
 
-              <View style={[styles.metaRow,{flexWrap:"wrap",gap:8}]}>
-                <Text style={[typography.caption, { color: colors.textSecondary }]}>
-                  By @{detail.author}
-                </Text>
-                <Text style={[typography.caption, { color: colors.textMuted }]}>
-                  +{detail.additions} -{detail.deletions} ({detail.changedFilesCount} files)
-                </Text>
-              </View>
             </View>
-
-            <View style={{flexDirection:"row",alignItems:"center",gap:8,padding:12,marginTop:12,borderRadius:12,backgroundColor:colors.surfaceElevated}}><Icon name="git-branch-outline" size={16} color={colors.brandLight}/><Text style={[typography.code,{color:colors.textSecondary,flexShrink:1}]}>{detail.headBranch} → {detail.baseBranch}</Text></View>
+            <View style={{flexDirection:"row",alignItems:"center",gap:8,flexWrap:"wrap",marginTop:12}}>
+              <View style={{flexDirection:"row",alignItems:"center",gap:6,paddingHorizontal:10,paddingVertical:5,borderRadius:9999,backgroundColor:colors.surfaceElevated,maxWidth:"70%"}}><Icon name="git-branch-outline" size={14} color={colors.brandLight}/><Text style={[typography.code,{color:colors.brandLight,fontSize:11,flexShrink:1}]}>{detail.headBranch}</Text></View>
+              <Icon name="arrow-forward" size={16} color={colors.textSecondary}/>
+              <View style={{paddingHorizontal:10,paddingVertical:5,borderRadius:9999,backgroundColor:colors.surfaceElevated}}><Text style={[typography.code,{color:colors.textSecondary,fontSize:11}]}>{detail.baseBranch}</Text></View>
+            </View>
+            <View style={{flexDirection:"row",gap:8,alignItems:"center",marginVertical:16,flexWrap:"wrap"}}><Avatar login={detail.author} size={24}/><Text style={[typography.footnote,{color:colors.textSecondary}]}>{detail.author} · {relativeTime(detail.createdAt)}</Text><View style={{flexDirection:"row",gap:8,marginLeft:"auto"}}><Text style={[typography.code,{color:colors.riskLow}]}>+{detail.additions}</Text><Text style={[typography.code,{color:colors.riskHigh}]}>-{detail.deletions}</Text></View></View>
 
             {/* US-25: Secret Leak Warning Banner */}
             {detail.secretWarning && (
@@ -182,28 +182,9 @@ export default function PrDetailScreen() {
             {detail.summary && (
               <View style={{ marginTop: spacing.sm }}>
                 <AIBlock title="AI Summary" coverage={detail.summary.coverage}>
-                  <Text style={[typography.subhead, { color: colors.brandLight, fontWeight: "600" }]}>
-                    What changed
-                  </Text>
-                  <Text style={[typography.body, { color: colors.text, marginTop: 2 }]}>
-                    {detail.summary.whatChanged}
-                  </Text>
-
-                  <Text style={[typography.subhead, { color: colors.brandLight, fontWeight: "600", marginTop: 8 }]}>
-                    Why it matters
-                  </Text>
-                  <Text style={[typography.body, { color: colors.text, marginTop: 2 }]}>
-                    {detail.summary.whyItMatters}
-                  </Text>
-
-                  <Text style={[typography.subhead, { color: colors.brandLight, fontWeight: "600", marginTop: 8 }]}>
-                    Suggested focus
-                  </Text>
-                  {detail.summary.suggestedFocus.map((focus: string, idx: number) => (
-                    <Text key={idx} style={[typography.footnote, { color: colors.textSecondary, marginTop: 2 }]}>
-                      • {focus}
-                    </Text>
-                  ))}
+                  <SummarySection title="What changed" icon="swap-horizontal-outline"><Text style={[typography.body,{color:colors.text}]}>{detail.summary.whatChanged}</Text></SummarySection>
+                  <SummarySection title="Why it matters" icon="shield-outline"><Text style={[typography.body,{color:colors.text}]}>{detail.summary.whyItMatters}</Text></SummarySection>
+                  <SummarySection title="Suggested focus" icon="scan-outline">{detail.summary.suggestedFocus.map((focus,index)=><Text key={index} style={[typography.body,{color:colors.text}]}>{focus}</Text>)}</SummarySection>
                 </AIBlock>
               </View>
             )}
@@ -254,9 +235,8 @@ export default function PrDetailScreen() {
                   ))}
                 </View>
 
-                <Text style={[typography.caption, { color: colors.textMuted, marginTop: spacing.sm }]}>
-                  How assessed: Evaluated against sensitive file boundaries, migrations, auth middleware, and secret patterns.
-                </Text>
+                <TouchableOpacity accessibilityRole="button" accessibilityLabel="How this was assessed" accessibilityState={{expanded:assessmentOpen}} aria-expanded={assessmentOpen} onPress={()=>setAssessmentOpen(open=>!open)} style={{flexDirection:"row",alignItems:"center",gap:8,minHeight:44,padding:12,marginTop:12,backgroundColor:colors.surfaceElevated,borderRadius:12}}><Icon name="information-circle-outline" size={18} color={colors.brandLight}/><Text style={[typography.footnote,{color:colors.textSecondary,flex:1}]}>How this was assessed</Text><Icon name={assessmentOpen?'chevron-up':'chevron-down'} size={16} color={colors.textSecondary}/></TouchableOpacity>
+                {assessmentOpen && <Text style={[typography.footnote,{color:colors.textSecondary,padding:12}]}>Evaluated against sensitive file boundaries, migrations, authentication middleware, and secret patterns. This is review guidance, not a security guarantee.</Text>}
               </View>
             )}
 
@@ -307,7 +287,7 @@ export default function PrDetailScreen() {
                 <View style={{ marginTop: spacing.xs }}>
                   {detail.files.map((file, idx) => (
                     <View key={file.filename} style={{marginTop:12,backgroundColor:colors.surfaceElevated,borderRadius:8,overflow:"hidden"}}>
-                      <TouchableOpacity accessibilityRole="button" accessibilityLabel={`Toggle diff for ${file.filename}`} accessibilityState={{expanded:expandedFiles.includes(file.filename)}} onPress={()=>setExpandedFiles(prev=>prev.includes(file.filename)?prev.filter(name=>name!==file.filename):[...prev,file.filename])} style={{flexDirection:"row",alignItems:"center",padding:12,gap:8,minHeight:48}}><Icon name={expandedFiles.includes(file.filename)?"chevron-down":"chevron-forward"} size={16} color={colors.textSecondary}/><Text style={[typography.code,{color:colors.text,flex:1}]}>{file.filename}</Text><Text style={[typography.code,{color:colors.riskLow,fontSize:11}]}>+{file.additions}</Text><Text style={[typography.code,{color:colors.riskHigh,fontSize:11}]}>-{file.deletions}</Text></TouchableOpacity>
+                      <TouchableOpacity accessibilityRole="button" accessibilityLabel={`Toggle diff for ${file.filename}`} accessibilityState={{expanded:expandedFiles.includes(file.filename)}} aria-expanded={expandedFiles.includes(file.filename)} onPress={()=>setExpandedFiles(prev=>prev.includes(file.filename)?prev.filter(name=>name!==file.filename):[...prev,file.filename])} style={{flexDirection:"row",alignItems:"center",padding:12,gap:8,minHeight:48}}><Icon name={expandedFiles.includes(file.filename)?"chevron-down":"chevron-forward"} size={16} color={colors.textSecondary}/><Text style={[typography.code,{color:colors.text,flex:1}]}>{file.filename}</Text><Text style={[typography.code,{color:colors.riskLow,fontSize:11}]}>+{file.additions}</Text><Text style={[typography.code,{color:colors.riskHigh,fontSize:11}]}>-{file.deletions}</Text></TouchableOpacity>
                       {expandedFiles.includes(file.filename) && <ScrollView horizontal style={{padding:12,borderTopWidth:1,borderTopColor:colors.border}}><Text selectable style={[typography.code,{color:colors.textSecondary}]}>{file.patchSnippet || "Diff unavailable. Open this pull request in GitHub."}</Text></ScrollView>}
                     </View>
                   ))}

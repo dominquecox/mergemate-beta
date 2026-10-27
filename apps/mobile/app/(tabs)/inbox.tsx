@@ -91,8 +91,7 @@ export default function InboxScreen() {
   return (
     <View style={[styles.root, { backgroundColor: colors.background }]}>
       <Header
-        showLogo={!isDesktop}
-        title={isDesktop ? "Workspace" : undefined}
+        title="Inbox"
         rightAction={
           <View style={styles.headerIcons}>
             <TouchableOpacity
@@ -114,19 +113,6 @@ export default function InboxScreen() {
           </View>
         }
       />
-
-      {(
-        <View style={[styles.webHeading,{paddingHorizontal:isDesktop?24:spacing.base}]}>
-          <View style={{flex:1,minWidth:0}}>
-            <Text style={[typography.title1,{color:colors.text}]} accessibilityRole="header">Inbox</Text>
-            <Text style={[typography.callout,{color:colors.textSecondary,marginTop:4}]}>Your next review, without the noise.</Text>
-          </View>
-          {isDesktop && <View style={[styles.readOnly,{borderColor:colors.border,backgroundColor:colors.surface}]}>
-            <Icon name="shield-checkmark-outline" size={16} color={colors.brandLight}/>
-            <Text style={[typography.footnote,{color:colors.textSecondary}]}>Read-only workspace</Text>
-          </View>}
-        </View>
-      )}
 
       {/* Segmented Filter Control */}
       <View style={[styles.filterBar, { borderBottomColor: colors.border }, { marginHorizontal:16, borderBottomWidth:0, paddingHorizontal:4, paddingVertical:4, backgroundColor:colors.surfaceElevated, borderRadius:radius.lg }]} accessibilityRole="tablist">
@@ -269,11 +255,11 @@ export default function InboxScreen() {
                       {item.risk && <RiskBadge level={item.risk} compact />}
                     </View>
                   </View>
-  
+
                   <Text style={[typography.headline, { color: colors.text, marginTop: 4 }]} numberOfLines={2}>
                     {item.title}
                   </Text>
-  
+
                   {item.summaryLine && (
                     <View style={[styles.summaryRow,{padding:12,backgroundColor:colors.surfaceElevated,borderRadius:radius.sm,marginTop:12}]}>
                       <Icon name="sparkles" size={12} color={colors.brandLight} style={styles.summaryIcon} />
@@ -283,12 +269,12 @@ export default function InboxScreen() {
                     </View>
                   )}
                 </TouchableOpacity>
-  
+
                 <View style={[styles.cardBottom,{flexWrap:"wrap",gap:8,borderTopColor:colors.border,marginTop:12,paddingTop:12}]}>
                   <Text style={[typography.caption, { color: colors.textMuted, flex: 1 }]}>
                     By @{item.author} · {new Date(item.updatedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
                   </Text>
-  
+
                   <View style={styles.quickActions}>
                     <TouchableOpacity
                       onPress={() => handleSnooze(item)}

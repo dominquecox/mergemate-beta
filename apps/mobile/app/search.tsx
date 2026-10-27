@@ -1,4 +1,3 @@
-import { ScreenIntro } from "../src/components/ScreenDesign";
 import React, { useState, useEffect, useCallback } from "react";
 import { View, TextInput, ScrollView, TouchableOpacity, StyleSheet } from "react-native";
 import { Text } from "../src/components/Text";
@@ -69,9 +68,9 @@ export default function SearchScreen() {
 
   return (
     <View style={[styles.root, { backgroundColor: colors.background }]}>
-      <Header title="Search & Filter" showBack />
+      <Header title="Search & Filters" showBack />
       <View style={{ padding: spacing.base }}>
-        <ScreenIntro eyebrow="Find your next review" title="Search & Filters" description="Search your review inbox by title, repository or author." icon="search-outline"/>
+
         {/* Search Input Bar */}
         <View style={[styles.searchBar, { backgroundColor: colors.surfaceElevated, borderColor: colors.border, borderRadius: radius.md }]}>
           <Icon name="search-outline" size={18} color={colors.textMuted} />

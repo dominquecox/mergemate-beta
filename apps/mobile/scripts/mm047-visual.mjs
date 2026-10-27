@@ -7,7 +7,7 @@ import { chromium } from '@playwright/test';
 
 // Review harness only. Runs the real exported app against isolated API fixtures.
 const root=resolve(fileURLToPath(new URL('../dist',import.meta.url)));
-const output=resolve(fileURLToPath(new URL('file:///private/tmp/mm043-proof/')));
+const output=resolve(fileURLToPath(new URL('file:///private/tmp/mm047-proof/')));
 const mime={'.html':'text/html','.js':'text/javascript','.css':'text/css','.ttf':'font/ttf','.woff2':'font/woff2','.png':'image/png','.ico':'image/x-icon'};
 const server=createServer(async(req,res)=>{
   const path=resolve(root,'.'+decodeURIComponent(new URL(req.url,'http://localhost').pathname));
@@ -44,7 +44,7 @@ try{
     await page.route('**/*',async route=>{
       const request=route.request();const url=new URL(request.url());
       if(url.origin===origin || url.protocol==='data:')return route.continue();
-      if(url.origin!=='https://api-mm043.example')return route.abort();
+      if(url.origin!=='https://api-mm047.example')return route.abort();
       apiCalls.push({method:request.method(),path:url.pathname});
       const headers={'content-type':'application/json','access-control-allow-origin':origin,'access-control-allow-credentials':'true','access-control-allow-headers':'content-type,x-csrf-token,authorization','access-control-allow-methods':'GET,POST,PUT,DELETE,OPTIONS'};
       if(request.method()==='OPTIONS')return route.fulfill({status:204,headers,body:''});
@@ -76,9 +76,10 @@ try{
     async function capture(label,path,ready){
       await page.goto(origin+path);
       if(ready)await page.getByText(ready,{exact:true}).filter({visible:true}).first().waitFor();
+      if(label==='triage')await page.getByText('All CI green',{exact:true}).waitFor();
       await page.evaluate(()=>document.fonts.ready);
       await page.waitForTimeout(250);
-      const dimensions=await page.evaluate(()=>({width:innerWidth,scroll:document.documentElement.scrollWidth,background:getComputedStyle(document.querySelector('#root')).backgroundColor}));
+      const dimensions=await page.evaluate(()=>({headers:[...document.querySelectorAll('[role="heading"]')].filter(el=>el.getBoundingClientRect().width>0).map(el=>el.textContent),width:innerWidth,scroll:document.documentElement.scrollWidth,background:getComputedStyle(document.querySelector('#root')).backgroundColor}));
       assert.ok(dimensions.scroll<=width,`${label}: horizontal overflow`);
       assert.equal(await page.getByRole('button',{name:/^(merge pull request|approve|request changes|close pull request)$/i}).count(),0);
       await page.screenshot({path:resolve(output,`${label}-${width}-${theme}.png`)});
@@ -88,7 +89,18 @@ try{
         await page.getByRole('tab',{name:'Filter by high risk',exact:true}).click();
         await page.getByText('No matching pull requests',{exact:true}).waitFor();
       }
+      if(label==='settings'){
+        await page.getByRole('button',{name:'Delete Account & Revoke Access',exact:true}).scrollIntoViewIfNeeded();
+        await page.screenshot({path:resolve(output,`settings-lower-${width}-${theme}.png`)});
+      }
       if(label==='pr-detail'){
+        const assessment=page.getByRole('button',{name:'How this was assessed',exact:true});
+        assert.equal(await assessment.getAttribute('aria-expanded'),'false');
+        await assessment.click();
+        assert.equal(await assessment.getAttribute('aria-expanded'),'true');
+        await page.getByText(/This is review guidance, not a security guarantee/).waitFor();
+        await assessment.click();
+        assert.equal(await assessment.getAttribute('aria-expanded'),'false');
         await page.getByRole('button',{name:'Toggle diff for src/network/retry.ts'}).click();
         await page.getByRole('button',{name:'Add Note',exact:true}).click();
         await page.getByRole('textbox',{name:'Personal review note'}).fill('Review the cancellation path.');
@@ -103,7 +115,7 @@ try{
     }
     authenticated=true;
     for(const [label,path,ready] of [
-      ['inbox','/inbox',titles[0]],['triage','/triage','Triage Deck'],['notifications','/notifications','Activity Feed'],['settings','/settings','Configure repositories'],['search','/search','Results'],['highlight','/highlight','Screenshot Insight'],['repos','/repos','Select Repositories'],['consent','/consent','AI, with your permission'],['pr-detail','/pr/octocat/review-app/1429','AI Summary'],['billing','/billing','Your subscription'],['billing-success','/billing/success','Checkout received'],['billing-cancel','/billing/cancel','Checkout canceled'],['account-delete','/account/delete','What will be removed'],['privacy','/privacy','Privacy Policy'],['terms','/terms','Terms of Service'],['support','/support','Support & Contact'],['delete-account','/delete-account','Account deletion'],['news','/news','Product News'],['changelog','/changelog',"What's new"],['auth-callback','/auth/callback','Could not sign you in'],
+      ['inbox','/inbox',titles[0]],['triage','/triage','Triage Deck'],['notifications','/notifications','Notifications'],['settings','/settings','Configure repositories'],['search','/search','Results'],['highlight','/highlight','Screenshot Insight'],['repos','/repos','Repositories'],['consent','/consent','AI Consent'],['pr-detail','/pr/octocat/review-app/1429','AI Summary'],['billing','/billing','Your subscription'],['billing-success','/billing/success','Checkout received'],['billing-cancel','/billing/cancel','Checkout canceled'],['account-delete','/account/delete','What will be removed'],['privacy','/privacy','Privacy Policy'],['terms','/terms','Terms of Service'],['support','/support','Support & Contact'],['delete-account','/delete-account','Account Deletion'],['news','/news','Product News'],['changelog','/changelog','Changelog'],['auth-callback','/auth/callback','Could not sign you in'],
     ])await capture(label,path,ready);
     authenticated=false;
     await capture('sign-in','/sign-in','Connect your GitHub');

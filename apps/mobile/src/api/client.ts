@@ -54,6 +54,7 @@ export interface ApiClient {
   restoreNotification(id: string): Promise<void>;
 
   // Pull Requests
+  getPrMetadata(owner: string, repo: string, number: number): Promise<PrDetail>;
   getPrDetail(owner: string, repo: string, number: number): Promise<PrDetail>;
   getPrSummary(owner: string, repo: string, number: number): Promise<PrSummary>;
   getPrRisk(owner: string, repo: string, number: number): Promise<PrRisk>;

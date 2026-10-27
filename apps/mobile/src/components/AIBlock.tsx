@@ -113,7 +113,7 @@ export function AIBlock({
         </View>
       </View>
 
-      <View style={{marginTop:16,padding:16,borderRadius:12,backgroundColor:colors.surfaceElevated,gap:6}}>{children}</View>
+      <View style={{marginTop:12,gap:10}}>{children}</View>
 
       {coverage && (
         <View style={[styles.footer, { borderTopColor: colors.border }]}>

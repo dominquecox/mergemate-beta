@@ -1,4 +1,4 @@
-import { ScreenIntro, Section } from "../../src/components/ScreenDesign";
+import { Section } from "../../src/components/ScreenDesign";
 import React, { useState } from "react";
 import { View, ScrollView, StyleSheet } from "react-native";
 import { Text } from "../../src/components/Text";
@@ -29,7 +29,7 @@ export default function PublicDeleteAccountScreen() {
         <EmptyState icon="trash-outline" title="Instructions unavailable" message="Email support@mergemate.dev to request account deletion." />
       ) : (
         <ScrollView contentContainerStyle={{ padding: spacing.base, paddingBottom: 60 }}>
-          <ScreenIntro eyebrow="MergeMate · Ploonu LLC" title="Account deletion" description="A clear path to removing your account and revoking access." icon="trash-outline"/>
+
           <Text style={[typography.body, { color: colors.textSecondary, marginTop: 4 }]}>
             MergeMate respects your data rights. You can delete your account and all associated tokens at any time.
           </Text>

@@ -1,4 +1,4 @@
-import { ScreenIntro, Section } from "../../src/components/ScreenDesign";
+import { Section } from "../../src/components/ScreenDesign";
 import React, { useState } from "react";
 import { View, TextInput, ScrollView, StyleSheet } from "react-native";
 import { Text } from "../../src/components/Text";
@@ -66,7 +66,7 @@ export default function SupportScreen() {
         />
       ) : (
         <ScrollView contentContainerStyle={{ padding: spacing.base, paddingBottom: 60 }}>
-          <ScreenIntro eyebrow="MergeMate · Ploonu LLC" title="Support & Contact" description="Tell us what happened. We will help you get back to reviewing." icon="help-circle-outline"/>
+
           <Text style={[typography.body, { color: colors.textSecondary, marginTop: 4 }]}>
             Reach the engineering team directly at{" "}
             <Text style={{ color: colors.brandLight, fontWeight: "600" }}>support@mergemate.dev</Text>.

@@ -50,6 +50,16 @@ const RISK = {
 };
 
 describe("pull request detail", () => {
+  it("loads triage metadata with one read and no AI request", async () => {
+    const {client,calls}=native(()=>jsonResponse(PR));
+    const detail=await client.getPrMetadata("octo","repo",7);
+    expect(calls.map(call=>`${call.method} ${call.path}`)).toEqual(["GET /prs/octo/repo/7"]);
+    expect(detail).toMatchObject({author:"octo",additions:30,deletions:4,changedFilesCount:2});
+    expect(detail.checks.map(check=>check.conclusion)).toEqual(["success","pending","failure"]);
+    expect(detail.summary).toBeUndefined();
+    expect(detail.risk).toBeUndefined();
+  });
+
   it("opens the PR and adds summary, risk and a secret warning without the secret value", async () => {
     const { client, calls } = native((req) => {
       if (req.path.endsWith("/summary")) return jsonResponse(SUMMARY);

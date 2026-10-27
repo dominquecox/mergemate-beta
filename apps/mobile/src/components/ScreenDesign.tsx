@@ -4,14 +4,6 @@ import { Text } from './Text';
 import { Icon, type IconName } from './Icon';
 import { useTheme } from '../context/ThemeContext';
 
-export function ScreenIntro({eyebrow,title,description,icon}:{eyebrow:string;title:string;description?:string;icon?:IconName}) {
-  const {colors,typography}=useTheme();
-  return <View style={styles.intro}>
-    <View style={styles.row}>{icon && <Icon name={icon} color={colors.brandLight} size={16}/>}<Text style={[typography.caption,{color:colors.brandLight,letterSpacing:1.2,textTransform:'uppercase'}]}>{eyebrow}</Text></View>
-    <Text accessibilityRole="header" style={[typography.title1,{color:colors.text,marginTop:8}]}>{title}</Text>
-    {description && <Text style={[typography.body,{color:colors.textSecondary,marginTop:8,maxWidth:600}]}>{description}</Text>}
-  </View>;
-}
 export function Section({title,caption,icon,children,style}:{title?:string;caption?:string;icon?:IconName;children:React.ReactNode;style?:ViewStyle}) {
   const {colors,typography}=useTheme();
   return <View style={[styles.section,{backgroundColor:colors.surface,borderColor:colors.border},style]}>

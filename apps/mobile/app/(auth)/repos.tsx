@@ -1,4 +1,3 @@
-import { ScreenIntro } from "../../src/components/ScreenDesign";
 import React, { useState, useEffect } from "react";
 import { View, ScrollView, TouchableOpacity, StyleSheet, Linking, TextInput, Switch } from "react-native";
 import { Text } from "../../src/components/Text";
@@ -66,7 +65,7 @@ export default function ReposScreen() {
   return (
     <View style={[styles.root, { backgroundColor: colors.background }]}>
       <Header
-        title="Choose Repositories"
+        title="Repositories"
         showBack
         rightAction={
           <TouchableOpacity
@@ -100,7 +99,7 @@ export default function ReposScreen() {
         </View>
       ) : (
         <ScrollView contentContainerStyle={{ padding: spacing.base }}>
-          <ScreenIntro eyebrow="Setup flow · 01 / 02" title="Select Repositories" description="Choose the repositories you want MergeMate to monitor for reviews and risk." icon="folder-open-outline"/>
+
           <View style={{height:4,backgroundColor:colors.brand,borderRadius:4,marginVertical:16}}/>
           <View style={{flexDirection:"row",alignItems:"center",gap:10,backgroundColor:colors.surfaceElevated,borderRadius:12,paddingHorizontal:12,marginBottom:16}}><Icon name="search-outline" color={colors.textSecondary} size={18}/><TextInput value={query} onChangeText={setQuery} placeholder="Search repositories, organizations..." placeholderTextColor={colors.textSecondary} accessibilityLabel="Search repositories" style={{flex:1,minHeight:48,color:colors.text,fontFamily:typography.body.fontFamily}}/></View>
           {/* GitHub App Configuration Notice */}

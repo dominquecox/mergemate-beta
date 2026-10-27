@@ -1,4 +1,4 @@
-import { ScreenIntro, Section } from "../../src/components/ScreenDesign";
+import { Section } from "../../src/components/ScreenDesign";
 import React, { useState, useEffect, useCallback } from "react";
 import { View, ScrollView, TouchableOpacity, StyleSheet, Linking, Platform } from "react-native";
 import { Text } from "../../src/components/Text";
@@ -103,7 +103,7 @@ export default function BillingScreen() {
         />
       ) : (
         <ScrollView contentContainerStyle={{ padding: spacing.base, paddingBottom: 60 }}>
-          <ScreenIntro eyebrow="Your workspace plan" title="Plans & Billing" description="Choose the review support that fits your workflow." icon="card-outline"/>
+
          {/* Current Plan Card */}
           <Section title="Your subscription" icon="card-outline">
             <View style={[styles.planHeader,{flexWrap:"wrap",gap:12}]}>

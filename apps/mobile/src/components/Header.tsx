@@ -1,101 +1,29 @@
-import React from "react";
-import { View, TouchableOpacity, Image, StyleSheet } from "react-native";
-import { Text } from "./Text";
-import { useRouter } from "expo-router";
-import { useTheme } from "../context/ThemeContext";
-import { useLayout } from "../layout/useLayout";
-import { Platform } from "react-native";
-import { Icon } from "./Icon";
+import React from 'react';
+import { View, TouchableOpacity, Image, StyleSheet } from 'react-native';
+import { Text } from './Text';
+import { useRouter } from 'expo-router';
+import { useTheme } from '../context/ThemeContext';
+import { Icon } from './Icon';
 
 interface HeaderProps {
   title?: string;
   showBack?: boolean;
   showLogo?: boolean;
   rightAction?: React.ReactNode;
+  footer?: React.ReactNode;
 }
 
-export function Header({ title, showBack = false, showLogo = false, rightAction }: HeaderProps) {
-  const router = useRouter();
-  const {isDesktop}=useLayout();
-  const { colors, typography, isDark } = useTheme();
-
-  return (
-    <View style={[styles.header, { backgroundColor: colors.background, borderBottomColor: colors.border }]}>
-      <View style={[styles.left,isDesktop && !showBack && {minWidth:0}]}>
-        {showBack && (
-          <TouchableOpacity
-            onPress={() => router.back()}
-            style={styles.backBtn}
-            accessibilityRole="button"
-            accessibilityLabel="Go back"
-          >
-            <View style={styles.backContent}>
-              <Icon name="chevron-back" size={22} color={colors.brandLight} />
-              <Text style={[typography.headline, { color: colors.brandLight }]}>Back</Text>
-            </View>
-          </TouchableOpacity>
-        )}
-        {showLogo && (
-          <Image
-            source={
-              isDark
-                ? require("../../assets/logo-dark.png")
-                : require("../../assets/logo-light.png")
-            }
-            style={styles.logo}
-            resizeMode="contain"
-            accessibilityRole="image"
-            accessibilityLabel="MergeMate"
-          />
-        )}
-      </View>
-
-      {title && !showLogo && (
-        <Text
-          style={[typography.headline, { color: colors.text, textAlign: isDesktop ? "left" : "center", flex: 1 }]}
-          numberOfLines={1}
-          accessibilityRole="header"
-        >
-          {title}
-        </Text>
-      )}
-
-      <View style={styles.right}>{rightAction}</View>
+/** One compact title/action row, with an optional pinned progress track. */
+export function Header({title,showBack=false,showLogo=false,rightAction,footer}:HeaderProps) {
+  const router=useRouter();
+  const {colors,typography,isDark}=useTheme();
+  return <View style={{backgroundColor:colors.background,borderBottomWidth:1,borderBottomColor:colors.border}}>
+    <View style={styles.row}>
+      {showBack && <TouchableOpacity accessibilityRole="button" accessibilityLabel="Go back" onPress={()=>router.back()} style={styles.back}><Icon name="chevron-back" size={22} color={colors.textSecondary}/></TouchableOpacity>}
+      {showLogo ? <Image source={isDark?require('../../assets/logo-dark.png'):require('../../assets/logo-light.png')} style={{width:142,height:34}} resizeMode="contain" accessibilityLabel="MergeMate"/> : <Text accessibilityRole="header" numberOfLines={1} style={[typography.headline,{color:colors.text,flex:1}]}>{title}</Text>}
+      {rightAction && <View style={styles.actions}>{rightAction}</View>}
     </View>
-  );
+    {footer}
+  </View>;
 }
-
-const styles = StyleSheet.create({
-  header: {
-    minHeight: 56,
-    paddingHorizontal: 16,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    borderBottomWidth: 1,
-  },
-  left: {
-    flexDirection: "row",
-    alignItems: "center",
-    minWidth: 64,
-  },
-  backBtn: {
-    minHeight: 44,
-    minWidth: 44,
-    paddingHorizontal: 4,
-    justifyContent: "center",
-  },
-  backContent: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  logo: {
-    width: 142,
-    height: 34,
-  },
-  right: {
-    minWidth: 64,
-    alignItems: "flex-end",
-    justifyContent: "center",
-  },
-});
+const styles=StyleSheet.create({row:{minHeight:56,paddingHorizontal:16,flexDirection:'row',alignItems:'center',gap:8},back:{width:44,minHeight:44,marginLeft:-12,alignItems:'center',justifyContent:'center'},actions:{flexShrink:0,alignItems:'flex-end',justifyContent:'center'}});

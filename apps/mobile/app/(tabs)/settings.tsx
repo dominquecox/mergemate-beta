@@ -1,4 +1,5 @@
-import { ScreenIntro, InfoLine } from "../../src/components/ScreenDesign";
+import { SettingsGroup, SettingsRow } from "../../src/components/SettingsRows";
+import { Avatar } from "../../src/components/Avatar";
 import React, { useState, useEffect, useCallback } from "react";
 import { View, ScrollView, TouchableOpacity, Switch, StyleSheet, Platform, Linking, Alert, TextInput } from "react-native";
 import { Text } from "../../src/components/Text";
@@ -193,385 +194,41 @@ export default function SettingsScreen() {
           onAction={() => router.replace("/(auth)/sign-in")}
         />
       ) : (
-        <ScrollView contentContainerStyle={{ padding: isDesktop ? 24 : spacing.base, paddingBottom: 60, flexDirection:isDesktop?"row":"column",flexWrap:isDesktop?"wrap":"nowrap",gap:isDesktop?16:0 }}>
-          <View style={{width:"100%"}}><ScreenIntro eyebrow="Personal workspace" title="Settings" description="Your repositories, review preferences and account." icon="options-outline"/></View>
-          {(notice || consentError) && (
-            <View
-              style={[styles.sectionCard, isDesktop && styles.webSectionCard, { backgroundColor: colors.surfaceElevated, borderColor: colors.border, borderRadius: radius.lg, marginBottom: spacing.base }]}
-              accessibilityRole="alert"
-            >
-              <Text style={[typography.callout, { color: colors.text }]}>{notice ?? consentError}</Text>
-            </View>
-          )}
-
-          {/* Account Profile Card */}
-          <View style={[styles.sectionCard, isDesktop && styles.webSectionCard, { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.lg }]}>
-            <View style={styles.userRow}>
-              <View style={[styles.avatar, { backgroundColor: colors.surfaceElevated, borderColor: colors.border }]}>
-                <Icon name="person-outline" size={24} color={colors.textSecondary} />
-              </View>
-              <View style={{ flex: 1, marginLeft: spacing.md }}>
-                <Text style={[typography.headline, { color: colors.text }]}>
-                  {user?.name || user?.login || "Demo User"}
-                </Text>
-                <Text style={[typography.footnote, { color: colors.textSecondary }]}>
-                  @{user?.login || "demo-developer"}
-                </Text>
-                {isDemo && (
-                  <View style={[styles.demoTag, { backgroundColor: colors.demoBadgeBg, marginTop: 4 }]}>
-                    <Text style={[typography.caption, { color: colors.demoBadge, fontWeight: "700" }]}>
-                      DEMO ACCOUNT
-                    </Text>
-                  </View>
-                )}
-              </View>
-            </View>
-
-            <Button
-              title="Sign Out"
-              onPress={handleSignOut}
-              variant="secondary"
-              style={{ marginTop: spacing.md }}
-            />
-          </View>
-
-          <View style={[styles.sectionCard,isDesktop && styles.webSectionCard,{backgroundColor:colors.surface,borderColor:colors.border,borderRadius:16,marginTop:isDesktop?0:16}]}>
-            <InfoLine icon="folder-open-outline" title="Manage Repositories" detail="Choose what appears in your review inbox."/>
-            <Button title="Configure repositories" variant="secondary" onPress={()=>router.push("/(auth)/repos")}/>
-          </View>
-
-          {/* Subscription Plan (US-20, US-21) */}
-          <View style={[styles.sectionCard, isDesktop && styles.webSectionCard, { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.lg, marginTop: isDesktop ? 0 : spacing.base }]}>
-            <Text
-              style={[typography.subhead, { color: colors.textMuted, textTransform: "uppercase" }]}
-              accessibilityRole="header"
-            >
-              Plan & Usage
-            </Text>
-            <View style={styles.planHeader}>
-              <View style={{ flex: 1, paddingRight: spacing.sm }}>
-                <Text style={[typography.title2, { color: colors.text, textTransform: "capitalize" }]}>
-                  {billing.plan} Plan
-                </Text>
-                <Text style={[typography.caption, { color: colors.textSecondary, marginTop: 2 }]}>
-                  {billing.plan === "pro"
-                    ? "More AI summaries and risk checks every day · Manage plan anytime"
-                    : "AI summaries, triage deck, and secret alerts"}
-                </Text>
-              </View>
-              <View style={[styles.statusBadge, { backgroundColor: colors.brandSubtle }]}>
-                <Text style={[typography.caption, { color: colors.brandLight, fontWeight: "700", textTransform: "uppercase" }]}>
-                  {billing.status.replace(/_/g, " ")}
-                </Text>
-              </View>
-            </View>
-
-            {/* Manage Plan Link (Compliance: iPhone shows plan status + link only, no prices or in-app purchase) */}
-            <Button
-              title={Platform.OS === "web" ? "Manage Billing & Plans" : "Manage Plan"}
-              onPress={handleManagePlan}
-              variant="secondary"
-              style={{ marginTop: spacing.md }}
-            />
-          </View>
-
-          {/* AI & Privacy (US-05) */}
-          <View style={[styles.sectionCard, isDesktop && styles.webSectionCard, { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.lg, marginTop: isDesktop ? 0 : spacing.base }]}>
-            <Text
-              style={[typography.subhead, { color: colors.textMuted, textTransform: "uppercase" }]}
-              accessibilityRole="header"
-            >
-              AI & Processing
-            </Text>
-            <View style={[styles.row,{borderTopWidth:1,borderTopColor:colors.border,marginTop:12,paddingTop:16}]}>
-              <View style={{ flex: 1, paddingRight: spacing.md }}>
-                <Text style={[typography.headline, { color: colors.text }]}>AI Summaries & Risk Scoring</Text>
-                <Text style={[typography.footnote, { color: colors.textSecondary, marginTop: 2 }]}>
-                  Send filtered patch diffs to Meta AI models for automated code review summaries.
-                </Text>
-              </View>
-              <Switch
-                value={aiConsentGranted && (settings?.aiSummaries ?? true)}
-                onValueChange={toggleAi}
-                disabled={isDemo || !settings}
-                accessibilityLabel="AI summaries and risk scoring"
-                trackColor={{ false: colors.surfaceSecondary, true: colors.brand }}
-                thumbColor="#FFFFFF"
-              />
-            </View>
-          </View>
-
-          {/* Notifications & Quiet Hours (US-17) */}
-          <View style={[styles.sectionCard, isDesktop && styles.webSectionCard, { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.lg, marginTop: isDesktop ? 0 : spacing.base }]}>
-            <Text
-              style={[typography.subhead, { color: colors.textMuted, textTransform: "uppercase" }]}
-              accessibilityRole="header"
-            >
-              Notifications
-            </Text>
-
-            {([
-              ["review", "Review requests", "When someone asks you to review a pull request."],
-              ["mention", "Mentions", "When someone mentions you."],
-              ["mine", "My pull requests", "Activity on pull requests you opened."],
-            ] as const).map(([kind, label, hint]) => (
-              <View key={kind} style={[styles.row,{borderTopWidth:1,borderTopColor:colors.border,marginTop:12,paddingTop:16}]}>
-                <View style={{ flex: 1, paddingRight: spacing.md }}>
-                  <Text style={[typography.headline, { color: colors.text }]}>{label}</Text>
-                  <Text style={[typography.footnote, { color: colors.textSecondary, marginTop: 2 }]}>{hint}</Text>
-                </View>
-                <Switch
-                  value={settings?.notifications[kind] ?? true}
-                  onValueChange={(val) => {
-                    void saveSettings({ notifications: { ...settings!.notifications, [kind]: val } });
-                  }}
-                  disabled={isDemo || !settings}
-                  accessibilityLabel={label}
-                  trackColor={{ false: colors.surfaceSecondary, true: colors.brand }}
-                  thumbColor="#FFFFFF"
-                />
-              </View>
-            ))}
-
-            <View style={[styles.row,{borderTopWidth:1,borderTopColor:colors.border,marginTop:12,paddingTop:16}]}>
-              <View style={{ flex: 1, paddingRight: spacing.md }}>
-                <Text style={[typography.headline, { color: colors.text }]}>Quiet Hours</Text>
-                <Text style={[typography.footnote, { color: colors.textSecondary, marginTop: 2 }]}>
-                  {settings?.quietHours
-                    ? `Silence notifications from ${settings.quietHours.start} to ${settings.quietHours.end}.`
-                    : "Silence notifications overnight (22:00 to 08:00)."}
-                </Text>
-              </View>
-              <Switch
-                value={settings?.quietHours != null}
-                onValueChange={toggleQuietHours}
-                disabled={isDemo || !settings}
-                accessibilityLabel="Quiet hours"
-                trackColor={{ false: colors.surfaceSecondary, true: colors.brand }}
-                thumbColor="#FFFFFF"
-              />
-            </View>
-
-            {Platform.OS !== "web" && !isDemo && (
-              <View style={[styles.row,{borderTopWidth:1,borderTopColor:colors.border,marginTop:12,paddingTop:16}]}>
-                <View style={{ flex: 1, paddingRight: spacing.md }}>
-                  <Text style={[typography.headline, { color: colors.text }]}>Push on this device</Text>
-                  <Text style={[typography.footnote, { color: colors.textSecondary, marginTop: 2 }]}>
-                    Get a push when a pull request needs you.
-                  </Text>
-                </View>
-                <Switch
-                  value={pushOn}
-                  onValueChange={togglePush}
-                  accessibilityLabel="Push notifications on this device"
-                  trackColor={{ false: colors.surfaceSecondary, true: colors.brand }}
-                  thumbColor="#FFFFFF"
-                />
-              </View>
-            )}
-          </View>
-
-          {/* Bring your own Meta key: entered on the web only, never shown again; iOS shows whether one is set */}
-          {metaKey && !isDemo && (
-            <View style={[styles.sectionCard, isDesktop && styles.webSectionCard, { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.lg, marginTop: isDesktop ? 0 : spacing.base }]}>
-              <Text
-                style={[typography.subhead, { color: colors.textMuted, textTransform: "uppercase" }]}
-                accessibilityRole="header"
-              >
-                Your Meta key
-              </Text>
-              <Text style={[typography.footnote, { color: colors.textSecondary, marginTop: 4 }]}>
-                {metaKey.configured
-                  ? "MergeMate is using your own Meta key for summaries. It is stored encrypted and never shown again."
-                  : "Optional. Add your own Meta key and MergeMate uses it for summaries."}
-              </Text>
-              {Platform.OS === "web" ? (
-                <>
-                  <TextInput
-                    value={metaKeyInput}
-                    onChangeText={setMetaKeyInput}
-                    placeholder={metaKey.configured ? "Paste a new key to replace it" : "Paste your Meta key"}
-                    placeholderTextColor={colors.textMuted}
-                    secureTextEntry
-                    autoCapitalize="none"
-                    autoCorrect={false}
-                    spellCheck={false}
-                    autoComplete="off"
-                    accessibilityLabel="Meta key"
-                    style={[styles.keyInput, { backgroundColor: colors.surfaceElevated, borderColor: colors.border, color: colors.text, borderRadius: radius.md, marginTop: spacing.sm }]}
-                  />
-                  <Button
-                    title="Save key"
-                    onPress={saveMetaKey}
-                    loading={metaKeyBusy}
-                    disabled={metaKeyInput.trim().length === 0}
-                    variant="secondary"
-                    style={{ marginTop: spacing.sm }}
-                  />
-                  {metaKey.configured && (
-                    <Button title="Remove key" onPress={removeMetaKey} disabled={metaKeyBusy} variant="ghost" style={{ marginTop: spacing.xs }} />
-                  )}
-                </>
-              ) : (
-                <Text style={[typography.headline, { color: colors.text, marginTop: spacing.sm }]}>
-                  {metaKey.configured ? "Using your key" : "Not set. Add one in the web app."}
-                </Text>
-              )}
-            </View>
-          )}
-
-          {/* Appearance */}
-          <View style={[styles.sectionCard, isDesktop && styles.webSectionCard, { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.lg, marginTop: isDesktop ? 0 : spacing.base }]}>
-            <Text
-              style={[typography.subhead, { color: colors.textMuted, textTransform: "uppercase" }]}
-              accessibilityRole="header"
-            >
-              Appearance
-            </Text>
-            <View style={[styles.themeRow, { marginTop: spacing.sm }]} accessibilityRole="radiogroup">
-              {(["dark", "light", "system"] as const).map((mode) => (
-                <TouchableOpacity
-                  key={mode}
-                  onPress={() => setThemeMode(mode)}
-                  style={[
-                    styles.themeTab,
-                    {
-                      backgroundColor: themeMode === mode ? colors.brand : colors.surfaceSecondary,
-                      borderRadius: radius.md,
-                    },
-                  ]}
-                  accessibilityRole="radio"
-                  accessibilityLabel={`${mode} theme`}
-                  accessibilityState={{ checked: themeMode === mode }}
-                >
-                  <Text
-                    style={[
-                      typography.caption,
-                      {
-                        color: themeMode === mode ? "#FFFFFF" : colors.textSecondary,
-                        fontWeight: "700",
-                        textTransform: "capitalize",
-                      },
-                    ]}
-                  >
-                    {mode}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          </View>
-
-          {/* Legal & Support Links (US-18, US-23) */}
-          <View style={[styles.sectionCard, isDesktop && styles.webSectionCard, { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.lg, marginTop: isDesktop ? 0 : spacing.base }]}>
-            <Text
-              style={[typography.subhead, { color: colors.textMuted, textTransform: "uppercase", marginBottom: spacing.xs }]}
-              accessibilityRole="header"
-            >
-              About & Legal
-            </Text>
-
-            {[
-              { label: "What's New (Changelog)", route: "/(public)/changelog" },
-              { label: "Product News", route: "/(public)/news" },
-              { label: "Support (support@mergemate.dev)", route: "/(public)/support" },
-              { label: "Privacy Policy", route: "/(public)/privacy" },
-              { label: "Terms of Service", route: "/(public)/terms" },
-            ].map((item, idx) => (
-              <TouchableOpacity
-                key={idx}
-                onPress={() => router.push(item.route as any)}
-                style={[styles.linkRow, { borderBottomColor: colors.border, borderBottomWidth: idx === 4 ? 0 : 1 }]}
-                accessibilityRole="link"
-                accessibilityLabel={item.label}
-              >
-                <View style={{flexDirection:"row",gap:10,alignItems:"center",flex:1}}><Icon name={idx===2?"help-circle-outline":idx===3?"shield-checkmark-outline":"document-text-outline"} size={18} color={colors.textSecondary}/><Text style={[typography.body,{color:colors.text,flex:1}]}>{item.label}</Text></View>
-                <Icon name="chevron-forward" size={18} color={colors.textMuted} />
-              </TouchableOpacity>
-            ))}
-          </View>
-
-          {/* Account Deletion (US-22) */}
-          <View style={{ marginTop: spacing.lg }}>
-            <Button
-              title="Delete Account & Revoke Access"
-              onPress={() => router.push("/account/delete")}
-              variant="destructive"
-              style={{ width: "100%" }}
-            />
-          </View>
+        <ScrollView contentContainerStyle={{padding:isDesktop?24:16,paddingBottom:48}}>
+          {(notice || consentError) && <View accessibilityRole="alert" style={{padding:12,backgroundColor:colors.surfaceElevated,borderRadius:12,marginBottom:16}}><Text style={[typography.body,{color:colors.text}]}>{notice ?? consentError}</Text></View>}
+          <SettingsGroup title="GitHub authentication">
+            <View style={{flexDirection:"row",alignItems:"center",gap:12,padding:16}}><Avatar login={user?.login ?? 'demo'} size={40}/><View style={{flex:1}}><Text style={[typography.headline,{color:colors.text}]}>{user?.name || user?.login || 'Demo User'}</Text><Text style={[typography.code,{color:colors.textSecondary,fontSize:11}]}>@{user?.login || 'demo-developer'}</Text></View><View style={{paddingHorizontal:8,paddingVertical:4,borderRadius:9999,backgroundColor:isDemo?colors.demoBadgeBg:colors.riskLowBg}}><Text style={[typography.caption,{color:isDemo?colors.demoBadge:colors.riskLow}]}>{isDemo?'Demo':'Signed in'}</Text></View></View>
+            <SettingsRow label="Sign Out" icon="log-out-outline" danger onPress={handleSignOut}/>
+          </SettingsGroup>
+          <SettingsGroup title="Workspace repositories">
+            <SettingsRow first label="Configure repositories" detail="Manage which repositories appear in your inbox" icon="folder-open-outline" onPress={()=>router.push('/(auth)/repos')}/>
+            <SettingsRow label={Platform.OS==='web'?'Manage Billing & Plans':'Manage Plan'} detail={billing.status.replace(/_/g,' ')} icon="card-outline" onPress={handleManagePlan} trailing={<View style={{flexDirection:'row',alignItems:'center',gap:8}}><View style={{paddingHorizontal:8,paddingVertical:3,borderRadius:9999,backgroundColor:colors.brandSubtle}}><Text style={[typography.caption,{color:colors.brandLight,textTransform:'uppercase'}]}>{billing.plan}</Text></View><Icon name="chevron-forward" size={16} color={colors.textSecondary}/></View>}/>
+          </SettingsGroup>
+          <SettingsGroup title="Push notifications & triage">
+            {([['review','Review requests','When someone asks for your review'],['mention','Mentions','When someone mentions you'],['mine','My pull requests','Updates to pull requests you opened']] as const).map(([kind,label,hint],index)=><SettingsRow key={kind} first={index===0} label={label} detail={hint} trailing={<Switch value={settings?.notifications[kind] ?? true} onValueChange={value=>{if(settings)void saveSettings({notifications:{...settings.notifications,[kind]:value}});}} disabled={isDemo || !settings} accessibilityLabel={label} trackColor={{false:colors.surfaceSecondary,true:colors.brand}} thumbColor="#FFFFFF"/>}/>)}
+            <SettingsRow label="Quiet Hours" detail={settings?.quietHours?`${settings.quietHours.start} → ${settings.quietHours.end}`:'22:00 → 08:00 when enabled'} icon="moon-outline" trailing={<Switch value={settings?.quietHours!=null} onValueChange={toggleQuietHours} disabled={isDemo || !settings} accessibilityLabel="Quiet hours" trackColor={{false:colors.surfaceSecondary,true:colors.brand}} thumbColor="#FFFFFF"/>}/>
+            {Platform.OS!=='web' && !isDemo && <SettingsRow label="Push on this device" detail="Get a push when a review needs you" trailing={<Switch value={pushOn} onValueChange={togglePush} accessibilityLabel="Push notifications on this device" trackColor={{false:colors.surfaceSecondary,true:colors.brand}} thumbColor="#FFFFFF"/>}/>}
+          </SettingsGroup>
+          <SettingsGroup title="Intelligence & privacy">
+            <SettingsRow first label="AI Summaries & Risk Scoring" detail="Send filtered patch diffs to Meta AI models" icon="sparkles-outline" trailing={<Switch value={aiConsentGranted && (settings?.aiSummaries ?? true)} onValueChange={toggleAi} disabled={isDemo || !settings} accessibilityLabel="AI summaries and risk scoring" trackColor={{false:colors.surfaceSecondary,true:colors.brand}} thumbColor="#FFFFFF"/>}/>
+            <SettingsRow label="What is sent to AI" detail="Review your consent and privacy choices" icon="shield-checkmark-outline" onPress={()=>router.push('/(auth)/consent')}/>
+          </SettingsGroup>
+          {metaKey && !isDemo && <SettingsGroup title="Your Meta key">
+            <SettingsRow first label={metaKey.configured?'Using your key':'Key not configured'} detail="Stored encrypted and never shown again" icon="key-outline"/>
+            {Platform.OS==='web'?<View style={{padding:16,paddingTop:0}}><TextInput value={metaKeyInput} onChangeText={setMetaKeyInput} placeholder={metaKey.configured?'Paste a replacement key':'Paste your Meta key'} placeholderTextColor={colors.textSecondary} secureTextEntry autoCapitalize="none" autoCorrect={false} spellCheck={false} autoComplete="off" accessibilityLabel="Meta key" style={[styles.keyInput,{color:colors.text,backgroundColor:colors.surfaceElevated,borderColor:colors.border,borderRadius:12}]}/><Button title="Save key" variant="secondary" onPress={saveMetaKey} loading={metaKeyBusy} disabled={metaKeyInput.trim().length===0} style={{marginTop:8}}/>{metaKey.configured && <Button title="Remove key" variant="ghost" onPress={removeMetaKey} disabled={metaKeyBusy}/>}</View>:<Text style={[typography.caption,{color:colors.textSecondary,padding:16,paddingTop:0}]}>Manage your key in the web app.</Text>}
+          </SettingsGroup>}
+          <SettingsGroup title="Appearance">
+            <SettingsRow first label="Interface Theme" icon="contrast-outline"/>
+            <View accessibilityRole="radiogroup" style={{flexDirection:'row',gap:4,padding:8,paddingTop:0}}>{(['system','dark','light'] as const).map(mode=><TouchableOpacity key={mode} onPress={()=>setThemeMode(mode)} accessibilityRole="radio" accessibilityLabel={`${mode} theme`} accessibilityState={{checked:themeMode===mode}} style={{flex:1,minHeight:44,flexDirection:'row',alignItems:'center',justifyContent:'center',gap:6,borderRadius:8,backgroundColor:themeMode===mode?colors.surfaceInteractive:'transparent'}}><Icon name={mode==='system'?'desktop-outline':mode==='dark'?'moon-outline':'sunny-outline'} size={16} color={themeMode===mode?colors.text:colors.textSecondary}/><Text style={[typography.caption,{color:themeMode===mode?colors.text:colors.textSecondary,textTransform:'capitalize'}]}>{mode}</Text></TouchableOpacity>)}</View>
+          </SettingsGroup>
+          <SettingsGroup title="Information & security">
+            {([{label:"What's New (Changelog)",route:'/(public)/changelog'},{label:'Product News',route:'/(public)/news'},{label:'Support',route:'/(public)/support'},{label:'Privacy Policy',route:'/(public)/privacy'},{label:'Terms of Service',route:'/(public)/terms'}] as const).map((item,index)=><SettingsRow key={item.route} first={index===0} label={item.label} onPress={()=>router.push(item.route)}/>)}
+          </SettingsGroup>
+          <SettingsGroup title="Danger zone"><SettingsRow first label="Delete Account & Revoke Access" detail="Permanently remove your account and revoke GitHub access" icon="trash-outline" danger onPress={()=>router.push('/account/delete')}/></SettingsGroup>
         </ScrollView>
       )}
     </View>
   );
 }
 
-const styles = StyleSheet.create({
-  root: {
-    flex: 1,
-  },
-  webSectionCard: { flexBasis:"47%", flexGrow:1, minWidth:280 },
-  sectionCard: {
-    padding: 20,
-    borderWidth: 1,
-  },
-  userRow: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  avatar: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    alignItems: "center",
-    justifyContent: "center",
-    borderWidth: 1,
-  },
-  demoTag: {
-    alignSelf: "flex-start",
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
-  },
-  planHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginTop: 8,
-  },
-  statusBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 4,
-  },
-  row: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginTop: 10,
-    minHeight: 44,
-  },
-  keyInput: {
-    fontFamily: "Geist_400Regular",
-    minHeight: 44,
-    padding: 12,
-    borderWidth: 1,
-  },
-  themeRow: {
-    flexDirection: "row",
-    gap: 8,
-  },
-  themeTab: {
-    flex: 1,
-    minHeight: 44,
-    paddingVertical: 10,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  linkRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    minHeight: 44,
-    paddingVertical: 12,
-  },
-});
+const styles=StyleSheet.create({root:{flex:1},keyInput:{fontFamily:'Geist_400Regular',minHeight:48,padding:12,borderWidth:1}});

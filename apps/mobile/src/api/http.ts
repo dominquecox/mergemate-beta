@@ -504,6 +504,10 @@ export class HttpApiClient implements ApiClient {
   // Pull requests
   // ---------------------------------------------------------------------------------------------
 
+  async getPrMetadata(owner: string, repo: string, number: number): Promise<PrDetail> {
+    return mapPrDetail(await this.request({ path: prPath(owner, repo, number), schema: PrDetailSchema }));
+  }
+
   async getPrDetail(owner: string, repo: string, number: number): Promise<PrDetail> {
     const path = prPath(owner, repo, number);
     const contract = await this.request({ path, schema: PrDetailSchema });
