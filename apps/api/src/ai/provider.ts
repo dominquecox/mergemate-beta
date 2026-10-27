@@ -1,6 +1,6 @@
 import type { AiBinding, Env } from "../env";
 import { ApiError, ConfigError } from "../errors";
-import { resolveRoute } from "./routes";
+import { resolveRoute, workersAiTraits } from "./routes";
 import type { AiTask, ProviderName } from "./routes";
 
 export type { ProviderName } from "./routes";
@@ -118,8 +118,13 @@ const asCount = (value: unknown): number =>
 
 interface WorkersAiResult {
   response?: unknown;
+  /** Chat Completions shape, used by third-party models such as Muse Spark Open. */
+  choices?: { message?: { content?: unknown } }[];
   usage?: { prompt_tokens?: unknown; completion_tokens?: unknown };
 }
+
+/** A reasoning model spends tokens thinking first; give it room so the answer is not cut off. */
+const REASONING_MIN_COMPLETION_TOKENS = 4096;
 
 /**
  * One Workers AI call. The prompt is the same delimited data under the same fixed system prompt as
@@ -139,20 +144,36 @@ const completeWithWorkersAi = async (
         { type: "image_url", image_url: { url: request.image.dataUrl } },
       ]
     : request.prompt;
+  const traits = workersAiTraits(config.modelId);
   const inputs = {
     messages: [
       { role: "system", content: request.system },
       { role: "user", content: userContent },
     ],
-    max_tokens: request.maxOutputTokens,
-    ...(request.jsonSchema ? { response_format: { type: "json_schema", json_schema: request.jsonSchema } } : {}),
+    ...(traits.reasoning
+      ? {
+          max_completion_tokens: Math.max(request.maxOutputTokens * 8, REASONING_MIN_COMPLETION_TOKENS),
+          reasoning_effort: "low",
+        }
+      : { max_tokens: request.maxOutputTokens }),
+    ...(traits.jsonMode && request.jsonSchema
+      ? { response_format: { type: "json_schema", json_schema: request.jsonSchema } }
+      : {}),
   };
   const result = (await (gatewayId
     ? ai.run(config.modelId, inputs, { gateway: { id: gatewayId } })
     : ai.run(config.modelId, inputs))) as WorkersAiResult | null | undefined;
   // JSON mode can return the parsed object instead of a string; either way it is validated downstream.
   const response = result?.response;
-  const text = typeof response === "string" ? response : response && typeof response === "object" ? JSON.stringify(response) : "";
+  const chat = result?.choices?.[0]?.message?.content;
+  const text =
+    typeof response === "string"
+      ? response
+      : response && typeof response === "object"
+        ? JSON.stringify(response)
+        : typeof chat === "string"
+          ? chat
+          : "";
   const usage = result?.usage
     ? { inputTokens: asCount(result.usage.prompt_tokens), outputTokens: asCount(result.usage.completion_tokens) }
     : undefined;

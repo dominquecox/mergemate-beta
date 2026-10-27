@@ -34,6 +34,8 @@ const TEXT_TASKS: readonly AiTask[] = ["summary", "risk", "triage"];
  */
 const ALLOWED_ROUTES: readonly AllowedRoute[] = [
   { provider: "meta", modelId: "muse-spark-1.2", tasks: TEXT_TASKS, maxInputChars: 190_000 },
+  // Meta's open-weight Muse model on Workers AI: text and vision, 1M-token window. The cap bounds cost, not the window.
+  { provider: "workers-ai", modelId: "meta/muse-spark-open", tasks: [...TEXT_TASKS, "highlight"], maxInputChars: 400_000 },
   // 24k-token window: about 50k characters of code leaves room for the system prompt and the answer.
   { provider: "workers-ai", modelId: "@cf/meta/llama-3.3-70b-instruct-fp8-fast", tasks: TEXT_TASKS, maxInputChars: 50_000 },
   { provider: "workers-ai", modelId: "@cf/meta/llama-4-scout-17b-16e-instruct", tasks: ["highlight"], maxInputChars: 190_000 },
@@ -53,3 +55,18 @@ export const resolveRoute = (env: Env, task: AiTask): ModelRoute => {
   if (!match) throw new ConfigError(`${name} is not an allowed route`);
   return { provider: match.provider, modelId: match.modelId, maxInputChars: match.maxInputChars };
 };
+
+/** How a Workers AI model is called. Muse Spark Open uses the Chat Completions shape and reasons before answering. */
+export interface WorkersAiTraits {
+  /** Supports Workers AI JSON mode (`response_format`). Others rely on the schema validation downstream. */
+  jsonMode: boolean;
+  /** Spends output tokens on reasoning first, so it needs a larger completion budget and a low effort. */
+  reasoning: boolean;
+}
+
+export const workersAiTraits = (modelId: string): WorkersAiTraits =>
+  modelId === "meta/muse-spark-open"
+    ? { jsonMode: false, reasoning: true }
+    : modelId === "@cf/meta/llama-3.3-70b-instruct-fp8-fast"
+      ? { jsonMode: true, reasoning: false }
+      : { jsonMode: false, reasoning: false };

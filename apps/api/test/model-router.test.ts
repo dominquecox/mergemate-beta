@@ -201,6 +201,45 @@ describe("route limits", () => {
   });
 });
 
+describe("Muse Spark Open on Workers AI", () => {
+  const OPEN = "meta/muse-spark-open";
+  const openEnv = () => ({ ...validModelEnv(), MODEL_ROUTE_RISK: `workers-ai:${OPEN}` }) as Env;
+
+  it("reads the Chat Completions answer and gives the reasoning model room to finish", async () => {
+    const ai = fakeAi(async () => ({
+      choices: [{ message: { content: riskText } }],
+      usage: { prompt_tokens: 120, completion_tokens: 900 },
+    }));
+    const deps = await setup({ ai });
+    const result = await assessPrRisk(deps, user, ref, openEnv());
+    expect(result.body).toMatchObject({ level: "low" });
+    expect(ai.runs[0]?.model).toBe(OPEN);
+    const inputs = ai.runs[0]?.inputs as Record<string, unknown>;
+    expect(inputs.max_completion_tokens).toBeGreaterThanOrEqual(4096);
+    expect(inputs.reasoning_effort).toBe("low");
+    expect(inputs).not.toHaveProperty("max_tokens");
+    expect(inputs).not.toHaveProperty("response_format");
+  });
+
+  it("serves highlight too, and keeps Llama 3.3 on JSON mode for the cost profile", async () => {
+    const { resolveRoute } = await import("../src/ai/routes");
+    expect(resolveRoute({ ...validModelEnv(), MODEL_ROUTE_HIGHLIGHT: `workers-ai:${OPEN}` } as Env, "highlight").modelId).toBe(OPEN);
+    const ai = fakeAi(async () => ({ response: riskText }));
+    const deps = await setup({ ai });
+    await assessPrRisk(deps, user, ref, validModelEnv());
+    const inputs = ai.runs[0]?.inputs as Record<string, unknown>;
+    expect(inputs.max_tokens).toBe(400);
+    expect(inputs).toHaveProperty("response_format");
+  });
+
+  it("treats an empty Chat Completions answer as a failed call", async () => {
+    const ai = fakeAi(async () => ({ choices: [{ message: { content: null } }] }));
+    const deps = await setup({ ai });
+    const error = await apiError(() => assessPrRisk(deps, user, ref, openEnv()));
+    expect(error.code).toBe("upstream_unavailable");
+  });
+});
+
 describe("AI metering", () => {
   it("writes one content-free data point per call, with tokens from the provider", async () => {
     const metrics = fakeDataset();
