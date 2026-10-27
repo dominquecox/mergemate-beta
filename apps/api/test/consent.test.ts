@@ -22,7 +22,7 @@ describe("consent routes", () => {
     const ctx = testContext();
     const res = await appFor(ctx)("/v1/consent", { headers: await demoHeaders(ctx) });
     expect(res.status).toBe(200);
-    expect(ConsentState.parse(await res.json())).toEqual({ ai: { granted: false, version: "1" } });
+    expect(ConsentState.parse(await res.json())).toEqual({ ai: { granted: false, version: "1", currentVersion: "1" } });
     expect(res.headers.get("Cache-Control")).toBe("no-store");
   });
 

@@ -55,5 +55,25 @@ export const createTriageRouter = (deps: AiRouterDeps = {}) => {
     return c.json(TriageRecord.parse({ prRef, lane: parsed.data.lane }));
   });
 
+  // Undo: forget the user's choice so the pull request returns to the queue. Idempotent.
+  router.delete("/:prRef", async (c) => {
+    const session = c.get("session");
+    const userId = session.userId;
+    if (session.demo || !userId) throw new ApiError("forbidden", "Not available in the demo.");
+    const prRef = c.req.param("prRef");
+    if (!PrRef.safeParse(prRef).success) {
+      throw new ApiError(
+        "validation_failed",
+        "That pull request reference is not valid. Send it URL-encoded as owner/repo#number.",
+      );
+    }
+    const { repo, number } = splitPrRef(prRef);
+    await requireBinding(c.env, "DB")
+      .prepare("DELETE FROM triage_choices WHERE user_id = ? AND item_id = ?")
+      .bind(userId, triageItemId(repo, number))
+      .run();
+    return c.body(null, 204);
+  });
+
   return router;
 };

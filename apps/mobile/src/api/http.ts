@@ -240,9 +240,9 @@ export class HttpApiClient implements ApiClient {
         throw error;
       }
 
-      // The API reports a missing or stale CSRF token as `forbidden`. Fetch a fresh one and try once more;
-      // if the token did not change the refusal is about something else, so show it.
-      if (this.web && authed && write && error.code === "forbidden" && !csrfRetried) {
+      // The API reports a missing or stale CSRF token as `csrf_invalid` (older APIs: `forbidden`). Fetch a
+      // fresh one and try once more; if the token did not change the refusal is about something else, so show it.
+      if (this.web && authed && write && (error.code === "csrf_invalid" || error.code === "forbidden") && !csrfRetried) {
         csrfRetried = true;
         setInMemoryCsrfToken(null);
         const fresh = await this.loadCsrf();

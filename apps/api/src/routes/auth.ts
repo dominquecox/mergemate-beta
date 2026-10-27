@@ -7,6 +7,7 @@ import {
   DemoRequest,
   type RefreshResponse,
   type Session,
+  type Me,
   type User,
 } from "@mergemate/contracts";
 import { type Context, Hono } from "hono";
@@ -170,11 +171,11 @@ export const auth = new Hono<AppEnv>()
 
   .get("/me", async (c) => {
     const session = c.get("session");
-    if (session.demo || !session.userId) return c.json(DEMO_USER);
+    if (session.demo || !session.userId) return c.json({ ...DEMO_USER, demo: true } satisfies Me);
     const row = await requireBinding(c.env, "DB")
       .prepare("SELECT id, login, name, avatar_url, status FROM users WHERE id = ?")
       .bind(session.userId)
       .first<UserRow>();
     if (!row) throw new ApiError("unauthorized", "Sign in to continue.");
-    return c.json(toUser(row));
+    return c.json({ ...toUser(row), demo: false } satisfies Me);
   });

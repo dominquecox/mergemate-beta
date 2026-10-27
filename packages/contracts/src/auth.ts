@@ -9,6 +9,10 @@ export const User = z.object({
 });
 export type User = z.infer<typeof User>;
 
+/** GET /v1/me: the user plus whether this is a demo session. */
+export const Me = User.extend({ demo: z.boolean() });
+export type Me = z.infer<typeof Me>;
+
 export const Platform = z.enum(["ios", "web"]);
 export type Platform = z.infer<typeof Platform>;
 

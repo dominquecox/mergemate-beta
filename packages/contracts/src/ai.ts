@@ -74,6 +74,8 @@ export const ConsentState = z.object({
     granted: z.boolean(),
     version: z.string().min(1),
     at: IsoDateTime.optional(),
+    /** The consent text version in force now. A grant counts only when `version` equals it. */
+    currentVersion: z.string().min(1).optional(),
   }),
 });
 export type ConsentState = z.infer<typeof ConsentState>;

@@ -6,6 +6,7 @@ import type { AppEnv } from "./env";
 export const ERROR_STATUS: Record<ErrorCode, ContentfulStatusCode> = {
   unauthorized: 401,
   forbidden: 403,
+  csrf_invalid: 403,
   consent_required: 403,
   sso_required: 403,
   payload_too_large: 413,

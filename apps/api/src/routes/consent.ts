@@ -53,7 +53,7 @@ export const requireConsent = async (store: ConsentStore, userId: string): Promi
   }
 };
 
-const ungranted = () => ({ ai: { granted: false, version: CONSENT_VERSION } });
+const ungranted = () => ({ ai: { granted: false, version: CONSENT_VERSION, currentVersion: CONSENT_VERSION } });
 
 /** Validates a consent update body, including the current version. */
 export const parseConsentUpdate = (body: unknown): { granted: boolean } => {
@@ -75,7 +75,7 @@ export const createConsentRouter = (store?: ConsentStore) => {
     const session = c.get("session");
     if (session.demo) return c.json(ConsentState.parse(ungranted()));
     const db = requireBinding(c.env, "DB");
-    return c.json(ConsentState.parse({ ai: await consent(db).read(userKey(session)) }));
+    return c.json(ConsentState.parse({ ai: { ...(await consent(db).read(userKey(session))), currentVersion: CONSENT_VERSION } }));
   });
 
   router.put("/", async (c) => {
@@ -83,7 +83,7 @@ export const createConsentRouter = (store?: ConsentStore) => {
     const db = requireBinding(c.env, "DB");
     const update = parseConsentUpdate(await c.req.json().catch(() => null));
     const record = await consent(db).write(userKey(session), update.granted);
-    return c.json(ConsentState.parse({ ai: record }));
+    return c.json(ConsentState.parse({ ai: { ...record, currentVersion: CONSENT_VERSION } }));
   });
 
   return router;

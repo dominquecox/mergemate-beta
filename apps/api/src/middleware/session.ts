@@ -70,7 +70,7 @@ export const authenticate = (): MiddlewareHandler<AppEnv> => async (c, next) => 
   if (write && session.transport === "cookie") {
     const header = c.req.header("x-csrf-token") ?? "";
     if (!session.csrfToken || !timingSafeEqual(header, session.csrfToken)) {
-      throw new ApiError("forbidden", "Missing or invalid CSRF token.");
+      throw new ApiError("csrf_invalid", "Missing or invalid CSRF token.");
     }
   }
   if (
