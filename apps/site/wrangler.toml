@@ -16,13 +16,12 @@ html_handling = "none"
 not_found_handling = "none"
 
 [vars]
-TURNSTILE_SITE_KEY = ""
+TURNSTILE_SITE_KEY = "1x00000000000000000000AA"
 EMAIL_FROM = "mergemate@ploonu.com"
 
 [[d1_databases]]
 binding = "DB"
 database_name = "mergemate-waitlist-db"
-# Local-only sentinel. Replace with the owner's created database UUID before release.
 database_id = "00000000-0000-0000-0000-000000000000"
 migrations_dir = "migrations"
 

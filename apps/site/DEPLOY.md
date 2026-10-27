@@ -65,7 +65,7 @@ npx --no-install wrangler secret put RESEND_API_KEY --config apps/site/wrangler.
 
 `secret put` creates/deploys a Worker version. Treat this as an owner-approved setup action, not as a harmless config edit. On a first Worker it may offer to create it; do not serve the site until both secrets and the real public site key are present. The signup API returns unavailable on missing secret configuration. Subsequent releases preserve secrets.
 
-4. Review and commit only the non-secret config changes on the site branch. Regenerate types and rerun the local gate before merging. Ploonu LLC must confirm the governing-law provision in the Terms before product launch; the current page explicitly leaves it unconfirmed.
+4. Review and commit only the non-secret config changes on the site branch. Regenerate types and rerun the local gate before merging. The Terms are governed by Indiana law (Ploonu LLC, confirmed 2026-10-27).
 
 ```sh
 npx --no-install wrangler types apps/site/worker-configuration.d.ts --config apps/site/wrangler.toml --env-interface SiteBindings --include-runtime false --strict-vars false
