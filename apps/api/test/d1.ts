@@ -34,6 +34,10 @@ class Statement {
   }
 
   async run() {
+    return this.runSync();
+  }
+
+  runSync() {
     const statement = this.db.prepare(this.sql);
     const info = /\?\d+/.test(this.sql) ? statement.run(this.numbered()) : statement.run(...this.params);
     return { success: true, meta: { changes: Number(info.changes) } };
@@ -53,11 +57,12 @@ export class TestD1 {
     return new Statement(this.sqlite, sql);
   }
 
+  /** Like D1, a batch is one atomic unit: nothing else runs between its statements. */
   async batch(statements: Statement[]) {
     this.sqlite.exec("BEGIN");
     try {
       const out = [];
-      for (const s of statements) out.push(await s.run());
+      for (const s of statements) out.push(s.runSync());
       this.sqlite.exec("COMMIT");
       return out;
     } catch (err) {

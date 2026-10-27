@@ -65,9 +65,22 @@ export interface BudgetCheck {
   remaining: number;
 }
 
+/** One reserved action in one scope on one day. Release uses the same day it was reserved on. */
+export interface UsageReservation {
+  scope: string;
+  day: string;
+  /** Count in this scope right after the reservation. */
+  used: number;
+  limit: number;
+}
+
 export interface UsageStore {
+  /** Read-only look at today's count. Never changes it. */
   check(scope: string, limit: number): Promise<BudgetCheck>;
-  count(scope: string): Promise<void>;
+  /** Atomically takes one action if the scope is under its cap. Null means the cap is reached. */
+  reserve(scope: string, limit: number): Promise<UsageReservation | null>;
+  /** Gives reserved actions back. Counts never go below zero. */
+  release(reservations: UsageReservation[]): Promise<void>;
 }
 
 /** D1-backed daily counters. Caps survive restarts and enforce per user and globally. */
@@ -82,14 +95,30 @@ export const createDbUsageStore = (db: D1Database): UsageStore => {
       const used = row?.used ?? 0;
       return { limited: used >= limit, limit, remaining: Math.max(0, limit - used) };
     },
-    async count(scope) {
-      await db
+    async reserve(scope, limit) {
+      if (limit < 1) return null;
+      const day = today();
+      // One statement checks the cap and takes the slot, so parallel requests cannot overshoot.
+      const row = await db
         .prepare(
           `INSERT INTO ai_usage_daily (scope, day, used) VALUES (?, ?, 1)
-           ON CONFLICT (scope, day) DO UPDATE SET used = used + 1`,
+           ON CONFLICT (scope, day) DO UPDATE SET used = used + 1
+           WHERE ai_usage_daily.used < ?
+           RETURNING used`,
         )
-        .bind(scope, today())
-        .run();
+        .bind(scope, day, limit)
+        .first<{ used: number }>();
+      return row ? { scope, day, used: row.used, limit } : null;
+    },
+    async release(reservations) {
+      if (reservations.length === 0) return;
+      await db.batch(
+        reservations.map((r) =>
+          db
+            .prepare("UPDATE ai_usage_daily SET used = used - 1 WHERE scope = ? AND day = ? AND used > 0")
+            .bind(r.scope, r.day),
+        ),
+      );
     },
   };
 };
@@ -534,6 +563,16 @@ export interface AiRunResult {
   remaining: number;
 }
 
+const USER_LIMIT_MESSAGE = "Daily AI limit reached. Resets at midnight.";
+const GLOBAL_LIMIT_MESSAGE = "AI is paused while usage is over budget.";
+
+const limitError = (message: string): ApiError =>
+  new ApiError("rate_limited", message, { "retry-after": String(secondsToMidnight()) });
+
+/**
+ * Consent, plan and a read-only cap check, before any work. This keeps cached results
+ * behind the same gate as before; the cap itself is enforced by reservation.
+ */
 const gateAction = async (
   stores: AiStores,
   limits: AiActionLimits,
@@ -544,20 +583,47 @@ const gateAction = async (
   await requireConsent(stores.consent, key);
   const plan = (await getBillingPlan(env, key)).plan;
   const userCheck = await stores.usage.check(key, plan === "pro" ? limits.pro : limits.free);
-  if (userCheck.limited) {
-    throw new ApiError("rate_limited", "Daily AI limit reached. Resets at midnight.", {
-      "retry-after": String(secondsToMidnight()),
-    });
-  }
+  if (userCheck.limited) throw limitError(USER_LIMIT_MESSAGE);
   if (limits.global !== undefined) {
     const globalCheck = await stores.globalBudget.check("global", limits.global);
-    if (globalCheck.limited) {
-      throw new ApiError("rate_limited", "AI is paused while usage is over budget.", {
-        "retry-after": String(secondsToMidnight()),
-      });
-    }
+    if (globalCheck.limited) throw limitError(GLOBAL_LIMIT_MESSAGE);
   }
   return { limit: userCheck.limit, remaining: userCheck.remaining };
+};
+
+/**
+ * Takes one action from the user and global budgets before the model is called, runs the
+ * work, and gives the action back if the work throws. Owns all usage counting.
+ */
+const withReservation = async <T>(
+  stores: AiStores,
+  limits: AiActionLimits,
+  userId: string,
+  userLimit: number,
+  work: () => Promise<T>,
+): Promise<{ value: T; remaining: number }> => {
+  const held: UsageReservation[] = [];
+  const giveBack = async (): Promise<void> => {
+    try {
+      await stores.usage.release(held);
+    } catch {
+      // Best effort: a missed release over-counts, which is the safe side, and must not hide the real error.
+    }
+  };
+  try {
+    const mine = await stores.usage.reserve(userId, userLimit);
+    if (!mine) throw limitError(USER_LIMIT_MESSAGE);
+    held.push(mine);
+    if (limits.global !== undefined) {
+      const shared = await stores.globalBudget.reserve("global", limits.global);
+      if (!shared) throw limitError(GLOBAL_LIMIT_MESSAGE);
+      held.push(shared);
+    }
+    return { value: await work(), remaining: Math.max(0, userLimit - mine.used) };
+  } catch (error) {
+    await giveBack();
+    throw error;
+  }
 };
 
 const parseModelJson = (text: string): unknown => {
@@ -616,26 +682,27 @@ export const summarizePr = async (
   const { context, coverage } = buildDiffContext(data);
   const { text } = redactSecrets(context);
   const provider = createModelProvider(env, deps.transport);
-  let reply: string;
-  try {
-    ({ text: reply } = await provider.complete({
-      system: SUMMARY_SYSTEM,
-      prompt: buildPrPrompt(text),
-      maxOutputTokens: SUMMARY_MAX_TOKENS,
-    }));
-  } catch (error) {
-    if (error instanceof ApiError) throw error;
-    throw new ApiError("upstream_unavailable", "The AI service is unavailable. Try again.");
-  }
-  const parsed = ModelSummary.safeParse(parseModelJson(reply));
-  if (!parsed.success) {
-    throw new ApiError("upstream_unavailable", "The AI service returned an unusable answer. Try again.");
-  }
-  const body: PrSummary = { ...parsed.data, coverage };
-  await stores.cache.set(key, userId, body);
-  await stores.usage.count(userId);
-  if (deps.limits.global !== undefined) await stores.globalBudget.count("global");
-  return { body, limit, remaining: remaining - 1 };
+  const { value: body, remaining: left } = await withReservation(stores, deps.limits, userId, limit, async () => {
+    let reply: string;
+    try {
+      ({ text: reply } = await provider.complete({
+        system: SUMMARY_SYSTEM,
+        prompt: buildPrPrompt(text),
+        maxOutputTokens: SUMMARY_MAX_TOKENS,
+      }));
+    } catch (error) {
+      if (error instanceof ApiError) throw error;
+      throw new ApiError("upstream_unavailable", "The AI service is unavailable. Try again.");
+    }
+    const parsed = ModelSummary.safeParse(parseModelJson(reply));
+    if (!parsed.success) {
+      throw new ApiError("upstream_unavailable", "The AI service returned an unusable answer. Try again.");
+    }
+    const result: PrSummary = { ...parsed.data, coverage };
+    await stores.cache.set(key, userId, result);
+    return result;
+  });
+  return { body, limit, remaining: left };
 };
 
 /** Full risk pipeline: deterministic signals floor the model level, never the reverse. */
@@ -658,43 +725,44 @@ export const assessPrRisk = async (
   const { context, coverage } = buildDiffContext(data);
   const { text } = redactSecrets(context);
   const provider = createModelProvider(env, deps.transport);
-  let reply: string;
-  try {
-    ({ text: reply } = await provider.complete({
-      system: RISK_SYSTEM,
-      prompt: buildPrPrompt(text),
-      maxOutputTokens: RISK_MAX_TOKENS,
-    }));
-  } catch (error) {
-    if (error instanceof ApiError) throw error;
-    throw new ApiError("upstream_unavailable", "The AI service is unavailable. Try again.");
-  }
-  const parsed = ModelRisk.safeParse(parseModelJson(reply));
-  if (!parsed.success) {
-    throw new ApiError("upstream_unavailable", "The AI service returned an unusable answer. Try again.");
-  }
-  const deterministic = assessRiskSignals({
-    files: signals.files,
-    totalChanged: signals.totalChanged,
-    secretFindings: signals.secretFindings,
-    hasTests: data.hasTests,
-    checksFailing: data.checksFailing,
+  const { value: body, remaining: left } = await withReservation(stores, deps.limits, userId, limit, async () => {
+    let reply: string;
+    try {
+      ({ text: reply } = await provider.complete({
+        system: RISK_SYSTEM,
+        prompt: buildPrPrompt(text),
+        maxOutputTokens: RISK_MAX_TOKENS,
+      }));
+    } catch (error) {
+      if (error instanceof ApiError) throw error;
+      throw new ApiError("upstream_unavailable", "The AI service is unavailable. Try again.");
+    }
+    const parsed = ModelRisk.safeParse(parseModelJson(reply));
+    if (!parsed.success) {
+      throw new ApiError("upstream_unavailable", "The AI service returned an unusable answer. Try again.");
+    }
+    const deterministic = assessRiskSignals({
+      files: signals.files,
+      totalChanged: signals.totalChanged,
+      secretFindings: signals.secretFindings,
+      hasTests: data.hasTests,
+      checksFailing: data.checksFailing,
+    });
+    const quality = assessQuality(signals.qualityInput);
+    const reasons = [...deterministic.reasons, ...parsed.data.reasons].filter(
+      (reason, index, all) => all.indexOf(reason) === index,
+    );
+    const result: PrRisk = {
+      level: maxLevel(deterministic.level, parsed.data.level),
+      reasons,
+      coverage,
+      secretFindings: signals.secretFindings,
+      quality: { needsCloserLook: quality.needsCloserLook, reasons: quality.reasons },
+    };
+    await stores.cache.set(key, userId, result);
+    return result;
   });
-  const quality = assessQuality(signals.qualityInput);
-  const reasons = [...deterministic.reasons, ...parsed.data.reasons].filter(
-    (reason, index, all) => all.indexOf(reason) === index,
-  );
-  const body: PrRisk = {
-    level: maxLevel(deterministic.level, parsed.data.level),
-    reasons,
-    coverage,
-    secretFindings: signals.secretFindings,
-    quality: { needsCloserLook: quality.needsCloserLook, reasons: quality.reasons },
-  };
-  await stores.cache.set(key, userId, body);
-  await stores.usage.count(userId);
-  if (deps.limits.global !== undefined) await stores.globalBudget.count("global");
-  return { body, limit, remaining: remaining - 1 };
+  return { body, limit, remaining: left };
 };
 
 /** Real highlight analysis needs the vision transport. Demo uploads are rejected upstream. */

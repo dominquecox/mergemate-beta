@@ -220,10 +220,27 @@ describe("D1 usage store", () => {
   it("enforces the daily cap and persists across instances", async () => {
     const db = testDb();
     const first = createDbUsageStore(db);
-    for (let i = 0; i < 30; i += 1) await first.count("u1");
+    for (let i = 0; i < 30; i += 1) expect(await first.reserve("u1", 30)).not.toBeNull();
+    expect(await first.reserve("u1", 30)).toBeNull();
     expect(await first.check("u1", 30)).toEqual({ limited: true, limit: 30, remaining: 0 });
     const second = createDbUsageStore(db);
     expect(await second.check("u1", 30)).toEqual({ limited: true, limit: 30, remaining: 0 });
+    expect(await second.reserve("u1", 30)).toBeNull();
+  });
+
+  it("reserves atomically and releases without going below zero", async () => {
+    const db = testDb();
+    const store = createDbUsageStore(db);
+    const first = await store.reserve("u1", 2);
+    const second = await store.reserve("u1", 2);
+    expect([first?.used, second?.used]).toEqual([1, 2]);
+    expect(await store.reserve("u1", 2)).toBeNull();
+    if (!first || !second) throw new Error("expected two reservations");
+    await store.release([second]);
+    expect((await store.check("u1", 2)).remaining).toBe(1);
+    await store.release([first, second, second]);
+    expect((await store.check("u1", 2)).remaining).toBe(2);
+    expect(await store.reserve("u1", 0)).toBeNull();
   });
 });
 
@@ -295,7 +312,7 @@ describe("summarizePr", () => {
   it("returns rate_limited with retry-after at the cap", async () => {
     const deps = await grantedDeps();
     const stores = storesFor(deps.db);
-    for (let i = 0; i < 30; i += 1) await stores.usage.count("u1");
+    for (let i = 0; i < 30; i += 1) await stores.usage.reserve("u1", 30);
     const err = await apiError(() =>
       summarizePr(deps, user, { owner: "o", repo: "r", number: 1 }, validModelEnv()),
     );
@@ -319,6 +336,127 @@ describe("summarizePr", () => {
       summarizePr(deps, user, { owner: "o", repo: "r", number: 1 }, { ...validModelEnv(), MODEL_ID: "  " }),
     );
     expect(err.code).toBe("misconfigured");
+  });
+});
+
+describe("usage reservation", () => {
+  const summaryText = JSON.stringify({ whatChanged: "x", whyItMatters: "y", suggestedFocus: [] });
+  const usedRows = (db: D1Database, scope: string) =>
+    (db as unknown as TestD1).rows<{ used: number }>(
+      "SELECT used FROM ai_usage_daily WHERE scope = ?",
+      scope,
+    ).map((row) => row.used);
+  const day = () => new Date().toISOString().slice(0, 10);
+
+  /** Replies after a few macrotask turns so parallel requests really interleave. */
+  const slowTransport = (reply: () => Promise<{ text: string }> = async () => ({ text: summaryText })) =>
+    mockTransport(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 5));
+      return reply();
+    });
+
+  const fire = (
+    deps: Awaited<ReturnType<typeof grantedDeps>>,
+    userId: string,
+    count: number,
+    offset = 0,
+  ) =>
+    Promise.allSettled(
+      Array.from({ length: count }, (_, i) =>
+        summarizePr(deps, record({ userId }), { owner: "o", repo: "r", number: offset + i + 1 }, validModelEnv()),
+      ),
+    );
+
+  const counts = (results: PromiseSettledResult<unknown>[]) => ({
+    ok: results.filter((r) => r.status === "fulfilled").length,
+    limited: results.filter(
+      (r) => r.status === "rejected" && r.reason instanceof ApiError && r.reason.code === "rate_limited",
+    ).length,
+  });
+
+  it("holds the user cap under parallel requests", async () => {
+    const transport = slowTransport();
+    const deps = await grantedDeps(transport);
+    const results = await fire(deps, "u1", 40);
+    expect(counts(results)).toEqual({ ok: 30, limited: 10 });
+    expect(transport.calls).toHaveLength(30);
+    expect(usedRows(deps.db, "u1")).toEqual([30]);
+  });
+
+  it("holds the global cap across users", async () => {
+    const transport = slowTransport();
+    const deps = await grantedDeps(transport);
+    await seedUser(deps.db, "u2", 4343);
+    await createDbConsentStore(deps.db).write("u2", true);
+    deps.limits = { free: 30, pro: 500, global: 12 };
+    const results = [...(await Promise.all([fire(deps, "u1", 10), fire(deps, "u2", 10, 100)]))].flat();
+    expect(counts(results)).toEqual({ ok: 12, limited: 8 });
+    expect(transport.calls).toHaveLength(12);
+    expect(usedRows(deps.db, "global")).toEqual([12]);
+    const perUser = [...usedRows(deps.db, "u1"), ...usedRows(deps.db, "u2")].reduce((a, b) => a + b, 0);
+    expect(perUser).toBe(12);
+  });
+
+  it("releases the reservation when the model fails or answers badly", async () => {
+    const failing = slowTransport(async () => {
+      throw new Error("boom");
+    });
+    const deps = await grantedDeps(failing);
+    deps.limits = { free: 30, pro: 500, global: 100 };
+    await deps.db
+      .prepare("INSERT INTO ai_usage_daily (scope, day, used) VALUES ('u1', ?, 5), ('global', ?, 7)")
+      .bind(day(), day())
+      .run();
+    const err = await apiError(() =>
+      summarizePr(deps, user, { owner: "o", repo: "r", number: 1 }, validModelEnv()),
+    );
+    expect(err.code).toBe("upstream_unavailable");
+    expect(usedRows(deps.db, "u1")).toEqual([5]);
+    expect(usedRows(deps.db, "global")).toEqual([7]);
+
+    const garbage = await grantedDeps(slowTransport(async () => ({ text: "not json" })));
+    garbage.limits = { free: 30, pro: 500, global: 100 };
+    const risk = await apiError(() =>
+      assessPrRisk(garbage, user, { owner: "o", repo: "r", number: 1 }, validModelEnv()),
+    );
+    expect(risk.code).toBe("upstream_unavailable");
+    expect(usedRows(garbage.db, "u1")).toEqual([0]);
+    expect(usedRows(garbage.db, "global")).toEqual([0]);
+  });
+
+  it("releases the user reservation when the global cap is already full", async () => {
+    const transport = mockTransport(async () => ({ text: summaryText }));
+    const deps = await grantedDeps(transport);
+    deps.limits = { free: 30, pro: 500, global: 3 };
+    // The global budget fills after the first cap check and before the reservation.
+    deps.prSource = async () => {
+      await deps.db
+        .prepare("INSERT INTO ai_usage_daily (scope, day, used) VALUES ('global', ?, 3)")
+        .bind(day())
+        .run();
+      return prData("run();");
+    };
+    const err = await apiError(() =>
+      summarizePr(deps, user, { owner: "o", repo: "r", number: 1 }, validModelEnv()),
+    );
+    expect(err.code).toBe("rate_limited");
+    expect(err.message).toBe("AI is paused while usage is over budget.");
+    expect(err.headers["retry-after"]).toMatch(/^\d+$/);
+    expect(transport.calls).toHaveLength(0);
+    expect(usedRows(deps.db, "u1")).toEqual([0]);
+    expect(usedRows(deps.db, "global")).toEqual([3]);
+  });
+
+  it("does not reserve for cached results", async () => {
+    const transport = mockTransport(async () => ({ text: summaryText }));
+    const deps = await grantedDeps(transport);
+    deps.limits = { free: 30, pro: 500, global: 100 };
+    await summarizePr(deps, user, { owner: "o", repo: "r", number: 1 }, validModelEnv());
+    await summarizePr(deps, user, { owner: "o", repo: "r", number: 1 }, validModelEnv());
+    await summarizePr(deps, user, { owner: "o", repo: "r", number: 1 }, validModelEnv());
+    expect(transport.calls).toHaveLength(1);
+    expect(usedRows(deps.db, "u1")).toEqual([1]);
+    expect(usedRows(deps.db, "global")).toEqual([1]);
   });
 });
 
