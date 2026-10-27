@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { transcribeWithMeta, VOICE_TRANSCRIBE_MODEL_ID } from "../src/ai/provider";
 import { VOICE_NOTE_MAX_BYTES, readWavInfo, storesFor } from "../src/routes/ai-engine";
 import { demoHeaders } from "./demo-session";
-import { TEST_API_KEY, json, testContext, validModelEnv } from "./helpers";
+import { TEST_API_KEY, fakeDataset, json, testContext, validModelEnv } from "./helpers";
 import { appFor, signIn } from "./sign-in";
 
 const wavBytes = (opts: {
@@ -182,6 +182,36 @@ describe("voice-notes transcription", () => {
     ctx.net.on("POST", "https://api.meta.ai/v1/asr/transcribe", () => json({ text }));
     return ctx;
   };
+
+  it('records voice duration and latency without audio, transcript, filename, identity or credentials',async()=>{
+    const metrics=fakeDataset();const ctx=testContext({...validModelEnv(),AI_METRICS:metrics});flagOn(ctx);
+    const transcript='PRIVATE_TRANSCRIPT_MARKER';ctx.net.on('POST','https://api.meta.ai/v1/asr/transcribe',()=>json({text:transcript}));
+    const call=appFor(ctx);const {headers,userId}=await signIn(ctx,'ios');await grant(call,headers);
+    const res=await call('/v1/voice-notes',{method:'POST',headers,body:audioForm(audioFile(wavBytes({dataSize:49600}),'PRIVATE_FILENAME.wav'))});
+    expect(res.status).toBe(200);expect(metrics.points).toHaveLength(1);
+    expect(metrics.points[0]?.blobs).toEqual(['voice','meta',VOICE_TRANSCRIBE_MODEL_ID,'ok']);
+    expect(metrics.points[0]?.doubles?.slice(0,2)).toEqual([0,0]);expect(metrics.points[0]?.doubles?.[2]).toBeGreaterThanOrEqual(0);
+    expect(metrics.points[0]?.doubles?.slice(3)).toEqual([1.55,1,1]);
+    const encoded=JSON.stringify(metrics.points);for(const marker of [transcript,'PRIVATE_FILENAME',userId,TEST_API_KEY,'RIFF'])expect(encoded).not.toContain(marker);
+  });
+  it('records unknown duration explicitly and never invents seconds for compressed formats',async()=>{
+    const metrics=fakeDataset();const ctx=testContext({...validModelEnv(),AI_METRICS:metrics});flagOn(ctx);
+    ctx.net.on('POST','https://api.meta.ai/v1/asr/transcribe',()=>json({text:'fixture'}));const call=appFor(ctx);const {headers}=await signIn(ctx,'ios');await grant(call,headers);
+    expect((await call('/v1/voice-notes',{method:'POST',headers,body:audioForm(audioFile(m4aBytes()))})).status).toBe(200);
+    expect(metrics.points[0]?.doubles?.slice(3)).toEqual([0,0,0]);
+  });
+  it('records one failure including retry latency, but no metric for validation before an upstream call',async()=>{
+    const metrics=fakeDataset();const ctx=testContext({...validModelEnv(),AI_METRICS:metrics});flagOn(ctx);
+    ctx.net.on('POST','https://api.meta.ai/v1/asr/transcribe',()=>json({error:'fixture'},500));const call=appFor(ctx);const {headers}=await signIn(ctx,'ios');await grant(call,headers);
+    expect((await call('/v1/voice-notes',{method:'POST',headers,body:audioForm(audioFile(wavBytes({channels:2})))})).status).toBe(422);expect(metrics.points).toHaveLength(0);
+    expect((await call('/v1/voice-notes',{method:'POST',headers,body:audioForm(audioFile(wavBytes()))})).status).toBe(502);
+    expect(metrics.points).toHaveLength(1);expect(metrics.points[0]?.blobs?.[3]).toBe('upstream_error');expect(metrics.points[0]?.doubles?.[2]).toBeGreaterThanOrEqual(0);
+  });
+  it('keeps successful transcription available if metrics fails or the binding is absent',async()=>{
+    const metrics=fakeDataset(true);const ctx=testContext({...validModelEnv(),AI_METRICS:metrics});flagOn(ctx);
+    ctx.net.on('POST','https://api.meta.ai/v1/asr/transcribe',()=>json({text:'fixture'}));const call=appFor(ctx);const {headers}=await signIn(ctx,'ios');await grant(call,headers);
+    expect((await call('/v1/voice-notes',{method:'POST',headers,body:audioForm(audioFile(wavBytes()))})).status).toBe(200);
+  });
 
   it("transcribes a real recording and counts one action", async () => {
     const ctx = successContext();

@@ -1,3 +1,4 @@
+import { recordAiCall, type AiOutcome } from "./metrics";
 import type { AiBinding, Env } from "../env";
 import { ApiError, ConfigError } from "../errors";
 import { resolveRoute, workersAiTraits } from "./routes";
@@ -217,44 +218,53 @@ export const transcribeWithMeta = async (args: {
   audio: Uint8Array;
   contentType: string;
   fileName: string;
+  audioSeconds?: number;
 }): Promise<{ text: string }> => {
   const { env, fetchImpl, audio, contentType, fileName } = args;
   const apiKey = requireApiKey(env);
   const form = new FormData();
   form.append("file", new File([audio], fileName, { type: contentType }));
   form.append("model", VOICE_TRANSCRIBE_MODEL_ID);
-  for (let attempt = 0; attempt < 2; attempt += 1) {
-    let res: Response;
-    try {
-      res = await fetchImpl(`${resolveBaseUrl(env)}/asr/transcribe`, {
-        method: "POST",
-        headers: { authorization: `Bearer ${apiKey}` },
-        body: form,
-        signal: AbortSignal.timeout(TRANSCRIBE_TIMEOUT_MS),
-        redirect: "error",
-      });
-    } catch {
-      throw transcribeUnavailable();
-    }
-    if (res.status === 429 || res.status >= 500) {
-      if (attempt === 0) {
-        await new Promise((resolve) => setTimeout(resolve, 500));
-        continue;
+  const baseUrl=resolveBaseUrl(env);
+  const started=Date.now();
+  let outcome:AiOutcome="upstream_error";
+  try {
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      let res: Response;
+      try {
+        res = await fetchImpl(`${baseUrl}/asr/transcribe`, {
+          method: "POST",
+          headers: { authorization: `Bearer ${apiKey}` },
+          body: form,
+          signal: AbortSignal.timeout(TRANSCRIBE_TIMEOUT_MS),
+          redirect: "error",
+        });
+      } catch {
+        throw transcribeUnavailable();
       }
-      throw transcribeUnavailable();
+      if (res.status === 429 || res.status >= 500) {
+        if (attempt === 0) {
+          await new Promise((resolve) => setTimeout(resolve, 500));
+          continue;
+        }
+        throw transcribeUnavailable();
+      }
+      if (res.status >= 400) {outcome="invalid_output";throw transcribeRejected();}
+      let data: unknown;
+      try {
+        data = (await res.json()) as unknown;
+      } catch {
+        throw transcribeUnavailable();
+      }
+      const text = (data as { text?: unknown })?.text;
+      if (typeof text !== "string" || !text.trim()) {outcome="invalid_output";throw transcribeRejected();}
+      outcome="ok";
+      return { text: text.trim() };
     }
-    if (res.status >= 400) throw transcribeRejected();
-    let data: unknown;
-    try {
-      data = (await res.json()) as unknown;
-    } catch {
-      throw transcribeUnavailable();
-    }
-    const text = (data as { text?: unknown })?.text;
-    if (typeof text !== "string" || !text.trim()) throw transcribeRejected();
-    return { text: text.trim() };
+    throw transcribeUnavailable();
+  } finally {
+    recordAiCall(env.AI_METRICS,{task:'voice',provider:'meta',modelId:VOICE_TRANSCRIBE_MODEL_ID,outcome,inputTokens:0,outputTokens:0,latencyMs:Math.max(0,Date.now()-started),...(args.audioSeconds === undefined ? {} : {audioSeconds:args.audioSeconds})});
   }
-  throw transcribeUnavailable();
 };
 
 /** Builds the provider for one task from Worker config. Fails before any call when config is missing or invalid. */

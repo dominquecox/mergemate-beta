@@ -215,3 +215,9 @@ curl -fsS https://app.mergemate.dev/health
 ```
 
 Rollback is `npm exec -w @mergemate/api -- wrangler rollback --env production` (Worker code only; database changes do not roll back, so use the backup the release line printed).
+
+### Voice usage metrics
+
+Voice notes reuse the existing AI_METRICS binding/dataset and need no new environment variable, permission or migration. One best-effort point is written for each logical transcription, including its existing retry time: blobs remain `[task, provider, model, outcome]` with task `voice`, provider `meta` and model `muse-voice-transcribe-1.0`. Token counts are zero, and latency remains double3. Voice appends double4 (audio seconds from the validated WAV header), double5 (whole seconds rounded down per recording for the audio-rate estimate), and double6 (duration-known flag, 1 or 0). Non-voice points retain their existing three doubles. Formats without a trusted duration carry zeros with flag 0 and must be shown as unpriced, not free. No point is emitted for local validation, flag, consent, budget or configuration rejection before transcription. Audio, transcript, filename, identity, request ID and credentials are never included in the point. A missing/failing metrics binding does not fail transcription.
+
+The paired private admin metrics page weights the audio fields by sampling interval and estimates voice separately from tokens at $0.18/audio hour ([Meta pricing](https://dev.meta.ai/docs/pricing-rate-limits), checked 2026-10-27). This is an estimate from submitted audio, not reconciled provider billing: retries and provider rejections may differ. This PR does not enable voice, change its format acceptance or limits, call the provider, or deploy either Worker.

@@ -1096,6 +1096,7 @@ export const transcribeVoiceNote = async (args: {
   const stores = storesFor(db);
   const userId = userKey(session);
   const { limit } = await gateVoiceAction(stores, limits, session, env);
+  let audioSeconds:number|undefined;
   if (audioType === "wav") {
     const info = readWavInfo(audio);
     const upstreamReady =
@@ -1103,6 +1104,7 @@ export const transcribeVoiceNote = async (args: {
     if (!upstreamReady) {
       throw new ApiError("validation_failed", "Send 16-bit mono WAV audio at 16 or 24 kHz.");
     }
+    audioSeconds=info.durationSeconds;
     if (info.durationSeconds > VOICE_NOTE_MAX_SECONDS) {
       throw new ApiError("validation_failed", "That note is too long.");
     }
@@ -1115,6 +1117,7 @@ export const transcribeVoiceNote = async (args: {
       audio,
       contentType,
       fileName: `note.${extension}`,
+      ...(audioSeconds === undefined ? {} : {audioSeconds}),
     });
     const result: VoiceNoteResult = { text, requestId };
     return result;
