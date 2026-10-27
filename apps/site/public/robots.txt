@@ -1,0 +1,5 @@
+User-agent: *
+Allow: /
+Disallow: /api/
+Disallow: /waitlist/remove
+Sitemap: https://mergemate.dev/sitemap.xml
