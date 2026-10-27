@@ -29,6 +29,8 @@ npx --no-install wrangler deploy --dry-run --config apps/web/wrangler.toml --env
 
 ## Deploying
 
+Production (`app.mergemate.dev`) ships together with the API: the ordered owner steps are in `apps/api/DEPLOY.md`, section "Production". The Turnstile widget behind the build's public site key must list `app.mergemate.dev`.
+
 Deploys go through the Brain release line, which builds the export for the stage and runs `wrangler deploy` (see the release rules). There are no owner one-time steps beyond the custom domain, and the deploy creates that: `dev.mergemate.dev` and `app.mergemate.dev` must be on a Cloudflare zone in the same account (`mergemate.dev` already is).
 
 The Expo export contains no inline scripts. It does contain an inline `<style>` and react-native-web injects styles at runtime, so `style-src` keeps `'unsafe-inline'`; `script-src` never does.

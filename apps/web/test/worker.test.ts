@@ -122,6 +122,15 @@ describe("CSP", () => {
     expect(origin("env.production.vars")).toBe("https://api.mergemate.dev");
   });
 
+  it("serves production only from app.mergemate.dev, never workers.dev or previews", () => {
+    const toml = readFileSync(new URL("../wrangler.toml", import.meta.url), "utf8");
+    const section = toml.split(/^\[/m).find((s) => s.startsWith("env.production]")) ?? "";
+    expect(section).toContain('name = "mergemate-web"');
+    expect(section).toContain('routes = [{ pattern = "app.mergemate.dev", custom_domain = true }]');
+    expect(section).toMatch(/^workers_dev = false$/m);
+    expect(section).toMatch(/^preview_urls = false$/m);
+  });
+
   it("fails closed when API_ORIGIN is missing or not a bare origin", async () => {
     const missing = await get("/", { ASSETS: assets() });
     expect(missing.status).toBe(500);

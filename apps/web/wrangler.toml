@@ -32,6 +32,9 @@ not_found_handling = "single-page-application"
 [env.dev.vars]
 API_ORIGIN = "https://api-dev.mergemate.dev"
 
+# Production: app.mergemate.dev. API_ORIGIN feeds the CSP connect-src and must be the origin the export was built
+# against (EXPO_PUBLIC_API_BASE_URL=https://api.mergemate.dev); the headers and CSP are the same code as dev. The
+# Turnstile widget used by the build must list app.mergemate.dev (apps/api/DEPLOY.md, Production). A test pins this block.
 [env.production]
 name = "mergemate-web"
 workers_dev = false
