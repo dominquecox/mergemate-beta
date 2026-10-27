@@ -5,3 +5,5 @@ export * from "./ai";
 export * from "./telemetry";
 export * from "./content";
 export * from "./billing";
+export * from './settings';
+export * from './push';

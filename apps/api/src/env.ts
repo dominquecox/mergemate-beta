@@ -36,6 +36,7 @@ export interface Env {
   TOKEN_ENCRYPTION_KEY?: string;
   TOKEN_ENCRYPTION_KEY_PREVIOUS?: string;
   TURNSTILE_SECRET_KEY?: string;
+  EXPO_ACCESS_TOKEN?: string;
   RESEND_API_KEY?: string;
   EMAIL_FROM?: string;
   SUPPORT_EMAIL?: string;

@@ -195,3 +195,10 @@ queue = "mergemate-stripe-events"
 max_batch_size = 10
 max_retries = 5
 dead_letter_queue = "mergemate-stripe-events-dlq"
+
+[triggers]
+crons = ["*/15 * * * *"]
+[env.dev.triggers]
+crons = ["*/15 * * * *"]
+[env.production.triggers]
+crons = ["*/15 * * * *"]

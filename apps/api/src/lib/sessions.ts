@@ -104,7 +104,11 @@ export const rotateSession = async (db: D1Database, session: SessionRecord, now:
     now,
     expiresAt: session.expiresAt,
   });
-  await deleteSession(db, session.tokenHash);
+  await db.batch([
+    db.prepare('UPDATE push_tokens SET session_hash=? WHERE session_hash=? AND user_id=?')
+      .bind(await sha256Hex(issued.token), session.tokenHash, session.userId),
+    db.prepare('DELETE FROM sessions WHERE token_hash=?').bind(session.tokenHash),
+  ]);
   return issued;
 };
 

@@ -16,16 +16,26 @@ class Statement {
     return new Statement(this.db, this.sql, params.map((p) => (p === undefined ? null : (p as Value))));
   }
 
+  private numbered() {
+    // node:sqlite treats D1's ?1/?2 bindings as named parameters, not positional ones.
+    return Object.fromEntries(this.params.map((value, index) => [`?${index + 1}`, value]));
+  }
+
   async first<T>() {
-    return (this.db.prepare(this.sql).get(...this.params) as T | undefined) ?? null;
+    const statement = this.db.prepare(this.sql);
+    const row = /\?\d+/.test(this.sql) ? statement.get(this.numbered()) : statement.get(...this.params);
+    return (row as T | undefined) ?? null;
   }
 
   async all<T>() {
-    return { results: this.db.prepare(this.sql).all(...this.params) as T[], success: true };
+    const statement = this.db.prepare(this.sql);
+    const rows = /\?\d+/.test(this.sql) ? statement.all(this.numbered()) : statement.all(...this.params);
+    return { results: rows as T[], success: true };
   }
 
   async run() {
-    const info = this.db.prepare(this.sql).run(...this.params);
+    const statement = this.db.prepare(this.sql);
+    const info = /\?\d+/.test(this.sql) ? statement.run(this.numbered()) : statement.run(...this.params);
     return { success: true, meta: { changes: Number(info.changes) } };
   }
 }
