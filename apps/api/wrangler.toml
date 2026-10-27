@@ -90,10 +90,12 @@ bucket_name = "mergemate-highlight-uploads-local"
 [images]
 binding = "IMAGES"
 
-# Deployed environments. D1 database ids and the POSTS KV namespace id (shared with the staff tool)
-# are added when those resources exist (DEPLOY.md).
+# Deployed environments. The D1 and KV ids below are placeholders: the owner replaces them with the
+# real ids before the first deploy (DEPLOY.md). Each environment serves only from its custom domain.
 [env.dev]
 name = "mergemate-api-dev"
+routes = [{ pattern = "api-dev.mergemate.dev", custom_domain = true }]
+workers_dev = false
 
 [env.dev.vars]
 APP_ENV = "development"
@@ -152,6 +154,18 @@ dataset = "mergemate_events_dev"
 binding = "AI_METRICS"
 dataset = "mergemate_ai_metrics_dev"
 
+[[env.dev.d1_databases]]
+binding = "DB"
+database_name = "mergemate-db-dev"
+# replaced with the owner's id before the first deploy
+database_id = "00000000-0000-0000-0000-000000000000"
+migrations_dir = "migrations"
+
+[[env.dev.kv_namespaces]]
+binding = "POSTS"
+# replaced with the owner's id before the first deploy
+id = "00000000000000000000000000000000"
+
 [env.dev.ai]
 binding = "AI"
 
@@ -164,6 +178,8 @@ binding = "IMAGES"
 
 [env.production]
 name = "mergemate-api"
+routes = [{ pattern = "api.mergemate.dev", custom_domain = true }]
+workers_dev = false
 
 # The production GitHub App's client id and slug are added when that app exists.
 [env.production.vars]
@@ -220,6 +236,18 @@ dataset = "mergemate_events"
 [[env.production.analytics_engine_datasets]]
 binding = "AI_METRICS"
 dataset = "mergemate_ai_metrics"
+
+[[env.production.d1_databases]]
+binding = "DB"
+database_name = "mergemate-db"
+# replaced with the owner's id before the first deploy
+database_id = "00000000-0000-0000-0000-000000000000"
+migrations_dir = "migrations"
+
+[[env.production.kv_namespaces]]
+binding = "POSTS"
+# replaced with the owner's id before the first deploy
+id = "00000000000000000000000000000000"
 
 [env.production.ai]
 binding = "AI"
