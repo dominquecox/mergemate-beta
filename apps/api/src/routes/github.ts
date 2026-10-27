@@ -48,6 +48,7 @@ const installUrl = (c: Context<AppEnv>) =>
 interface RepoCursor {
   i: number;
   p: number;
+  size?: number;
 }
 
 const encodeCursor = (cursor: RepoCursor) => base64url(new TextEncoder().encode(JSON.stringify(cursor)));
@@ -56,7 +57,7 @@ const decodeCursor = (value: string | undefined): RepoCursor => {
   if (!value) return { i: 0, p: 1 };
   try {
     const parsed = JSON.parse(atob(value.replace(/-/g, "+").replace(/_/g, "/"))) as RepoCursor;
-    if (Number.isInteger(parsed.i) && Number.isInteger(parsed.p) && parsed.i >= 0 && parsed.p >= 1 && parsed.p <= 1000) {
+    if ((parsed.size === undefined || (Number.isInteger(parsed.size) && parsed.size >= 1 && parsed.size <= 50)) && Number.isInteger(parsed.i) && Number.isInteger(parsed.p) && parsed.i >= 0 && parsed.p >= 1 && parsed.p <= 1000) {
       return parsed;
     }
   } catch {
@@ -198,11 +199,12 @@ export const fetchPrDetail = async (
   owner: string,
   repo: string,
   number: number,
+  lazy = false,
 ): Promise<PrDetail> => {
   const base = `/repos/${owner}/${repo}`;
   const pull = await githubGet<GhPull>(deps, token, `${base}/pulls/${number}`);
 
-  const filePages = Math.min(FILE_PAGES, Math.max(1, Math.ceil(pull.changed_files / 100)));
+  const filePages = lazy ? 0 : Math.min(FILE_PAGES, Math.max(1, Math.ceil(pull.changed_files / 100)));
   const [files, checkRuns, statuses, review, conversation] = await Promise.all([
     Promise.all(
       Array.from({ length: filePages }, (_, i) =>
@@ -211,8 +213,8 @@ export const fetchPrDetail = async (
     ).then((pages) => pages.flat()),
     githubGet<{ check_runs: GhCheckRun[] }>(deps, token, `${base}/commits/${pull.head.sha}/check-runs?per_page=100`),
     githubGet<{ statuses: GhStatus[] }>(deps, token, `${base}/commits/${pull.head.sha}/status?per_page=100`),
-    githubGet<GhComment[]>(deps, token, `${base}/pulls/${number}/comments?per_page=100`),
-    githubGet<GhComment[]>(deps, token, `${base}/issues/${number}/comments?per_page=100`),
+    lazy ? Promise.resolve([] as GhComment[]) : githubGet<GhComment[]>(deps, token, `${base}/pulls/${number}/comments?per_page=100`),
+    lazy ? Promise.resolve([] as GhComment[]) : githubGet<GhComment[]>(deps, token, `${base}/issues/${number}/comments?per_page=100`),
   ]);
 
   const checks: PrCheck[] = [
@@ -252,7 +254,7 @@ export const github = new Hono<AppEnv>()
   .get("/me/installations", async (c) => {
     if (c.get("session").demo) {
       const demo: InstallationList = { items: DEMO_INSTALLATIONS, installUrl: installUrl(c) };
-      return c.json(demo);
+      return c.json(c.req.query("lazy")==="1"?{...demo,files:[],threads:[]}:demo);
     }
     const token = await userToken(c);
     const items: Installation[] = (await listInstallations(c, token)).flatMap((inst) =>
@@ -273,11 +275,14 @@ export const github = new Hono<AppEnv>()
   })
 
   .get("/repos", async (c) => {
+    const cursor = decodeCursor(c.req.query("cursor"));
+    const limit=Number(c.req.query('limit') ?? cursor.size ?? PAGE_SIZE);
+    if(!Number.isInteger(limit) || limit<1 || limit>50 || (cursor.size!==undefined && cursor.size!==limit))throw new ApiError('validation_failed','Invalid page limit.');
     if (c.get("session").demo) {
-      const demo: RepoPage = { items: DEMO_REPOS, nextCursor: null };
+      const offset=(cursor.p-1)*limit;
+      const demo: RepoPage = {items:DEMO_REPOS.slice(offset,offset+limit),nextCursor:offset+limit<DEMO_REPOS.length?encodeCursor({i:0,p:cursor.p+1,size:limit}):null};
       return c.json(demo);
     }
-    const cursor = decodeCursor(c.req.query("cursor"));
     const token = await userToken(c);
     const deps = c.get("deps");
     const installations = (await listInstallations(c, token)).filter((inst) => !inst.suspended_at);
@@ -287,7 +292,7 @@ export const github = new Hono<AppEnv>()
     const page = await githubGet<{
       total_count: number;
       repositories: { id: number; full_name: string; private: boolean }[];
-    }>(deps, token, `/user/installations/${inst.id}/repositories?per_page=${PAGE_SIZE}&page=${cursor.p}`);
+    }>(deps, token, `/user/installations/${inst.id}/repositories?per_page=${limit}&page=${cursor.p}`);
 
     const ids = page.repositories.map((r) => String(r.id));
     const watch = new Map<string, boolean>();
@@ -302,10 +307,10 @@ export const github = new Hono<AppEnv>()
     }
 
     const next: RepoCursor | null =
-      cursor.p * PAGE_SIZE < page.total_count
-        ? { i: cursor.i, p: cursor.p + 1 }
+      cursor.p * limit < page.total_count
+        ? { i: cursor.i, p: cursor.p + 1, size:limit }
         : cursor.i + 1 < installations.length
-          ? { i: cursor.i + 1, p: 1 }
+          ? { i: cursor.i + 1, p: 1, size:limit }
           : null;
     const res: RepoPage = {
       items: page.repositories.map((r) => ({
@@ -337,6 +342,27 @@ export const github = new Hono<AppEnv>()
     return c.json({ id: String(repo.id), fullName: repo.full_name, watching: body.watching });
   })
 
+  .get('/prs/:owner/:repo/:number/pages/:section', async c => {
+    const {owner,repo,number,section}=c.req.param();
+    if(!NAME.test(owner) || !NAME.test(repo) || !/^[1-9]\d{0,8}$/.test(number) || !['files','comments'].includes(section))throw new ApiError('validation_failed','Invalid pull request page.');
+    const cursor=c.req.query('cursor') ?? (section==='files'?'1':'review:1');
+    const [source,pageText]=section==='files'?['files',cursor]:cursor.split(':');
+    const page=Number(pageText); const limit=25;
+    if(!Number.isInteger(page) || page<1 || page>120 || (section==='comments' && !['review','conversation'].includes(source ?? '')))throw new ApiError('validation_failed','Invalid cursor.');
+    if(c.get('session').demo){
+      const detail=DEMO_PRS.find(pr=>pr.repo===`${owner}/${repo}` && pr.number===Number(number));
+      if(!detail)throw new ApiError('not_found','Pull request not found.');
+      return c.json({items:section==='files'?detail.files:detail.threads,nextCursor:null});
+    }
+    const token=await userToken(c); const deps=c.get('deps'); const base=`/repos/${owner}/${repo}`;
+    if(section==='files'){
+      const files=await githubGet<GhFile[]>(deps,token,`${base}/pulls/${number}/files?per_page=${limit}&page=${page}`);
+      return c.json({items:files.map(f=>({path:f.filename,status:f.status,additions:f.additions,deletions:f.deletions,...(f.patch?{patch:f.patch}:{})})),nextCursor:files.length===limit && page<120?String(page+1):null});
+    }
+    const comments=await githubGet<GhComment[]>(deps,token,`${base}/${source==='review'?'pulls':'issues'}/${number}/comments?per_page=${limit}&page=${page}`);
+    return c.json({items:toThreads(source==='review'?comments:[],source==='conversation'?comments:[]),nextCursor:comments.length===limit && page<120?`${source}:${page+1}`:source==='review'?'conversation:1':null});
+  })
+
   .get("/prs/:owner/:repo/:number", async (c) => {
     const { owner, repo, number } = c.req.param();
     if (!NAME.test(owner) || !NAME.test(repo) || !/^[1-9]\d{0,9}$/.test(number)) {
@@ -346,10 +372,10 @@ export const github = new Hono<AppEnv>()
     if (c.get("session").demo) {
       const demo = DEMO_PRS.find((p) => p.repo === fullName && p.number === Number(number));
       if (!demo) throw new ApiError("not_found", "Not found.");
-      return c.json(demo);
+      return c.json(c.req.query("lazy")==="1"?{...demo,files:[],threads:[]}:demo);
     }
 
     // The user's own token: GitHub enforces their access to this repository.
     const token = await userToken(c);
-    return c.json(await fetchPrDetail(c.get("deps"), token, owner, repo, Number(number)));
+    return c.json(await fetchPrDetail(c.get("deps"), token, owner, repo, Number(number), c.req.query("lazy") === "1"));
   });

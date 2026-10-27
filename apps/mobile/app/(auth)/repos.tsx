@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from "react";
-import { View, ScrollView, TouchableOpacity, StyleSheet, Linking, TextInput, Switch } from "react-native";
+import React, { useState, useEffect, useRef } from "react";
+import { View, FlatList, TouchableOpacity, StyleSheet, Linking, TextInput, Switch } from "react-native";
 import { Text } from "../../src/components/Text";
 import { useRouter } from "expo-router";
 import { useTheme } from "../../src/context/ThemeContext";
@@ -13,12 +13,18 @@ import { ErrorState } from "../../src/components/ErrorState";
 import { LoadingState } from "../../src/components/LoadingState";
 import { Icon } from "../../src/components/Icon";
 
+import { usePagedList } from "../../src/hooks/usePagedList";
+import { useDebouncedValue } from "../../src/hooks/useDebouncedValue";
+
 export default function ReposScreen() {
   const router = useRouter();
   const { colors, typography, spacing, radius } = useTheme();
 
   const [query,setQuery] = useState("");
-  const [repos, setRepos] = useState<Repo[]>([]);
+  const {items:repos,setItems:setRepos,loading:reposLoading,busy:pageBusy,error:pageError,refresh:refreshRepos,more,hasMore}=usePagedList("repos",cursor=>api.getRepoPage(cursor));
+  const settledQuery=useDebouncedValue(query);
+  const watchLock=useRef(new Set<string>());
+  const [watching,setWatching]=useState<string[]>([]);
   const [orgs, setOrgs] = useState<OrgInstallation[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -30,11 +36,7 @@ export default function ReposScreen() {
     setError(null);
     setSsoUrl(null);
     try {
-      const [fetchedRepos, installations] = await Promise.all([
-        api.getRepos(),
-        api.getOrgInstallations(),
-      ]);
-      setRepos(fetchedRepos);
+      const installations = await api.getOrgInstallations();
       setOrgs(installations.items);
       setInstallUrl(installations.installUrl);
     } catch (e) {
@@ -50,12 +52,14 @@ export default function ReposScreen() {
   }, []);
 
   const toggleWatch = async (id: string, current: boolean) => {
+    if(watchLock.current.has(id))return;
+    watchLock.current.add(id);setWatching([...watchLock.current]);
     try {
       const updated = await api.toggleWatchRepo(id, !current);
       setRepos((prev) => prev.map((r) => (r.id === id ? updated : r)));
     } catch (e) {
       setError(toUserMessage(e, "We couldn't update the watch setting for that repository. Please try again."));
-    }
+    } finally{watchLock.current.delete(id);setWatching([...watchLock.current]);}
   };
 
   const openGitHubAppConfig = () => {
@@ -79,7 +83,7 @@ export default function ReposScreen() {
         }
       />
 
-      {isLoading ? (
+      {isLoading || reposLoading ? (
         <LoadingState
           title="Loading your repositories..."
           message="Checking which repositories and organizations are connected to MergeMate."
@@ -89,7 +93,7 @@ export default function ReposScreen() {
           <ErrorState
             title="Could not load repositories"
             message={error}
-            onRetry={loadData}
+            onRetry={()=>{void refreshRepos();void loadData();}}
           />
           {ssoUrl && (
             <View style={{ alignItems: "center", paddingHorizontal: spacing.base }}>
@@ -98,8 +102,10 @@ export default function ReposScreen() {
           )}
         </View>
       ) : (
-        <ScrollView contentContainerStyle={{ padding: spacing.base }}>
-
+        <FlatList data={repos.filter(repo=>repo.fullName.toLowerCase().includes(settledQuery.toLowerCase()))}
+          keyExtractor={repo=>repo.id} initialNumToRender={12} maxToRenderPerBatch={10} windowSize={5}
+          contentContainerStyle={{padding:spacing.base}} onEndReached={()=>{if(!pageError)void more();}} onEndReachedThreshold={0.4}
+          ListHeaderComponent={<>
           <View style={{height:4,backgroundColor:colors.brand,borderRadius:4,marginVertical:16}}/>
           <View style={{flexDirection:"row",alignItems:"center",gap:10,backgroundColor:colors.surfaceElevated,borderRadius:12,paddingHorizontal:12,marginBottom:16}}><Icon name="search-outline" color={colors.textSecondary} size={18}/><TextInput value={query} onChangeText={setQuery} placeholder="Search repositories, organizations..." placeholderTextColor={colors.textSecondary} accessibilityLabel="Search repositories" style={{flex:1,minHeight:48,color:colors.text,fontFamily:typography.body.fontFamily}}/></View>
           {/* GitHub App Configuration Notice */}
@@ -206,26 +212,10 @@ export default function ReposScreen() {
             </View>
           )}
 
-          {/* Connected Repositories */}
-          <View style={{ marginTop: spacing.lg }}>
-            <Text
-              style={[typography.subhead, { color: colors.textMuted, textTransform: "uppercase", marginBottom: spacing.xs }]}
-              accessibilityRole="header"
-            >
-              Connected Repositories ({repos.length})
-            </Text>
-
-            {repos.length === 0 ? (
-              <EmptyState
-                icon="folder-open-outline"
-                title="No repositories selected"
-                message="You haven't connected any repositories yet. Add one on GitHub to start seeing pull requests."
-                actionTitle="Add Repositories on GitHub"
-                onAction={openGitHubAppConfig}
-              />
-            ) : (
-              repos.filter(repo=>repo.fullName.toLowerCase().includes(query.toLowerCase())).map((repo) => (
-                <View
+<Text accessibilityRole="header" style={[typography.headline,{color:colors.text,marginTop:24}]}>Connected repositories · {repos.length} loaded</Text></>}
+          ListEmptyComponent={<EmptyState icon="folder-open-outline" title="No matching repositories" message="Search the loaded repositories or load another page."/>}
+          ListFooterComponent={<View>{(hasMore || pageError) && <Button title={pageError?'Retry loading repositories':'Load more repositories'} loading={pageBusy} onPress={()=>void more()}/>}<Button title="Continue to Inbox" onPress={()=>router.replace('/(tabs)/inbox')} style={{marginVertical:24}}/></View>}
+          renderItem={({item:repo})=>(                <View
                   key={repo.id}
                   style={[
                     styles.repoRow,
@@ -248,14 +238,9 @@ export default function ReposScreen() {
                     </View>
                   </View>
 
-                  <Switch value={repo.watching} onValueChange={()=>toggleWatch(repo.id,repo.watching)} accessibilityLabel={`${repo.watching?"Stop watching":"Watch"} ${repo.fullName}`} trackColor={{false:colors.surfaceSecondary,true:colors.brand}} thumbColor="#FFFFFF"/>
-                </View>
-              ))
-            )}
-          </View>
-          <Button title={`Continue to Inbox (${repos.filter(repo=>repo.watching).length} repos)`} onPress={()=>router.replace("/(tabs)/inbox")} style={{marginVertical:24}}/>
-          <Text style={[typography.caption,{color:colors.textSecondary,textAlign:"center",paddingBottom:16}]}>You can change repository access at any time in GitHub.</Text>
-        </ScrollView>
+                  <Switch disabled={watching.includes(repo.id)} value={repo.watching} onValueChange={()=>toggleWatch(repo.id,repo.watching)} accessibilityLabel={`${repo.watching?"Stop watching":"Watch"} ${repo.fullName}`} trackColor={{false:colors.surfaceSecondary,true:colors.brand}} thumbColor="#FFFFFF"/>
+                </View>)}
+        />
       )}
     </View>
   );

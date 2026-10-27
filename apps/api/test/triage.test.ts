@@ -472,3 +472,9 @@ describe("AI lane scoring", () => {
     expect(sent).not.toContain("ghu_");
   });
 });
+
+ it('does not change the decision timestamp when the same choice is replayed',async()=>{
+  const ctx=testContext();const {headers}=await signIn(ctx);const call=appFor(ctx);const path='/v1/triage/'+encodeURIComponent('acme/api#1');
+  await call(path,post({lane:'fyi'},headers));const first=ctx.db.rows('SELECT lane,decided_at FROM triage_choices');
+  ctx.time.advance(1000);await call(path,post({lane:'fyi'},headers));expect(ctx.db.rows('SELECT lane,decided_at FROM triage_choices')).toEqual(first);
+ });

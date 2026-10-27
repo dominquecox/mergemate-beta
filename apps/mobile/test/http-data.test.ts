@@ -53,7 +53,7 @@ describe("pull request detail", () => {
   it("loads triage metadata with one read and no AI request", async () => {
     const {client,calls}=native(()=>jsonResponse(PR));
     const detail=await client.getPrMetadata("octo","repo",7);
-    expect(calls.map(call=>`${call.method} ${call.path}`)).toEqual(["GET /prs/octo/repo/7"]);
+    expect(calls.map(call=>`${call.method} ${call.path}`)).toEqual(["GET /prs/octo/repo/7?lazy=1"]);
     expect(detail).toMatchObject({author:"octo",additions:30,deletions:4,changedFilesCount:2});
     expect(detail.checks.map(check=>check.conclusion)).toEqual(["success","pending","failure"]);
     expect(detail.summary).toBeUndefined();
@@ -68,7 +68,7 @@ describe("pull request detail", () => {
     });
     const d = await client.getPrDetail("octo", "repo", 7);
     expect(calls.map((c) => `${c.method} ${c.path}`).sort()).toEqual([
-      "GET /prs/octo/repo/7",
+      "GET /prs/octo/repo/7?lazy=1",
       "POST /prs/octo/repo/7/risk",
       "POST /prs/octo/repo/7/summary",
     ]);
@@ -86,6 +86,13 @@ describe("pull request detail", () => {
     expect(d.comments).toHaveLength(1);
     expect(d.comments[0]?.author).toBe("reviewer");
     expect(d.htmlUrl).toBe("https://github.com/octo/repo/pull/7");
+  });
+
+  it('shares ten PR opens including AI requests and reuses the recent detail',async()=>{
+    const {client,calls}=native(req=>req.path.endsWith('/summary')?jsonResponse(SUMMARY):req.path.endsWith('/risk')?jsonResponse(RISK):jsonResponse(PR));
+    const details=await Promise.all(Array.from({length:10},()=>client.getPrDetail('octo','repo',7)));
+    expect(details).toHaveLength(10);expect(calls).toHaveLength(3);
+    await client.getPrDetail('octo','repo',7);expect(calls).toHaveLength(3);
   });
 
   it("drops a PR link that is not on GitHub", async () => {
@@ -159,8 +166,10 @@ describe("inbox, triage, consent and settings", () => {
     const { client, calls } = native((req) =>
       req.url.includes("cursor=") ? jsonResponse({ items: [item(2)], nextCursor: null }) : jsonResponse({ items: [item(1)], nextCursor: "next page+1" }),
     );
-    const items = await client.getNotifications("review");
-    expect(items.map((i) => i.number)).toEqual([1, 2]);
+    const first = await client.getNotificationPage("review");
+    expect(calls).toHaveLength(1);
+    const second = await client.getNotificationPage("review",first.nextCursor);
+    expect([...first.items,...second.items].map(i=>i.number)).toEqual([1,2]);
     expect(calls[0]?.path).toBe("/notifications?filter=review");
     expect(calls[1]?.path).toBe("/notifications?filter=review&cursor=next%20page%2B1");
   });
@@ -232,8 +241,10 @@ describe("repositories and installations", () => {
         ? jsonResponse({ items: [repo("2", true)], nextCursor: null })
         : jsonResponse({ items: [repo("1", false)], nextCursor: "c1" });
     });
-    const repos = await client.getRepos();
-    expect(repos.map((r) => r.id)).toEqual(["1", "2"]);
+    const first = await client.getRepoPage();
+    expect(calls).toHaveLength(1);
+    const second = await client.getRepoPage(first.nextCursor);
+    expect([...first.items,...second.items].map(r=>r.id)).toEqual(['1','2']);
     const toggled = await client.toggleWatchRepo("2", false);
     expect(toggled).toEqual({ id: "2", fullName: "octo/r2", private: true, watching: false });
     expect(calls[2]?.path).toBe("/repos/2/watch");

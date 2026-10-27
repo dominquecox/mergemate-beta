@@ -228,6 +228,17 @@ describe("GET /v1/activity", () => {
         repositories: repos.map((full_name) => ({ full_name })),
       });
 
+  it('pages equal-timestamp activity without duplicates and keeps repository access checks',async()=>{
+    const ctx=testContext();const {headers}=await signIn(ctx);mockAccess(ctx,['acme/api']);
+    for(const n of [1,2,3])await deliver(ctx,'pull_request',prPayload(n,'synchronize','acme/api'));
+    await drain(ctx);const call=appFor(ctx);const path='/v1/activity?since=2026-10-27T11:00:00Z&limit=2';
+    const first=await (await call(path,{headers})).json() as {items:{number:number}[];nextCursor:string};
+    expect(first.items.map(i=>i.number)).toEqual([1,2]);expect(first.nextCursor).toBeTruthy();
+    const second=await (await call(path+'&cursor='+encodeURIComponent(first.nextCursor),{headers})).json() as {items:{number:number}[];nextCursor:string|null};
+    expect(second.items.map(i=>i.number)).toEqual([3]);expect(second.nextCursor).toBeNull();
+    expect((await call(path+'&cursor=not-json',{headers})).status).toBe(422);
+  });
+
   it("lists changed PRs only in repos the user's token can read and still watches", async () => {
     const ctx = testContext();
     const { headers, userId } = await signIn(ctx);

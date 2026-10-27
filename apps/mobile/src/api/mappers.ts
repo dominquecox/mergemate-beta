@@ -56,7 +56,7 @@ function mapFileStatus(status: string): PrFile["status"] {
   return "modified";
 }
 
-function mapFile(file: ContractPrFile): PrFile {
+export function mapFile(file: ContractPrFile): PrFile {
   return {
     filename: file.path,
     status: mapFileStatus(file.status),
@@ -67,7 +67,7 @@ function mapFile(file: ContractPrFile): PrFile {
 }
 
 /** Review threads and the conversation, flattened to the comment list the screen shows. */
-function mapComments(threads: ContractPrDetail["threads"]): PrComment[] {
+export function mapComments(threads: ContractPrDetail["threads"]): PrComment[] {
   return threads.flatMap((thread) =>
     thread.comments.map((comment) => ({
       id: `${thread.id}:${comment.id}`,

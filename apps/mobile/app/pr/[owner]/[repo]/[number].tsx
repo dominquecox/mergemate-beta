@@ -1,7 +1,7 @@
 import { Avatar } from "../../../../src/components/Avatar";
 import { relativeTime } from "../../../../src/format/activity";
 import { SummarySection } from "../../../../src/components/SummarySection";
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { View, ScrollView, TouchableOpacity, TextInput, StyleSheet, Linking, Share, Platform } from "react-native";
 import { Text } from "../../../../src/components/Text";
 import { useLocalSearchParams } from "expo-router";
@@ -43,16 +43,44 @@ export default function PrDetailScreen() {
   const [showNoteInput, setShowNoteInput] = useState(false);
   const [newNote, setNewNote] = useState("");
 
+  const pageLock=useRef(false);
+  const routeVersion=useRef(0);
+  const [pageBusy,setPageBusy]=useState(false);
+  const [pageError,setPageError]=useState<string|null>(null);
+  const [fileCursor,setFileCursor]=useState<string|null>('1');
+  const [commentCursor,setCommentCursor]=useState<string|null>('review:1');
+  const loadPage=async(section:'files'|'comments')=>{
+    if(pageLock.current)return;
+    const cursor=section==='files'?fileCursor:commentCursor;
+    if(!cursor)return;
+    pageLock.current=true;setPageBusy(true);setPageError(null);
+    const version=routeVersion.current;
+    try{
+      if(section==='files'){
+        const page=await api.getPrFilePage(owner,repo,Number(number),cursor);
+        if(version!==routeVersion.current)return;
+        setDetail(prev=>prev?{...prev,files:[...new Map([...prev.files,...page.items].map(file=>[file.filename,file])).values()]}:prev);setFileCursor(page.nextCursor);
+      }else{
+        const page=await api.getPrCommentPage(owner,repo,Number(number),cursor);
+        if(version!==routeVersion.current)return;
+        setDetail(prev=>prev?{...prev,comments:[...new Map([...prev.comments,...page.items].map(comment=>[comment.id,comment])).values()]}:prev);setCommentCursor(page.nextCursor);
+      }
+    }catch(e){if(version===routeVersion.current)setPageError(toUserMessage(e,'Could not load this page.'));}
+    finally{if(version===routeVersion.current){pageLock.current=false;setPageBusy(false);}}
+  };
+  useEffect(()=>{routeVersion.current++;pageLock.current=false;setPageBusy(false);setFileCursor('1');setCommentCursor('review:1');return()=>{routeVersion.current++;};},[owner,repo,number]);
+
   const loadPr = useCallback(async () => {
+    const version=routeVersion.current;
     setIsLoading(true);
     setError(null);
     try {
       const data = await api.getPrDetail(owner || "owner", repo || "repo", parseInt(number || "1", 10));
-      setDetail(data);
+      if(version===routeVersion.current)setDetail(data);
     } catch (e) {
-      setError(toUserMessage(e, "We couldn't load this pull request right now. Please try again."));
+      if(version===routeVersion.current)setError(toUserMessage(e, "We couldn't load this pull request right now. Please try again."));
     } finally {
-      setIsLoading(false);
+      if(version===routeVersion.current)setIsLoading(false);
     }
     // Reload when AI is switched on or off, so the summary and risk appear or go.
   }, [owner, repo, number, aiConsentGranted]);
@@ -68,7 +96,7 @@ export default function PrDetailScreen() {
     const timer = setTimeout(async () => {
       setMergeRechecks((count) => count + 1);
       try {
-        const fresh = await api.getPrDetail(owner || "owner", repo || "repo", parseInt(number || "1", 10));
+        const fresh = await api.getPrMetadata(owner || "owner", repo || "repo", parseInt(number || "1", 10));
         setDetail((current) => (current ? { ...current, mergeState: fresh.mergeState } : current));
       } catch {
         // Keep showing "Checking merge status"; it never claims ready.
@@ -300,11 +328,11 @@ export default function PrDetailScreen() {
             {/* Changed Files List */}
             <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.lg, marginTop: spacing.sm }]}>
               <Text style={[typography.headline, { color: colors.text }]} accessibilityRole="header">
-                Files Changed ({detail.files.length})
+                Files Changed ({detail.changedFilesCount})
               </Text>
               {detail.files.length === 0 ? (
                 <Text style={[typography.footnote, { color: colors.textMuted, marginTop: spacing.xs }]}>
-                  No changed files reported for this pull request.
+                  {detail.changedFilesCount ? "Load changed files when you are ready to review them." : "No changed files reported for this pull request."}
                 </Text>
               ) : (
                 <View style={{ marginTop: spacing.xs }}>
@@ -316,6 +344,14 @@ export default function PrDetailScreen() {
                   ))}
                 </View>
               )}
+            </View>
+
+            {fileCursor && <Button title={detail.files.length?'Load more files':'Load files'} loading={pageBusy} onPress={()=>loadPage('files')} variant="secondary"/>}
+            {pageError && <Text accessibilityRole="alert" style={[typography.footnote,{color:colors.riskHigh,padding:16}]}>{pageError}</Text>}
+            <View style={[styles.card,{backgroundColor:colors.surface,borderColor:colors.border,borderRadius:radius.lg,marginTop:16}]}>
+              <Text accessibilityRole="header" style={[typography.headline,{color:colors.text}]}>Conversation</Text>
+              {detail.comments.map(comment=><View key={comment.id} style={{paddingVertical:12,borderBottomWidth:1,borderBottomColor:colors.border}}><Text style={[typography.footnote,{color:colors.textSecondary}]}>@{comment.author}</Text><Text style={[typography.body,{color:colors.text,marginTop:4}]}>{comment.body}</Text></View>)}
+              {commentCursor?<Button title="Load comments" loading={pageBusy} onPress={()=>loadPage('comments')} variant="ghost"/>:detail.comments.length===0?<Text style={[typography.footnote,{color:colors.textSecondary}]}>No comments.</Text>:null}
             </View>
 
             {/* Inline Note Editor */}

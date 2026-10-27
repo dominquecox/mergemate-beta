@@ -48,7 +48,7 @@ export const createTriageRouter = (deps: AiRouterDeps = {}) => {
     await requireBinding(c.env, "DB")
       .prepare(
         `INSERT INTO triage_choices (user_id, item_id, lane, decided_at) VALUES (?, ?, ?, ?)
-         ON CONFLICT (user_id, item_id) DO UPDATE SET lane = excluded.lane, decided_at = excluded.decided_at`,
+         ON CONFLICT (user_id, item_id) DO UPDATE SET lane = excluded.lane, decided_at = excluded.decided_at WHERE triage_choices.lane != excluded.lane`,
       )
       .bind(userId, triageItemId(repo, number), parsed.data.lane, c.get("deps").now().toISOString())
       .run();

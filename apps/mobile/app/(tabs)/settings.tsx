@@ -1,6 +1,6 @@
 import { SettingsGroup, SettingsRow } from "../../src/components/SettingsRows";
 import { Avatar } from "../../src/components/Avatar";
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { View, ScrollView, TouchableOpacity, Switch, StyleSheet, Platform, Linking, Alert, TextInput } from "react-native";
 import { Text } from "../../src/components/Text";
 import { useRouter } from "expo-router";
@@ -28,6 +28,15 @@ export default function SettingsScreen() {
   const { user, signOut, isDemo } = useAuth();
   const { aiConsentGranted, grantConsent, revokeConsent, error: consentError } = useConsent();
 
+  const saveLock=useRef(false);
+  const preferenceLock=useRef(false);
+  const [saving,setSaving]=useState(false);
+  const [preferenceBusy,setPreferenceBusy]=useState(false);
+  const runPreference=async(action:()=>Promise<void>)=>{
+    if(preferenceLock.current || saveLock.current)return;
+    preferenceLock.current=true;setPreferenceBusy(true);
+    try{await action();}finally{preferenceLock.current=false;setPreferenceBusy(false);}
+  };
   const [settings, setSettings] = useState<UserSettings | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -69,7 +78,8 @@ export default function SettingsScreen() {
 
   /** Saves a change to the API. The switch moves at once and snaps back, with the reason, if it is refused. */
   const saveSettings = async (patch: Partial<UserSettings>): Promise<boolean> => {
-    if (!settings) return false;
+    if (!settings || saveLock.current) return false;
+    saveLock.current=true;setSaving(true);
     const before = settings;
     setNotice(null);
     setSettings({ ...before, ...patch, notifications: { ...before.notifications, ...patch.notifications } });
@@ -80,7 +90,7 @@ export default function SettingsScreen() {
       setSettings(before);
       setNotice(toUserMessage(e, "Couldn't save that change."));
       return false;
-    }
+    } finally{saveLock.current=false;setSaving(false);}
   };
 
   const toggleAi = async (val: boolean) => {
@@ -152,9 +162,9 @@ export default function SettingsScreen() {
     }
   };
 
-  const handleSignOut = () => {
+  const handleSignOut = async () => {
     if (Platform.OS === "web") {
-      signOut();
+      await signOut();
       router.replace("/(auth)/sign-in");
     } else {
       Alert.alert("Sign Out", "Are you sure you want to sign out?", [
@@ -205,17 +215,17 @@ export default function SettingsScreen() {
             <SettingsRow label={Platform.OS==='web'?'Manage Billing & Plans':'Manage Plan'} detail={billing.status.replace(/_/g,' ')} icon="card-outline" onPress={handleManagePlan} trailing={<View style={{flexDirection:'row',alignItems:'center',gap:8}}><View style={{paddingHorizontal:8,paddingVertical:3,borderRadius:9999,backgroundColor:colors.brandSubtle}}><Text style={[typography.caption,{color:colors.brandLight,textTransform:'uppercase'}]}>{billing.plan}</Text></View><Icon name="chevron-forward" size={16} color={colors.textSecondary}/></View>}/>
           </SettingsGroup>
           <SettingsGroup title="Push notifications & triage">
-            {([['review','Review requests','When someone asks for your review'],['mention','Mentions','When someone mentions you'],['mine','My pull requests','Updates to pull requests you opened']] as const).map(([kind,label,hint],index)=><SettingsRow key={kind} first={index===0} label={label} detail={hint} trailing={<Switch value={settings?.notifications[kind] ?? true} onValueChange={value=>{if(settings)void saveSettings({notifications:{...settings.notifications,[kind]:value}});}} disabled={isDemo || !settings} accessibilityLabel={label} trackColor={{false:colors.surfaceSecondary,true:colors.brand}} thumbColor="#FFFFFF"/>}/>)}
-            <SettingsRow label="Quiet Hours" detail={settings?.quietHours?`${settings.quietHours.start} → ${settings.quietHours.end}`:'22:00 → 08:00 when enabled'} icon="moon-outline" trailing={<Switch value={settings?.quietHours!=null} onValueChange={toggleQuietHours} disabled={isDemo || !settings} accessibilityLabel="Quiet hours" trackColor={{false:colors.surfaceSecondary,true:colors.brand}} thumbColor="#FFFFFF"/>}/>
-            {Platform.OS!=='web' && !isDemo && <SettingsRow label="Push on this device" detail="Get a push when a review needs you" trailing={<Switch value={pushOn} onValueChange={togglePush} accessibilityLabel="Push notifications on this device" trackColor={{false:colors.surfaceSecondary,true:colors.brand}} thumbColor="#FFFFFF"/>}/>}
+            {([['review','Review requests','When someone asks for your review'],['mention','Mentions','When someone mentions you'],['mine','My pull requests','Updates to pull requests you opened']] as const).map(([kind,label,hint],index)=><SettingsRow key={kind} first={index===0} label={label} detail={hint} trailing={<Switch value={settings?.notifications[kind] ?? true} onValueChange={value=>{if(settings)void saveSettings({notifications:{...settings.notifications,[kind]:value}});}} disabled={isDemo || !settings || saving || preferenceBusy} accessibilityLabel={label} trackColor={{false:colors.surfaceSecondary,true:colors.brand}} thumbColor="#FFFFFF"/>}/>)}
+            <SettingsRow label="Quiet Hours" detail={settings?.quietHours?`${settings.quietHours.start} → ${settings.quietHours.end}`:'22:00 → 08:00 when enabled'} icon="moon-outline" trailing={<Switch value={settings?.quietHours!=null} onValueChange={value=>runPreference(()=>toggleQuietHours(value))} disabled={isDemo || !settings || saving || preferenceBusy} accessibilityLabel="Quiet hours" trackColor={{false:colors.surfaceSecondary,true:colors.brand}} thumbColor="#FFFFFF"/>}/>
+            {Platform.OS!=='web' && !isDemo && <SettingsRow label="Push on this device" detail="Get a push when a review needs you" trailing={<Switch value={pushOn} onValueChange={value=>runPreference(()=>togglePush(value))} disabled={saving || preferenceBusy} accessibilityLabel="Push notifications on this device" trackColor={{false:colors.surfaceSecondary,true:colors.brand}} thumbColor="#FFFFFF"/>}/>}
           </SettingsGroup>
           <SettingsGroup title="Intelligence & privacy">
-            <SettingsRow first label="AI Summaries & Risk Scoring" detail="Send filtered patch diffs to Meta AI models" icon="sparkles-outline" trailing={<Switch value={aiConsentGranted && (settings?.aiSummaries ?? true)} onValueChange={toggleAi} disabled={isDemo || !settings} accessibilityLabel="AI summaries and risk scoring" trackColor={{false:colors.surfaceSecondary,true:colors.brand}} thumbColor="#FFFFFF"/>}/>
+            <SettingsRow first label="AI Summaries & Risk Scoring" detail="Send filtered patch diffs to Meta AI models" icon="sparkles-outline" trailing={<Switch value={aiConsentGranted && (settings?.aiSummaries ?? true)} onValueChange={value=>runPreference(()=>toggleAi(value))} disabled={isDemo || !settings || saving || preferenceBusy} accessibilityLabel="AI summaries and risk scoring" trackColor={{false:colors.surfaceSecondary,true:colors.brand}} thumbColor="#FFFFFF"/>}/>
             <SettingsRow label="What is sent to AI" detail="Review your consent and privacy choices" icon="shield-checkmark-outline" onPress={()=>router.push('/(auth)/consent')}/>
           </SettingsGroup>
           {metaKey && !isDemo && <SettingsGroup title="Your Meta key">
             <SettingsRow first label={metaKey.configured?'Using your key':'Key not configured'} detail="Stored encrypted and never shown again" icon="key-outline"/>
-            {Platform.OS==='web'?<View style={{padding:16,paddingTop:0}}><TextInput value={metaKeyInput} onChangeText={setMetaKeyInput} placeholder={metaKey.configured?'Paste a replacement key':'Paste your Meta key'} placeholderTextColor={colors.textSecondary} secureTextEntry autoCapitalize="none" autoCorrect={false} spellCheck={false} autoComplete="off" accessibilityLabel="Meta key" style={[styles.keyInput,{color:colors.text,backgroundColor:colors.surfaceElevated,borderColor:colors.border,borderRadius:12}]}/><Button title="Save key" variant="secondary" onPress={saveMetaKey} loading={metaKeyBusy} disabled={metaKeyInput.trim().length===0} style={{marginTop:8}}/>{metaKey.configured && <Button title="Remove key" variant="ghost" onPress={removeMetaKey} disabled={metaKeyBusy}/>}</View>:<Text style={[typography.caption,{color:colors.textSecondary,padding:16,paddingTop:0}]}>Manage your key in the web app.</Text>}
+            {Platform.OS==='web'?<View style={{padding:16,paddingTop:0}}><TextInput value={metaKeyInput} onChangeText={setMetaKeyInput} placeholder={metaKey.configured?'Paste a replacement key':'Paste your Meta key'} placeholderTextColor={colors.textSecondary} secureTextEntry autoCapitalize="none" autoCorrect={false} spellCheck={false} autoComplete="off" accessibilityLabel="Meta key" style={[styles.keyInput,{color:colors.text,backgroundColor:colors.surfaceElevated,borderColor:colors.border,borderRadius:12}]}/><Button title="Save key" variant="secondary" onPress={saveMetaKey} loading={metaKeyBusy} disabled={metaKeyInput.trim().length===0} style={{marginTop:8}}/>{metaKey.configured && <Button title="Remove key" variant="ghost" onPress={removeMetaKey} disabled={metaKeyBusy || saving || preferenceBusy}/>}</View>:<Text style={[typography.caption,{color:colors.textSecondary,padding:16,paddingTop:0}]}>Manage your key in the web app.</Text>}
           </SettingsGroup>}
           <SettingsGroup title="Appearance">
             <SettingsRow first label="Interface Theme" icon="contrast-outline"/>

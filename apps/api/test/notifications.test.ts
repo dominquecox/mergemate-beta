@@ -124,3 +124,23 @@ describe("GET /v1/notifications", () => {
     expect((await call("/v1/notifications/a%27%3B--/done", { method: "POST", headers })).status).toBe(422);
   });
 });
+
+ it('repeated done and snooze requests preserve their first state timestamps',async()=>{
+  const ctx=testContext();const {headers}=await signIn(ctx);const call=appFor(ctx);
+  const path='/v1/notifications/abcdefgh';
+  await call(path+'/done',post({observedUpdatedAt:'2026-10-27T10:00:00Z'},headers));const initial=ctx.db.rows('SELECT done_at,updated_at FROM notification_state');
+  ctx.time.advance(1000);await call(path+'/done',post({observedUpdatedAt:'2026-10-27T10:00:00Z'},headers));expect(ctx.db.rows('SELECT done_at,updated_at FROM notification_state')).toEqual(initial);
+  await call(path+'/done',post({observedUpdatedAt:'2026-10-27T11:00:00Z'},headers));expect(ctx.db.rows<{done_at:string}>('SELECT done_at FROM notification_state')[0]?.done_at).toBe('2026-10-27T11:00:00Z');
+  const body={until:'2026-10-28T18:00:00Z'};await call(path+'/snooze',post(body,headers));const snoozed=ctx.db.rows('SELECT snoozed_until,updated_at FROM notification_state');
+  ctx.time.advance(1000);await call(path+'/snooze',post(body,headers));expect(ctx.db.rows('SELECT snoozed_until,updated_at FROM notification_state')).toEqual(snoozed);
+ });
+ it('rejects invalid page limits and search text before GitHub',async()=>{
+  const ctx=testContext();const {headers}=await signIn(ctx);const call=appFor(ctx);
+  for(const query of ['limit=0','limit=51','search=%00'])expect((await call('/v1/notifications?'+query,{headers})).status).toBe(422);
+ });
+
+ it('searches title, repository and author within each accessible page',async()=>{
+  const ctx=testContext();const {headers}=await signIn(ctx);mockSearch(ctx);
+  const page=await list(ctx,headers,'?search=me%2Ftool');expect(page.items.map(item=>item.repo)).toEqual(['me/tool']);
+  expect(page.nextCursor).toBeNull();
+ });

@@ -20,6 +20,21 @@ import {
 } from "../types";
 
 export class MockApiClient implements ApiClient {
+  invalidateCache(): void {  }
+  clearCache(): void {}
+  async getPrFilePage(owner: string, repo: string, number: number, _cursor?: string | null) {return {items:(await this.getPrDetail(owner,repo,number)).files,nextCursor:null};}
+  async getPrCommentPage(owner: string, repo: string, number: number, _cursor?: string | null) {return {items:(await this.getPrDetail(owner,repo,number)).comments,nextCursor:null};}
+  async undoTriageChoice(_prRef: string): Promise<void> {}
+  async getNotificationPage(filter: NotificationFilter = 'all', cursor?: string | null, search = '') {
+    const all = (await this.getNotifications(filter)).filter(item => `${item.title} ${item.repo} ${item.author}`.toLowerCase().includes(search.toLowerCase()));
+    const start = Number(cursor ?? 0);
+    return {items: all.slice(start,start+25), nextCursor: start+25 < all.length ? String(start+25) : null};
+  }
+  async getRepoPage(cursor?: string | null) {
+    const all = await this.getRepos(); const start = Number(cursor ?? 0);
+    return {items: all.slice(start,start+25), nextCursor: start+25 < all.length ? String(start+25) : null};
+  }
+
   public isMock = true;
 
   private user: User = {

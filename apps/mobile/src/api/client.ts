@@ -23,6 +23,10 @@ import {
  */
 export interface ApiClient {
   isMock: boolean;
+  invalidateCache(): void;
+  clearCache(): void;
+  getNotificationPage(filter?: NotificationFilter, cursor?: string | null, search?: string): Promise<{items: Notification[]; nextCursor: string | null}>;
+  getRepoPage(cursor?: string | null): Promise<{items: Repo[]; nextCursor: string | null}>;
   health(): Promise<{ ok: boolean; version: string }>;
 
   // Auth. The real client keeps the session itself: the cookie plus an in-memory CSRF token on web, a
@@ -49,11 +53,13 @@ export interface ApiClient {
 
   // Notifications / Inbox
   getNotifications(filter?: NotificationFilter): Promise<Notification[]>;
-  markNotificationDone(id: string): Promise<void>;
+  markNotificationDone(id: string, observedUpdatedAt?: string): Promise<void>;
   snoozeNotification(id: string, until: string): Promise<void>;
   restoreNotification(id: string): Promise<void>;
 
   // Pull Requests
+  getPrFilePage(owner: string, repo: string, number: number, cursor?: string | null): Promise<{items: import('../types').PrFile[]; nextCursor: string | null}>;
+  getPrCommentPage(owner: string, repo: string, number: number, cursor?: string | null): Promise<{items: import('../types').PrComment[]; nextCursor: string | null}>;
   getPrMetadata(owner: string, repo: string, number: number): Promise<PrDetail>;
   getPrDetail(owner: string, repo: string, number: number): Promise<PrDetail>;
   getPrSummary(owner: string, repo: string, number: number): Promise<PrSummary>;
@@ -61,6 +67,7 @@ export interface ApiClient {
 
   // Triage
   getTriageQueue(): Promise<TriageItem[]>;
+  undoTriageChoice(prRef: string): Promise<void>;
   setTriageChoice(prRef: string, lane: TriageLane): Promise<void>;
 
   // Highlight

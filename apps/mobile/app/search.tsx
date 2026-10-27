@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from "react";
-import { View, TextInput, ScrollView, TouchableOpacity, StyleSheet } from "react-native";
+import { View, TextInput, FlatList, TouchableOpacity, StyleSheet } from "react-native";
 import { Text } from "../src/components/Text";
 import { useRouter } from "expo-router";
 import { useTheme } from "../src/context/ThemeContext";
@@ -15,6 +15,9 @@ import { ErrorState } from "../src/components/ErrorState";
 import { LoadingState } from "../src/components/LoadingState";
 import { Icon } from "../src/components/Icon";
 
+import { usePagedList } from "../src/hooks/usePagedList";
+import { useDebouncedValue } from "../src/hooks/useDebouncedValue";
+
 export default function SearchScreen() {
   const router = useRouter();
   const { colors, typography, spacing, radius } = useTheme();
@@ -22,30 +25,9 @@ export default function SearchScreen() {
   const [query, setQuery] = useState("");
   const [selectedRisk, setSelectedRisk] = useState<RiskLevel | "all">("all");
   const [recentSearches, setRecentSearches] = useState<string[]>([]);
-  const [allPrs, setAllPrs] = useState<Notification[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  const loadSearchItems = useCallback(async () => {
-    setIsLoading(true);
-    setError(null);
-    try {
-      const [recent, prs] = await Promise.all([
-        StorageService.getRecentSearches(),
-        api.getNotifications("all"),
-      ]);
-      setRecentSearches(recent);
-      setAllPrs(prs);
-    } catch (e) {
-      setError(toUserMessage(e, "We couldn't load your pull requests for search. Please try again."));
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    loadSearchItems();
-  }, [loadSearchItems]);
+  const settledQuery = useDebouncedValue(query);
+  const {items:allPrs,loading:isLoading,busy,error,refresh:loadSearchItems,more,hasMore} = usePagedList(`search:${settledQuery}`, cursor=>api.getNotificationPage('all',cursor,settledQuery));
+  useEffect(()=>{void StorageService.getRecentSearches().then(setRecentSearches);},[]);
 
   const handleSearchSubmit = async () => {
     if (query.trim()) {
@@ -56,10 +38,10 @@ export default function SearchScreen() {
 
   const filteredPrs = allPrs.filter((pr) => {
     const matchesQuery =
-      query.trim() === "" ||
-      pr.title.toLowerCase().includes(query.toLowerCase()) ||
-      pr.repo.toLowerCase().includes(query.toLowerCase()) ||
-      pr.author.toLowerCase().includes(query.toLowerCase());
+      settledQuery.trim() === "" ||
+      pr.title.toLowerCase().includes(settledQuery.toLowerCase()) ||
+      pr.repo.toLowerCase().includes(settledQuery.toLowerCase()) ||
+      pr.author.toLowerCase().includes(settledQuery.toLowerCase());
 
     const matchesRisk = selectedRisk === "all" || pr.risk === selectedRisk;
 
@@ -153,33 +135,20 @@ export default function SearchScreen() {
           title="Loading pull requests..."
           message="Preparing your searchable pull request list."
         />
-      ) : error ? (
+      ) : error && allPrs.length===0 ? (
         <ErrorState
           title="Couldn't load search results"
           message={error}
           onRetry={loadSearchItems}
         />
       ) : (
-        <ScrollView contentContainerStyle={{ paddingHorizontal: spacing.base, paddingBottom: 60 }}>
-          <View style={{flexDirection:"row",alignItems:"center",justifyContent:"space-between",marginBottom:16}}><Text style={[typography.headline,{color:colors.text}]}>Results</Text><Text style={[typography.code,{color:colors.textSecondary}]}>{filteredPrs.length} pull requests</Text></View>
-          {filteredPrs.length === 0 ? (
-            <EmptyState
-              icon="search-outline"
-              title="No matching pull requests"
-              message={
-                query.trim()
-                  ? `No pull requests match "${query}". Try clearing your search or changing the risk filter.`
-                  : "No pull requests match the selected risk filter."
-              }
-              actionTitle="Clear Filters"
-              onAction={() => {
-                setQuery("");
-                setSelectedRisk("all");
-              }}
-            />
-          ) : (
-            filteredPrs.map((item) => (
-              <TouchableOpacity
+        <FlatList data={filteredPrs} keyExtractor={item=>item.id} initialNumToRender={8} maxToRenderPerBatch={8} windowSize={5}
+          contentContainerStyle={{paddingHorizontal:spacing.base,paddingBottom:60}}
+          onEndReached={()=>{if(!error)void more();}} onEndReachedThreshold={0.4}
+          ListEmptyComponent={<EmptyState icon="search-outline" title="No matching pull requests" message="Try another search or risk filter."/>}
+          ListHeaderComponent={<Text style={[typography.headline,{color:colors.text,marginBottom:16}]}>Results · {filteredPrs.length} loaded</Text>}
+          ListFooterComponent={hasMore?<TouchableOpacity disabled={busy} onPress={()=>void more()} accessibilityRole="button" style={{padding:16,minHeight:44}}><Text style={{color:colors.brandLight}}>{busy?'Loading…':'Load more results'}</Text></TouchableOpacity>:undefined}
+          renderItem={({item})=>(              <TouchableOpacity
                 key={item.id}
                 onPress={() => {
                   const parts = item.repo.split("/");
@@ -210,10 +179,8 @@ export default function SearchScreen() {
                     By @{item.author}
                   </Text>
                 </View>
-              </TouchableOpacity>
-            ))
-          )}
-        </ScrollView>
+              </TouchableOpacity>)}
+        />
       )}
     </View>
   );

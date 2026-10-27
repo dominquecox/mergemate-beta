@@ -35,6 +35,17 @@ describe("GET /v1/me/installations", () => {
 });
 
 describe("GET /v1/repos", () => {
+  it('keeps a custom limit in the cursor and rejects changing it mid-page',async()=>{
+    const ctx=testContext();const {headers}=await signIn(ctx);
+    ctx.net.on('GET',`${GH}/user/installations`,installations)
+      .on('GET',`${GH}/user/installations/11/repositories?per_page=2&page=1`,{total_count:3,repositories:repos(1,2)})
+      .on('GET',`${GH}/user/installations/11/repositories?per_page=2&page=2`,{total_count:3,repositories:repos(3,1)});
+    const call=appFor(ctx);const first=RepoPage.parse(await (await call('/v1/repos?limit=2',{headers})).json());
+    expect(first.items).toHaveLength(2);const query='/v1/repos?cursor='+encodeURIComponent(first.nextCursor ?? '');
+    expect(RepoPage.parse(await (await call(query,{headers})).json()).items[0]?.id).toBe('3');
+    expect((await call(query+'&limit=3',{headers})).status).toBe(422);
+  });
+
   it("pages through every active installation with watch state", async () => {
     const ctx = testContext();
     const { headers, userId } = await signIn(ctx);
@@ -137,6 +148,21 @@ describe("GET /v1/prs/:owner/:repo/:number", () => {
       .on("GET", `${GH}/repos/acme/api/issues/7/comments`, [
         { id: 9, user: { login: "rev" }, body: "LGTM overall", created_at: "2026-10-26T10:50:00Z" },
       ]);
+
+  it('loads metadata without files/comments and pages them independently',async()=>{
+    const ctx=testContext();const {headers}=await signIn(ctx);mockPr(ctx);
+    const call=appFor(ctx);const start=ctx.net.calls.length;
+    const detail=PrDetail.parse(await (await call('/v1/prs/acme/api/7?lazy=1',{headers})).json());
+    expect(detail.files).toEqual([]);expect(detail.threads).toEqual([]);
+    expect(ctx.net.calls.slice(start).some(c=>/files|comments/.test(c.url))).toBe(false);
+    const files=await (await call('/v1/prs/acme/api/7/pages/files',{headers})).json() as {items:unknown[];nextCursor:string|null};
+    expect(files.items).toHaveLength(2);expect(files.nextCursor).toBeNull();
+    expect(ctx.net.calls.at(-1)?.url).toContain('per_page=25&page=1');
+    const review=await (await call('/v1/prs/acme/api/7/pages/comments',{headers})).json() as {items:unknown[];nextCursor:string|null};
+    expect(review.nextCursor).toBe('conversation:1');
+    expect((await call('/v1/prs/acme/api/7/pages/files?cursor=0',{headers})).status).toBe(422);
+    expect((await call('/v1/prs/acme/api/7/pages/comments?cursor=other:1',{headers})).status).toBe(422);
+  });
 
   it("returns header data, files, checks and threads using the user's own token", async () => {
     const ctx = testContext();

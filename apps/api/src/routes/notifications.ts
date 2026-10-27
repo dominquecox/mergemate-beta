@@ -4,6 +4,7 @@ import {
   type NotificationKind,
   type NotificationPage,
   SnoozeRequest,
+  IsoDateTime,
 } from "@mergemate/contracts";
 import { type Context, Hono } from "hono";
 import { requireBinding } from "../config";
@@ -18,7 +19,6 @@ import { prStatus } from "./github";
 import { DEMO_NOTIFICATIONS } from "./github.fixtures";
 
 const PAGE_SIZE = 50;
-const MAX_PAGE = 20; // GitHub search returns at most 1,000 results
 const STATE_CHUNK = 90;
 const MAX_SNOOZE_MS = 365 * 24 * 60 * 60 * 1000;
 
@@ -66,6 +66,8 @@ export const loadInbox = async (
   uid: string,
   filter: NotificationFilter,
   page: number,
+  pageSize = PAGE_SIZE,
+  search = "",
 ): Promise<NotificationPage> => {
   const now = deps.now();
   const token = await getAccessToken(env, uid, now);
@@ -75,7 +77,7 @@ export const loadInbox = async (
       githubGet<{ total_count: number; items: SearchItem[] }>(
         deps,
         token,
-        `/search/issues?q=${encodeURIComponent(q.q)}&sort=updated&order=desc&per_page=${PAGE_SIZE}&page=${page}`,
+        `/search/issues?q=${encodeURIComponent(q.q)}&sort=updated&order=desc&per_page=${pageSize}&page=${page}`,
       ),
     ),
   );
@@ -130,38 +132,50 @@ export const loadInbox = async (
   const muted = new Set(unwatched.results.map((r) => r.full_name.toLowerCase()));
 
   const items = [...byId.values()]
-    .filter((n) => !hidden.has(n.id) && !muted.has(n.repo.toLowerCase()))
+    .filter((n) => !hidden.has(n.id) && !muted.has(n.repo.toLowerCase()) && `${n.title} ${n.repo} ${n.author}`.toLowerCase().includes(search.toLowerCase()))
     .sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt));
-  const more = page < MAX_PAGE && results.some((r) => r.total_count > page * PAGE_SIZE);
+  const more = page < Math.ceil(1000 / pageSize) && results.some((r) => r.total_count > page * pageSize);
   return { items, nextCursor: more ? String(page + 1) : null };
 };
 
 export const notifications = new Hono<AppEnv>()
   .get("/notifications", async (c) => {
     const filter = parseValue(NotificationFilter, c.req.query("filter") ?? "all");
+    const search = (c.req.query('search') ?? '').trim();
+    if(search.length > 120 || [...search].some(char=>char.charCodeAt(0)<32))throw new ApiError('validation_failed','Search is too long or contains invalid characters.');
+    const limit = Number(c.req.query('limit') ?? PAGE_SIZE);
+    if(!Number.isInteger(limit) || limit<1 || limit>50)throw new ApiError('validation_failed','Limit must be between 1 and 50.');
     const cursor = c.req.query("cursor");
     const page = cursor ? Number(cursor) : 1;
-    if (!Number.isInteger(page) || page < 1 || page > MAX_PAGE) {
+    if (!Number.isInteger(page) || page < 1 || page > Math.ceil(1000/limit)) {
       throw new ApiError("validation_failed", "The cursor is not valid.");
     }
 
     if (c.get("session").demo) {
-      const items = DEMO_NOTIFICATIONS.filter((n) => filter === "all" || n.kind === QUERIES.find((q) => q.filter === filter)?.kind);
-      return c.json({ items, nextCursor: null } satisfies NotificationPage);
+      const all = DEMO_NOTIFICATIONS.filter(n => (filter === 'all' || n.kind === QUERIES.find(q=>q.filter===filter)?.kind) && `${n.title} ${n.repo} ${n.author}`.toLowerCase().includes(search.toLowerCase()));
+      const offset=(page-1)*limit;
+      return c.json({items:all.slice(offset,offset+limit),nextCursor:offset+limit<all.length?String(page+1):null} satisfies NotificationPage);
     }
 
-    return c.json(await loadInbox(c.env, c.get("deps"), userId(c), filter, page));
+    return c.json(await loadInbox(c.env, c.get("deps"), userId(c), filter, page, limit, search));
   })
 
   .post("/notifications/:id/done", async (c) => {
     const id = parseItemId(c.req.param("id"));
     const now = c.get("deps").now().toISOString();
+    let observed=now;
+    if(c.req.header('content-type')?.includes('application/json')){
+      const body=await c.req.json().catch(()=>null) as {observedUpdatedAt?:unknown}|null;
+      const parsed=IsoDateTime.safeParse(body?.observedUpdatedAt);
+      if(!parsed.success || Date.parse(parsed.data)>Date.parse(now))throw new ApiError('validation_failed','Invalid notification update time.');
+      observed=parsed.data;
+    }
     await requireBinding(c.env, "DB")
       .prepare(
         `INSERT INTO notification_state (user_id, item_id, done_at, snoozed_until, updated_at) VALUES (?, ?, ?, NULL, ?)
-         ON CONFLICT (user_id, item_id) DO UPDATE SET done_at = excluded.done_at, snoozed_until = NULL, updated_at = excluded.updated_at`,
+         ON CONFLICT (user_id, item_id) DO UPDATE SET done_at = excluded.done_at, snoozed_until = NULL, updated_at = excluded.updated_at WHERE notification_state.done_at IS NOT excluded.done_at OR notification_state.snoozed_until IS NOT NULL`,
       )
-      .bind(userId(c), id, now, now)
+      .bind(userId(c), id, observed, now)
       .run();
     return c.body(null, 204);
   })
@@ -177,7 +191,7 @@ export const notifications = new Hono<AppEnv>()
     await requireBinding(c.env, "DB")
       .prepare(
         `INSERT INTO notification_state (user_id, item_id, done_at, snoozed_until, updated_at) VALUES (?, ?, NULL, ?, ?)
-         ON CONFLICT (user_id, item_id) DO UPDATE SET snoozed_until = excluded.snoozed_until, done_at = NULL, updated_at = excluded.updated_at`,
+         ON CONFLICT (user_id, item_id) DO UPDATE SET snoozed_until = excluded.snoozed_until, done_at = NULL, updated_at = excluded.updated_at WHERE notification_state.snoozed_until IS NOT excluded.snoozed_until`,
       )
       .bind(userId(c), id, new Date(untilMs).toISOString(), now.toISOString())
       .run();

@@ -1,7 +1,7 @@
 import { Avatar } from "../../src/components/Avatar";
 import { relativeTime, activityAction } from "../../src/format/activity";
-import React, { useState, useEffect, useCallback } from "react";
-import { View, ScrollView, TouchableOpacity, StyleSheet, Platform } from "react-native";
+import React, { useState } from "react";
+import { View, FlatList, TouchableOpacity, StyleSheet, Platform } from "react-native";
 import { Text } from "../../src/components/Text";
 import { useRouter } from "expo-router";
 import { useTheme } from "../../src/context/ThemeContext";
@@ -17,32 +17,15 @@ import { LoadingState } from "../../src/components/LoadingState";
 import { useLayout } from "../../src/layout/useLayout";
 import { Icon } from "../../src/components/Icon";
 
+import { usePagedList } from "../../src/hooks/usePagedList";
+
 export default function NotificationsScreen() {
   const { colors, typography, spacing, radius } = useTheme();
   const {isDesktop}=useLayout();
   const router = useRouter();
 
   const [filter, setFilter] = useState<NotificationFilter>("all");
-  const [items, setItems] = useState<Notification[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  const loadNotifications = useCallback(async () => {
-    setIsLoading(true);
-    setError(null);
-    try {
-      const data = await api.getNotifications(filter);
-      setItems(data);
-    } catch (e) {
-      setError(toUserMessage(e, "We couldn't load your notifications right now. Please try again."));
-    } finally {
-      setIsLoading(false);
-    }
-  }, [filter]);
-
-  useEffect(() => {
-    loadNotifications();
-  }, [loadNotifications]);
+  const {items,setItems,loading:isLoading,busy,error,refresh:loadNotifications,more,hasMore} = usePagedList(`activity:${filter}`, cursor=>api.getNotificationPage(filter,cursor));
 
   const markAllRead = () => {
     setItems((prev) => prev.map((item) => ({ ...item, read: true })));
@@ -107,7 +90,7 @@ export default function NotificationsScreen() {
           title="Loading notifications..."
           message="Checking for recent pull request activity."
         />
-      ) : error ? (
+      ) : error && items.length===0 ? (
         <ErrorState
           title="Could not load notifications"
           message={error}
@@ -122,12 +105,11 @@ export default function NotificationsScreen() {
           onAction={loadNotifications}
         />
       ) : (
-        <ScrollView contentContainerStyle={{padding:isDesktop?24:16,paddingBottom:48}}>
-
-          {Array.from(new Set(items.map(item=>new Date(item.updatedAt).toLocaleDateString()))).map(day=><View key={day} style={{marginTop:20}}>
-            <View style={{flexDirection:"row",alignItems:"center",justifyContent:"space-between",marginBottom:12}}><Text accessibilityRole="header" style={[typography.subhead,{color:colors.text,fontWeight:"600"}]}>{day===new Date().toLocaleDateString()?"Today":day}</Text><Text style={[typography.caption,{color:colors.textSecondary}]}>{items.filter(item=>new Date(item.updatedAt).toLocaleDateString()===day && !item.read).length} unread</Text></View>
-            <View style={{borderWidth:1,borderColor:colors.border,borderRadius:16,overflow:"hidden"}}>
-              {items.filter(item=>new Date(item.updatedAt).toLocaleDateString()===day).map((item,index)=><TouchableOpacity key={item.id} accessibilityRole="button" accessibilityLabel={`Review ${item.title}`} onPress={()=>router.push(`/pr/${item.repo}/${item.number}`)} style={{backgroundColor:item.read?colors.surface:colors.surfaceElevated,padding:16,borderTopWidth:index?1:0,borderTopColor:colors.border}}>
+        <FlatList data={items} keyExtractor={item=>item.id} initialNumToRender={8} maxToRenderPerBatch={8} windowSize={5}
+          contentContainerStyle={{padding:isDesktop?24:16,paddingBottom:48}}
+          onEndReached={()=>{if(!error)void more();}} onEndReachedThreshold={0.4}
+          ListFooterComponent={hasMore?<TouchableOpacity disabled={busy} onPress={()=>void more()} style={{minHeight:44,padding:16}} accessibilityRole="button"><Text style={{color:colors.brandLight}}>{busy?'Loading…':'Load more activity'}</Text></TouchableOpacity>:undefined}
+          renderItem={({item,index})=>{const day=new Date(item.updatedAt).toLocaleDateString();const previous=items[index-1];const showDay=!previous || new Date(previous.updatedAt).toLocaleDateString()!==day;return <View>{showDay && <Text accessibilityRole="header" style={[typography.subhead,{color:colors.text,marginTop:20,marginBottom:12}]}>{day===new Date().toLocaleDateString()?'Today':day}</Text>}<TouchableOpacity key={item.id} accessibilityRole="button" accessibilityLabel={`Review ${item.title}`} onPress={()=>router.push(`/pr/${item.repo}/${item.number}`)} style={{backgroundColor:item.read?colors.surface:colors.surfaceElevated,padding:16,borderTopWidth:1,borderTopColor:colors.border}}>
                 <View style={{flexDirection:"row",gap:12,alignItems:"flex-start"}}>
                   <Avatar login={item.author} size={32}/>
                   <View style={{flex:1,minWidth:0}}>
@@ -139,10 +121,8 @@ export default function NotificationsScreen() {
                   </View>
                   <Icon name="chevron-forward" size={16} color={colors.textMuted}/>
                 </View>
-              </TouchableOpacity>)}
-            </View>
-          </View>)}
-        </ScrollView>
+              </TouchableOpacity></View>;}}
+        />
       )}
     </View>
   );

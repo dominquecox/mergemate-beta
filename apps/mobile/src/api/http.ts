@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { RequestCache } from "./request-cache";
 import {
   AuthCallbackResponse,
   AuthStartResponse,
@@ -16,6 +17,8 @@ import {
   NotificationPage,
   PostList,
   PrDetail as PrDetailSchema,
+  PrFile as PrFileSchema,
+  PrThread as PrThreadSchema,
   PrRisk as PrRiskSchema,
   PrSummary as PrSummarySchema,
   PushTokenRegistered,
@@ -57,6 +60,8 @@ import {
   mapInstallations,
   mapPostSummary,
   mapPrDetail,
+  mapFile,
+  mapComments,
   secretWarningFromRisk,
 } from "./mappers";
 import { RepoWatchResponse, SupportReceived } from "./schemas";
@@ -99,8 +104,6 @@ interface RequestOptions<T> {
 
 const DEFAULT_TIMEOUT_MS = 30_000;
 const AI_TIMEOUT_MS = 60_000;
-const MAX_NOTIFICATION_PAGES = 3;
-const MAX_REPO_PAGES = 10;
 
 const SAFE_METHODS = new Set(["GET", "HEAD"]);
 
@@ -133,6 +136,11 @@ export class HttpApiClient implements ApiClient {
   private csrfLoading: Promise<string> | null = null;
   private refreshing: Promise<Session> | null = null;
   private settingsCache: UserSettings | null = null;
+  private reads = new RequestCache();
+  private actions = new RequestCache();
+
+  invalidateCache(): void { this.reads.invalidate(); }
+  clearCache(): void { this.reads.clear(); this.actions.clear(); this.settingsCache = null; this.repoPrivacy.clear(); }
   private repoPrivacy = new Map<string, boolean>();
 
   constructor(options: HttpApiClientOptions) {
@@ -153,7 +161,17 @@ export class HttpApiClient implements ApiClient {
   // Transport
   // ---------------------------------------------------------------------------------------------
 
-  private async request<T = void>(opts: RequestOptions<T>): Promise<T> {
+  private request<T = void>(opts: RequestOptions<T>): Promise<T> {
+    if ((opts.method ?? 'GET') === 'GET') {
+      return this.reads.run(`get:${opts.auth !== false}:${!!opts.probe}:${opts.path}`, () => this.readRequest(opts));
+    }
+    return this.readRequest(opts).then(value=>{
+      if(/^\/(settings|consent|repos|account)(\/|$)/.test(opts.path))this.reads.invalidate();
+      return value;
+    });
+  }
+
+  private async readRequest<T = void>(opts: RequestOptions<T>): Promise<T> {
     const res = await this.exchange(opts);
     if (!opts.schema) return undefined as T;
     let json: unknown;
@@ -235,6 +253,7 @@ export class HttpApiClient implements ApiClient {
           }
           await this.store.clear();
         }
+        this.clearCache();
         setInMemoryCsrfToken(null);
         if (!opts.probe) this.unauthorizedHandler?.();
         throw error;
@@ -311,7 +330,8 @@ export class HttpApiClient implements ApiClient {
    * Keeps what the client must hold (the bearer token on native, the CSRF token on web) and hands back
    * a session without either, so neither reaches screens or React state.
    */
-  private async adoptSession(session: z.infer<typeof AuthCallbackResponse>["session"]): Promise<Session> {
+  private async adoptSession(session: z.infer<typeof AuthCallbackResponse>["session"], newSession = true): Promise<Session> {
+    if(newSession)this.clearCache();
     if (this.web) {
       if (session.csrfToken) setInMemoryCsrfToken(session.csrfToken);
     } else if (session.token) {
@@ -381,7 +401,7 @@ export class HttpApiClient implements ApiClient {
           schema: RefreshResponse,
           isRefresh: true,
         });
-        return this.adoptSession(res.session);
+        return this.adoptSession(res.session, false);
       };
       this.refreshing = run().finally(() => {
         this.refreshing = null;
@@ -400,6 +420,7 @@ export class HttpApiClient implements ApiClient {
   }
 
   async logout(): Promise<void> {
+    this.clearCache();
     try {
       await this.request({ method: "POST", path: "/auth/logout", probe: true });
     } finally {
@@ -410,6 +431,7 @@ export class HttpApiClient implements ApiClient {
   }
 
   async deleteAccount(): Promise<void> {
+    this.clearCache();
     await this.request({ method: "DELETE", path: "/account" });
     await this.store.clear();
     setInMemoryCsrfToken(null);
@@ -438,21 +460,13 @@ export class HttpApiClient implements ApiClient {
   // Repositories and installations
   // ---------------------------------------------------------------------------------------------
 
-  async getRepos(): Promise<Repo[]> {
-    const repos: Repo[] = [];
-    let cursor: string | null = null;
-    for (let page = 0; page < MAX_REPO_PAGES; page++) {
-      const res: z.infer<typeof RepoPage> = await this.request({
-        path: cursor ? `/repos?cursor=${enc(cursor)}` : "/repos",
-        schema: RepoPage,
-      });
-      repos.push(...res.items);
-      cursor = res.nextCursor;
-      if (!cursor) break;
-    }
-    for (const repo of repos) this.repoPrivacy.set(repo.id, repo.private);
-    return repos;
+  async getRepoPage(cursor?: string | null): Promise<{items: Repo[]; nextCursor: string | null}> {
+    const page = await this.request({path: cursor ? `/repos?cursor=${enc(cursor)}` : '/repos', schema: RepoPage});
+    for (const repo of page.items) this.repoPrivacy.set(repo.id, repo.private);
+    return page;
   }
+
+  async getRepos(): Promise<Repo[]> { return (await this.getRepoPage()).items; }
 
   async toggleWatchRepo(id: string, watching: boolean): Promise<Repo> {
     const res = await this.request({
@@ -472,45 +486,55 @@ export class HttpApiClient implements ApiClient {
   // Notifications
   // ---------------------------------------------------------------------------------------------
 
-  async getNotifications(filter: NotificationFilter = "all"): Promise<Notification[]> {
-    const items: Notification[] = [];
-    let cursor: string | null = null;
-    for (let page = 0; page < MAX_NOTIFICATION_PAGES; page++) {
-      const query: string = `filter=${enc(filter)}${cursor ? `&cursor=${enc(cursor)}` : ""}`;
-      const res: z.infer<typeof NotificationPage> = await this.request({
-        path: `/notifications?${query}`,
-        schema: NotificationPage,
-      });
-      items.push(...res.items);
-      cursor = res.nextCursor;
-      if (!cursor) break;
-    }
-    return items;
+  getNotificationPage(filter: NotificationFilter = 'all', cursor?: string | null, search = ''): Promise<{items: Notification[]; nextCursor: string | null}> {
+    const path = `/notifications?filter=${enc(filter)}${cursor ? `&cursor=${enc(cursor)}` : ''}${search ? `&search=${enc(search)}` : ''}`;
+    return this.reads.run(`inbox:${path}`, () => this.request({path, schema: NotificationPage}), 15_000);
   }
 
-  async markNotificationDone(id: string): Promise<void> {
-    await this.request({ method: "POST", path: `/notifications/${enc(id)}/done` });
+  async getNotifications(filter: NotificationFilter = 'all'): Promise<Notification[]> {
+    return (await this.getNotificationPage(filter)).items;
+  }
+
+  async markNotificationDone(id: string, observedUpdatedAt?: string): Promise<void> {
+    await this.actions.run(`done:${id}`, () => this.request({ method: "POST", path: `/notifications/${enc(id)}/done`, ...(observedUpdatedAt?{body:{observedUpdatedAt}}:{}) }));
+    this.reads.invalidate("inbox:");
   }
 
   async snoozeNotification(id: string, until: string): Promise<void> {
-    await this.request({ method: "POST", path: `/notifications/${enc(id)}/snooze`, body: { until } });
+    await this.actions.run(`snooze:${id}:${until}`, () => this.request({ method: "POST", path: `/notifications/${enc(id)}/snooze`, body: { until } }));
+    this.reads.invalidate("inbox:");
   }
 
   async restoreNotification(id: string): Promise<void> {
-    await this.request({ method: "POST", path: `/notifications/${enc(id)}/restore` });
+    await this.actions.run(`restore:${id}`, () => this.request({ method: "POST", path: `/notifications/${enc(id)}/restore` }));
+    this.reads.invalidate("inbox:");
   }
 
   // ---------------------------------------------------------------------------------------------
   // Pull requests
   // ---------------------------------------------------------------------------------------------
 
+  async getPrFilePage(owner: string, repo: string, number: number, cursor?: string | null) {
+    const page=await this.request({path:`${prPath(owner,repo,number)}/pages/files${cursor?`?cursor=${enc(cursor)}`:''}`,schema:z.object({items:z.array(PrFileSchema),nextCursor:z.string().nullable()})});
+    return {items:page.items.map(mapFile),nextCursor:page.nextCursor};
+  }
+
+  async getPrCommentPage(owner: string, repo: string, number: number, cursor?: string | null) {
+    const page=await this.request({path:`${prPath(owner,repo,number)}/pages/comments${cursor?`?cursor=${enc(cursor)}`:''}`,schema:z.object({items:z.array(PrThreadSchema),nextCursor:z.string().nullable()})});
+    return {items:mapComments(page.items).map(comment=>({...comment,id:`${cursor?.split(':')[0] ?? 'review'}:${comment.id}`})),nextCursor:page.nextCursor};
+  }
+
   async getPrMetadata(owner: string, repo: string, number: number): Promise<PrDetail> {
-    return mapPrDetail(await this.request({ path: prPath(owner, repo, number), schema: PrDetailSchema }));
+    return mapPrDetail(await this.request({ path: `${prPath(owner, repo, number)}?lazy=1`, schema: PrDetailSchema }));
   }
 
   async getPrDetail(owner: string, repo: string, number: number): Promise<PrDetail> {
+    return this.reads.run(`detail:${prPath(owner, repo, number)}`, () => this.loadPrDetail(owner, repo, number), 30_000);
+  }
+
+  private async loadPrDetail(owner: string, repo: string, number: number): Promise<PrDetail> {
     const path = prPath(owner, repo, number);
-    const contract = await this.request({ path, schema: PrDetailSchema });
+    const contract = await this.request({ path: `${path}?lazy=1`, schema: PrDetailSchema });
     const detail = mapPrDetail(contract);
 
     // Summary and risk are separate AI calls. If one is unavailable the PR still opens, with a plain reason.
@@ -562,13 +586,17 @@ export class HttpApiClient implements ApiClient {
     return this.request({ path: "/triage", schema: TriageQueue, timeoutMs: AI_TIMEOUT_MS });
   }
 
+  async undoTriageChoice(prRef: string): Promise<void> {
+    await this.actions.run(`undo:${prRef}`,()=>this.request({method:'DELETE',path:`/triage/${enc(prRef)}`}));
+  }
+
   async setTriageChoice(prRef: string, lane: TriageLane): Promise<void> {
-    await this.request({
+    await this.actions.run(`triage:${prRef}:${lane}`, () => this.request({
       method: "POST",
       path: `/triage/${enc(prRef)}`,
       body: { lane },
       schema: TriageRecord,
-    });
+    }));
   }
 
   // ---------------------------------------------------------------------------------------------

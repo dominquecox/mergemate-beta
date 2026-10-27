@@ -1,4 +1,4 @@
-import React from "react";
+import React, {useRef,useState} from "react";
 import { TouchableOpacity, ActivityIndicator, StyleSheet, ViewStyle, TextStyle } from "react-native";
 import { Text } from "./Text";
 import { useTheme } from "../context/ThemeContext";
@@ -26,6 +26,9 @@ export function Button({
   icon,
   accessibilityLabel,
 }: ButtonProps) {
+  const lock=useRef(false);
+  const [pending,setPending]=useState(false);
+  const invoke=async()=>{if(lock.current || disabled || loading)return;lock.current=true;setPending(true);try{await onPress();}finally{lock.current=false;setPending(false);}};
   const { colors, typography, radius } = useTheme();
 
   let bg = colors.brand;
@@ -46,8 +49,8 @@ export function Button({
 
   return (
     <TouchableOpacity
-      onPress={onPress}
-      disabled={disabled || loading}
+      onPress={invoke}
+      disabled={disabled || loading || pending}
       activeOpacity={0.8}
       style={[
         styles.btn,
@@ -62,9 +65,9 @@ export function Button({
       ]}
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel || title}
-      accessibilityState={{ disabled: disabled || loading, busy: loading }}
+      accessibilityState={{ disabled: disabled || loading || pending, busy: loading || pending }}
     >
-      {loading ? (
+      {loading || pending ? (
         <ActivityIndicator color={text} size="small" />
       ) : (
         <>

@@ -20,7 +20,7 @@ export function createUnconfiguredClient(): ApiClient {
   return new Proxy({} as ApiClient, {
     get(_target, prop) {
       if (prop === "isMock") return false;
-      if (prop === "setUnauthorizedHandler") return () => undefined;
+      if (["setUnauthorizedHandler","clearCache","invalidateCache"].includes(String(prop))) return () => undefined;
       if (prop === "then") return undefined;
       return () => Promise.reject(failure());
     },

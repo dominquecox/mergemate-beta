@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useCallback } from "react";
-import { View, ScrollView, RefreshControl, TouchableOpacity, StyleSheet } from "react-native";
+import React, { useState, useRef } from "react";
+import { View, FlatList, RefreshControl, TouchableOpacity, StyleSheet } from "react-native";
 import { Text } from "../../src/components/Text";
 import { useRouter } from "expo-router";
 import { useTheme } from "../../src/context/ThemeContext";
@@ -15,43 +15,24 @@ import { LoadingState } from "../../src/components/LoadingState";
 import { Icon } from "../../src/components/Icon";
 import { useLayout } from "../../src/layout/useLayout";
 
+import { usePagedList } from "../../src/hooks/usePagedList";
+
 export default function InboxScreen() {
   const router = useRouter();
   const { colors, typography, spacing, radius } = useTheme();
   const { isDesktop } = useLayout();
 
   const [filter, setFilter] = useState<NotificationFilter>("all");
-  const [items, setItems] = useState<Notification[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isRefreshing, setIsRefreshing] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const {items,setItems,loading:isLoading,busy:isRefreshing,error,setError,refresh:fetchItems,more,hasMore} = usePagedList(`inbox:${filter}`, cursor=>api.getNotificationPage(filter,cursor));
   const [undoItem, setUndoItem] = useState<Notification | null>(null);
-
-  const fetchItems = useCallback(async () => {
-    try {
-      const data = await api.getNotifications(filter);
-      setItems(data);
-      setError(null);
-    } catch (e) {
-      setError(toUserMessage(e, "We couldn't load your inbox right now. Please try again."));
-    } finally {
-      setIsLoading(false);
-      setIsRefreshing(false);
-    }
-  }, [filter]);
-
-  useEffect(() => {
-    setIsLoading(true);
-    fetchItems();
-  }, [fetchItems]);
-
-  const onRefresh = () => {
-    setIsRefreshing(true);
-    fetchItems();
-  };
+  const actionLock = useRef(false);
+  const [acting,setActing] = useState(false);
+  const onRefresh = () => { api.invalidateCache(); void fetchItems(); };
 
   // The card leaves the list at once; if the API refuses, it comes back and the reason is shown.
   const applyAction = async (item: Notification, action: () => Promise<void>) => {
+    if(actionLock.current)return;
+    actionLock.current=true; setActing(true);
     setUndoItem(item);
     setItems((prev) => prev.filter((i) => i.id !== item.id));
     try {
@@ -60,16 +41,17 @@ export default function InboxScreen() {
       setUndoItem(null);
       setItems((prev) => [item, ...prev]);
       setError(toUserMessage(e, "Couldn't update that pull request."));
-    }
+    } finally { actionLock.current=false; setActing(false); }
   };
 
-  const handleDone = (item: Notification) => applyAction(item, () => api.markNotificationDone(item.id));
+  const handleDone = (item: Notification) => applyAction(item, () => api.markNotificationDone(item.id,item.updatedAt));
 
   const handleSnooze = (item: Notification) =>
     applyAction(item, () => api.snoozeNotification(item.id, new Date(Date.now() + 86400000).toISOString()));
 
   const handleUndo = async () => {
-    if (!undoItem) return;
+    if (!undoItem || actionLock.current) return;
+    actionLock.current=true; setActing(true);
     const item = undoItem;
     setUndoItem(null);
     setItems((prev) => [item, ...prev]);
@@ -78,7 +60,7 @@ export default function InboxScreen() {
     } catch (e) {
       setItems((prev) => prev.filter((i) => i.id !== item.id));
       setError(toUserMessage(e, "Couldn't undo that."));
-    }
+    } finally {actionLock.current=false; setActing(false);}
   };
 
   const navigateToPr = (item: Notification) => {
@@ -162,7 +144,7 @@ export default function InboxScreen() {
         >
           <Text style={[typography.footnote, { color: colors.text }]}>Moved out of your inbox</Text>
           <TouchableOpacity
-            onPress={handleUndo}
+            disabled={acting} onPress={handleUndo}
             style={styles.undoBtn}
             accessibilityRole="button"
             accessibilityLabel={`Undo moving ${undoItem.title}`}
@@ -177,7 +159,7 @@ export default function InboxScreen() {
           title="Loading your inbox..."
           message="Fetching pull requests, status checks, and AI summaries."
         />
-      ) : error ? (
+      ) : error && items.length===0 ? (
         <ErrorState
           title="Could not load your inbox"
           message={error}
@@ -192,11 +174,13 @@ export default function InboxScreen() {
           onAction={fetchItems}
         />
       ) : (
-        <ScrollView
-          contentContainerStyle={{ padding: isDesktop ? 24 : spacing.base, paddingBottom: 80 }}
-          refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} tintColor={colors.brandLight} />}
-        >
-          {/* Summary Strip Card */}
+        <FlatList
+          key={isDesktop?'desktop':'phone'} numColumns={isDesktop?2:1} columnWrapperStyle={isDesktop?{gap:16}:undefined}
+          data={items} keyExtractor={item=>item.id} initialNumToRender={8} maxToRenderPerBatch={8} windowSize={5}
+          contentContainerStyle={{padding:isDesktop?24:spacing.base,paddingBottom:80}}
+          refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} tintColor={colors.brandLight}/>}
+          onEndReached={()=>{if(!error)void more();}} onEndReachedThreshold={0.4}
+          ListHeaderComponent={<>          {/* Summary Strip Card */}
           <View
             style={[styles.summaryStrip, { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.lg }, { padding:16, marginBottom:16 }]}
             accessibilityLabel={`Summary: ${items.filter((i) => i.kind === "review").length} needs you, ${items.filter((i) => i.kind === "mention").length} FYI, ${items.filter((i) => i.kind === "mine").length} mine`}
@@ -221,14 +205,15 @@ export default function InboxScreen() {
             </View>
           </View>
 
-          {/* PR Items List: two columns on desktop, one column elsewhere */}
-          <View style={isDesktop ? styles.itemGrid : undefined}>
-            {items.map((item) => (
+</>}
+          ListFooterComponent={hasMore || error?<TouchableOpacity disabled={isRefreshing} onPress={()=>void more()} accessibilityRole="button" style={{padding:16,minHeight:44}}><Text style={{color:colors.brandLight}}>{isRefreshing?'Loading…':error?'Retry loading pull requests':'Load more pull requests'}</Text></TouchableOpacity>:undefined}
+          renderItem={({item})=>(
               <View
                 key={item.id}
                 style={[
                   styles.itemCard,
-                  isDesktop && styles.itemCardGrid,
+                  isDesktop && {flex:1,maxWidth:"50%"},
+
                   { padding:16, marginBottom:16 },
                   {
                     backgroundColor: colors.surface,
@@ -277,7 +262,7 @@ export default function InboxScreen() {
 
                   <View style={styles.quickActions}>
                     <TouchableOpacity
-                      onPress={() => handleSnooze(item)}
+                      disabled={acting} onPress={() => handleSnooze(item)}
                       style={[styles.actionBtn, { borderColor: colors.border },{borderRadius:radius.md}]}
                       accessibilityRole="button"
                       accessibilityLabel={`Snooze ${item.title}`}
@@ -285,7 +270,7 @@ export default function InboxScreen() {
                       <Text style={[typography.caption, { color: colors.textSecondary, fontWeight: "600" }]}>Snooze</Text>
                     </TouchableOpacity>
                     <TouchableOpacity
-                      onPress={() => handleDone(item)}
+                      disabled={acting} onPress={() => handleDone(item)}
                       style={[styles.actionBtn, { borderColor: colors.border, backgroundColor: colors.surfaceInteractive },{borderRadius:radius.md}]}
                       accessibilityRole="button"
                       accessibilityLabel={`Mark ${item.title} as done`}
@@ -295,9 +280,8 @@ export default function InboxScreen() {
                   </View>
                 </View>
               </View>
-            ))}
-          </View>
-        </ScrollView>
+)}
+        />
       )}
     </View>
   );
