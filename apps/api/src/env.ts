@@ -14,15 +14,25 @@ export interface TokenRefresherNamespace {
   get(id: DurableObjectId): { refresh(userId: string): Promise<RefreshOutcome> };
 }
 
+/** Minimal shape of the Workers AI binding. */
+export interface AiBinding {
+  run(model: string, inputs: unknown, options?: { gateway?: { id: string } }): Promise<unknown>;
+}
+
 /** Worker bindings. Non-secret values come from wrangler.toml [vars]; secrets from `wrangler secret put`. */
 export interface Env {
   APP_ENV?: string;
   WEB_ORIGIN?: string;
   SITE_ORIGIN?: string;
-  MODEL_PROVIDER?: string;
-  MODEL_ID?: string;
+  /** Per-task model routes, each `provider:model` from the allowlist in ai/routes.ts. */
+  MODEL_ROUTE_SUMMARY?: string;
+  MODEL_ROUTE_RISK?: string;
+  MODEL_ROUTE_TRIAGE?: string;
+  MODEL_ROUTE_HIGHLIGHT?: string;
   MODEL_BASE_URL?: string;
   MODEL_API_KEY?: string;
+  /** AI Gateway id for Workers AI calls (not a secret). Absent means calls go without a gateway. */
+  AI_GATEWAY_ID?: string;
   /** Daily AI actions per user on the free plan. Defaults to 30. */
   AI_DAILY_ACTIONS_FREE?: string;
   /** Daily AI actions per user on the paid plan. Defaults to 500. */
@@ -53,6 +63,9 @@ export interface Env {
   SUPPORT_RATE_LIMITER?: RateLimiter;
   TOKEN_REFRESHER?: TokenRefresherNamespace;
   TELEMETRY?: AnalyticsEngineDataset;
+  /** One content-free data point per model call. Metering is skipped when absent. */
+  AI_METRICS?: AnalyticsEngineDataset;
+  AI?: AiBinding;
   POSTS?: KVNamespace;
   GITHUB_EVENTS?: Pick<Queue<GitHubEventMessage>, "send">;
 }

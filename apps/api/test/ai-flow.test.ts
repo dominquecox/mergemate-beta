@@ -1,7 +1,7 @@
 import { ErrorBody } from "@mergemate/contracts";
 import { describe, expect, it } from "vitest";
 import { demoHeaders } from "./demo-session";
-import { json, testContext, validModelEnv } from "./helpers";
+import { fakeAi, json, testContext, validModelEnv } from "./helpers";
 import type { RecordedCall, TestContext } from "./helpers";
 import { appFor, signIn, tokenResponse } from "./sign-in";
 
@@ -97,7 +97,8 @@ describe("AI flow with real GitHub data", () => {
   });
 
   it("floors risk on real signals and enforces caps across actions", async () => {
-    const ctx = testContext({ ...validModelEnv(), AI_DAILY_ACTIONS_FREE: "2" });
+    const ai = fakeAi(async () => ({ response: riskText }));
+    const ctx = testContext({ ...validModelEnv(), AI: ai, AI_DAILY_ACTIONS_FREE: "2" });
     const call = appFor(ctx);
     const { headers } = await signIn(ctx, "ios");
     stubPr(ctx, 8, "bbb222", [
@@ -124,6 +125,9 @@ describe("AI flow with real GitHub data", () => {
     expect(body.level).toBe("high");
     expect(body.secretFindings).toEqual([{ file: "src/auth/login.ts", line: 2, rule: "credential-assignment" }]);
     expect(body.quality.needsCloserLook).toBe(true);
+    expect(ai.runs.map((run) => run.model)).toEqual(["@cf/meta/llama-3.3-70b-instruct-fp8-fast"]);
+    expect(JSON.stringify(ai.runs[0]?.inputs)).toContain("[REDACTED]");
+    expect(JSON.stringify(ai.runs[0]?.inputs)).not.toContain("k".repeat(20));
 
     const summary = await call("/v1/prs/acme/api/8/summary", { method: "POST", headers });
     expect(summary.status).toBe(200);

@@ -11,8 +11,10 @@ WEB_ORIGIN = "http://localhost:8081"
 SITE_ORIGIN = "https://dev.mergemate.dev"
 GITHUB_APP_CLIENT_ID = "Iv1.submission-dev-example"
 GITHUB_APP_SLUG = "submission-production-example"
-MODEL_PROVIDER = "meta"
-MODEL_ID = "muse-spark-1.2"
+MODEL_ROUTE_SUMMARY = "meta:muse-spark-1.2"
+MODEL_ROUTE_RISK = "workers-ai:@cf/meta/llama-3.3-70b-instruct-fp8-fast"
+MODEL_ROUTE_TRIAGE = "workers-ai:@cf/meta/llama-3.3-70b-instruct-fp8-fast"
+MODEL_ROUTE_HIGHLIGHT = "workers-ai:@cf/meta/llama-4-scout-17b-16e-instruct"
 MODEL_BASE_URL = "https://api.meta.ai/v1"
 # Initial value; confirm before launch.
 AI_GLOBAL_DAILY_ACTIONS = "300"
@@ -67,6 +69,14 @@ new_sqlite_classes = ["TokenRefresher"]
 binding = "TELEMETRY"
 dataset = "mergemate_events"
 
+[[analytics_engine_datasets]]
+binding = "AI_METRICS"
+dataset = "mergemate_ai_metrics_dev"
+
+# Workers AI. No secret is needed. AI_GATEWAY_ID (a non-secret var) is set by the owner; see DEPLOY.md.
+[ai]
+binding = "AI"
+
 # Deployed environments. D1 database ids and the POSTS KV namespace id (shared with the staff tool)
 # are added when those resources exist (DEPLOY.md).
 [env.dev]
@@ -79,8 +89,10 @@ WEB_ORIGIN = "https://dev.mergemate.dev"
 SITE_ORIGIN = "https://dev.mergemate.dev"
 GITHUB_APP_CLIENT_ID = "Iv1.submission-dev-example"
 GITHUB_APP_SLUG = "submission-production-example"
-MODEL_PROVIDER = "meta"
-MODEL_ID = "muse-spark-1.2"
+MODEL_ROUTE_SUMMARY = "meta:muse-spark-1.2"
+MODEL_ROUTE_RISK = "workers-ai:@cf/meta/llama-3.3-70b-instruct-fp8-fast"
+MODEL_ROUTE_TRIAGE = "workers-ai:@cf/meta/llama-3.3-70b-instruct-fp8-fast"
+MODEL_ROUTE_HIGHLIGHT = "workers-ai:@cf/meta/llama-4-scout-17b-16e-instruct"
 MODEL_BASE_URL = "https://api.meta.ai/v1"
 # Initial value; confirm before launch.
 AI_GLOBAL_DAILY_ACTIONS = "300"
@@ -121,6 +133,13 @@ class_name = "TokenRefresher"
 binding = "TELEMETRY"
 dataset = "mergemate_events_dev"
 
+[[env.dev.analytics_engine_datasets]]
+binding = "AI_METRICS"
+dataset = "mergemate_ai_metrics_dev"
+
+[env.dev.ai]
+binding = "AI"
+
 [env.production]
 name = "mergemate-api"
 
@@ -130,8 +149,10 @@ APP_ENV = "production"
 STRIPE_MODE = "disabled"
 WEB_ORIGIN = "https://app.mergemate.dev"
 SITE_ORIGIN = "https://mergemate.dev"
-MODEL_PROVIDER = "meta"
-MODEL_ID = "muse-spark-1.2"
+MODEL_ROUTE_SUMMARY = "meta:muse-spark-1.2"
+MODEL_ROUTE_RISK = "workers-ai:@cf/meta/llama-3.3-70b-instruct-fp8-fast"
+MODEL_ROUTE_TRIAGE = "workers-ai:@cf/meta/llama-3.3-70b-instruct-fp8-fast"
+MODEL_ROUTE_HIGHLIGHT = "workers-ai:@cf/meta/llama-4-scout-17b-16e-instruct"
 MODEL_BASE_URL = "https://api.meta.ai/v1"
 # Initial value; confirm before launch.
 AI_GLOBAL_DAILY_ACTIONS = "300"
@@ -171,6 +192,13 @@ class_name = "TokenRefresher"
 [[env.production.analytics_engine_datasets]]
 binding = "TELEMETRY"
 dataset = "mergemate_events"
+
+[[env.production.analytics_engine_datasets]]
+binding = "AI_METRICS"
+dataset = "mergemate_ai_metrics"
+
+[env.production.ai]
+binding = "AI"
 
 [[queues.producers]]
 binding = "STRIPE_EVENTS"

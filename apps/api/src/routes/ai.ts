@@ -15,11 +15,13 @@ import {
 import type { AiDeps, PrDataSource, PrRefParts } from "./ai-engine";
 import type { ModelTransport } from "../ai/provider";
 import { requireBinding } from "../config";
-import type { AppEnv } from "../env";
+import type { AiBinding, AppEnv } from "../env";
 import { ApiError } from "../errors";
 
 export interface AiRouterDeps {
   transport?: ModelTransport;
+  /** Workers AI binding override; defaults to the Worker's `AI` binding. */
+  ai?: AiBinding;
   prSource?: PrDataSource;
 }
 
@@ -48,6 +50,7 @@ export const createAiRouter = (deps: AiRouterDeps = {}) => {
     return {
       db: requireBinding(c.env, "DB"),
       transport: deps.transport ?? createFetchTransport(requestDeps.fetch),
+      ai: deps.ai ?? c.env.AI,
       prSource: deps.prSource ?? githubPrDataSource(c.env, requestDeps),
       limits: actionLimits(c.env),
     };

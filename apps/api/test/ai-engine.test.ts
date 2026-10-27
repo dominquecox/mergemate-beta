@@ -30,7 +30,8 @@ import type { PrDetail } from "@mergemate/contracts";
 import type { SessionRecord } from "../src/lib/sessions";
 import { createDbConsentStore, parseConsentUpdate, requireConsent } from "../src/routes/consent";
 import { ApiError } from "../src/errors";
-import { mockTransport, validModelEnv } from "./helpers";
+import type { AiBinding } from "../src/env";
+import { fakeAi, mockTransport, validModelEnv } from "./helpers";
 import { TestD1 } from "./d1";
 
 const testDb = () => new TestD1() as unknown as D1Database;
@@ -83,6 +84,7 @@ const grantedDeps = async (transport = mockTransport(async () => ({ text: "{}" }
   return {
     db,
     transport,
+    ai: undefined as AiBinding | undefined,
     prSource: async () => prData("run();"),
     limits: { free: 30, pro: 500, global: undefined as number | undefined },
   };
@@ -333,7 +335,7 @@ describe("summarizePr", () => {
   it("surfaces misconfiguration instead of substituting", async () => {
     const deps = await grantedDeps(mockTransport(async () => ({ text: summaryText })));
     const err = await apiError(() =>
-      summarizePr(deps, user, { owner: "o", repo: "r", number: 1 }, { ...validModelEnv(), MODEL_ID: "  " }),
+      summarizePr(deps, user, { owner: "o", repo: "r", number: 1 }, { ...validModelEnv(), MODEL_ROUTE_SUMMARY: "  " }),
     );
     expect(err.code).toBe("misconfigured");
   });
@@ -414,7 +416,8 @@ describe("usage reservation", () => {
     expect(usedRows(deps.db, "u1")).toEqual([5]);
     expect(usedRows(deps.db, "global")).toEqual([7]);
 
-    const garbage = await grantedDeps(slowTransport(async () => ({ text: "not json" })));
+    const garbage = await grantedDeps();
+    garbage.ai = fakeAi(async () => ({ response: "not json" }));
     garbage.limits = { free: 30, pro: 500, global: 100 };
     const risk = await apiError(() =>
       assessPrRisk(garbage, user, { owner: "o", repo: "r", number: 1 }, validModelEnv()),
@@ -465,8 +468,8 @@ describe("assessPrRisk", () => {
 
   it("floors the level on secrets and attaches findings plus quality", async () => {
     const token = fakeToken();
-    const transport = mockTransport(async () => ({ text: riskText }));
-    const deps = await grantedDeps(transport);
+    const deps = await grantedDeps();
+    deps.ai = fakeAi(async () => ({ response: riskText }));
     deps.prSource = async () => ({
       ...prData(`key = "${token}"`),
       authorIsBot: true,
@@ -631,7 +634,7 @@ describe("createFetchTransport", () => {
     const { fn, calls } = stubFetch([429, 200]);
     const transport = createFetchTransport(fn);
     const result = await transport.complete({
-      config: { provider: "meta", modelId: "muse-spark-1.2", baseUrl: "https://api.meta.ai/v1" },
+      config: { provider: "meta", modelId: "muse-spark-1.2", maxInputChars: 190_000, baseUrl: "https://api.meta.ai/v1" },
       apiKey: "k",
       request: { system: "s", prompt: "p", maxOutputTokens: 10 },
     });
@@ -641,10 +644,26 @@ describe("createFetchTransport", () => {
     expect((calls[0]?.init.headers as Record<string, string>).authorization).toBe("Bearer k");
   });
 
+  it("reports token usage when the endpoint provides it", async () => {
+    const fn = (async () =>
+      new Response(
+        JSON.stringify({
+          choices: [{ message: { content: "hi" } }],
+          usage: { prompt_tokens: 12, completion_tokens: 3 },
+        }),
+      )) as unknown as typeof fetch;
+    const result = await createFetchTransport(fn).complete({
+      config: { provider: "meta", modelId: "m", maxInputChars: 190_000, baseUrl: "https://x" },
+      apiKey: "k",
+      request: { system: "s", prompt: "p", maxOutputTokens: 1 },
+    });
+    expect(result).toEqual({ text: "hi", usage: { inputTokens: 12, outputTokens: 3 } });
+  });
+
   it("gives up after the retry and on client errors", async () => {
     await expect(
       createFetchTransport(stubFetch([500, 500]).fn).complete({
-        config: { provider: "meta", modelId: "m", baseUrl: "https://x" },
+        config: { provider: "meta", modelId: "m", maxInputChars: 190_000, baseUrl: "https://x" },
         apiKey: "k",
         request: { system: "s", prompt: "p", maxOutputTokens: 1 },
       }),
@@ -652,7 +671,7 @@ describe("createFetchTransport", () => {
     const stub = stubFetch([400]);
     await expect(
       createFetchTransport(stub.fn).complete({
-        config: { provider: "meta", modelId: "m", baseUrl: "https://x" },
+        config: { provider: "meta", modelId: "m", maxInputChars: 190_000, baseUrl: "https://x" },
         apiKey: "k",
         request: { system: "s", prompt: "p", maxOutputTokens: 1 },
       }),

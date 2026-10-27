@@ -13,15 +13,19 @@ import type {
   TriageLane,
 } from "@mergemate/contracts";
 import type { MiddlewareHandler } from "hono";
+import { recordAiCall } from "../ai/metrics";
+import type { AiOutcome } from "../ai/metrics";
 import { createModelProvider } from "../ai/provider";
-import type { ModelTransport } from "../ai/provider";
+import type { CompletionRequest, ModelProvider, ModelTransport } from "../ai/provider";
+import type { AiTask } from "../ai/routes";
+import { RISK_JSON_SCHEMA, SUMMARY_JSON_SCHEMA } from "../ai/schemas";
 import { githubGet } from "../lib/github";
 import { getAccessToken } from "../lib/github-tokens";
 import type { SessionRecord } from "../lib/sessions";
 import { getBillingPlan } from "../lib/stripe-billing";
 import type { ConsentStore } from "./consent";
 import { createDbConsentStore, requireConsent } from "./consent";
-import type { AppEnv, Deps, Env } from "../env";
+import type { AiBinding, AppEnv, Deps, Env } from "../env";
 import { ApiError } from "../errors";
 import { fetchPrDetail } from "./github";
 
@@ -248,11 +252,14 @@ const MAX_TOTAL_CHARS = 190000;
 const TRUNCATION_MARKER = "\n…[truncated]";
 
 /** Trims a file list to the diff budget. Always reports analyzed, skipped and truncated counts. */
-export const buildDiffContext = (input: {
-  title: string;
-  description: string;
-  files: PrFileInput[];
-}): { context: string; coverage: AnalysisCoverage } => {
+export const buildDiffContext = (
+  input: {
+    title: string;
+    description: string;
+    files: PrFileInput[];
+  },
+  maxTotalChars: number = MAX_TOTAL_CHARS,
+): { context: string; coverage: AnalysisCoverage } => {
   const considered = input.files.slice(0, MAX_FILES);
   let skippedFiles = input.files.length - considered.length;
   const kept: { file: PrFileInput; changed: number }[] = [];
@@ -268,7 +275,7 @@ export const buildDiffContext = (input: {
   }
   kept.sort((a, b) => b.changed - a.changed);
   const head = `Title: ${input.title}\nDescription: ${input.description}\n`;
-  let budget = Math.max(0, MAX_TOTAL_CHARS - head.length);
+  let budget = Math.max(0, Math.min(maxTotalChars, MAX_TOTAL_CHARS) - head.length);
   const parts: string[] = [];
   let analyzedFiles = 0;
   let truncatedFiles = 0;
@@ -392,6 +399,7 @@ export const stripCodeFences = (text: string): string => {
 
 interface ChatCompletionsResponse {
   choices?: { message?: { content?: string } }[];
+  usage?: { prompt_tokens?: number; completion_tokens?: number };
 }
 
 const UPSTREAM_TIMEOUT_MS = 20000;
@@ -426,7 +434,10 @@ export const createFetchTransport = (fetchImpl: typeof fetch = fetch): ModelTran
       const data = (await res.json()) as ChatCompletionsResponse;
       const text = data.choices?.[0]?.message?.content;
       if (!text || !text.trim()) throw new Error("empty upstream reply");
-      return { text };
+      const { prompt_tokens: inputTokens, completion_tokens: outputTokens } = data.usage ?? {};
+      return typeof inputTokens === "number" && typeof outputTokens === "number"
+        ? { text, usage: { inputTokens, outputTokens } }
+        : { text };
     }
     throw new Error("upstream retry exhausted");
   },
@@ -539,6 +550,8 @@ export const FIXTURE_TRIAGE: TriageItem[] = [
 export interface AiDeps {
   db: D1Database;
   transport: ModelTransport;
+  /** Workers AI binding, injected so tests use a fake. */
+  ai?: AiBinding | undefined;
   prSource: PrDataSource;
   limits: AiActionLimits;
 }
@@ -626,12 +639,57 @@ const withReservation = async <T>(
   }
 };
 
-const parseModelJson = (text: string): unknown => {
+const unusableAnswer = () =>
+  new ApiError("upstream_unavailable", "The AI service returned an unusable answer. Try again.");
+
+interface AnswerSchema<T> {
+  safeParse(value: unknown): { success: true; data: T } | { success: false };
+}
+
+/**
+ * One metered model call: sends the request, validates the answer against the schema and discards
+ * anything invalid. Writes one content-free data point whatever the outcome.
+ */
+const runModelTask = async <T>(
+  env: Env,
+  provider: ModelProvider,
+  task: AiTask,
+  request: CompletionRequest,
+  schema: AnswerSchema<T>,
+): Promise<T> => {
+  const started = Date.now();
+  const meter = (outcome: AiOutcome, usage?: { inputTokens: number; outputTokens: number }) =>
+    recordAiCall(env.AI_METRICS, {
+      task,
+      provider: provider.config.provider,
+      modelId: provider.config.modelId,
+      outcome,
+      inputTokens: usage?.inputTokens ?? 0,
+      outputTokens: usage?.outputTokens ?? 0,
+      latencyMs: Date.now() - started,
+    });
+  let reply;
   try {
-    return JSON.parse(stripCodeFences(text)) as unknown;
-  } catch {
-    throw new ApiError("upstream_unavailable", "The AI service returned an unusable answer. Try again.");
+    reply = await provider.complete(request);
+  } catch (error) {
+    meter("upstream_error");
+    if (error instanceof ApiError) throw error;
+    throw new ApiError("upstream_unavailable", "The AI service is unavailable. Try again.");
   }
+  let json: unknown;
+  try {
+    json = JSON.parse(stripCodeFences(reply.text)) as unknown;
+  } catch {
+    meter("invalid_output", reply.usage);
+    throw unusableAnswer();
+  }
+  const parsed = schema.safeParse(json);
+  if (!parsed.success) {
+    meter("invalid_output", reply.usage);
+    throw unusableAnswer();
+  }
+  meter("ok", reply.usage);
+  return parsed.data;
 };
 
 interface CommonSignals {
@@ -679,26 +737,24 @@ export const summarizePr = async (
   const key = cacheKey(userId, refStr, data.headSha, "summary");
   const hit = await stores.cache.get<PrSummary>(key);
   if (hit) return { body: hit, limit, remaining };
-  const { context, coverage } = buildDiffContext(data);
+  const provider = createModelProvider(env, "summary", deps);
+  // Each route gets only as much PR context as its model's window holds; coverage reports the rest.
+  const { context, coverage } = buildDiffContext(data, provider.config.maxInputChars);
   const { text } = redactSecrets(context);
-  const provider = createModelProvider(env, deps.transport);
   const { value: body, remaining: left } = await withReservation(stores, deps.limits, userId, limit, async () => {
-    let reply: string;
-    try {
-      ({ text: reply } = await provider.complete({
+    const answer = await runModelTask(
+      env,
+      provider,
+      "summary",
+      {
         system: SUMMARY_SYSTEM,
         prompt: buildPrPrompt(text),
         maxOutputTokens: SUMMARY_MAX_TOKENS,
-      }));
-    } catch (error) {
-      if (error instanceof ApiError) throw error;
-      throw new ApiError("upstream_unavailable", "The AI service is unavailable. Try again.");
-    }
-    const parsed = ModelSummary.safeParse(parseModelJson(reply));
-    if (!parsed.success) {
-      throw new ApiError("upstream_unavailable", "The AI service returned an unusable answer. Try again.");
-    }
-    const result: PrSummary = { ...parsed.data, coverage };
+        jsonSchema: SUMMARY_JSON_SCHEMA,
+      },
+      ModelSummary,
+    );
+    const result: PrSummary = { ...answer, coverage };
     await stores.cache.set(key, userId, result);
     return result;
   });
@@ -722,25 +778,23 @@ export const assessPrRisk = async (
   const hit = await stores.cache.get<PrRisk>(key);
   if (hit) return { body: hit, limit, remaining };
   const signals = commonSignals(data);
-  const { context, coverage } = buildDiffContext(data);
+  const provider = createModelProvider(env, "risk", deps);
+  // Each route gets only as much PR context as its model's window holds; coverage reports the rest.
+  const { context, coverage } = buildDiffContext(data, provider.config.maxInputChars);
   const { text } = redactSecrets(context);
-  const provider = createModelProvider(env, deps.transport);
   const { value: body, remaining: left } = await withReservation(stores, deps.limits, userId, limit, async () => {
-    let reply: string;
-    try {
-      ({ text: reply } = await provider.complete({
+    const answer = await runModelTask(
+      env,
+      provider,
+      "risk",
+      {
         system: RISK_SYSTEM,
         prompt: buildPrPrompt(text),
         maxOutputTokens: RISK_MAX_TOKENS,
-      }));
-    } catch (error) {
-      if (error instanceof ApiError) throw error;
-      throw new ApiError("upstream_unavailable", "The AI service is unavailable. Try again.");
-    }
-    const parsed = ModelRisk.safeParse(parseModelJson(reply));
-    if (!parsed.success) {
-      throw new ApiError("upstream_unavailable", "The AI service returned an unusable answer. Try again.");
-    }
+        jsonSchema: RISK_JSON_SCHEMA,
+      },
+      ModelRisk,
+    );
     const deterministic = assessRiskSignals({
       files: signals.files,
       totalChanged: signals.totalChanged,
@@ -749,11 +803,11 @@ export const assessPrRisk = async (
       checksFailing: data.checksFailing,
     });
     const quality = assessQuality(signals.qualityInput);
-    const reasons = [...deterministic.reasons, ...parsed.data.reasons].filter(
+    const reasons = [...deterministic.reasons, ...answer.reasons].filter(
       (reason, index, all) => all.indexOf(reason) === index,
     );
     const result: PrRisk = {
-      level: maxLevel(deterministic.level, parsed.data.level),
+      level: maxLevel(deterministic.level, answer.level),
       reasons,
       coverage,
       secretFindings: signals.secretFindings,

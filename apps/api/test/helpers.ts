@@ -1,4 +1,4 @@
-import type { Deps, Env, RateLimiter, RefreshOutcome } from "../src/env";
+import type { AiBinding, Deps, Env, RateLimiter, RefreshOutcome } from "../src/env";
 import type { ModelTransport } from "../src/ai/provider";
 import { refreshTokens } from "../src/lib/github-tokens";
 import { TestD1 } from "./d1";
@@ -24,8 +24,10 @@ const testEncryptionKey = (version: string) =>
   `${version}:${Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString("base64")}`;
 
 export const validModelEnv = (): Env => ({
-  MODEL_PROVIDER: "meta",
-  MODEL_ID: "muse-spark-1.2",
+  MODEL_ROUTE_SUMMARY: "meta:muse-spark-1.2",
+  MODEL_ROUTE_RISK: "workers-ai:@cf/meta/llama-3.3-70b-instruct-fp8-fast",
+  MODEL_ROUTE_TRIAGE: "workers-ai:@cf/meta/llama-3.3-70b-instruct-fp8-fast",
+  MODEL_ROUTE_HIGHLIGHT: "workers-ai:@cf/meta/llama-4-scout-17b-16e-instruct",
   MODEL_BASE_URL: "https://api.meta.ai/v1",
   MODEL_API_KEY: TEST_API_KEY,
 });
@@ -42,6 +44,40 @@ export const mockTransport = (
       return reply();
     },
   };
+};
+
+export interface AiRun {
+  model: string;
+  inputs: unknown;
+  options: unknown;
+  argCount: number;
+}
+
+/** Fake Workers AI binding: records calls and returns a canned reply. No real AI calls. */
+export const fakeAi = (
+  reply: (run: AiRun) => Promise<unknown> = async () => ({ response: "{}" }),
+): AiBinding & { runs: AiRun[] } => {
+  const runs: AiRun[] = [];
+  return {
+    runs,
+    run(...args: Parameters<AiBinding["run"]>) {
+      const run: AiRun = { model: args[0], inputs: args[1], options: args[2], argCount: args.length };
+      runs.push(run);
+      return reply(run);
+    },
+  };
+};
+
+/** Fake Analytics Engine dataset: records data points. */
+export const fakeDataset = (fail = false) => {
+  const points: { blobs?: unknown[]; doubles?: number[]; indexes?: unknown[] }[] = [];
+  return {
+    points,
+    writeDataPoint(point?: { blobs?: unknown[]; doubles?: number[]; indexes?: unknown[] }) {
+      if (fail) throw new Error("metrics down");
+      points.push(point ?? {});
+    },
+  } as AnalyticsEngineDataset & { points: typeof points };
 };
 
 export interface RecordedCall {

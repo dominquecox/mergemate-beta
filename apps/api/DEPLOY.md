@@ -35,6 +35,14 @@ npm exec -w @mergemate/api -- wrangler secret put SUPPORT_EMAIL --env dev
 npm exec -w @mergemate/api -- wrangler secret put TURNSTILE_SECRET_KEY --env dev
 ```
 
+## AI models
+
+Each AI task has its own route in `wrangler.toml` `[vars]`: `MODEL_ROUTE_SUMMARY`, `MODEL_ROUTE_RISK`, `MODEL_ROUTE_TRIAGE` and `MODEL_ROUTE_HIGHLIGHT`, written `provider:model`. The code accepts only a fixed list of routes; an unset or unlisted value is a configuration error, and there is no fallback to another route. `MODEL_BASE_URL` and the `MODEL_API_KEY` secret apply to `meta:` routes only.
+
+`workers-ai:` routes use the `AI` binding (`[ai]` in `wrangler.toml`), which needs no secret. To send those calls through AI Gateway, set `AI_GATEWAY_ID` as a plain var to the gateway's id (not a secret; leave it out of `wrangler.toml` until the gateway exists, and turn prompt and response logging off on the gateway). When it is unset, Workers AI is called without a gateway.
+
+Every model call writes one content-free data point to the `AI_METRICS` Analytics Engine dataset (`mergemate_ai_metrics_dev` for local and dev, `mergemate_ai_metrics` for production): blobs task, provider, model, outcome; doubles input tokens, output tokens, latency in ms.
+
 ## Database (one-time per environment)
 
 Create the D1 database, put the printed `database_id` in a `[[env.dev.d1_databases]]` block (binding `DB`, `database_name = "mergemate-db-dev"`, `migrations_dir = "migrations"`) in `wrangler.toml`, then apply migrations:
