@@ -27,14 +27,8 @@ export default function SignInScreen() {
     <ScrollView contentContainerStyle={[styles.container, { backgroundColor: colors.background, padding: spacing.xl }]}>
       <View style={styles.header}>
         <Image
-          source={require("../../assets/icon.png")}
-          style={[styles.appIcon, { borderRadius: radius.xl }]}
-          resizeMode="cover"
-          accessibilityLabel="MergeMate Icon"
-        />
-        <Image
           source={isDark ? require("../../assets/logo-dark.png") : require("../../assets/logo-light.png")}
-          style={[styles.logo, { marginTop: spacing.md }]}
+          style={styles.logo}
           resizeMode="contain"
           accessibilityLabel="MergeMate"
         />
@@ -135,13 +129,9 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginTop: 24,
   },
-  appIcon: {
-    width: 80,
-    height: 80,
-  },
   logo: {
-    width: 180,
-    height: 44,
+    width: 220,
+    height: 54,
   },
   errorBanner: {
     width: "100%",
