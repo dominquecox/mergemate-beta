@@ -23,9 +23,9 @@ export async function verifyMetaKey(env: Env,deps: Deps,key: string) {
   if(config.provider!=='meta')throw new Error('Invalid verification route');
   let response: Response;
   try {
-    response=await deps.fetch(`${config.baseUrl}/chat/completions`,{
+    response=await deps.fetch(`${config.baseUrl}/responses`,{
       method:'POST',headers:{authorization:`Bearer ${key}`,'content-type':'application/json','cf-aig-collect-log':'false','cf-aig-skip-cache':'true','cf-aig-max-attempts':'1','cf-aig-no-wholesale':'true'},
-      body:JSON.stringify({model:config.modelId,messages:[{role:'user',content:'Reply OK.'}],max_tokens:1}),
+      body:JSON.stringify({model:config.modelId,input:'Reply OK.',max_output_tokens:16,reasoning:{effort:'low'},store:false}),
       signal:AbortSignal.timeout(20_000),redirect:'error',
     });
   } catch { throw new ApiError('upstream_unavailable','The Meta key could not be checked. Try again.'); }
@@ -34,10 +34,10 @@ export async function verifyMetaKey(env: Env,deps: Deps,key: string) {
     if(response.status===401 || response.status===403)throw new ApiError('validation_failed','Meta rejected this key. Check the key and its access.');
     throw new ApiError('upstream_unavailable','The Meta key could not be checked. Try again.');
   }
-  // A token-limited response may have no visible text. A valid completion envelope
+  // A token-limited response may have no visible text. A valid Responses envelope
   // confirms authentication without requiring more billable output.
-  const body=await response.json().catch(()=>null) as {choices?:unknown[]}|null;
-  if(!Array.isArray(body?.choices) || !body.choices.length)throw new ApiError('upstream_unavailable','The Meta key could not be checked. Try again.');
+  const body=await response.json().catch(()=>null) as {object?:unknown}|null;
+  if(body?.object!=='response')throw new ApiError('upstream_unavailable','The Meta key could not be checked. Try again.');
 }
 
 /** Request-local credential context. Never mutates Worker bindings or falls back on a broken saved key. */

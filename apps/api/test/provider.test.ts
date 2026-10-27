@@ -277,8 +277,10 @@ describe("vision image input", () => {
     });
   });
 
-  it("never sends screenshots to Meta", async () => {
-    const provider = createModelProvider(validModelEnv(), "summary", { transport: mockTransport() });
-    await expect(provider.complete(withImage)).rejects.toMatchObject({ code: "upstream_unavailable" });
+  it("passes the screenshot to the Meta transport on a highlight route", async () => {
+    const transport = mockTransport();
+    const provider = createModelProvider({ ...validModelEnv(), MODEL_ROUTE_HIGHLIGHT: "meta:muse-spark-1.2" }, "highlight", { transport });
+    await provider.complete(withImage);
+    expect(transport.calls[0]?.request.image).toEqual(withImage.image);
   });
 });

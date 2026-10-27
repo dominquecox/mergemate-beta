@@ -14,9 +14,9 @@ GITHUB_APP_SLUG = "submission-production-example"
 MODEL_ROUTE_SUMMARY = "meta:muse-spark-1.2"
 # Event profile: every route on Meta's Muse models. Cost profile (after judging): risk and triage on
 # workers-ai:@cf/meta/llama-3.3-70b-instruct-fp8-fast, highlight on workers-ai:@cf/meta/llama-4-scout-17b-16e-instruct.
-MODEL_ROUTE_RISK = "workers-ai:meta/muse-spark-open"
-MODEL_ROUTE_TRIAGE = "workers-ai:meta/muse-spark-open"
-MODEL_ROUTE_HIGHLIGHT = "workers-ai:meta/muse-spark-open"
+MODEL_ROUTE_RISK = "meta:muse-spark-1.2"
+MODEL_ROUTE_TRIAGE = "meta:muse-spark-1.2"
+MODEL_ROUTE_HIGHLIGHT = "meta:muse-spark-1.2"
 MODEL_BASE_URL = "https://api.meta.ai/v1"
 # Initial value; confirm before launch.
 AI_GLOBAL_DAILY_ACTIONS = "300"
@@ -107,9 +107,9 @@ GITHUB_APP_SLUG = "submission-production-example"
 MODEL_ROUTE_SUMMARY = "meta:muse-spark-1.2"
 # Event profile: every route on Meta's Muse models. Cost profile (after judging): risk and triage on
 # workers-ai:@cf/meta/llama-3.3-70b-instruct-fp8-fast, highlight on workers-ai:@cf/meta/llama-4-scout-17b-16e-instruct.
-MODEL_ROUTE_RISK = "workers-ai:meta/muse-spark-open"
-MODEL_ROUTE_TRIAGE = "workers-ai:meta/muse-spark-open"
-MODEL_ROUTE_HIGHLIGHT = "workers-ai:meta/muse-spark-open"
+MODEL_ROUTE_RISK = "meta:muse-spark-1.2"
+MODEL_ROUTE_TRIAGE = "meta:muse-spark-1.2"
+MODEL_ROUTE_HIGHLIGHT = "meta:muse-spark-1.2"
 MODEL_BASE_URL = "https://api.meta.ai/v1"
 # Initial value; confirm before launch.
 AI_GLOBAL_DAILY_ACTIONS = "300"
@@ -188,9 +188,9 @@ SITE_ORIGIN = "https://mergemate.dev"
 MODEL_ROUTE_SUMMARY = "meta:muse-spark-1.2"
 # Event profile: every route on Meta's Muse models. Cost profile (after judging): risk and triage on
 # workers-ai:@cf/meta/llama-3.3-70b-instruct-fp8-fast, highlight on workers-ai:@cf/meta/llama-4-scout-17b-16e-instruct.
-MODEL_ROUTE_RISK = "workers-ai:meta/muse-spark-open"
-MODEL_ROUTE_TRIAGE = "workers-ai:meta/muse-spark-open"
-MODEL_ROUTE_HIGHLIGHT = "workers-ai:meta/muse-spark-open"
+MODEL_ROUTE_RISK = "meta:muse-spark-1.2"
+MODEL_ROUTE_TRIAGE = "meta:muse-spark-1.2"
+MODEL_ROUTE_HIGHLIGHT = "meta:muse-spark-1.2"
 MODEL_BASE_URL = "https://api.meta.ai/v1"
 # Initial value; confirm before launch.
 AI_GLOBAL_DAILY_ACTIONS = "300"

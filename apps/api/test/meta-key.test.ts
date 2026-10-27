@@ -9,7 +9,7 @@ import { appFor, ghUser, post, signIn } from './sign-in';
 import { demoHeaders } from './demo-session';
 import { fakeAi, fakeLimiter, json, mockTransport, testContext, validModelEnv } from './helpers';
 
-const url='https://api.meta.ai/v1/chat/completions';
+const url='https://api.meta.ai/v1/responses';
 const key=(n=1)=>`fixture-meta-user-${n}-not-real`;
 const ref={owner:'acme',repo:'api',number:7};
 const summary={whatChanged:'x',whyItMatters:'y',suggestedFocus:['src/a.ts']};
@@ -17,7 +17,7 @@ const risk={level:'low',reasons:['small change']};
 async function fixture() {
   const ctx=testContext({...validModelEnv()});const web=await signIn(ctx,'web');const call=appFor(ctx);
   const headers={...web.headers,origin:'http://localhost:8081','x-csrf-token':web.csrf??''};
-  ctx.net.on('POST',url,{choices:[{message:{content:null}}]});
+  ctx.net.on('POST',url,{object:'response',status:'incomplete',output:[]});
   const put=(value:unknown={key:key()})=>call('/v1/settings/meta-key',{...post(value,headers),method:'PUT'});
   return {ctx,web,call,headers,put};
 }
@@ -45,7 +45,7 @@ describe('user Meta key settings',()=>{
     const calls=sends(ctx);expect(calls).toHaveLength(1);expect(calls[0]?.headers.get('authorization')).toBe(`Bearer ${key()}`);
     expect(calls[0]?.headers.get('cf-aig-collect-log')).toBe('false');
     expect(calls[0]?.headers.get('cf-aig-skip-cache')).toBe('true');expect(calls[0]?.headers.get('cf-aig-max-attempts')).toBe('1');expect(calls[0]?.headers.get('cf-aig-no-wholesale')).toBe('true');
-    expect(JSON.parse(calls[0]?.body??'{}')).toEqual({model:'muse-spark-1.2',messages:[{role:'user',content:'Reply OK.'}],max_tokens:1});
+    expect(JSON.parse(calls[0]?.body??'{}')).toEqual({model:'muse-spark-1.2',input:'Reply OK.',max_output_tokens:16,reasoning:{effort:'low'},store:false});
     const first=ctx.db.rows<{ciphertext:string;key_version:string}>('SELECT ciphertext,key_version FROM user_meta_keys')[0];
     expect(first?.key_version).toBe(ctx.env.TOKEN_ENCRYPTION_KEY?.split(':')[0]);expect(JSON.stringify(ctx.db.rows('SELECT * FROM user_meta_keys'))).not.toContain(key());
     const cipher=await createTokenCipher(ctx.env);

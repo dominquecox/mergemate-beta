@@ -24,7 +24,7 @@ export type ModelConfig = MetaModelConfig | WorkersAiModelConfig;
 
 /**
  * One screenshot for a vision model, as a data URL. Only the highlight task sends one,
- * and only Workers AI vision routes accept it; the Meta transport rejects it outright.
+ * and only routes allowed for highlight receive it.
  */
 export interface ImageInput {
   dataUrl: string;
@@ -36,7 +36,7 @@ export interface CompletionRequest {
   maxOutputTokens: number;
   /** JSON Schema of the expected answer. Used by providers with a native JSON mode; the answer is still validated. */
   jsonSchema?: Record<string, unknown>;
-  /** Screenshot bytes for a vision model. Workers AI only; never sent to Meta. */
+  /** Screenshot for a vision model; sent only on routes allowed for highlight. */
   image?: ImageInput | undefined;
 }
 
@@ -259,12 +259,7 @@ export const createModelProvider = (env: Env, task: AiTask, deps: ProviderDeps):
   let send: Send;
   if (config.provider === "meta") {
     const apiKey = requireApiKey(env);
-    send = (request) => {
-      // Screenshots never leave the Workers AI vision route. Dropping one silently would
-      // analyze without the image the answer claims to describe, so this fails closed.
-      if (request.image) throw new ConfigError("This model route does not accept images");
-      return deps.transport.complete({ config, apiKey, request });
-    };
+    send = (request) => deps.transport.complete({ config, apiKey, request });
   } else {
     const ai = deps.ai;
     if (!ai) throw new ConfigError("AI binding is missing");

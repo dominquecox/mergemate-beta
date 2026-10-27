@@ -51,10 +51,10 @@ const stubPr = (
 };
 
 const stubModel = (ctx: ReturnType<typeof testContext>) => {
-  ctx.net.on("POST", "https://api.meta.ai/v1/chat/completions", (call: RecordedCall) => {
-    const body = JSON.parse(call.body ?? "{}") as { messages?: { content?: string }[] };
-    const prompt = body.messages?.map((m) => m.content ?? "").join("\n") ?? "";
-    return json({ choices: [{ message: { content: prompt.includes("for risk") ? riskText : summaryText } }] });
+  ctx.net.on("POST", "https://api.meta.ai/v1/responses", (call: RecordedCall) => {
+    const body = JSON.parse(call.body ?? "{}") as { instructions?: string; input?: { content?: { text?: string }[] }[] };
+    const prompt = [body.instructions ?? "", ...(body.input ?? []).flatMap((m) => (m.content ?? []).map((part) => part.text ?? ""))].join("\n");
+    return json({ object: "response", output: [{ type: "message", content: [{ type: "output_text", text: prompt.includes("for risk") ? riskText : summaryText }] }] });
   });
 };
 
@@ -86,14 +86,14 @@ describe("AI flow with real GitHub data", () => {
     expect(pullCalls).toHaveLength(1);
     expect(pullCalls[0]?.headers.get("authorization")).toBe(`Bearer ${tokenResponse().access_token}`);
 
-    const modelCalls = ctx.net.calls.filter((c) => c.url === "https://api.meta.ai/v1/chat/completions");
+    const modelCalls = ctx.net.calls.filter((c) => c.url === "https://api.meta.ai/v1/responses");
     expect(modelCalls).toHaveLength(1);
     expect(modelCalls[0]?.body ?? "").toContain("[REDACTED]");
     expect(modelCalls[0]?.body ?? "").not.toContain("k".repeat(20));
 
     const second = await call("/v1/prs/acme/api/7/summary", { method: "POST", headers });
     expect(second.status).toBe(200);
-    expect(ctx.net.calls.filter((c) => c.url === "https://api.meta.ai/v1/chat/completions")).toHaveLength(1);
+    expect(ctx.net.calls.filter((c) => c.url === "https://api.meta.ai/v1/responses")).toHaveLength(1);
   });
 
   it("floors risk on real signals and enforces caps across actions", async () => {

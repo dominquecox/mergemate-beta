@@ -181,11 +181,11 @@ describe("model router in the AI pipeline", () => {
 });
 
 describe("route limits", () => {
-  it("allows only the vision model for highlight and keeps it off text tasks", async () => {
+  it("allows only vision-capable routes for highlight and keeps vision-only models off text tasks", async () => {
     const { resolveRoute } = await import("../src/ai/routes");
     const env = (overrides: Partial<Env>) => ({ ...validModelEnv(), ...overrides }) as Env;
     expect(() => resolveRoute(env({ MODEL_ROUTE_HIGHLIGHT: `workers-ai:${LLAMA}` }), "highlight")).toThrow();
-    expect(() => resolveRoute(env({ MODEL_ROUTE_HIGHLIGHT: "meta:muse-spark-1.2" }), "highlight")).toThrow();
+    expect(resolveRoute(env({ MODEL_ROUTE_HIGHLIGHT: "meta:muse-spark-1.2" }), "highlight").provider).toBe("meta");
     expect(() => resolveRoute(env({ MODEL_ROUTE_RISK: "workers-ai:@cf/meta/llama-4-scout-17b-16e-instruct" }), "risk")).toThrow();
   });
 

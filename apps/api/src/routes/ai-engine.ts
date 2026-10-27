@@ -403,27 +403,46 @@ export const stripCodeFences = (text: string): string => {
   return fenced ? (fenced[1] ?? "").trim() : trimmed;
 };
 
-interface ChatCompletionsResponse {
-  choices?: { message?: { content?: string } }[];
-  usage?: { prompt_tokens?: number; completion_tokens?: number };
+interface ResponsesApiResponse {
+  status?: string;
+  output?: { type?: string; content?: { type?: string; text?: string }[] }[];
+  usage?: { input_tokens?: number; output_tokens?: number };
 }
 
-const UPSTREAM_TIMEOUT_MS = 20000;
+/** Joins every output_text part of every assistant message. Reasoning items carry no text. */
+export const responsesOutputText = (data: ResponsesApiResponse): string =>
+  (data.output ?? [])
+    .filter((item) => item.type === "message")
+    .flatMap((item) => item.content ?? [])
+    .filter((part) => part.type === "output_text" && typeof part.text === "string")
+    .map((part) => part.text)
+    .join("");
 
-/** Plain-fetch transport for OpenAI-compatible chat endpoints. Retries once on 429/5xx. */
+/** Muse Spark reasons before answering (about 200 tokens on a tiny prompt at high effort), so a short request needs a longer wait. */
+const UPSTREAM_TIMEOUT_MS = 60000;
+/** Reasoning tokens count against max_output_tokens; leave room so the answer is not cut off. */
+const META_MIN_OUTPUT_TOKENS = 4096;
+
+/**
+ * Plain-fetch transport for Meta's Responses API (`POST {base}/responses`), the shape Meta's own
+ * samples use. Chat Completions on api.meta.ai returns 200 with an empty body, so it is not used.
+ * `store: false` keeps request content out of Meta's stored responses. Retries once on 429/5xx.
+ */
 export const createFetchTransport = (fetchImpl: typeof fetch = fetch): ModelTransport => ({
   async complete({ config, apiKey, request }) {
     const headers = { "content-type": "application/json", authorization: `Bearer ${apiKey}`, "cf-aig-collect-log": "false", "cf-aig-skip-cache": "true", "cf-aig-max-attempts": "1", "cf-aig-no-wholesale": "true" };
+    const content: Record<string, string>[] = [{ type: "input_text", text: request.prompt }];
+    if (request.image) content.push({ type: "input_image", image_url: request.image.dataUrl });
     const body = JSON.stringify({
       model: config.modelId,
-      messages: [
-        { role: "system", content: request.system },
-        { role: "user", content: request.prompt },
-      ],
-      max_tokens: request.maxOutputTokens,
+      instructions: request.system,
+      input: [{ role: "user", content }],
+      max_output_tokens: Math.max(request.maxOutputTokens * 8, META_MIN_OUTPUT_TOKENS),
+      reasoning: { effort: "low" },
+      store: false,
     });
     for (let attempt = 0; attempt < 2; attempt += 1) {
-      const res = await fetchImpl(`${config.baseUrl}/chat/completions`, {
+      const res = await fetchImpl(`${config.baseUrl}/responses`, {
         method: "POST",
         headers,
         body,
@@ -438,10 +457,10 @@ export const createFetchTransport = (fetchImpl: typeof fetch = fetch): ModelTran
         throw new Error(`upstream status ${res.status}`);
       }
       if (!res.ok) throw new Error(`upstream status ${res.status}`);
-      const data = (await res.json()) as ChatCompletionsResponse;
-      const text = data.choices?.[0]?.message?.content;
-      if (!text || !text.trim()) throw new Error("empty upstream reply");
-      const { prompt_tokens: inputTokens, completion_tokens: outputTokens } = data.usage ?? {};
+      const data = (await res.json()) as ResponsesApiResponse;
+      const text = responsesOutputText(data);
+      if (!text.trim()) throw new Error(`empty upstream reply (status ${data.status ?? "unknown"})`);
+      const { input_tokens: inputTokens, output_tokens: outputTokens } = data.usage ?? {};
       return typeof inputTokens === "number" && typeof outputTokens === "number"
         ? { text, usage: { inputTokens, outputTokens } }
         : { text };

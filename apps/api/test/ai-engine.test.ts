@@ -637,12 +637,12 @@ describe("createFetchTransport", () => {
     const fn = (async (url: string, init: RequestInit) => {
       calls.push({ url, init });
       const status = statuses[Math.min(calls.length - 1, statuses.length - 1)] ?? 200;
-      return new Response(JSON.stringify({ choices: [{ message: { content: "hi" } }] }), { status });
+      return new Response(JSON.stringify({ object: "response", status: "completed", output: [{ type: "reasoning" }, { type: "message", content: [{ type: "output_text", text: "hi" }] }] }), { status });
     }) as unknown as typeof fetch;
     return { fn, calls };
   };
 
-  it("posts chat completions with the key and retries once on 429", async () => {
+  it("posts to the Responses API with the key, store off, and retries once on 429", async () => {
     const { fn, calls } = stubFetch([429, 200]);
     const transport = createFetchTransport(fn);
     const result = await transport.complete({
@@ -652,16 +652,38 @@ describe("createFetchTransport", () => {
     });
     expect(result).toEqual({ text: "hi" });
     expect(calls).toHaveLength(2);
-    expect(calls[0]?.url).toBe("https://api.meta.ai/v1/chat/completions");
+    expect(calls[0]?.url).toBe("https://api.meta.ai/v1/responses");
     expect((calls[0]?.init.headers as Record<string, string>).authorization).toBe("Bearer k");
+    expect(JSON.parse(String(calls[0]?.init.body))).toEqual({
+      model: "muse-spark-1.2",
+      instructions: "s",
+      input: [{ role: "user", content: [{ type: "input_text", text: "p" }] }],
+      max_output_tokens: 4096,
+      reasoning: { effort: "low" },
+      store: false,
+    });
+  });
+
+  it("sends a screenshot as an input_image part", async () => {
+    const { fn, calls } = stubFetch([200]);
+    await createFetchTransport(fn).complete({
+      config: { provider: "meta", modelId: "muse-spark-1.2", maxInputChars: 190_000, baseUrl: "https://x" },
+      apiKey: "k",
+      request: { system: "s", prompt: "p", maxOutputTokens: 1, image: { dataUrl: "data:image/png;base64,AAAA" } },
+    });
+    const body = JSON.parse(String(calls[0]?.init.body)) as { input: { content: unknown[] }[] };
+    expect(body.input[0]?.content).toEqual([
+      { type: "input_text", text: "p" },
+      { type: "input_image", image_url: "data:image/png;base64,AAAA" },
+    ]);
   });
 
   it("reports token usage when the endpoint provides it", async () => {
     const fn = (async () =>
       new Response(
         JSON.stringify({
-          choices: [{ message: { content: "hi" } }],
-          usage: { prompt_tokens: 12, completion_tokens: 3 },
+          output: [{ type: "message", content: [{ type: "output_text", text: "hi" }] }],
+          usage: { input_tokens: 12, output_tokens: 3 },
         }),
       )) as unknown as typeof fetch;
     const result = await createFetchTransport(fn).complete({

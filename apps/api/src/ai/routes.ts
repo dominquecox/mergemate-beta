@@ -33,7 +33,8 @@ const TEXT_TASKS: readonly AiTask[] = ["summary", "risk", "triage"];
  * No contributor models: they may use prompts for training, and user code must never reach them.
  */
 const ALLOWED_ROUTES: readonly AllowedRoute[] = [
-  { provider: "meta", modelId: "muse-spark-1.2", tasks: TEXT_TASKS, maxInputChars: 190_000 },
+  // Muse Spark on Meta Model API (Responses API): text and image input.
+  { provider: "meta", modelId: "muse-spark-1.2", tasks: [...TEXT_TASKS, "highlight"], maxInputChars: 190_000 },
   // Meta's open-weight Muse model on Workers AI: text and vision, 1M-token window. The cap bounds cost, not the window.
   { provider: "workers-ai", modelId: "meta/muse-spark-open", tasks: [...TEXT_TASKS, "highlight"], maxInputChars: 400_000 },
   // 24k-token window: about 50k characters of code leaves room for the system prompt and the answer.
