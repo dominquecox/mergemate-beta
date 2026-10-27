@@ -66,6 +66,8 @@ export const account = new Hono<AppEnv>().delete("/account", async (c) => {
   await db.batch([
     db.prepare("DELETE FROM notification_state WHERE user_id = ?").bind(userId),
     db.prepare("DELETE FROM repo_watch WHERE user_id = ?").bind(userId),
+    db.prepare("DELETE FROM user_repo_access WHERE user_id = ?").bind(userId),
+    db.prepare("DELETE FROM user_access_checks WHERE user_id = ?").bind(userId),
     db.prepare("DELETE FROM github_tokens WHERE user_id = ?").bind(userId),
     db.prepare("DELETE FROM sessions WHERE user_id = ?").bind(userId),
     db.prepare("DELETE FROM users WHERE id = ?").bind(userId),

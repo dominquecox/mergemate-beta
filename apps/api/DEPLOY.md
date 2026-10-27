@@ -12,10 +12,13 @@ Run from the repository root. Each command sets one secret for the `dev` environ
 | `GITHUB_APP_CLIENT_SECRET` | GitHub App sign-in |
 | `GITHUB_APP_PRIVATE_KEY` | GitHub App installation tokens (PKCS8 PEM) |
 | `GITHUB_WEBHOOK_SECRET` | GitHub webhook signature check |
+| `GITHUB_WEBHOOK_SECRET_NEXT` | Only while rotating the webhook secret: the new value, accepted alongside the current one |
 | `TOKEN_ENCRYPTION_KEY` | Encrypting stored GitHub tokens. Format `<version>:<base64 32 bytes>`; to rotate, move the old value to `TOKEN_ENCRYPTION_KEY_PREVIOUS` and set a new version |
 | `STRIPE_SECRET_KEY` | Stripe API |
 | `STRIPE_WEBHOOK_SECRET` | Stripe webhook signature check |
 | `RESEND_API_KEY` | Transactional email |
+| `EMAIL_FROM` | Sender address for support mail (not secret; kept out of the repo) |
+| `SUPPORT_EMAIL` | Where support mail goes (not secret; kept out of the repo) |
 | `TURNSTILE_SECRET_KEY` | Bot check on public forms |
 
 ```bash
@@ -27,6 +30,8 @@ npm exec -w @mergemate/api -- wrangler secret put TOKEN_ENCRYPTION_KEY --env dev
 npm exec -w @mergemate/api -- wrangler secret put STRIPE_SECRET_KEY --env dev
 npm exec -w @mergemate/api -- wrangler secret put STRIPE_WEBHOOK_SECRET --env dev
 npm exec -w @mergemate/api -- wrangler secret put RESEND_API_KEY --env dev
+npm exec -w @mergemate/api -- wrangler secret put EMAIL_FROM --env dev
+npm exec -w @mergemate/api -- wrangler secret put SUPPORT_EMAIL --env dev
 npm exec -w @mergemate/api -- wrangler secret put TURNSTILE_SECRET_KEY --env dev
 ```
 
@@ -40,6 +45,21 @@ npm exec -w @mergemate/api -- wrangler d1 migrations apply mergemate-db-dev --en
 ```
 
 Locally, `npm run db:migrate:local -w @mergemate/api` applies migrations to the local database used by `wrangler dev`.
+
+## Queues and KV (one-time per environment)
+
+GitHub webhook events go through a queue with a dead-letter queue. Create both:
+
+```bash
+npm exec -w @mergemate/api -- wrangler queues create mergemate-github-events-dev
+npm exec -w @mergemate/api -- wrangler queues create mergemate-github-events-dev-dlq
+```
+
+Public posts are read from the KV namespace the staff tool publishes to. Add it to `wrangler.toml` as a `[[env.dev.kv_namespaces]]` block with binding `POSTS` and that namespace's id.
+
+## GitHub App webhook
+
+In the GitHub App settings, set the webhook URL to `https://api-dev.mergemate.dev/v1/webhooks/github` (production: `https://api.mergemate.dev/v1/webhooks/github`), set the secret to the `GITHUB_WEBHOOK_SECRET` value, mark it active, and subscribe to: Pull request, Pull request review, Pull request review comment, Issue comment, Check suite, Status. Installation events are always sent.
 
 List what is set (names only): `npm exec -w @mergemate/api -- wrangler secret list --env dev`.
 

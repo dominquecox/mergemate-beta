@@ -10,11 +10,14 @@ import { authenticate } from "./middleware/session";
 import { billing } from "./routes/billing";
 import { billingWebhooks } from "./routes/billing-webhooks";
 import { account } from "./routes/account";
+import { activity } from "./routes/activity";
 import { auth } from "./routes/auth";
 import { github } from "./routes/github";
 import { health } from "./routes/health";
 import { notifications } from "./routes/notifications";
+import { publicContent } from "./routes/public";
 import { telemetry } from "./routes/telemetry";
+import { webhooks } from "./routes/webhooks";
 
 const MAX_BODY_BYTES = 1024 * 1024;
 
@@ -29,10 +32,19 @@ export const createApp = (deps: Deps = defaultDeps) => {
   app.use(cors());
   // Rate limits and sessions run before any route logic.
   app.use(authenticate());
-  app.use((c,next) => bodyLimit({
-    maxSize: c.req.path === "/v1/webhooks/stripe" ? 5 * MAX_BODY_BYTES : MAX_BODY_BYTES,
-    onError: (ctx) => errorResponse(ctx, "payload_too_large", "Request body is too large."),
-  })(c,next));
+  const jsonLimit = bodyLimit({
+    maxSize: MAX_BODY_BYTES,
+    onError: (c) => errorResponse(c, "payload_too_large", "Request body is too large."),
+  });
+  const stripeLimit = bodyLimit({
+    maxSize: 5 * MAX_BODY_BYTES,
+    onError: (c) => errorResponse(c, "payload_too_large", "Request body is too large."),
+  });
+  // The GitHub webhook enforces its own cap on the raw body; Stripe keeps a 5 MB cap here.
+  app.use((c, next) => {
+    if (c.req.path === "/v1/webhooks/github") return next();
+    return c.req.path === "/v1/webhooks/stripe" ? stripeLimit(c, next) : jsonLimit(c, next);
+  });
 
   app.route("/v1/health", health);
   app.route("/v1", auth);
@@ -42,6 +54,9 @@ export const createApp = (deps: Deps = defaultDeps) => {
   app.route("/v1", github);
   app.route("/v1", notifications);
   app.route("/v1", telemetry);
+  app.route("/v1", activity);
+  app.route("/v1", publicContent);
+  app.route("/v1", webhooks);
 
   app.notFound((c) => errorResponse(c, "not_found", "Not found."));
 

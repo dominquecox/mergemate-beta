@@ -114,6 +114,9 @@ export interface TestContext {
   sessionLimiter: ReturnType<typeof fakeLimiter>;
   refreshCalls: string[];
   points: AnalyticsEngineDataPoint[];
+  kv: Map<string, string>;
+  queued: unknown[];
+  supportLimiter: ReturnType<typeof fakeLimiter>;
 }
 
 /** A full test environment: real migrations, fake GitHub, serialized fake token refresher. */
@@ -126,6 +129,9 @@ export const testContext = (overrides: Partial<Env> = {}): TestContext => {
   const sessionLimiter = fakeLimiter();
   const refreshCalls: string[] = [];
   const points: AnalyticsEngineDataPoint[] = [];
+  const kv = new Map<string, string>();
+  const queued: unknown[] = [];
+  const supportLimiter = fakeLimiter();
   let queue: Promise<unknown> = Promise.resolve();
 
   const env: TestContext["env"] = {
@@ -154,10 +160,27 @@ export const testContext = (overrides: Partial<Env> = {}): TestContext => {
       }),
     },
     TELEMETRY: { writeDataPoint: (point?: AnalyticsEngineDataPoint) => void (point && points.push(point)) },
+    GITHUB_WEBHOOK_SECRET: "test-webhook-secret-not-real",
+    RESEND_API_KEY: "test-resend-not-real",
+    EMAIL_FROM: "MergeMate <noreply@example.test>",
+    SUPPORT_EMAIL: "support@example.test",
+    SUPPORT_RATE_LIMITER: supportLimiter,
+    POSTS: {
+      get: async (key: string, type?: string) => {
+        const value = kv.get(key);
+        if (value === undefined) return null;
+        return type === "json" ? JSON.parse(value) : value;
+      },
+    } as unknown as KVNamespace,
+    GITHUB_EVENTS: {
+      send: async (message: unknown) => {
+        queued.push(message);
+      },
+    },
     ...overrides,
   } as TestContext["env"];
 
-  return { env, db, net, time, deps, ipLimiter, sessionLimiter, refreshCalls, points };
+  return { env, db, net, time, deps, ipLimiter, sessionLimiter, refreshCalls, points, kv, queued, supportLimiter };
 };
 
 export { testEncryptionKey };

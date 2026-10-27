@@ -24,25 +24,36 @@ export const appEnv = (env: Env): AppEnvName => {
 
 export const corsOrigins = (env: Env) => WEB_ORIGINS[appEnv(env)];
 
-export const callbackUrl = (env: Env, platform: Platform) => {
-  const name = appEnv(env);
-  if (platform === "ios") return IOS_CALLBACKS[name];
+/** The web app's origin for this deployment, checked against the allowlist. */
+export const webOrigin = (env: Env) => {
   const origin = env.WEB_ORIGIN?.trim();
   if (!origin) throw new ConfigError("WEB_ORIGIN is not set");
-  if (!WEB_ORIGINS[name].includes(origin)) throw new ConfigError("WEB_ORIGIN is not allowed for APP_ENV");
-  return `${origin}/auth/callback`;
+  if (!WEB_ORIGINS[appEnv(env)].includes(origin)) throw new ConfigError("WEB_ORIGIN is not allowed for APP_ENV");
+  return origin;
 };
+
+export const callbackUrl = (env: Env, platform: Platform) =>
+  platform === "ios" ? IOS_CALLBACKS[appEnv(env)] : `${webOrigin(env)}/auth/callback`;
 
 export const requireVar = (
   env: Env,
-  name: "GITHUB_APP_CLIENT_ID" | "GITHUB_APP_CLIENT_SECRET" | "GITHUB_APP_SLUG" | "TURNSTILE_SECRET_KEY",
+  name:
+    | "GITHUB_APP_CLIENT_ID"
+    | "GITHUB_APP_CLIENT_SECRET"
+    | "GITHUB_APP_SLUG"
+    | "TURNSTILE_SECRET_KEY"
+    | "RESEND_API_KEY"
+    | "EMAIL_FROM"
+    | "SUPPORT_EMAIL",
 ) => {
   const value = env[name]?.trim();
   if (!value) throw new ConfigError(`${name} is not set`);
   return value;
 };
 
-export const requireBinding = <K extends "DB" | "SESSION_RATE_LIMITER" | "TOKEN_REFRESHER" | "TELEMETRY">(
+export const requireBinding = <
+  K extends "DB" | "SESSION_RATE_LIMITER" | "SUPPORT_RATE_LIMITER" | "TOKEN_REFRESHER" | "TELEMETRY" | "POSTS" | "GITHUB_EVENTS",
+>(
   env: Env,
   name: K,
 ): NonNullable<Env[K]> => {

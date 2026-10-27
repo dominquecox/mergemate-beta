@@ -40,6 +40,8 @@ const unauthorized = () => new ApiError("unauthorized", "Sign in to continue.");
  */
 export const authenticate = (): MiddlewareHandler<AppEnv> => async (c, next) => {
   const path = c.req.path;
+  // Webhooks are authenticated by their signature, and providers send from shared IPs.
+  if (path.startsWith("/v1/webhooks/")) return next();
   if (!path.startsWith("/v1/") || PUBLIC_PATHS.some((p) => p.test(path))) {
     await limitIp(c);
     return next();

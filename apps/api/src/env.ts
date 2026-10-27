@@ -1,3 +1,4 @@
+import type { GitHubEventMessage } from "./lib/github-webhooks";
 import type { SessionRecord } from "./lib/sessions";
 
 /** Minimal shape of a Workers Rate Limiting binding. */
@@ -24,9 +25,14 @@ export interface Env {
   GITHUB_APP_CLIENT_ID?: string;
   GITHUB_APP_CLIENT_SECRET?: string;
   GITHUB_APP_SLUG?: string;
+  GITHUB_WEBHOOK_SECRET?: string;
+  GITHUB_WEBHOOK_SECRET_NEXT?: string;
   TOKEN_ENCRYPTION_KEY?: string;
   TOKEN_ENCRYPTION_KEY_PREVIOUS?: string;
   TURNSTILE_SECRET_KEY?: string;
+  RESEND_API_KEY?: string;
+  EMAIL_FROM?: string;
+  SUPPORT_EMAIL?: string;
   STRIPE_MODE?: string;
   STRIPE_SECRET_KEY?: string;
   STRIPE_WEBHOOK_SECRET?: string;
@@ -36,8 +42,11 @@ export interface Env {
   DB?: D1Database;
   IP_RATE_LIMITER?: RateLimiter;
   SESSION_RATE_LIMITER?: RateLimiter;
+  SUPPORT_RATE_LIMITER?: RateLimiter;
   TOKEN_REFRESHER?: TokenRefresherNamespace;
   TELEMETRY?: AnalyticsEngineDataset;
+  POSTS?: KVNamespace;
+  GITHUB_EVENTS?: Pick<Queue<GitHubEventMessage>, "send">;
 }
 
 /** Outside effects, injectable for tests. */

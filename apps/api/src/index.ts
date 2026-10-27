@@ -1,11 +1,12 @@
 import { createApp } from "./app";
-import { consumeStripeEvents } from "./lib/stripe-events";
 import type { Env } from "./env";
+import { handleQueue } from "./queues";
 
 export { TokenRefresher } from "./token-refresher";
 
-const app=createApp();
+const app = createApp();
+
 export default {
   fetch: app.fetch,
-  queue: (batch: MessageBatch<{eventId:string}>,env:Env) => consumeStripeEvents(batch,env,{fetch:(input,init)=>fetch(input,init),now:()=>new Date()}),
-};
+  queue: (batch: MessageBatch<unknown>, env: Env) => handleQueue(batch, env),
+} satisfies ExportedHandler<Env>;

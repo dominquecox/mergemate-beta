@@ -25,11 +25,11 @@ import {
   sessionCookie,
   type Transport,
 } from "../lib/sessions";
+import { verifyTurnstile } from "../lib/turnstile";
 import { parseBody } from "../lib/validate";
 import { DEMO_USER } from "./github.fixtures";
 
 const STATE_TTL_MS = 10 * 60 * 1000;
-const TURNSTILE_VERIFY = "https://challenges.cloudflare.com/turnstile/v0/siteverify";
 
 const transportFor = (platform: Platform): Transport => (platform === "web" ? "cookie" : "bearer");
 
@@ -140,21 +140,7 @@ export const auth = new Hono<AppEnv>()
   .post("/auth/demo", async (c) => {
     const body = await parseBody(c, DemoRequest);
     const deps = c.get("deps");
-    const verify = await deps
-      .fetch(TURNSTILE_VERIFY, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          secret: requireVar(c.env, "TURNSTILE_SECRET_KEY"),
-          response: body.turnstileToken,
-          remoteip: c.req.header("cf-connecting-ip"),
-        }),
-        signal: AbortSignal.timeout(20_000),
-      })
-      .then((res) => (res.ok ? (res.json() as Promise<{ success?: boolean }>) : null))
-      .catch(() => null);
-    if (!verify) throw new ApiError("upstream_unavailable", "The bot check is unavailable. Try again.");
-    if (verify.success !== true) throw new ApiError("forbidden", "The bot check failed. Try again.");
+    await verifyTurnstile(c, body.turnstileToken);
 
     const transport = transportFor(body.platform);
     const issued = await createSession(requireBinding(c.env, "DB"), { userId: null, transport, now: deps.now() });

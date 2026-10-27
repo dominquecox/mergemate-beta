@@ -4,6 +4,8 @@ MODEL_API_KEY=
 GITHUB_APP_CLIENT_SECRET=
 GITHUB_APP_PRIVATE_KEY=
 GITHUB_WEBHOOK_SECRET=
+# Only while rotating: the new webhook secret, accepted alongside the current one.
+GITHUB_WEBHOOK_SECRET_NEXT=
 # Format <version>:<base64 of 32 random bytes>, e.g. version 1. Generate the key with: openssl rand -base64 32
 TOKEN_ENCRYPTION_KEY=
 # Only while rotating: the previous TOKEN_ENCRYPTION_KEY, kept for decryption.
@@ -12,6 +14,9 @@ STRIPE_SECRET_KEY=
 STRIPE_WEBHOOK_SECRET=
 RESEND_API_KEY=
 TURNSTILE_SECRET_KEY=
+# Support mail addresses (not secret, but kept out of the repo)
+EMAIL_FROM=
+SUPPORT_EMAIL=
 # Non-secret config. APP_ENV, WEB_ORIGIN, GITHUB_APP_CLIENT_ID, GITHUB_APP_SLUG and the model settings
 # are in wrangler.toml [vars]; uncomment only to override locally (an empty value also overrides).
 # STRIPE_MODE=
@@ -25,6 +30,4 @@ TURNSTILE_SECRET_KEY=
 GITHUB_APP_ID=
 STRIPE_PRICE_PRO_MONTHLY=
 STRIPE_PRICE_PRO_ANNUAL=
-EMAIL_FROM=
-SUPPORT_EMAIL=
 TURNSTILE_SITE_KEY=

@@ -131,3 +131,22 @@ export const PrDetail = z.object({
   htmlUrl: z.url(),
 });
 export type PrDetail = z.infer<typeof PrDetail>;
+
+export const ActivityEvent = z.enum(["opened", "updated", "review", "comment", "checks", "closed"]);
+export type ActivityEvent = z.infer<typeof ActivityEvent>;
+
+/** A pull request that changed on GitHub since the client's last poll. Refetch it to see what changed. */
+export const ActivityItem = z.object({
+  repo: z.string(),
+  number: z.number().int().positive(),
+  event: ActivityEvent,
+  updatedAt: IsoDateTime,
+});
+export type ActivityItem = z.infer<typeof ActivityItem>;
+
+export const ActivityResponse = z.object({
+  items: z.array(ActivityItem),
+  /** Pass as `since` on the next poll. */
+  serverTime: IsoDateTime,
+});
+export type ActivityResponse = z.infer<typeof ActivityResponse>;
