@@ -1,11 +1,12 @@
 import React, {useRef,useState} from "react";
-import { TouchableOpacity, ActivityIndicator, StyleSheet, ViewStyle, TextStyle } from "react-native";
+import { Pressable, ActivityIndicator, StyleSheet, ViewStyle, TextStyle } from "react-native";
 import { Text } from "./Text";
 import { useTheme } from "../context/ThemeContext";
+import { androidRipple, MIN_TOUCH_TARGET_DP } from "../platform/android";
 
 interface ButtonProps {
   title: string;
-  onPress: () => void;
+  onPress: () => void | Promise<void>;
   variant?: "primary" | "secondary" | "destructive" | "ghost";
   loading?: boolean;
   disabled?: boolean;
@@ -48,18 +49,18 @@ export function Button({
   }
 
   return (
-    <TouchableOpacity
+    <Pressable
       onPress={invoke}
       disabled={disabled || loading || pending}
-      activeOpacity={0.8}
-      style={[
+      android_ripple={androidRipple("rgba(255, 255, 255, 0.18)")}
+      style={({ pressed }) => [
         styles.btn,
         {
           backgroundColor: bg,
           borderColor: border,
           borderWidth: variant === "secondary" ? 1 : 0,
           borderRadius: radius.md,
-          opacity: disabled ? 0.55 : 1,
+          opacity: disabled ? 0.55 : pressed ? 0.85 : 1,
         },
         style,
       ]}
@@ -77,19 +78,20 @@ export function Button({
           </Text>
         </>
       )}
-    </TouchableOpacity>
+    </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
   btn: {
-    minHeight: 44,
-    minWidth: 44,
+    minHeight: MIN_TOUCH_TARGET_DP,
+    minWidth: MIN_TOUCH_TARGET_DP,
     paddingHorizontal: 16,
     paddingVertical: 12,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     gap: 8,
+    overflow: "hidden",
   },
 });

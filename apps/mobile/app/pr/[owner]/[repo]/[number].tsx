@@ -2,7 +2,9 @@ import { Avatar } from "../../../../src/components/Avatar";
 import { relativeTime } from "../../../../src/format/activity";
 import { SummarySection } from "../../../../src/components/SummarySection";
 import React, { useState, useEffect, useCallback, useRef } from "react";
-import { View, ScrollView, TouchableOpacity, TextInput, StyleSheet, Linking, Share, Platform } from "react-native";
+import { View, ScrollView, TouchableOpacity, TextInput, StyleSheet, Linking, Share, Platform, KeyboardAvoidingView } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useAndroidBackHandler } from "../../../../src/platform/android";
 import { Text } from "../../../../src/components/Text";
 import { useLocalSearchParams } from "expo-router";
 import { useLayout } from "../../../../src/layout/useLayout";
@@ -42,6 +44,20 @@ export default function PrDetailScreen() {
   const [notes, setNotes] = useState<string[]>([]);
   const [showNoteInput, setShowNoteInput] = useState(false);
   const [newNote, setNewNote] = useState("");
+  const insets = useSafeAreaInsets();
+  const bottomInset = Platform.OS === "web" ? 0 : insets.bottom;
+
+  useAndroidBackHandler(() => {
+    if (showNoteInput) {
+      setShowNoteInput(false);
+      return true;
+    }
+    if (assessmentOpen) {
+      setAssessmentOpen(false);
+      return true;
+    }
+    return false;
+  }, showNoteInput || assessmentOpen);
 
   const pageLock=useRef(false);
   const routeVersion=useRef(0);
@@ -128,7 +144,7 @@ export default function PrDetailScreen() {
   };
 
   return (
-    <View style={[styles.root, { backgroundColor: colors.background }]}>
+    <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={[styles.root, { backgroundColor: colors.background }]}>
       <Header
         title="PR Review Detail"
         showBack
@@ -413,7 +429,7 @@ export default function PrDetailScreen() {
           </ScrollView>
 
           {/* Bottom Bar: Open in GitHub and Add note. STRICTLY NO MERGE, APPROVE, OR COMMENT CONTROLS ON GITHUB (US-12) */}
-          <View style={[styles.bottomBar, { backgroundColor: colors.surface, borderTopColor: colors.border }]}>
+          <View style={[styles.bottomBar, { backgroundColor: colors.surface, borderTopColor: colors.border, paddingBottom: 16 + bottomInset }]}>
             <Button
               title={showNoteInput ? "Hide Note" : "Add Note"}
               onPress={() => setShowNoteInput((prev) => !prev)}
@@ -429,7 +445,7 @@ export default function PrDetailScreen() {
           </View>
         </>
       )}
-    </View>
+    </KeyboardAvoidingView>
   );
 }
 

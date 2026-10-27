@@ -1,6 +1,6 @@
 import { Section } from "../../src/components/ScreenDesign";
 import React, { useState } from "react";
-import { View, TextInput, ScrollView, StyleSheet } from "react-native";
+import { View, TextInput, ScrollView, StyleSheet, KeyboardAvoidingView, Platform } from "react-native";
 import { Text } from "../../src/components/Text";
 import { useTheme } from "../../src/context/ThemeContext";
 import { api } from "../../src/api";
@@ -40,7 +40,7 @@ export default function SupportScreen() {
   };
 
   return (
-    <View style={[styles.root, { backgroundColor: colors.background }]}>
+    <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={[styles.root, { backgroundColor: colors.background }]}>
       <Header title="Support & Contact" showBack />
       {isSending ? (
         <LoadingState
@@ -135,7 +135,7 @@ export default function SupportScreen() {
           </Section>
         </ScrollView>
       )}
-    </View>
+    </KeyboardAvoidingView>
   );
 }
 

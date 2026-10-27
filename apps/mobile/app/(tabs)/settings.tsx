@@ -1,7 +1,8 @@
 import { SettingsGroup, SettingsRow } from "../../src/components/SettingsRows";
 import { Avatar } from "../../src/components/Avatar";
 import React, { useState, useEffect, useCallback, useRef } from "react";
-import { View, ScrollView, TouchableOpacity, Switch, StyleSheet, Platform, Linking, Alert, TextInput } from "react-native";
+import { View, ScrollView, TouchableOpacity, Switch, StyleSheet, Platform, Linking, Alert, TextInput, KeyboardAvoidingView } from "react-native";
+import { isExternalBillingLinkAllowed } from "../../src/platform/android";
 import { Text } from "../../src/components/Text";
 import { useRouter } from "expo-router";
 import { useTheme } from "../../src/context/ThemeContext";
@@ -153,11 +154,13 @@ export default function SettingsScreen() {
     }
   };
 
+  const canShowBillingRow = isExternalBillingLinkAllowed(Platform.OS);
+
   const handleManagePlan = () => {
     if (Platform.OS === "web") {
       router.push("/billing");
-    } else {
-      // iPhone storefront compliant linking out
+    } else if (canShowBillingRow) {
+      // iOS App Store & Google Play compliant link-out to the web billing page (no in-app Stripe checkout).
       Linking.openURL(`${webAppOrigin(apiMode)}/billing`);
     }
   };
@@ -182,7 +185,7 @@ export default function SettingsScreen() {
   };
 
   return (
-    <View style={[styles.root, { backgroundColor: colors.background }]}>
+    <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={[styles.root, { backgroundColor: colors.background }]}>
       <Header title="Settings" />
       {isLoading ? (
         <LoadingState
@@ -212,7 +215,7 @@ export default function SettingsScreen() {
           </SettingsGroup>
           <SettingsGroup title="Workspace repositories">
             <SettingsRow first label="Configure repositories" detail="Manage which repositories appear in your inbox" icon="folder-open-outline" onPress={()=>router.push('/(auth)/repos')}/>
-            <SettingsRow label={Platform.OS==='web'?'Manage Billing & Plans':'Manage Plan'} detail={billing.status.replace(/_/g,' ')} icon="card-outline" onPress={handleManagePlan} trailing={<View style={{flexDirection:'row',alignItems:'center',gap:8}}><View style={{paddingHorizontal:8,paddingVertical:3,borderRadius:9999,backgroundColor:colors.brandSubtle}}><Text style={[typography.caption,{color:colors.brandLight,textTransform:'uppercase'}]}>{billing.plan}</Text></View><Icon name="chevron-forward" size={16} color={colors.textSecondary}/></View>}/>
+            {canShowBillingRow && <SettingsRow label={Platform.OS==='web'?'Manage Billing & Plans':'Manage Plan'} detail={billing.status.replace(/_/g,' ')} icon="card-outline" onPress={handleManagePlan} trailing={<View style={{flexDirection:'row',alignItems:'center',gap:8}}><View style={{paddingHorizontal:8,paddingVertical:3,borderRadius:9999,backgroundColor:colors.brandSubtle}}><Text style={[typography.caption,{color:colors.brandLight,textTransform:'uppercase'}]}>{billing.plan}</Text></View><Icon name="chevron-forward" size={16} color={colors.textSecondary}/></View>}/>}
           </SettingsGroup>
           <SettingsGroup title="Push notifications & triage">
             {([['review','Review requests','When someone asks for your review'],['mention','Mentions','When someone mentions you'],['mine','My pull requests','Updates to pull requests you opened']] as const).map(([kind,label,hint],index)=><SettingsRow key={kind} first={index===0} label={label} detail={hint} trailing={<Switch value={settings?.notifications[kind] ?? true} onValueChange={value=>{if(settings)void saveSettings({notifications:{...settings.notifications,[kind]:value}});}} disabled={isDemo || !settings || saving || preferenceBusy} accessibilityLabel={label} trackColor={{false:colors.surfaceSecondary,true:colors.brand}} thumbColor="#FFFFFF"/>}/>)}
@@ -237,7 +240,7 @@ export default function SettingsScreen() {
           <SettingsGroup title="Danger zone"><SettingsRow first label="Delete Account & Revoke Access" detail="Permanently remove your account and revoke GitHub access" icon="trash-outline" danger onPress={()=>router.push('/account/delete')}/></SettingsGroup>
         </ScrollView>
       )}
-    </View>
+    </KeyboardAvoidingView>
   );
 }
 

@@ -86,6 +86,24 @@ describe("push token registration (native)", () => {
     await refreshPushRegistration(api, device());
     expect(register).toHaveBeenCalledTimes(1);
   });
+
+  it("ensures the Android notification channel before requesting runtime permission", async () => {
+    (Platform as { OS: string }).OS = "android";
+    const api = new MockApiClient();
+    const order: string[] = [];
+    const androidDevice = device({
+      ensureNotificationChannel: vi.fn(async () => {
+        order.push("channel");
+      }),
+      getPermission: async () => "undetermined",
+      requestPermission: vi.fn(async () => {
+        order.push("permission");
+        return "granted" as const;
+      }),
+    });
+    expect(await registerPush(api, { prompt: true }, androidDevice)).toBe("registered");
+    expect(order).toEqual(["channel", "permission"]);
+  });
 });
 
 describe("sign-in in progress", () => {

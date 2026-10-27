@@ -1,6 +1,6 @@
 import { Section } from "../src/components/ScreenDesign";
 import React, { useState } from "react";
-import { View, ScrollView, TextInput, StyleSheet, Image, Platform, TouchableOpacity } from "react-native";
+import { View, ScrollView, TextInput, StyleSheet, Image, Platform, TouchableOpacity, KeyboardAvoidingView } from "react-native";
 import { Text } from "../src/components/Text";
 import * as ImagePicker from "expo-image-picker";
 import { useTheme } from "../src/context/ThemeContext";
@@ -75,7 +75,7 @@ export default function HighlightScreen() {
   };
 
   return (
-    <View style={[styles.root, { backgroundColor: colors.background }]}>
+    <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={[styles.root, { backgroundColor: colors.background }]}>
       <Header title="Screenshot Insight" showBack />
       <ScrollView contentContainerStyle={{ padding: spacing.base, paddingBottom: 60 }}>
 
@@ -215,7 +215,7 @@ export default function HighlightScreen() {
           />
         )}
       </ScrollView>
-    </View>
+    </KeyboardAvoidingView>
   );
 }
 

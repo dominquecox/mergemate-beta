@@ -1,6 +1,15 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import worker, { buildCsp, validApiOrigin, type Env } from "../src/index";
+import worker, {
+  ANDROID_PACKAGE_DEV,
+  ANDROID_PACKAGE_PROD,
+  PLACEHOLDER_ANDROID_SHA256,
+  buildAssetLinks,
+  buildCsp,
+  parseAndroidFingerprints,
+  validApiOrigin,
+  type Env,
+} from "../src/index";
 
 const INDEX = "<!doctype html><title>MergeMate</title>";
 
@@ -142,5 +151,66 @@ describe("CSP", () => {
       expect(res.headers.get("Strict-Transport-Security")).toBe("max-age=31536000; includeSubDomains");
     }
     expect(validApiOrigin("https://api.mergemate.dev")).toBe("https://api.mergemate.dev");
+  });
+});
+
+
+describe("Android App Links (/.well-known/assetlinks.json)", () => {
+  it("serves assetlinks.json on dev with both prod and dev packages and placeholder SHA-256", async () => {
+    const res = await get("/.well-known/assetlinks.json", env("https://api-dev.mergemate.dev"));
+    expect(res.status).toBe(200);
+    expect(res.headers.get("Content-Type")).toContain("application/json");
+    expect(res.headers.get("Cache-Control")).toBe("no-store");
+    expectSecurityHeaders(res, "https://api-dev.mergemate.dev");
+    const body = await res.json();
+    expect(body).toEqual([
+      {
+        relation: ["delegate_permission/common.handle_all_urls"],
+        target: {
+          namespace: "android_app",
+          package_name: ANDROID_PACKAGE_PROD,
+          sha256_cert_fingerprints: [PLACEHOLDER_ANDROID_SHA256],
+        },
+      },
+      {
+        relation: ["delegate_permission/common.handle_all_urls"],
+        target: {
+          namespace: "android_app",
+          package_name: ANDROID_PACKAGE_DEV,
+          sha256_cert_fingerprints: [PLACEHOLDER_ANDROID_SHA256],
+        },
+      },
+    ]);
+  });
+
+  it("serves assetlinks.json on prod with only dev.mergemate.app and caches when real SHA-256 is set", async () => {
+    const realFp = "AA:BB:CC:DD:EE:FF:00:11:22:33:44:55:66:77:88:99:AA:BB:CC:DD:EE:FF:00:11:22:33:44:55:66:77:88:99";
+    const res = await get("/.well-known/assetlinks.json", {
+      ASSETS: assets(),
+      API_ORIGIN: "https://api.mergemate.dev",
+      ANDROID_SHA256_FINGERPRINTS: realFp.toLowerCase(),
+    });
+    expect(res.status).toBe(200);
+    expect(res.headers.get("Cache-Control")).toBe("public, max-age=3600");
+    expectSecurityHeaders(res, "https://api.mergemate.dev");
+    const body = await res.json();
+    expect(body).toEqual([
+      {
+        relation: ["delegate_permission/common.handle_all_urls"],
+        target: {
+          namespace: "android_app",
+          package_name: ANDROID_PACKAGE_PROD,
+          sha256_cert_fingerprints: [realFp],
+        },
+      },
+    ]);
+  });
+
+  it("rejects malformed fingerprints and falls back to the placeholder", () => {
+    expect(parseAndroidFingerprints("not-a-sha256")).toEqual({
+      fingerprints: [PLACEHOLDER_ANDROID_SHA256],
+      isPlaceholder: true,
+    });
+    expect(buildAssetLinks("https://api.mergemate.dev", "").isPlaceholder).toBe(true);
   });
 });

@@ -4,11 +4,17 @@ import { StorageService } from "../storage";
 
 export type PushResult = "registered" | "denied" | "unavailable";
 
+/** Android 8+ notification channel required before Android 13+ POST_NOTIFICATIONS prompt (specs/ANDROID.md). */
+export const ANDROID_NOTIFICATION_CHANNEL_ID = "reviews-and-mentions";
+export const ANDROID_NOTIFICATION_CHANNEL_NAME = "Reviews and mentions";
+
 /** What the registration needs from the device. Injected so it can be tested without native modules. */
 export interface PushDevice {
   isNative: boolean;
   /** EAS project id, set by the owner in the Expo config. Without it Expo cannot issue a push token. */
   projectId: string | null;
+  /** Creates the Android notification channel before requesting runtime permission (no-op on iOS/web). */
+  ensureNotificationChannel?(): Promise<void>;
   getPermission(): Promise<"granted" | "denied" | "undetermined">;
   requestPermission(): Promise<"granted" | "denied">;
   getExpoPushToken(projectId: string): Promise<string>;
@@ -16,7 +22,7 @@ export interface PushDevice {
 }
 
 export function expoPushDevice(): PushDevice {
-  // Loaded on use: these native modules exist on iOS only.
+  // Loaded on use: these native modules exist on iOS and Android only.
   const { Platform } = require("react-native") as typeof import("react-native");
   const Constants = require("expo-constants").default as typeof import("expo-constants").default;
   const extra = Constants.expoConfig?.extra as { eas?: { projectId?: string } } | undefined;
@@ -25,6 +31,16 @@ export function expoPushDevice(): PushDevice {
   return {
     isNative: Platform.OS !== "web",
     projectId,
+    async ensureNotificationChannel() {
+      if (Platform.OS !== "android") return;
+      const Notifications = load();
+      await Notifications.setNotificationChannelAsync(ANDROID_NOTIFICATION_CHANNEL_ID, {
+        name: ANDROID_NOTIFICATION_CHANNEL_NAME,
+        importance: Notifications.AndroidImportance.HIGH,
+        vibrationPattern: [0, 180, 120, 180],
+        lightColor: "#4F46E5",
+      });
+    },
     async getPermission() {
       return (await load().getPermissionsAsync()).status;
     },
@@ -51,6 +67,7 @@ async function ensureDeviceId(device: PushDevice): Promise<string> {
 /**
  * Registers this device for push. `prompt` asks for permission when it has not been decided; without it
  * (silent re-registration at sign-in) nothing is shown to the person.
+ * On Android, creates the "Reviews and mentions" channel before prompting for POST_NOTIFICATIONS on Android 13+.
  */
 export async function registerPush(
   api: ApiClient,
@@ -58,6 +75,7 @@ export async function registerPush(
   device: PushDevice = expoPushDevice(),
 ): Promise<PushResult> {
   if (!device.isNative || !device.projectId) return "unavailable";
+  await device.ensureNotificationChannel?.();
   let permission = await device.getPermission();
   if (permission !== "granted" && options.prompt) permission = await device.requestPermission();
   if (permission !== "granted") return "denied";

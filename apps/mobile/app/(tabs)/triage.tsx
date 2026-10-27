@@ -15,6 +15,7 @@ import { Avatar } from "../../src/components/Avatar";
 import { RiskBadge } from "../../src/components/RiskBadge";
 import { relativeTime } from "../../src/format/activity";
 import { Icon } from "../../src/components/Icon";
+import { triggerAndroidHaptic } from "../../src/platform/android";
 
 export default function TriageScreen() {
   const router=useRouter();
@@ -51,6 +52,7 @@ export default function TriageScreen() {
 
   const handleDecision = async (lane: TriageLane) => {
     if (queue.length === 0 || lock.current) return;
+    triggerAndroidHaptic();
     lock.current=true;setSaving(true);
     const current = queue[0];
     try {
@@ -109,7 +111,7 @@ export default function TriageScreen() {
             {error && <Text accessibilityRole="alert" style={[typography.footnote,{color:colors.riskHigh}]}>{error}</Text>}
             <View style={{height:12,marginHorizontal:24,backgroundColor:colors.surfaceElevated,borderRadius:16}}/>
             <View style={{height:12,marginHorizontal:12,marginTop:-4,backgroundColor:colors.surfaceSecondary,borderRadius:16}}/>
-            <TouchableOpacity disabled={saving} onPress={()=>router.push(`/pr/${currentItem.prRef.replace("#","/")}`)} accessibilityRole="button" accessibilityLabel={`Open pull request ${currentItem.title ?? currentItem.prRef}`}><Section style={{padding:16}}>
+            <TouchableOpacity disabled={saving} onPress={()=>{const [fullRepo="owner/repo",num="1"]=currentItem.prRef.split("#");const [owner="owner",repo="repo"]=fullRepo.split("/");router.push(`/pr/${owner}/${repo}/${num}`);}} accessibilityRole="button" accessibilityLabel={`Open pull request ${currentItem.title ?? currentItem.prRef}`}><Section style={{padding:16}}>
               <View style={{flexDirection:"row",gap:8,alignItems:"flex-start",justifyContent:"space-between"}}>
                 <Text style={[typography.code,{color:colors.textSecondary,flex:1,fontSize:11}]}>{currentItem.prRef}</Text>
                 {risk?<RiskBadge level={risk} compact/>:<Text style={[typography.caption,{color:colors.textSecondary}]}>Risk not assessed</Text>}

@@ -11,6 +11,7 @@ import { ConfigErrorScreen, SampleDataBanner, isApiMisconfigured } from "../src/
 import { AppFonts } from "../src/components/AppFonts";
 import { Sidebar } from "../src/components/Sidebar";
 import { SIDEBAR_WIDTH, resolveShell, requiresSession } from "../src/layout/breakpoints";
+import { resolveHardwareBackAction, useAndroidBackHandler } from "../src/platform/android";
 
 function AppContent() {
   const { colors, isDark } = useTheme();
@@ -18,6 +19,19 @@ function AppContent() {
   const { session, isLoading } = useAuth();
   const { width } = useWindowDimensions();
   const segments = useSegments() as string[];
+
+  // Android hardware Back / gesture back from secondary tabs returns to Inbox before exiting the app.
+  useAndroidBackHandler(() => {
+    const action = resolveHardwareBackAction({
+      segments,
+      canGoBackInStack: typeof router.canGoBack === "function" ? router.canGoBack() : false,
+    });
+    if (action === "go-inbox") {
+      router.replace("/(tabs)/inbox");
+      return true;
+    }
+    return false;
+  });
 
   // Web only: phone column, centered tablet column, or sidebar + wide column on desktop. Native is untouched.
   const shell = resolveShell({ width, segments, signedIn: Boolean(session), isWeb: Platform.OS === "web" });

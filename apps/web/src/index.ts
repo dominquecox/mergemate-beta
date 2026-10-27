@@ -1,5 +1,6 @@
 /**
- * Serves the Expo web export (apps/mobile/dist) with the security headers from specs/SECURITY.md section 8.
+ * Serves the Expo web export (apps/mobile/dist) with the security headers from specs/SECURITY.md section 8,
+ * plus /.well-known/assetlinks.json for Android App Links sign-in callback verification (specs/ANDROID.md).
  * The assets binding does the file serving and the single-page-app fallback; this Worker runs first on every
  * request so no response, including errors and the fallback page, leaves without headers.
  */
@@ -8,6 +9,74 @@ export interface Env {
   ASSETS: Fetcher;
   /** Origin of the API this build talks to, for CSP connect-src. Set per environment in wrangler.toml. */
   API_ORIGIN?: string;
+  /**
+   * Comma-separated SHA-256 signing certificate fingerprints from Play App Signing (and optional debug keystore
+   * on dev). Placeholder until the owner supplies the release SHA-256 from Play Console -> App integrity.
+   */
+  ANDROID_SHA256_FINGERPRINTS?: string;
+}
+
+export const ANDROID_PACKAGE_PROD = "dev.mergemate.app";
+export const ANDROID_PACKAGE_DEV = "dev.mergemate.app.dev";
+export const PLACEHOLDER_ANDROID_SHA256 =
+  "00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00";
+
+const SHA256_FINGERPRINT_RE = /^([0-9A-F]{2}:){31}[0-9A-F]{2}$/i;
+
+export interface AssetLinkEntry {
+  relation: ["delegate_permission/common.handle_all_urls"];
+  target: {
+    namespace: "android_app";
+    package_name: string;
+    sha256_cert_fingerprints: string[];
+  };
+}
+
+/** Validates configured SHA-256 certificate fingerprints, falling back to the placeholder until Play App Signing is set. */
+export function parseAndroidFingerprints(raw: string | undefined): {
+  fingerprints: string[];
+  isPlaceholder: boolean;
+} {
+  if (!raw) {
+    return { fingerprints: [PLACEHOLDER_ANDROID_SHA256], isPlaceholder: true };
+  }
+  const valid = Array.from(
+    new Set(
+      raw
+        .split(/[\s,]+/)
+        .map((s) => s.trim().toUpperCase())
+        .filter((s) => SHA256_FINGERPRINT_RE.test(s)),
+    ),
+  );
+  const nonPlaceholder = valid.filter((s) => s !== PLACEHOLDER_ANDROID_SHA256);
+  if (nonPlaceholder.length === 0) {
+    return { fingerprints: [PLACEHOLDER_ANDROID_SHA256], isPlaceholder: true };
+  }
+  return { fingerprints: nonPlaceholder, isPlaceholder: false };
+}
+
+/**
+ * Digital Asset Links statement list for Android App Links (/auth/callback).
+ * Production (api.mergemate.dev) authorizes dev.mergemate.app only; dev/local also authorizes dev.mergemate.app.dev.
+ */
+export function buildAssetLinks(apiOrigin: string, rawFingerprints?: string): {
+  entries: AssetLinkEntry[];
+  isPlaceholder: boolean;
+} {
+  const { fingerprints, isPlaceholder } = parseAndroidFingerprints(rawFingerprints);
+  const packages =
+    apiOrigin === "https://api.mergemate.dev"
+      ? [ANDROID_PACKAGE_PROD]
+      : [ANDROID_PACKAGE_PROD, ANDROID_PACKAGE_DEV];
+  const entries: AssetLinkEntry[] = packages.map((packageName) => ({
+    relation: ["delegate_permission/common.handle_all_urls"],
+    target: {
+      namespace: "android_app",
+      package_name: packageName,
+      sha256_cert_fingerprints: fingerprints,
+    },
+  }));
+  return { entries, isPlaceholder };
 }
 
 const HSTS = "max-age=31536000; includeSubDomains";
@@ -76,6 +145,14 @@ export default {
     const { pathname } = new URL(request.url);
     if (pathname === "/health") {
       return withHeaders(Response.json({ ok: true }), csp, { "Cache-Control": "no-store" });
+    }
+
+    if (pathname === "/.well-known/assetlinks.json") {
+      const { entries, isPlaceholder } = buildAssetLinks(apiOrigin, env.ANDROID_SHA256_FINGERPRINTS);
+      return withHeaders(Response.json(entries), csp, {
+        "Content-Type": "application/json; charset=utf-8",
+        "Cache-Control": isPlaceholder ? "no-store" : "public, max-age=3600",
+      });
     }
 
     const response = await env.ASSETS.fetch(request);

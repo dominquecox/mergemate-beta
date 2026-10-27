@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from "react";
-import { View, TextInput, FlatList, TouchableOpacity, StyleSheet } from "react-native";
+import { View, TextInput, FlatList, TouchableOpacity, Pressable, StyleSheet } from "react-native";
+import { androidRipple, useAndroidBackHandler } from "../src/platform/android";
 import { Text } from "../src/components/Text";
 import { useRouter } from "expo-router";
 import { useTheme } from "../src/context/ThemeContext";
@@ -28,6 +29,14 @@ export default function SearchScreen() {
   const settledQuery = useDebouncedValue(query);
   const {items:allPrs,loading:isLoading,busy,error,refresh:loadSearchItems,more,hasMore} = usePagedList(`search:${settledQuery}`, cursor=>api.getNotificationPage('all',cursor,settledQuery));
   useEffect(()=>{void StorageService.getRecentSearches().then(setRecentSearches);},[]);
+
+  useAndroidBackHandler(() => {
+    if (query.trim().length > 0) {
+      setQuery("");
+      return true;
+    }
+    return false;
+  }, query.trim().length > 0);
 
   const handleSearchSubmit = async () => {
     if (query.trim()) {
@@ -148,7 +157,7 @@ export default function SearchScreen() {
           ListEmptyComponent={<EmptyState icon="search-outline" title="No matching pull requests" message="Try another search or risk filter."/>}
           ListHeaderComponent={<Text style={[typography.headline,{color:colors.text,marginBottom:16}]}>Results · {filteredPrs.length} loaded</Text>}
           ListFooterComponent={hasMore?<TouchableOpacity disabled={busy} onPress={()=>void more()} accessibilityRole="button" style={{padding:16,minHeight:44}}><Text style={{color:colors.brandLight}}>{busy?'Loading…':'Load more results'}</Text></TouchableOpacity>:undefined}
-          renderItem={({item})=>(              <TouchableOpacity
+          renderItem={({item})=>(              <Pressable
                 key={item.id}
                 onPress={() => {
                   const parts = item.repo.split("/");
@@ -156,11 +165,13 @@ export default function SearchScreen() {
                   const repo = parts[1] || "repo";
                   router.push(`/pr/${owner}/${repo}/${item.number}`);
                 }}
+                android_ripple={androidRipple()}
                 accessibilityRole="button"
                 accessibilityLabel={`Open pull request ${item.title} in ${item.repo}`}
-                style={[
+                style={({ pressed }) => [
                   styles.resultCard,
                   { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.md },
+                  pressed && { opacity: 0.85 },
                 ]}
               >
                 <View style={styles.cardHeader}>
@@ -179,7 +190,7 @@ export default function SearchScreen() {
                     By @{item.author}
                   </Text>
                 </View>
-              </TouchableOpacity>)}
+              </Pressable>)}
         />
       )}
     </View>

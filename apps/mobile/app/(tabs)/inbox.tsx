@@ -1,5 +1,6 @@
 import React, { useState, useRef } from "react";
-import { View, FlatList, RefreshControl, TouchableOpacity, StyleSheet } from "react-native";
+import { View, FlatList, RefreshControl, TouchableOpacity, Pressable, StyleSheet } from "react-native";
+import { androidRipple } from "../../src/platform/android";
 import { Text } from "../../src/components/Text";
 import { useRouter } from "expo-router";
 import { useTheme } from "../../src/context/ThemeContext";
@@ -224,10 +225,10 @@ export default function InboxScreen() {
                   },
                 ]}
               >
-                <TouchableOpacity
+                <Pressable
                   onPress={() => navigateToPr(item)}
-                  activeOpacity={0.85}
-                  style={styles.cardMainTouch}
+                  android_ripple={androidRipple()}
+                  style={({ pressed }) => [styles.cardMainTouch, pressed && { opacity: 0.85 }]}
                   accessibilityRole="button"
                   accessibilityLabel={`Open pull request #${item.number}: ${item.title} in ${item.repo}, ${item.risk || "normal"} risk`}
                 >
@@ -253,7 +254,7 @@ export default function InboxScreen() {
                       </Text>
                     </View>
                   )}
-                </TouchableOpacity>
+                </Pressable>
 
                 <View style={[styles.cardBottom,{flexWrap:"wrap",gap:8,borderTopColor:colors.border,marginTop:12,paddingTop:12}]}>
                   <Text style={[typography.caption, { color: colors.textMuted, flex: 1 }]}>

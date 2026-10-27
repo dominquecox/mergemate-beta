@@ -11,7 +11,8 @@
     "ios": "expo start --ios",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
-    "test": "vitest run"
+    "test": "vitest run",
+    "android": "expo start --android"
   },
   "dependencies": {
     "@expo-google-fonts/geist": "0.4.2",

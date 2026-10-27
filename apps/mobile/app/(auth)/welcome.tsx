@@ -9,6 +9,7 @@ import { ErrorState } from "../../src/components/ErrorState";
 import { LoadingState } from "../../src/components/LoadingState";
 import { OnboardingPreview } from "../../src/components/OnboardingPreview";
 import { Icon, IconName } from "../../src/components/Icon";
+import { useAndroidBackHandler } from "../../src/platform/android";
 
 const CARDS = [
   {
@@ -40,6 +41,14 @@ export default function WelcomeScreen() {
   const [activeStep, setActiveStep] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useAndroidBackHandler(() => {
+    if (activeStep > 0) {
+      setActiveStep((prev) => prev - 1);
+      return true;
+    }
+    return false;
+  }, activeStep > 0);
 
   const goToSignIn = () => {
     try {

@@ -1,7 +1,8 @@
 import { Avatar } from "../../src/components/Avatar";
 import { relativeTime, activityAction } from "../../src/format/activity";
 import React, { useState } from "react";
-import { View, FlatList, TouchableOpacity, StyleSheet, Platform } from "react-native";
+import { View, FlatList, TouchableOpacity, Pressable, StyleSheet, Platform } from "react-native";
+import { androidRipple } from "../../src/platform/android";
 import { Text } from "../../src/components/Text";
 import { useRouter } from "expo-router";
 import { useTheme } from "../../src/context/ThemeContext";
@@ -109,7 +110,7 @@ export default function NotificationsScreen() {
           contentContainerStyle={{padding:isDesktop?24:16,paddingBottom:48}}
           onEndReached={()=>{if(!error)void more();}} onEndReachedThreshold={0.4}
           ListFooterComponent={hasMore?<TouchableOpacity disabled={busy} onPress={()=>void more()} style={{minHeight:44,padding:16}} accessibilityRole="button"><Text style={{color:colors.brandLight}}>{busy?'Loading…':'Load more activity'}</Text></TouchableOpacity>:undefined}
-          renderItem={({item,index})=>{const day=new Date(item.updatedAt).toLocaleDateString();const previous=items[index-1];const showDay=!previous || new Date(previous.updatedAt).toLocaleDateString()!==day;return <View>{showDay && <Text accessibilityRole="header" style={[typography.subhead,{color:colors.text,marginTop:20,marginBottom:12}]}>{day===new Date().toLocaleDateString()?'Today':day}</Text>}<TouchableOpacity key={item.id} accessibilityRole="button" accessibilityLabel={`Review ${item.title}`} onPress={()=>router.push(`/pr/${item.repo}/${item.number}`)} style={{backgroundColor:item.read?colors.surface:colors.surfaceElevated,padding:16,borderTopWidth:1,borderTopColor:colors.border}}>
+          renderItem={({item,index})=>{const day=new Date(item.updatedAt).toLocaleDateString();const previous=items[index-1];const showDay=!previous || new Date(previous.updatedAt).toLocaleDateString()!==day;return <View>{showDay && <Text accessibilityRole="header" style={[typography.subhead,{color:colors.text,marginTop:20,marginBottom:12}]}>{day===new Date().toLocaleDateString()?'Today':day}</Text>}<Pressable key={item.id} accessibilityRole="button" accessibilityLabel={`Review ${item.title}`} onPress={()=>{const [owner="owner",repo="repo"]=item.repo.split("/");router.push(`/pr/${owner}/${repo}/${item.number}`);}} android_ripple={androidRipple()} style={({pressed})=>[{backgroundColor:item.read?colors.surface:colors.surfaceElevated,padding:16,borderTopWidth:1,borderTopColor:colors.border},pressed && {opacity:0.88}]}>
                 <View style={{flexDirection:"row",gap:12,alignItems:"flex-start"}}>
                   <Avatar login={item.author} size={32}/>
                   <View style={{flex:1,minWidth:0}}>
@@ -121,7 +122,7 @@ export default function NotificationsScreen() {
                   </View>
                   <Icon name="chevron-forward" size={16} color={colors.textMuted}/>
                 </View>
-              </TouchableOpacity></View>;}}
+              </Pressable></View>;}}
         />
       )}
     </View>
