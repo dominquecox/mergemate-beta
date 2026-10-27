@@ -22,12 +22,22 @@ export interface WorkersAiModelConfig {
 
 export type ModelConfig = MetaModelConfig | WorkersAiModelConfig;
 
+/**
+ * One screenshot for a vision model, as a data URL. Only the highlight task sends one,
+ * and only Workers AI vision routes accept it; the Meta transport rejects it outright.
+ */
+export interface ImageInput {
+  dataUrl: string;
+}
+
 export interface CompletionRequest {
   system: string;
   prompt: string;
   maxOutputTokens: number;
   /** JSON Schema of the expected answer. Used by providers with a native JSON mode; the answer is still validated. */
   jsonSchema?: Record<string, unknown>;
+  /** Screenshot bytes for a vision model. Workers AI only; never sent to Meta. */
+  image?: ImageInput | undefined;
 }
 
 export interface TokenUsage {
@@ -121,10 +131,18 @@ const completeWithWorkersAi = async (
   gatewayId: string | undefined,
   request: CompletionRequest,
 ): Promise<{ text: string; usage?: TokenUsage }> => {
+  // Vision input follows the Workers AI image-text shape: the screenshot travels as an
+  // image part inside the user message, alongside the text. Text tasks keep a plain string.
+  const userContent = request.image
+    ? [
+        { type: "text", text: request.prompt },
+        { type: "image_url", image_url: { url: request.image.dataUrl } },
+      ]
+    : request.prompt;
   const inputs = {
     messages: [
       { role: "system", content: request.system },
-      { role: "user", content: request.prompt },
+      { role: "user", content: userContent },
     ],
     max_tokens: request.maxOutputTokens,
     ...(request.jsonSchema ? { response_format: { type: "json_schema", json_schema: request.jsonSchema } } : {}),
@@ -148,7 +166,12 @@ export const createModelProvider = (env: Env, task: AiTask, deps: ProviderDeps):
   let send: Send;
   if (config.provider === "meta") {
     const apiKey = requireApiKey(env);
-    send = (request) => deps.transport.complete({ config, apiKey, request });
+    send = (request) => {
+      // Screenshots never leave the Workers AI vision route. Dropping one silently would
+      // analyze without the image the answer claims to describe, so this fails closed.
+      if (request.image) throw new ConfigError("This model route does not accept images");
+      return deps.transport.complete({ config, apiKey, request });
+    };
   } else {
     const ai = deps.ai;
     if (!ai) throw new ConfigError("AI binding is missing");

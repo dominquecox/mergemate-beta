@@ -43,6 +43,22 @@ Each AI task has its own route in `wrangler.toml` `[vars]`: `MODEL_ROUTE_SUMMARY
 
 Every model call writes one content-free data point to the `AI_METRICS` Analytics Engine dataset (`mergemate_ai_metrics_dev` for local and dev, `mergemate_ai_metrics` for production): blobs task, provider, model, outcome; doubles input tokens, output tokens, latency in ms.
 
+## Highlight uploads (one-time per environment)
+
+Highlight screenshots wait in a private R2 bucket between receipt and deletion. The API
+deletes each upload right after analysis and account deletion purges the user's keys, so
+what follows is only the backstop. Create the bucket (private by default; never attach a
+public domain or custom-domain access):
+
+```bash
+npm exec -w @mergemate/api -- wrangler r2 bucket create mergemate-highlight-uploads-dev
+npm exec -w @mergemate/api -- wrangler r2 bucket create mergemate-highlight-uploads
+```
+
+Then add a 1-day object-expiry rule on each bucket, so anything a failed delete leaves
+behind disappears within a day. The `IMAGES` binding (Image Transformations, used to
+resize uploads and strip their metadata) needs no bucket and no secret.
+
 ## Database (one-time per environment)
 
 Create the D1 database, put the printed `database_id` in a `[[env.dev.d1_databases]]` block (binding `DB`, `database_name = "mergemate-db-dev"`, `migrations_dir = "migrations"`) in `wrangler.toml`, then apply migrations:

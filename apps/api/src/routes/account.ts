@@ -7,6 +7,7 @@ import { cancelBillingBeforeDelete } from "../lib/stripe-billing";
 import { getAccessToken } from "../lib/github-tokens";
 import { clearedSessionCookie } from "../lib/sessions";
 import { aiUserDeletion } from "./ai-engine";
+import { deleteUserUploads } from "./highlight";
 
 /**
  * Revokes the user's grant for this GitHub App (an app-level call authenticated with the
@@ -64,6 +65,9 @@ export const account = new Hono<AppEnv>().delete("/account", async (c) => {
     );
   }
 
+  // Uploads are purged before the rows: the keys are user-scoped, so a retry after a
+  // partial delete finds only what is left, and a failed purge keeps the account for retry.
+  await deleteUserUploads(c.env, userId);
   await db.batch([
     db.prepare("DELETE FROM notification_state WHERE user_id = ?").bind(userId),
     db.prepare("DELETE FROM triage_choices WHERE user_id = ?").bind(userId),

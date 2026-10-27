@@ -248,3 +248,37 @@ describe("createModelProvider (workers-ai)", () => {
     }
   });
 });
+
+describe("vision image input", () => {
+  const dataUrl = "data:image/png;base64,AAA";
+  const withImage = { ...request, image: { dataUrl } };
+
+  it("sends the screenshot as an image part inside the user message", async () => {
+    const ai = fakeAi(async () => ({ response: "ok" }));
+    const transport = mockTransport();
+    const provider = createModelProvider(validModelEnv(), "highlight", { transport, ai });
+    await expect(provider.complete(withImage)).resolves.toMatchObject({
+      provider: "workers-ai",
+      modelId: "@cf/meta/llama-4-scout-17b-16e-instruct",
+    });
+    expect(transport.calls).toHaveLength(0);
+    expect(ai.runs[0]?.inputs).toEqual({
+      messages: [
+        { role: "system", content: "s" },
+        {
+          role: "user",
+          content: [
+            { type: "text", text: "p" },
+            { type: "image_url", image_url: { url: dataUrl } },
+          ],
+        },
+      ],
+      max_tokens: 100,
+    });
+  });
+
+  it("never sends screenshots to Meta", async () => {
+    const provider = createModelProvider(validModelEnv(), "summary", { transport: mockTransport() });
+    await expect(provider.complete(withImage)).rejects.toMatchObject({ code: "upstream_unavailable" });
+  });
+});

@@ -568,7 +568,7 @@ describe("plan-aware caps", () => {
 
 describe("misc engine helpers", () => {
   it("parses limits with safe defaults", () => {
-    expect(actionLimits({})).toEqual({ free: 30, pro: 500, global: undefined });
+    expect(actionLimits({})).toEqual({ free: 30, pro: 200, global: undefined });
   });
 
   it("reads configured limits and ignores invalid globals", () => {
@@ -587,8 +587,20 @@ describe("misc engine helpers", () => {
     expect(secondsToMidnight()).toBeGreaterThan(0);
   });
 
-  it("leaves highlight unavailable without a vision transport", async () => {
-    await expect(analyzeHighlight()).rejects.toMatchObject({ code: "upstream_unavailable" });
+  it("leaves highlight unavailable without storage", async () => {
+    await expect(
+      analyzeHighlight({
+        db: testDb(),
+        transport: mockTransport(),
+        limits: { free: 30, pro: 200 },
+        env: {},
+        session: user,
+        image: new Uint8Array([1, 2, 3]),
+        contentType: "image/png",
+        note: "",
+        requestId: "r1",
+      }),
+    ).rejects.toMatchObject({ code: "upstream_unavailable" });
   });
 
   it("keeps fixtures shape-valid", () => {

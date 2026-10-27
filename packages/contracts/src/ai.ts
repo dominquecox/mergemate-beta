@@ -87,9 +87,22 @@ export const ConsentUpdate = z.object({
 });
 export type ConsentUpdate = z.infer<typeof ConsentUpdate>;
 
+/** One marked region in a screenshot. Boxes are integers from 0 to 1000 relative to the image size. */
+export const HighlightRegion = z
+  .object({
+    xMin: z.number().int().min(0).max(1000),
+    yMin: z.number().int().min(0).max(1000),
+    xMax: z.number().int().min(0).max(1000),
+    yMax: z.number().int().min(0).max(1000),
+    label: z.string().min(1).max(120),
+  })
+  .refine((box) => box.xMax > box.xMin && box.yMax > box.yMin, { message: "empty box" });
+export type HighlightRegion = z.infer<typeof HighlightRegion>;
+
 /** Highlight result. The request id matches the `x-request-id` response header. */
 export const HighlightResult = z.object({
   insight: z.string().min(1),
+  regions: z.array(HighlightRegion).default([]),
   requestId: z.string().min(1),
 });
 export type HighlightResult = z.infer<typeof HighlightResult>;
@@ -115,6 +128,13 @@ export const ModelRisk = z.object({
   reasons: z.array(z.string()).min(1),
 });
 export type ModelRisk = z.infer<typeof ModelRisk>;
+
+/** Exact shape the vision model must return for a highlight. */
+export const ModelHighlight = z.object({
+  explanation: z.string().min(1),
+  regions: z.array(HighlightRegion).default([]),
+});
+export type ModelHighlight = z.infer<typeof ModelHighlight>;
 
 /** Exact shape the model must return for triage. The lane can only raise the deterministic lane server-side. */
 export const ModelTriage = z.object({

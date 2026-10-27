@@ -77,6 +77,17 @@ dataset = "mergemate_ai_metrics_dev"
 [ai]
 binding = "AI"
 
+# Highlight uploads. The bucket is private (no public access); see DEPLOY.md for
+# creation and the 1-day expiry backstop. Top level serves local `wrangler dev`.
+[[r2_buckets]]
+binding = "HIGHLIGHT_UPLOADS"
+bucket_name = "mergemate-highlight-uploads-local"
+
+# Image Transformations for resizing uploads and stripping their metadata. Like [ai],
+# this binding must be repeated in every named environment.
+[images]
+binding = "IMAGES"
+
 # Deployed environments. D1 database ids and the POSTS KV namespace id (shared with the staff tool)
 # are added when those resources exist (DEPLOY.md).
 [env.dev]
@@ -140,6 +151,13 @@ dataset = "mergemate_ai_metrics_dev"
 [env.dev.ai]
 binding = "AI"
 
+[[env.dev.r2_buckets]]
+binding = "HIGHLIGHT_UPLOADS"
+bucket_name = "mergemate-highlight-uploads-dev"
+
+[env.dev.images]
+binding = "IMAGES"
+
 [env.production]
 name = "mergemate-api"
 
@@ -199,6 +217,13 @@ dataset = "mergemate_ai_metrics"
 
 [env.production.ai]
 binding = "AI"
+
+[[env.production.r2_buckets]]
+binding = "HIGHLIGHT_UPLOADS"
+bucket_name = "mergemate-highlight-uploads"
+
+[env.production.images]
+binding = "IMAGES"
 
 [[queues.producers]]
 binding = "STRIPE_EVENTS"

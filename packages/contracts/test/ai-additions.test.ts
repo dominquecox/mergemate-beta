@@ -1,7 +1,9 @@
 import {
   ConsentState,
   ConsentUpdate,
+  HighlightRegion,
   HighlightResult,
+  ModelHighlight,
   ModelTriage,
   QualityCheck,
   SecretFinding,
@@ -27,8 +29,19 @@ describe("MM-009 contract additions", () => {
 
   it("parses highlight results and triage records", () => {
     expect(HighlightResult.parse({ insight: "moved", requestId: "r1" }).insight).toBe("moved");
+    expect(HighlightResult.parse({ insight: "moved", requestId: "r1" }).regions).toEqual([]);
     expect(TriageRecord.parse({ prRef: "octo/demo#1", lane: "ignore" }).lane).toBe("ignore");
     expect(TriageRecord.safeParse({ prRef: "bad", lane: "ignore" }).success).toBe(false);
+  });
+
+  it("validates highlight regions as non-empty 0-1000 boxes", () => {
+    const box = { xMin: 10, yMin: 20, xMax: 200, yMax: 80, label: "Checkout button" };
+    expect(HighlightRegion.parse(box).label).toBe("Checkout button");
+    expect(ModelHighlight.parse({ explanation: "clear", regions: [box] }).regions).toHaveLength(1);
+    expect(ModelHighlight.parse({ explanation: "clear" }).regions).toEqual([]);
+    expect(HighlightRegion.safeParse({ ...box, xMax: 10 }).success).toBe(false);
+    expect(HighlightRegion.safeParse({ ...box, xMin: -1 }).success).toBe(false);
+    expect(HighlightRegion.safeParse({ ...box, xMax: 1001 }).success).toBe(false);
   });
 
   it("adds optional triage reasons and source without changing the old shape", () => {

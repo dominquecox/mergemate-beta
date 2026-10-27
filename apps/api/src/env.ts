@@ -37,7 +37,7 @@ export interface Env {
   AI_GATEWAY_ID?: string;
   /** Daily AI actions per user on the free plan. Defaults to 30. */
   AI_DAILY_ACTIONS_FREE?: string;
-  /** Daily AI actions per user on the paid plan. Defaults to 500. */
+  /** Daily AI actions per user on the paid plan. Defaults to 200. */
   AI_DAILY_ACTIONS_PRO?: string;
   /** Global daily AI actions. Absent means unenforced. */
   AI_GLOBAL_DAILY_ACTIONS?: string;
@@ -68,6 +68,10 @@ export interface Env {
   /** One content-free data point per model call. Metering is skipped when absent. */
   AI_METRICS?: AnalyticsEngineDataset;
   AI?: AiBinding;
+  /** Private R2 bucket holding highlight uploads between receipt and deletion. Absent in tests. */
+  HIGHLIGHT_UPLOADS?: R2Bucket;
+  /** Image Transformations binding. When present, uploads are resized and re-encoded before analysis. */
+  IMAGES?: ImagesBinding;
   POSTS?: KVNamespace;
   GITHUB_EVENTS?: Pick<Queue<GitHubEventMessage>, "send">;
 }
