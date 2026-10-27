@@ -8,3 +8,4 @@ export * from "./billing";
 export * from './settings';
 export * from './push';
 export * from './meta-key';
+export * from './flags';

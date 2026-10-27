@@ -6,6 +6,7 @@ import { cors } from "./middleware/cors";
 import { provideDeps } from "./middleware/deps";
 import { requestId } from "./middleware/request-id";
 import { securityHeaders } from "./middleware/security-headers";
+import { flags } from "./routes/flags";
 import { authenticate } from "./middleware/session";
 import { metaKey } from './routes/meta-key';
 import { settings } from './routes/settings';
@@ -38,7 +39,8 @@ export const createApp = (deps: Deps = defaultDeps) => {
   app.use(securityHeaders());
   app.use(provideDeps(deps));
   app.use(cors());
-  // Rate limits and sessions run before any route logic.
+  app.route("/v1", flags);
+  // Other routes retain their existing rate limits and session rules.
   app.use(authenticate());
   const jsonLimit = bodyLimit({
     maxSize: MAX_BODY_BYTES,
