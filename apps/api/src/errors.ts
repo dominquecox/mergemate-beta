@@ -26,6 +26,8 @@ export class ApiError extends Error {
     readonly code: ErrorCode,
     message: string,
     readonly headers: Record<string, string> = {},
+    /** For the log only, never the client: which upstream step failed and its HTTP status. No request or response content. */
+    readonly logDetail?: string,
   ) {
     super(message);
   }

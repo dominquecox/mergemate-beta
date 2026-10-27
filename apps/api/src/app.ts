@@ -87,6 +87,7 @@ export const createApp = (deps: Deps = defaultDeps) => {
       console.error(JSON.stringify({ requestId, code: err.code, detail: err.detail }));
     }
     if (err instanceof ApiError) {
+      if (err.logDetail) console.error(JSON.stringify({ requestId, code: err.code, detail: err.logDetail, path: c.req.path }));
       return errorResponse(c, err.code, err.message, err.headers);
     }
     // Log only the error type: messages may carry request data.

@@ -8,7 +8,8 @@ const USER_AGENT = "MergeMate";
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-const unavailable = () => new ApiError("upstream_unavailable", "GitHub is unavailable. Try again.");
+const unavailable = (logDetail?: string) =>
+  new ApiError("upstream_unavailable", "GitHub is unavailable. Try again.", {}, logDetail);
 
 /**
  * Read-only GitHub REST call with the user's token. GET only: there is no write path.
@@ -33,7 +34,7 @@ export const githubGet = async <T>(deps: Deps, token: string, path: string): Pro
         await sleep(500);
         continue;
       }
-      throw unavailable();
+      throw unavailable("github api fetch failed");
     }
     if (res.ok) return (await res.json()) as T;
     if ((res.status === 429 || res.status >= 500) && attempt === 0) {
@@ -65,7 +66,7 @@ const githubError = async (res: Response) => {
     return new ApiError("forbidden", "GitHub denied access.");
   }
   if (res.status === 429) return rateLimited(res);
-  return unavailable();
+  return unavailable(`github api status ${res.status}`);
 };
 
 const rateLimited = (res: Response) => {
@@ -102,13 +103,13 @@ export const requestTokens = async (
       signal: AbortSignal.timeout(TIMEOUT_MS),
     });
   } catch {
-    throw unavailable();
+    throw unavailable("token exchange fetch failed");
   }
-  if (res.status >= 500) throw unavailable();
+  if (res.status >= 500) throw unavailable(`token exchange status ${res.status}`);
   const body = (await res.json().catch(() => null)) as Record<string, unknown> | null;
-  if (!body) throw unavailable();
+  if (!body) throw unavailable(`token exchange status ${res.status}, body not JSON (${res.headers.get("content-type") ?? "no type"})`);
   if (typeof body.error === "string") return { ok: false, error: body.error };
-  if (typeof body.access_token !== "string" || !body.access_token) throw unavailable();
+  if (typeof body.access_token !== "string" || !body.access_token) throw unavailable(`token exchange status ${res.status}, no access_token`);
 
   const now = deps.now().getTime();
   const at = (seconds: unknown) =>
