@@ -109,6 +109,13 @@ export const PrThread = z.object({
 });
 export type PrThread = z.infer<typeof PrThread>;
 
+/**
+ * GitHub's merge status for an open pull request. `unknown` means GitHub is still computing it
+ * (refetch shortly); it is never shown as ready. Read-only: MergeMate never merges or resolves.
+ */
+export const MergeState = z.enum(["clean", "conflicts", "blocked", "behind", "unstable", "unknown"]);
+export type MergeState = z.infer<typeof MergeState>;
+
 export const PrDetail = z.object({
   repo: z.string(),
   number: z.number().int().positive(),
@@ -129,6 +136,8 @@ export const PrDetail = z.object({
   createdAt: IsoDateTime,
   updatedAt: IsoDateTime,
   htmlUrl: z.url(),
+  /** Present for open pull requests only. */
+  mergeState: MergeState.optional(),
 });
 export type PrDetail = z.infer<typeof PrDetail>;
 

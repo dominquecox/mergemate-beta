@@ -98,6 +98,7 @@ export function mapPrDetail(detail: ContractPrDetail): PrDetail {
     changedFilesCount: detail.changedFiles,
     // Only a GitHub link may be opened from "Open in GitHub".
     htmlUrl: githubUrl(detail.htmlUrl) ?? "",
+    ...(detail.mergeState ? { mergeState: detail.mergeState } : {}),
     checks: detail.checks.map(mapCheck),
     files: detail.files.map(mapFile),
     comments: mapComments(detail.threads),

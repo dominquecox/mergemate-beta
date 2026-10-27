@@ -21,8 +21,8 @@ export default function TabsLayout() {
               backgroundColor: colors.surface,
               borderTopColor: colors.border,
               // Web needs a little more room: the icon box is taller than the old emoji glyph and would squeeze the label.
-              height: Platform.OS === "web" ? 68 : 62,
-              paddingBottom: 8,
+              height: Platform.OS === "web" ? 72 : 62,
+              paddingBottom: Platform.OS === "web" ? 10 : 8,
               paddingTop: 8,
             },
         tabBarActiveTintColor: colors.brandLight,
@@ -30,6 +30,9 @@ export default function TabsLayout() {
         tabBarLabelStyle: {
           ...typography.caption,
           fontWeight: "600",
+          // Full line height so descenders ("Triage") are not clipped on web.
+          lineHeight: Math.ceil((typography.caption.fontSize ?? 12) * 1.4),
+          paddingBottom: 2,
         },
       }}
     >

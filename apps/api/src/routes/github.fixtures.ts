@@ -53,12 +53,14 @@ const pr = (
   createdAt: updatedAt,
   updatedAt,
   htmlUrl: `https://github.com/${repo}/pull/${number}`,
+  mergeState: "clean",
   ...extra,
 });
 
 export const DEMO_PRS: PrDetail[] = [
   pr("acme-demo/payments-api", 42, "Retry failed card charges with backoff", "rivera-dev", at("2026-10-26T15:20:00Z"), {
     body: "Adds exponential backoff for declined-but-retryable charges and a cap of three attempts.",
+    mergeState: "conflicts",
     additions: 184,
     deletions: 22,
     changedFiles: 4,

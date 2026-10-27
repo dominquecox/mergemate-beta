@@ -94,6 +94,9 @@ export interface PrComment {
   createdAt: string;
 }
 
+/** GitHub's merge status for an open pull request; "unknown" means GitHub is still checking. */
+export type MergeState = "clean" | "conflicts" | "blocked" | "behind" | "unstable" | "unknown";
+
 export interface PrDetail {
   owner: string;
   repo: string;
@@ -110,6 +113,7 @@ export interface PrDetail {
   deletions: number;
   changedFilesCount: number;
   htmlUrl: string;
+  mergeState?: MergeState;
   checks: PrCheck[];
   files: PrFile[];
   comments: PrComment[];

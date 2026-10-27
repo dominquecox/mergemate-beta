@@ -20,6 +20,8 @@ import { EmptyState } from "../../../../src/components/EmptyState";
 import { ErrorState } from "../../../../src/components/ErrorState";
 import { LoadingState } from "../../../../src/components/LoadingState";
 import { Icon } from "../../../../src/components/Icon";
+import { DiffView } from "../../../../src/components/DiffView";
+import { MergeStateChip } from "../../../../src/components/MergeStateChip";
 
 export default function PrDetailScreen() {
   const { owner, repo, number } = useLocalSearchParams<{
@@ -58,6 +60,22 @@ export default function PrDetailScreen() {
   useEffect(() => {
     loadPr();
   }, [loadPr]);
+
+  // GitHub computes mergeability in the background. While it reports "unknown", re-read the PR a few times.
+  const [mergeRechecks, setMergeRechecks] = useState(0);
+  useEffect(() => {
+    if (detail?.mergeState !== "unknown" || mergeRechecks >= 3) return;
+    const timer = setTimeout(async () => {
+      setMergeRechecks((count) => count + 1);
+      try {
+        const fresh = await api.getPrDetail(owner || "owner", repo || "repo", parseInt(number || "1", 10));
+        setDetail((current) => (current ? { ...current, mergeState: fresh.mergeState } : current));
+      } catch {
+        // Keep showing "Checking merge status"; it never claims ready.
+      }
+    }, 4000);
+    return () => clearTimeout(timer);
+  }, [detail?.mergeState, mergeRechecks, owner, repo, number]);
 
   const handleShare = async () => {
     if (detail) {
@@ -135,6 +153,11 @@ export default function PrDetailScreen() {
               >
                 {detail.title}
               </Text>
+              {detail.mergeState && (
+                <View style={{ marginTop: spacing.sm }}>
+                  <MergeStateChip state={detail.mergeState} />
+                </View>
+              )}
 
             </View>
             <View style={{flexDirection:"row",alignItems:"center",gap:8,flexWrap:"wrap",marginTop:12}}>
@@ -288,7 +311,7 @@ export default function PrDetailScreen() {
                   {detail.files.map((file, idx) => (
                     <View key={file.filename} style={{marginTop:12,backgroundColor:colors.surfaceElevated,borderRadius:8,overflow:"hidden"}}>
                       <TouchableOpacity accessibilityRole="button" accessibilityLabel={`Toggle diff for ${file.filename}`} accessibilityState={{expanded:expandedFiles.includes(file.filename)}} aria-expanded={expandedFiles.includes(file.filename)} onPress={()=>setExpandedFiles(prev=>prev.includes(file.filename)?prev.filter(name=>name!==file.filename):[...prev,file.filename])} style={{flexDirection:"row",alignItems:"center",padding:12,gap:8,minHeight:48}}><Icon name={expandedFiles.includes(file.filename)?"chevron-down":"chevron-forward"} size={16} color={colors.textSecondary}/><Text style={[typography.code,{color:colors.text,flex:1}]}>{file.filename}</Text><Text style={[typography.code,{color:colors.riskLow,fontSize:11}]}>+{file.additions}</Text><Text style={[typography.code,{color:colors.riskHigh,fontSize:11}]}>-{file.deletions}</Text></TouchableOpacity>
-                      {expandedFiles.includes(file.filename) && <ScrollView horizontal style={{padding:12,borderTopWidth:1,borderTopColor:colors.border}}><Text selectable style={[typography.code,{color:colors.textSecondary}]}>{file.patchSnippet || "Diff unavailable. Open this pull request in GitHub."}</Text></ScrollView>}
+                      {expandedFiles.includes(file.filename) && (file.patchSnippet ? <DiffView patch={file.patchSnippet}/> : <Text style={[typography.code,{color:colors.textSecondary,padding:12,borderTopWidth:1,borderTopColor:colors.border}]}>Diff unavailable. Open this pull request in GitHub.</Text>)}
                     </View>
                   ))}
                 </View>

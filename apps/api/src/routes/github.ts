@@ -3,6 +3,7 @@ import {
   type Installation,
   type InstallationList,
   type PrCheck,
+  type MergeState,
   type PrDetail,
   type PrStatus,
   type PrThread,
@@ -80,6 +81,9 @@ interface GhPull {
   created_at: string;
   updated_at: string;
   html_url: string;
+  /** null while GitHub computes mergeability in the background. */
+  mergeable?: boolean | null;
+  mergeable_state?: string;
 }
 
 interface GhFile {
@@ -112,6 +116,26 @@ interface GhComment {
   line?: number | null;
   in_reply_to_id?: number;
 }
+
+/** Maps GitHub's mergeability onto MergeState. Only open pull requests have one. */
+export const mergeStateOf = (pr: Pick<GhPull, "state" | "merged_at" | "mergeable" | "mergeable_state">): MergeState | undefined => {
+  if (pr.state !== "open" || pr.merged_at) return undefined;
+  if (pr.mergeable === false || pr.mergeable_state === "dirty") return "conflicts";
+  if (pr.mergeable === null || pr.mergeable === undefined) return "unknown";
+  switch (pr.mergeable_state) {
+    case "clean":
+    case "has_hooks":
+      return "clean";
+    case "blocked":
+      return "blocked";
+    case "behind":
+      return "behind";
+    case "unstable":
+      return "unstable";
+    default:
+      return "unknown";
+  }
+};
 
 export const prStatus = (pr: { state: string; draft?: boolean; merged_at?: string | null }): PrStatus => {
   if (pr.merged_at) return "merged";
@@ -220,6 +244,7 @@ export const fetchPrDetail = async (
     createdAt: pull.created_at,
     updatedAt: pull.updated_at,
     htmlUrl: pull.html_url,
+    ...(mergeStateOf(pull) ? { mergeState: mergeStateOf(pull) } : {}),
   };
 };
 

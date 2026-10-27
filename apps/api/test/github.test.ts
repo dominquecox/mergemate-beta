@@ -295,3 +295,17 @@ describe("telemetry", () => {
     expect(res.status).toBe(401);
   });
 });
+
+describe("merge state", () => {
+  it("maps GitHub mergeability and never calls an uncomputed state ready", async () => {
+    const { mergeStateOf } = await import("../src/routes/github");
+    const open = { state: "open" as const, merged_at: null };
+    expect(mergeStateOf({ ...open, mergeable: false, mergeable_state: "dirty" })).toBe("conflicts");
+    expect(mergeStateOf({ ...open, mergeable: null, mergeable_state: "unknown" })).toBe("unknown");
+    expect(mergeStateOf({ ...open, mergeable: true, mergeable_state: "clean" })).toBe("clean");
+    expect(mergeStateOf({ ...open, mergeable: true, mergeable_state: "behind" })).toBe("behind");
+    expect(mergeStateOf({ ...open, mergeable: true, mergeable_state: "blocked" })).toBe("blocked");
+    expect(mergeStateOf({ ...open, mergeable: true, mergeable_state: "unstable" })).toBe("unstable");
+    expect(mergeStateOf({ state: "closed", merged_at: "2026-10-27T00:00:00Z", mergeable: null })).toBeUndefined();
+  });
+});

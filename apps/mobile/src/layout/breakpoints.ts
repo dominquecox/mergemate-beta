@@ -31,6 +31,11 @@ export function getLayoutMode(width: number): LayoutMode {
   return "phone";
 }
 
+/** Signed-in screens: reaching one without a session (Back after sign-out, a pasted URL) goes to sign-in. */
+export function requiresSession(segments: readonly string[]): boolean {
+  return getShellKind(segments) === "app";
+}
+
 export function getShellKind(segments: readonly string[]): ShellKind {
   const first = segments[0];
   if (first === undefined) return "bare";

@@ -10,7 +10,7 @@ import { DemoBanner } from "../src/components/DemoBanner";
 import { ConfigErrorScreen, SampleDataBanner, isApiMisconfigured } from "../src/components/ConfigBanner";
 import { AppFonts } from "../src/components/AppFonts";
 import { Sidebar } from "../src/components/Sidebar";
-import { SIDEBAR_WIDTH, resolveShell } from "../src/layout/breakpoints";
+import { SIDEBAR_WIDTH, resolveShell, requiresSession } from "../src/layout/breakpoints";
 
 function AppContent() {
   const { colors, isDark } = useTheme();
@@ -23,16 +23,18 @@ function AppContent() {
   const shell = resolveShell({ width, segments, signedIn: Boolean(session), isWeb: Platform.OS === "web" });
   const isPhoneFrame = shell.mode === "phone" && Platform.OS === "web";
 
-  // If the session ends while the app is open (expired, revoked), go back to sign-in.
+  // If the session ends while the app is open (expired, revoked), go back to sign-in. Also covers
+  // reaching a signed-in screen without a session: browser Back after sign-out, or a pasted URL.
   const hadSession = useRef(false);
+  const onProtected = requiresSession(segments);
   useEffect(() => {
     if (session) {
       hadSession.current = true;
-    } else if (hadSession.current && !isLoading) {
+    } else if (!isLoading && (hadSession.current || onProtected)) {
       hadSession.current = false;
       router.replace("/(auth)/sign-in");
     }
-  }, [session, isLoading, router]);
+  }, [session, isLoading, router, onProtected]);
 
   useEffect(() => {
     if (Platform.OS === "web" && typeof document !== "undefined") {
