@@ -6,6 +6,7 @@ compatibility_date = "2026-10-01"
 
 [vars]
 APP_ENV = "development"
+STRIPE_MODE = "test"
 WEB_ORIGIN = "http://localhost:8081"
 GITHUB_APP_CLIENT_ID = "Iv1.submission-dev-example"
 GITHUB_APP_SLUG = "submission-production-example"
@@ -47,6 +48,7 @@ name = "mergemate-api-dev"
 
 [env.dev.vars]
 APP_ENV = "development"
+STRIPE_MODE = "test"
 WEB_ORIGIN = "https://dev.mergemate.dev"
 GITHUB_APP_CLIENT_ID = "Iv1.submission-dev-example"
 GITHUB_APP_SLUG = "submission-production-example"
@@ -78,6 +80,7 @@ name = "mergemate-api"
 # The production GitHub App's client id and slug are added when that app exists.
 [env.production.vars]
 APP_ENV = "production"
+STRIPE_MODE = "disabled"
 WEB_ORIGIN = "https://mergemate.dev"
 MODEL_PROVIDER = "meta"
 MODEL_ID = "muse-spark-1.2"
@@ -100,3 +103,30 @@ class_name = "TokenRefresher"
 [[env.production.analytics_engine_datasets]]
 binding = "TELEMETRY"
 dataset = "mergemate_events"
+
+[[queues.producers]]
+binding = "STRIPE_EVENTS"
+queue = "mergemate-stripe-events-local"
+[[queues.consumers]]
+queue = "mergemate-stripe-events-local"
+max_batch_size = 10
+max_retries = 5
+dead_letter_queue = "mergemate-stripe-events-local-dlq"
+
+[[env.dev.queues.producers]]
+binding = "STRIPE_EVENTS"
+queue = "mergemate-stripe-events-dev"
+[[env.dev.queues.consumers]]
+queue = "mergemate-stripe-events-dev"
+max_batch_size = 10
+max_retries = 5
+dead_letter_queue = "mergemate-stripe-events-dev-dlq"
+
+[[env.production.queues.producers]]
+binding = "STRIPE_EVENTS"
+queue = "mergemate-stripe-events"
+[[env.production.queues.consumers]]
+queue = "mergemate-stripe-events"
+max_batch_size = 10
+max_retries = 5
+dead_letter_queue = "mergemate-stripe-events-dlq"

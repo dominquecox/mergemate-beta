@@ -42,3 +42,13 @@ npm exec -w @mergemate/api -- wrangler d1 migrations apply mergemate-db-dev --en
 Locally, `npm run db:migrate:local -w @mergemate/api` applies migrations to the local database used by `wrangler dev`.
 
 List what is set (names only): `npm exec -w @mergemate/api -- wrangler secret list --env dev`.
+
+## Billing setup
+
+Billing is test mode only in this version; production is disabled. Set Stripe test secrets locally in `.dev.vars` and configure `STRIPE_PRICE_PRO_MONTHLY` and `STRIPE_PRICE_PRO_ANNUAL` with recurring test prices. Never use live keys. The REST client pins API version `2025-06-30.basil`; configure a test webhook destination at that version. No Stripe resources or secrets were created by this change.
+
+Subscribe the test destination to `checkout.session.completed`, `customer.subscription.created`, `customer.subscription.updated`, `customer.subscription.deleted`, `invoice.payment_failed`, and `invoice.paid`. The Worker verifies the raw-body signature and timestamp, records a durable inbox entry, then queues the event ID. Provision each configured queue and its dead-letter queue only as part of an authorized deployment. Replaying a dead-letter message uses the existing pending inbox row; completed events are ignored. Do not remove pending events without reconciliation.
+
+`getBillingPlan(env, userId)` exposes the verified stored entitlement for API consumers. `renewsAt` is null when cancellation is scheduled, with the end date in `cancelAt`. A billing operation interrupted while holding a customer lock fails closed; confirm the old request ended before an authorized operator clears its `operation_token`. A failed deletion keeps `deleting=1`, so new checkouts remain blocked until deletion is retried. Account deletion expires open checkouts and confirms cancellation of every remaining subscription before GitHub revocation and local data deletion.
+
+Reference: [Stripe webhooks](https://docs.stripe.com/webhooks), [Checkout creation](https://docs.stripe.com/api/checkout/sessions/create), [subscription cancellation](https://docs.stripe.com/api/subscriptions/cancel), [API versioning](https://docs.stripe.com/api/versioning).

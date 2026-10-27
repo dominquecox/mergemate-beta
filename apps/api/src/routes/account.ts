@@ -3,6 +3,7 @@ import { requireBinding, requireVar } from "../config";
 import type { AppEnv } from "../env";
 import { ApiError } from "../errors";
 import { GITHUB_API } from "../lib/github";
+import { cancelBillingBeforeDelete } from "../lib/stripe-billing";
 import { getAccessToken } from "../lib/github-tokens";
 import { clearedSessionCookie } from "../lib/sessions";
 
@@ -43,6 +44,8 @@ export const account = new Hono<AppEnv>().delete("/account", async (c) => {
   if (!userId) throw new ApiError("forbidden", "Not available in the demo.");
   const db = requireBinding(c.env, "DB");
   const deps = c.get("deps");
+
+  await cancelBillingBeforeDelete(c.env,deps,userId);
 
   let accessToken: string | null = null;
   try {

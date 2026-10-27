@@ -14,6 +14,7 @@ RESEND_API_KEY=
 TURNSTILE_SECRET_KEY=
 # Non-secret config. APP_ENV, WEB_ORIGIN, GITHUB_APP_CLIENT_ID, GITHUB_APP_SLUG and the model settings
 # are in wrangler.toml [vars]; uncomment only to override locally (an empty value also overrides).
+# STRIPE_MODE=
 # APP_ENV=
 # WEB_ORIGIN=
 # GITHUB_APP_CLIENT_ID=

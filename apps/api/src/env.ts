@@ -27,6 +27,12 @@ export interface Env {
   TOKEN_ENCRYPTION_KEY?: string;
   TOKEN_ENCRYPTION_KEY_PREVIOUS?: string;
   TURNSTILE_SECRET_KEY?: string;
+  STRIPE_MODE?: string;
+  STRIPE_SECRET_KEY?: string;
+  STRIPE_WEBHOOK_SECRET?: string;
+  STRIPE_PRICE_PRO_MONTHLY?: string;
+  STRIPE_PRICE_PRO_ANNUAL?: string;
+  STRIPE_EVENTS?: Pick<Queue<{ eventId: string }>, "send">;
   DB?: D1Database;
   IP_RATE_LIMITER?: RateLimiter;
   SESSION_RATE_LIMITER?: RateLimiter;

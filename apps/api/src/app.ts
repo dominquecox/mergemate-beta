@@ -7,6 +7,8 @@ import { provideDeps } from "./middleware/deps";
 import { requestId } from "./middleware/request-id";
 import { securityHeaders } from "./middleware/security-headers";
 import { authenticate } from "./middleware/session";
+import { billing } from "./routes/billing";
+import { billingWebhooks } from "./routes/billing-webhooks";
 import { account } from "./routes/account";
 import { auth } from "./routes/auth";
 import { github } from "./routes/github";
@@ -27,16 +29,16 @@ export const createApp = (deps: Deps = defaultDeps) => {
   app.use(cors());
   // Rate limits and sessions run before any route logic.
   app.use(authenticate());
-  app.use(
-    bodyLimit({
-      maxSize: MAX_BODY_BYTES,
-      onError: (c) => errorResponse(c, "payload_too_large", "Request body is too large."),
-    }),
-  );
+  app.use((c,next) => bodyLimit({
+    maxSize: c.req.path === "/v1/webhooks/stripe" ? 5 * MAX_BODY_BYTES : MAX_BODY_BYTES,
+    onError: (ctx) => errorResponse(ctx, "payload_too_large", "Request body is too large."),
+  })(c,next));
 
   app.route("/v1/health", health);
   app.route("/v1", auth);
   app.route("/v1", account);
+  app.route("/v1", billing);
+  app.route("/v1", billingWebhooks);
   app.route("/v1", github);
   app.route("/v1", notifications);
   app.route("/v1", telemetry);
