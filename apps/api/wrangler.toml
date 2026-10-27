@@ -20,6 +20,9 @@ MODEL_ROUTE_HIGHLIGHT = "meta:muse-spark-1.2"
 MODEL_BASE_URL = "https://api.meta.ai/v1"
 # Initial value; confirm before launch.
 AI_GLOBAL_DAILY_ACTIONS = "300"
+# Non-secret per-env salt for hashing telemetry user indexes. Distinct per environment
+# so indexes cannot be joined across datasets.
+TELEMETRY_SALT = "submission-local-example-salt-configure-your-own"
 
 [[ratelimits]]
 name = "IP_RATE_LIMITER"
@@ -113,6 +116,9 @@ MODEL_ROUTE_HIGHLIGHT = "meta:muse-spark-1.2"
 MODEL_BASE_URL = "https://api.meta.ai/v1"
 # Initial value; confirm before launch.
 AI_GLOBAL_DAILY_ACTIONS = "300"
+# Non-secret per-env salt for hashing telemetry user indexes. Distinct per environment
+# so indexes cannot be joined across datasets.
+TELEMETRY_SALT = "submission-dev-example-salt-configure-your-own"
 
 [[env.dev.ratelimits]]
 name = "IP_RATE_LIMITER"
@@ -206,6 +212,9 @@ MODEL_ROUTE_HIGHLIGHT = "meta:muse-spark-1.2"
 MODEL_BASE_URL = "https://api.meta.ai/v1"
 # Initial value; confirm before launch.
 AI_GLOBAL_DAILY_ACTIONS = "300"
+# Non-secret per-env salt for hashing telemetry user indexes. Distinct per environment
+# so indexes cannot be joined across datasets.
+TELEMETRY_SALT = "submission-production-example-salt-configure-your-own"
 
 [[env.production.ratelimits]]
 name = "IP_RATE_LIMITER"

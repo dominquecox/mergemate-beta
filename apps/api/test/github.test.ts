@@ -1,5 +1,6 @@
 import { ErrorBody, PrDetail, RepoPage } from "@mergemate/contracts";
 import { describe, expect, it } from "vitest";
+import { sha256Hex } from "../src/lib/crypto";
 import { json, testContext } from "./helpers";
 import { appFor, post, signIn, tokenResponse } from "./sign-in";
 
@@ -298,12 +299,31 @@ describe("DELETE /v1/account", () => {
 });
 
 describe("telemetry", () => {
-  it("records allowlisted events keyed by user id only", async () => {
-    const ctx = testContext();
+  it("records allowlisted events keyed by salted user hash only", async () => {
+    const ctx = testContext({ TELEMETRY_SALT: "test-salt" });
     const { headers, userId } = await signIn(ctx);
-    const res = await appFor(ctx)("/v1/events", post({ name: "inbox_view", props: { filter: "all" } }, headers));
+    const call = appFor(ctx);
+    const res = await call("/v1/events", post({ name: "inbox_view", props: { filter: "all" } }, headers));
     expect(res.status).toBe(204);
-    expect(ctx.points).toEqual([{ indexes: [userId], blobs: ["event", "inbox_view", '{"filter":"all"}'] }]);
+    expect(ctx.points).toHaveLength(1);
+    const index = ctx.points[0]?.indexes?.[0];
+    expect(typeof index).toBe("string");
+    expect(index).not.toBe(userId);
+    expect(index).not.toContain(userId);
+    expect(ctx.points[0]?.blobs).toEqual(["event", "inbox_view", '{"filter":"all"}']);
+    // Deterministic per salt, separated across salts.
+    expect(index).toBe(await sha256Hex(`test-salt:${userId}`));
+    expect(index).not.toBe(await sha256Hex(`other-salt:${userId}`));
+    const twice = await call("/v1/events", post({ name: "inbox_view" }, headers));
+    expect(twice.status).toBe(204);
+    expect(ctx.points[1]?.indexes?.[0]).toBe(index);
+  });
+
+  it("fails closed without a telemetry salt", async () => {
+    const ctx = testContext();
+    const { headers } = await signIn(ctx);
+    const res = await appFor(ctx)("/v1/events", post({ name: "inbox_view" }, headers));
+    expect(res.status).toBe(500);
   });
 
   it("rejects unknown events and oversized payloads", async () => {

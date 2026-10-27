@@ -67,6 +67,8 @@ export interface Env {
   TELEMETRY?: AnalyticsEngineDataset;
   /** One content-free data point per model call. Metering is skipped when absent. */
   AI_METRICS?: AnalyticsEngineDataset;
+  /** Non-secret per-env salt for hashing telemetry user indexes. Absent fails closed. */
+  TELEMETRY_SALT?: string;
   AI?: AiBinding;
   /** Private R2 bucket holding highlight uploads between receipt and deletion. Absent in tests. */
   HIGHLIGHT_UPLOADS?: R2Bucket;
