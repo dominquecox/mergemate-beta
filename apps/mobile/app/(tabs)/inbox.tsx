@@ -11,6 +11,7 @@ import {
 import { useRouter } from "expo-router";
 import { useTheme } from "../../src/context/ThemeContext";
 import { api } from "../../src/api";
+import { toUserMessage } from "../../src/api/errors";
 import { Notification, NotificationFilter } from "../../src/types";
 import { Header } from "../../src/components/Header";
 import { RiskBadge } from "../../src/components/RiskBadge";
@@ -34,8 +35,8 @@ export default function InboxScreen() {
       const data = await api.getNotifications(filter);
       setItems(data);
       setError(null);
-    } catch (e: any) {
-      setError(e.message || "Could not fetch inbox items.");
+    } catch (e) {
+      setError(toUserMessage(e, "Could not fetch inbox items."));
     } finally {
       setIsLoading(false);
       setIsRefreshing(false);
@@ -52,22 +53,34 @@ export default function InboxScreen() {
     fetchItems();
   };
 
-  const handleDone = async (item: Notification) => {
+  // The card leaves the list at once; if the API refuses, it comes back and the reason is shown.
+  const applyAction = async (item: Notification, action: () => Promise<void>) => {
     setUndoItem(item);
     setItems((prev) => prev.filter((i) => i.id !== item.id));
-    await api.markNotificationDone(item.id);
-  };
-
-  const handleSnooze = async (item: Notification) => {
-    setUndoItem(item);
-    setItems((prev) => prev.filter((i) => i.id !== item.id));
-    await api.snoozeNotification(item.id, new Date(Date.now() + 86400000).toISOString());
-  };
-
-  const handleUndo = () => {
-    if (undoItem) {
-      setItems((prev) => [undoItem, ...prev]);
+    try {
+      await action();
+    } catch (e) {
       setUndoItem(null);
+      setItems((prev) => [item, ...prev]);
+      setError(toUserMessage(e, "Couldn't update that pull request."));
+    }
+  };
+
+  const handleDone = (item: Notification) => applyAction(item, () => api.markNotificationDone(item.id));
+
+  const handleSnooze = (item: Notification) =>
+    applyAction(item, () => api.snoozeNotification(item.id, new Date(Date.now() + 86400000).toISOString()));
+
+  const handleUndo = async () => {
+    if (!undoItem) return;
+    const item = undoItem;
+    setUndoItem(null);
+    setItems((prev) => [item, ...prev]);
+    try {
+      await api.restoreNotification(item.id);
+    } catch (e) {
+      setItems((prev) => prev.filter((i) => i.id !== item.id));
+      setError(toUserMessage(e, "Couldn't undo that."));
     }
   };
 
@@ -75,10 +88,7 @@ export default function InboxScreen() {
     const parts = item.repo.split("/");
     const owner = parts[0] || "owner";
     const repoName = parts[1] || "repo";
-    // Match number from title or fallback
-    const match = item.title.match(/#(\d+)/);
-    const prNumber = match ? match[1] : "7";
-    router.push(`/pr/${owner}/${repoName}/${prNumber}`);
+    router.push(`/pr/${owner}/${repoName}/${item.number}`);
   };
 
   return (

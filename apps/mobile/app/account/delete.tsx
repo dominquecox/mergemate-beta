@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, Alert, Platform } from "react-native";
 import { useRouter } from "expo-router";
 import { useTheme } from "../../src/context/ThemeContext";
 import { useAuth } from "../../src/context/AuthContext";
+import { toUserMessage } from "../../src/api/errors";
 import { Header } from "../../src/components/Header";
 import { Button } from "../../src/components/Button";
 import { Card } from "../../src/components/Card";
@@ -18,8 +19,8 @@ export default function DeleteAccountScreen() {
     try {
       await deleteAccount();
       router.replace("/(auth)/sign-in");
-    } catch (e: any) {
-      alert("Failed to delete account. Please try again or contact support@mergemate.dev");
+    } catch (e) {
+      alert(`${toUserMessage(e, "Failed to delete account.")} If it keeps failing, contact support@mergemate.dev`);
       setIsDeleting(false);
     }
   };

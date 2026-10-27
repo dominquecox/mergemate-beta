@@ -17,7 +17,10 @@
     "@mergemate/contracts": "*",
     "expo": "~58.0.19",
     "expo-constants": "~58.0.13",
+    "expo-crypto": "58.0.7",
+    "expo-image-picker": "58.0.10",
     "expo-linking": "~58.0.14",
+    "expo-notifications": "58.1.6",
     "expo-router": "~58.0.26",
     "expo-secure-store": "~58.0.2",
     "expo-status-bar": "~58.0.4",
@@ -27,7 +30,8 @@
     "react-native": "0.88.0",
     "react-native-safe-area-context": "~5.10.1",
     "react-native-screens": "~4.30.0",
-    "react-native-web": "~0.21.4"
+    "react-native-web": "~0.21.4",
+    "zod": "4.6.7"
   },
   "devDependencies": {
     "@eslint/js": "9.39.5",

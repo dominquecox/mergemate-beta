@@ -1,10 +1,14 @@
 import React, { useState, useEffect } from "react";
-import { View, Text, ScrollView, TouchableOpacity, Switch, StyleSheet, Platform, Linking, Alert } from "react-native";
+import { View, Text, ScrollView, TouchableOpacity, Switch, StyleSheet, Platform, Linking, Alert, TextInput } from "react-native";
 import { useRouter } from "expo-router";
 import { useTheme } from "../../src/context/ThemeContext";
 import { useAuth } from "../../src/context/AuthContext";
 import { useConsent } from "../../src/context/ConsentContext";
-import { api } from "../../src/api";
+import { api, apiMode } from "../../src/api";
+import { webAppOrigin } from "../../src/api/config";
+import { toUserMessage } from "../../src/api/errors";
+import { StorageService } from "../../src/storage";
+import { registerPush, unregisterPush } from "../../src/push/registration";
 import { BillingPlan, UserSettings } from "../../src/types";
 import { Header } from "../../src/components/Header";
 import { Button } from "../../src/components/Button";
@@ -13,33 +17,103 @@ export default function SettingsScreen() {
   const router = useRouter();
   const { colors, typography, spacing, radius, themeMode, setThemeMode } = useTheme();
   const { user, signOut, isDemo } = useAuth();
-  const { aiConsentGranted, grantConsent, revokeConsent } = useConsent();
+  const { aiConsentGranted, grantConsent, revokeConsent, error: consentError } = useConsent();
 
-  const [settings, setSettings] = useState<UserSettings>({
-    notificationsEnabled: true,
-    quietHours: { enabled: true, start: "22:00", end: "08:00" },
-    aiSummariesEnabled: aiConsentGranted,
-    theme: themeMode,
-    emailAlerts: false,
-  });
+  const [settings, setSettings] = useState<UserSettings | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
 
   const [billing, setBilling] = useState<BillingPlan>({
     plan: "free",
     status: "active",
   });
 
+  // null means this API does not offer the feature, so the section is left out.
+  const [metaKey, setMetaKey] = useState<{ configured: boolean } | null>(null);
+  const [metaKeyInput, setMetaKeyInput] = useState("");
+  const [metaKeyBusy, setMetaKeyBusy] = useState(false);
+  const [pushOn, setPushOn] = useState(false);
+
   useEffect(() => {
-    api.getSettings().then(setSettings).catch(() => {});
+    api.getSettings().then(setSettings).catch((e) => setNotice(toUserMessage(e, "Couldn't load your settings.")));
     api.getBillingPlan().then(setBilling).catch(() => {});
+    api.getMetaKeyStatus().then(setMetaKey).catch(() => setMetaKey(null));
+    if (Platform.OS !== "web") StorageService.getPushEnabled().then(setPushOn).catch(() => {});
   }, []);
 
+  /** Saves a change to the API. The switch moves at once and snaps back, with the reason, if it is refused. */
+  const saveSettings = async (patch: Partial<UserSettings>): Promise<boolean> => {
+    if (!settings) return false;
+    const before = settings;
+    setNotice(null);
+    setSettings({ ...before, ...patch, notifications: { ...before.notifications, ...patch.notifications } });
+    try {
+      setSettings(await api.updateSettings(patch));
+      return true;
+    } catch (e) {
+      setSettings(before);
+      setNotice(toUserMessage(e, "Couldn't save that change."));
+      return false;
+    }
+  };
+
   const toggleAi = async (val: boolean) => {
+    setNotice(null);
     if (val) {
-      await grantConsent();
-    } else {
+      if (await grantConsent()) await saveSettings({ aiSummaries: true });
+    } else if (await saveSettings({ aiSummaries: false })) {
       await revokeConsent();
     }
-    setSettings((prev) => ({ ...prev, aiSummariesEnabled: val }));
+  };
+
+  const toggleQuietHours = async (on: boolean) => {
+    const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+    await saveSettings({ quietHours: on ? { start: "22:00", end: "08:00", timeZone } : null });
+  };
+
+  const togglePush = async (on: boolean) => {
+    setNotice(null);
+    try {
+      if (on) {
+        const result = await registerPush(api, { prompt: true });
+        if (result === "denied") setNotice("Notifications are off for MergeMate in your device settings.");
+        if (result === "unavailable") setNotice("Push notifications aren't set up for this build yet.");
+        setPushOn(result === "registered");
+      } else {
+        await unregisterPush(api);
+        setPushOn(false);
+      }
+    } catch (e) {
+      setNotice(toUserMessage(e, "Couldn't change push notifications."));
+    }
+  };
+
+  const saveMetaKey = async () => {
+    setMetaKeyBusy(true);
+    setNotice(null);
+    try {
+      await api.saveMetaKey(metaKeyInput);
+      setMetaKey({ configured: true });
+      setNotice("Your Meta key is saved. It is never shown again.");
+    } catch (e) {
+      setNotice(toUserMessage(e, "Couldn't save your Meta key."));
+    } finally {
+      // The key leaves the screen whether or not it was accepted.
+      setMetaKeyInput("");
+      setMetaKeyBusy(false);
+    }
+  };
+
+  const removeMetaKey = async () => {
+    setMetaKeyBusy(true);
+    setNotice(null);
+    try {
+      await api.removeMetaKey();
+      setMetaKey({ configured: false });
+    } catch (e) {
+      setNotice(toUserMessage(e, "Couldn't remove your Meta key."));
+    } finally {
+      setMetaKeyBusy(false);
+    }
   };
 
   const handleManagePlan = () => {
@@ -47,7 +121,7 @@ export default function SettingsScreen() {
       router.push("/billing");
     } else {
       // iPhone storefront compliant linking out
-      Linking.openURL("https://mergemate.dev/billing");
+      Linking.openURL(`${webAppOrigin(apiMode)}/billing`);
     }
   };
 
@@ -74,6 +148,15 @@ export default function SettingsScreen() {
     <View style={[styles.root, { backgroundColor: colors.background }]}>
       <Header title="Settings" />
       <ScrollView contentContainerStyle={{ padding: spacing.base, paddingBottom: 60 }}>
+        {(notice || consentError) && (
+          <View
+            style={[styles.sectionCard, { backgroundColor: colors.surfaceElevated, borderColor: colors.border, borderRadius: radius.lg, marginBottom: spacing.base }]}
+            accessibilityRole="alert"
+          >
+            <Text style={[typography.callout, { color: colors.text }]}>{notice ?? consentError}</Text>
+          </View>
+        )}
+
         {/* Account Profile Card */}
         <View style={[styles.sectionCard, { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.lg }]}>
           <View style={styles.userRow}>
@@ -122,7 +205,9 @@ export default function SettingsScreen() {
               </Text>
             </View>
             <View style={[styles.statusBadge, { backgroundColor: colors.brandSubtle }]}>
-              <Text style={[typography.caption, { color: colors.brandLight, fontWeight: "700" }]}>ACTIVE</Text>
+              <Text style={[typography.caption, { color: colors.brandLight, fontWeight: "700", textTransform: "uppercase" }]}>
+                {billing.status.replace(/_/g, " ")}
+              </Text>
             </View>
           </View>
 
@@ -148,8 +233,10 @@ export default function SettingsScreen() {
               </Text>
             </View>
             <Switch
-              value={aiConsentGranted}
+              value={aiConsentGranted && (settings?.aiSummaries ?? true)}
               onValueChange={toggleAi}
+              disabled={isDemo || !settings}
+              accessibilityLabel="AI summaries and risk scoring"
               trackColor={{ false: colors.surfaceSecondary, true: colors.brand }}
               thumbColor="#FFFFFF"
             />
@@ -161,23 +248,113 @@ export default function SettingsScreen() {
           <Text style={[typography.subhead, { color: colors.textMuted, textTransform: "uppercase" }]}>
             Notifications
           </Text>
+
+          {([
+            ["review", "Review requests", "When someone asks you to review a pull request."],
+            ["mention", "Mentions", "When someone mentions you."],
+            ["mine", "My pull requests", "Activity on pull requests you opened."],
+          ] as const).map(([kind, label, hint]) => (
+            <View key={kind} style={styles.row}>
+              <View style={{ flex: 1, paddingRight: spacing.md }}>
+                <Text style={[typography.headline, { color: colors.text }]}>{label}</Text>
+                <Text style={[typography.footnote, { color: colors.textSecondary, marginTop: 2 }]}>{hint}</Text>
+              </View>
+              <Switch
+                value={settings?.notifications[kind] ?? true}
+                onValueChange={(val) => {
+                  void saveSettings({ notifications: { ...settings!.notifications, [kind]: val } });
+                }}
+                disabled={isDemo || !settings}
+                accessibilityLabel={label}
+                trackColor={{ false: colors.surfaceSecondary, true: colors.brand }}
+                thumbColor="#FFFFFF"
+              />
+            </View>
+          ))}
+
           <View style={styles.row}>
-            <View style={{ flex: 1 }}>
+            <View style={{ flex: 1, paddingRight: spacing.md }}>
               <Text style={[typography.headline, { color: colors.text }]}>Quiet Hours</Text>
               <Text style={[typography.footnote, { color: colors.textSecondary, marginTop: 2 }]}>
-                Silence review notifications from 22:00 to 08:00.
+                {settings?.quietHours
+                  ? `Silence notifications from ${settings.quietHours.start} to ${settings.quietHours.end}.`
+                  : "Silence notifications overnight (22:00 to 08:00)."}
               </Text>
             </View>
             <Switch
-              value={settings.quietHours.enabled}
-              onValueChange={(val) =>
-                setSettings((prev) => ({ ...prev, quietHours: { ...prev.quietHours, enabled: val } }))
-              }
+              value={settings?.quietHours != null}
+              onValueChange={toggleQuietHours}
+              disabled={isDemo || !settings}
+              accessibilityLabel="Quiet hours"
               trackColor={{ false: colors.surfaceSecondary, true: colors.brand }}
               thumbColor="#FFFFFF"
             />
           </View>
+
+          {Platform.OS !== "web" && !isDemo && (
+            <View style={styles.row}>
+              <View style={{ flex: 1, paddingRight: spacing.md }}>
+                <Text style={[typography.headline, { color: colors.text }]}>Push on this device</Text>
+                <Text style={[typography.footnote, { color: colors.textSecondary, marginTop: 2 }]}>
+                  Get a push when a pull request needs you.
+                </Text>
+              </View>
+              <Switch
+                value={pushOn}
+                onValueChange={togglePush}
+                accessibilityLabel="Push notifications on this device"
+                trackColor={{ false: colors.surfaceSecondary, true: colors.brand }}
+                thumbColor="#FFFFFF"
+              />
+            </View>
+          )}
         </View>
+
+        {/* Bring your own Meta key: entered on the web only, never shown again; iOS shows whether one is set */}
+        {metaKey && !isDemo && (
+          <View style={[styles.sectionCard, { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.lg, marginTop: spacing.base }]}>
+            <Text style={[typography.subhead, { color: colors.textMuted, textTransform: "uppercase" }]}>
+              Your Meta key
+            </Text>
+            <Text style={[typography.footnote, { color: colors.textSecondary, marginTop: 4 }]}>
+              {metaKey.configured
+                ? "MergeMate is using your own Meta key for summaries. It is stored encrypted and never shown again."
+                : "Optional. Add your own Meta key and MergeMate uses it for summaries."}
+            </Text>
+            {Platform.OS === "web" ? (
+              <>
+                <TextInput
+                  value={metaKeyInput}
+                  onChangeText={setMetaKeyInput}
+                  placeholder={metaKey.configured ? "Paste a new key to replace it" : "Paste your Meta key"}
+                  placeholderTextColor={colors.textMuted}
+                  secureTextEntry
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  spellCheck={false}
+                  autoComplete="off"
+                  accessibilityLabel="Meta key"
+                  style={[styles.keyInput, { backgroundColor: colors.surfaceElevated, borderColor: colors.border, color: colors.text, borderRadius: radius.md, marginTop: spacing.sm }]}
+                />
+                <Button
+                  title="Save key"
+                  onPress={saveMetaKey}
+                  loading={metaKeyBusy}
+                  disabled={metaKeyInput.trim().length === 0}
+                  variant="secondary"
+                  style={{ marginTop: spacing.sm }}
+                />
+                {metaKey.configured && (
+                  <Button title="Remove key" onPress={removeMetaKey} disabled={metaKeyBusy} variant="ghost" style={{ marginTop: spacing.xs }} />
+                )}
+              </>
+            ) : (
+              <Text style={[typography.headline, { color: colors.text, marginTop: spacing.sm }]}>
+                {metaKey.configured ? "Using your key" : "Not set. Add one in the web app."}
+              </Text>
+            )}
+          </View>
+        )}
 
         {/* Appearance */}
         <View style={[styles.sectionCard, { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.lg, marginTop: spacing.base }]}>
@@ -294,6 +471,10 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
     marginTop: 10,
+  },
+  keyInput: {
+    padding: 12,
+    borderWidth: 1,
   },
   themeRow: {
     flexDirection: "row",

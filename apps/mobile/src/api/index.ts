@@ -1,7 +1,25 @@
+import { Platform } from "react-native";
+import { StorageService } from "../storage";
+import { getTurnstileToken } from "../auth/turnstile";
 import { ApiClient } from "./client";
-import { MockApiClient } from "./mock";
+import { type ApiMode, resolveApiConfig } from "./config";
+import { createApiClient } from "./factory";
 
-// Default to the comprehensive mock client so screens work before the real API lands
-export const api: ApiClient = new MockApiClient();
+// Expo inlines this exact expression at build time. __DEV__ is true only for development bundles.
+const isDevBuild = typeof __DEV__ !== "undefined" ? __DEV__ : false;
+
+export const apiMode: ApiMode = resolveApiConfig(process.env.EXPO_PUBLIC_API_BASE_URL, isDevBuild);
+
+export const api: ApiClient = createApiClient(apiMode, {
+  platform: Platform.OS === "web" ? "web" : "native",
+  tokenStore: {
+    get: () => StorageService.getSessionToken(),
+    set: (token) => StorageService.setSessionToken(token),
+    clear: () => StorageService.clearSessionToken(),
+  },
+  getTurnstileToken,
+});
+
 export * from "./client";
+export * from "./errors";
 export * from "./mock";

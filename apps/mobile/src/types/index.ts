@@ -26,6 +26,8 @@ import {
   TriageItem,
   TriageQueue,
   TriageChoice,
+  Settings,
+  QuietHours,
 } from "@mergemate/contracts";
 
 export {
@@ -56,6 +58,8 @@ export {
   TriageItem,
   TriageQueue,
   TriageChoice,
+  Settings,
+  QuietHours,
 };
 
 export type ThemeMode = "dark" | "light" | "system";
@@ -112,13 +116,16 @@ export interface PrDetail {
   summary?: PrSummary;
   risk?: PrRisk;
   secretWarning?: SecretLeakWarning;
+  /** Why the AI summary or risk is missing, in plain words. Never raw server text. */
+  aiNotice?: { code: string; message: string };
 }
 
 export type OrgApprovalStatus =
   | "active"
   | "pending_approval"
   | "sso_required"
-  | "ip_blocked";
+  | "ip_blocked"
+  | "suspended";
 
 export interface OrgInstallation {
   id: string;
@@ -126,6 +133,14 @@ export interface OrgInstallation {
   avatarUrl: string;
   status: OrgApprovalStatus;
   ssoUrl?: string;
+  /** Where to change which repositories this account shares (GitHub). */
+  manageUrl?: string;
+}
+
+export interface InstallationList {
+  items: OrgInstallation[];
+  /** Install MergeMate on another account or organization (GitHub). */
+  installUrl: string;
 }
 
 export interface HighlightRegion {
@@ -144,23 +159,12 @@ export interface HighlightResult {
   requestId: string;
 }
 
-export interface QuietHours {
-  enabled: boolean;
-  start: string; // HH:mm
-  end: string; // HH:mm
-}
-
-export interface UserSettings {
-  notificationsEnabled: boolean;
-  quietHours: QuietHours;
-  aiSummariesEnabled: boolean;
-  theme: ThemeMode;
-  emailAlerts: boolean;
-}
+/** Settings as the API stores them. Theme is a device preference and lives in ThemeContext. */
+export type UserSettings = Settings;
 
 export interface BillingPlan {
   plan: "free" | "pro";
-  status: "active" | "past_due" | "canceled";
+  status: string;
   renewsAt?: string;
   cancelAt?: string;
 }

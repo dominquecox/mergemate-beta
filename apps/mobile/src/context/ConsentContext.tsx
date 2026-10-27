@@ -1,68 +1,85 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
 import { StorageService } from "../storage";
 import { api } from "../api";
+import { useAuth } from "./AuthContext";
+import { AI_CONSENT_VERSION } from "../config/consent";
+import { toUserMessage } from "../api/errors";
 
 interface ConsentContextType {
   aiConsentGranted: boolean;
   isLoading: boolean;
-  grantConsent: () => Promise<void>;
-  revokeConsent: () => Promise<void>;
+  /** Why the last grant or revoke did not go through, in plain words. */
+  error: string | null;
+  /** Resolve to true when the choice was saved. */
+  grantConsent: () => Promise<boolean>;
+  revokeConsent: () => Promise<boolean>;
 }
 
 const ConsentContext = createContext<ConsentContextType | null>(null);
 
 export function ConsentProvider({ children }: { children: React.ReactNode }) {
+  const { user, isDemo } = useAuth();
+  const userId = user?.id ?? null;
   const [aiConsentGranted, setAiConsentGranted] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   const checkConsent = useCallback(async () => {
+    setIsLoading(true);
     try {
-      const localConsent = await StorageService.getAiConsent();
-      if (localConsent) {
+      if (!userId) {
+        setAiConsentGranted(false);
+      } else if (isDemo) {
+        // The demo shows pre-generated results on sample data, so there is nothing to consent to.
         setAiConsentGranted(true);
-      } else {
-        const remote = await api.getConsent();
-        setAiConsentGranted(remote.ai.granted);
-        if (remote.ai.granted) {
-          await StorageService.setAiConsent(true);
+      } else if (api.isMock) {
+        const localConsent = await StorageService.getAiConsent();
+        if (localConsent) {
+          setAiConsentGranted(true);
+        } else {
+          const remote = await api.getConsent();
+          setAiConsentGranted(remote.ai.granted);
         }
+      } else {
+        // The API is the record of consent. A grant for another consent version does not count.
+        const remote = await api.getConsent();
+        setAiConsentGranted(remote.ai.granted && remote.ai.version === AI_CONSENT_VERSION);
       }
     } catch {
-      // default false
+      setAiConsentGranted(false);
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [userId, isDemo]);
 
   useEffect(() => {
     checkConsent();
   }, [checkConsent]);
 
-  const grantConsent = async () => {
+  const update = async (granted: boolean): Promise<boolean> => {
+    if (isDemo) return false;
+    setError(null);
     try {
-      await api.setConsent(true);
-      await StorageService.setAiConsent(true);
-      setAiConsentGranted(true);
+      await api.setConsent(granted);
+      if (api.isMock) await StorageService.setAiConsent(granted);
+      setAiConsentGranted(granted);
+      return true;
     } catch (e) {
-      console.error("Failed to grant consent", e);
+      // Consent stays as it was.
+      setError(toUserMessage(e, "Couldn't save your choice. Try again."));
+      return false;
     }
   };
 
-  const revokeConsent = async () => {
-    try {
-      await api.setConsent(false);
-      await StorageService.setAiConsent(false);
-      setAiConsentGranted(false);
-    } catch (e) {
-      console.error("Failed to revoke consent", e);
-    }
-  };
+  const grantConsent = () => update(true);
+  const revokeConsent = () => update(false);
 
   return (
     <ConsentContext.Provider
       value={{
         aiConsentGranted,
         isLoading,
+        error,
         grantConsent,
         revokeConsent,
       }}

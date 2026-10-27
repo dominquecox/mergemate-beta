@@ -12,6 +12,8 @@ import {
 import { useLocalSearchParams } from "expo-router";
 import { useTheme } from "../../../../src/context/ThemeContext";
 import { api } from "../../../../src/api";
+import { toUserMessage } from "../../../../src/api/errors";
+import { useConsent } from "../../../../src/context/ConsentContext";
 import { PrDetail } from "../../../../src/types";
 import { Header } from "../../../../src/components/Header";
 import { StatusPill } from "../../../../src/components/StatusPill";
@@ -28,6 +30,7 @@ export default function PrDetailScreen() {
   }>();
 
   const { colors, typography, spacing, radius } = useTheme();
+  const { aiConsentGranted } = useConsent();
 
   const [detail, setDetail] = useState<PrDetail | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -42,12 +45,13 @@ export default function PrDetailScreen() {
     try {
       const data = await api.getPrDetail(owner || "owner", repo || "repo", parseInt(number || "1", 10));
       setDetail(data);
-    } catch (e: any) {
-      setError(e.message || "Failed to load pull request detail.");
+    } catch (e) {
+      setError(toUserMessage(e, "Failed to load pull request detail."));
     } finally {
       setIsLoading(false);
     }
-  }, [owner, repo, number]);
+    // Reload when AI is switched on or off, so the summary and risk appear or go.
+  }, [owner, repo, number, aiConsentGranted]);
 
   useEffect(() => {
     loadPr();
@@ -157,7 +161,7 @@ export default function PrDetailScreen() {
             {/* AI Summary Card (US-09) */}
             {detail.summary && (
               <View style={{ marginTop: spacing.sm }}>
-                <AIBlock title="AI PR Summary" coverage={detail.summary.coverage} cachedTime="cached · 2m ago">
+                <AIBlock title="AI PR Summary" coverage={detail.summary.coverage}>
                   <Text style={[typography.subhead, { color: colors.brandLight, fontWeight: "600" }]}>
                     What Changed
                   </Text>
@@ -181,6 +185,24 @@ export default function PrDetailScreen() {
                     </Text>
                   ))}
                 </AIBlock>
+              </View>
+            )}
+
+            {/* Why the AI parts are missing: not turned on, turned off, over the limit or unavailable */}
+            {detail.aiNotice && (
+              <View style={{ marginTop: spacing.sm }}>
+                {detail.aiNotice.code === "consent_required" && !detail.summary ? (
+                  <AIBlock title="AI PR Summary">
+                    <Text style={[typography.body, { color: colors.text }]}>{detail.aiNotice.message}</Text>
+                  </AIBlock>
+                ) : (
+                  <View style={[styles.card, { backgroundColor: colors.surfaceElevated, borderColor: colors.border, borderRadius: radius.lg }]}>
+                    <Text style={[typography.headline, { color: colors.text }]}>AI summary unavailable</Text>
+                    <Text style={[typography.body, { color: colors.textSecondary, marginTop: 4 }]}>
+                      {detail.aiNotice.message}
+                    </Text>
+                  </View>
+                )}
               </View>
             )}
 
@@ -217,8 +239,8 @@ export default function PrDetailScreen() {
               <View style={{ marginTop: spacing.xs }}>
                 {detail.checks.map((chk) => (
                   <View key={chk.id} style={styles.checkRow}>
-                    <Text style={{ color: chk.conclusion === "success" ? colors.riskLow : colors.riskHigh }}>
-                      {chk.conclusion === "success" ? "✓" : "✕"}
+                    <Text style={{ color: chk.conclusion === "success" ? colors.riskLow : chk.conclusion === "failure" ? colors.riskHigh : colors.textMuted }}>
+                      {chk.conclusion === "success" ? "✓" : chk.conclusion === "failure" ? "✕" : "…"}
                     </Text>
                     <Text style={[typography.subhead, { color: colors.text, flex: 1 }]}>{chk.name}</Text>
                     <Text style={[typography.caption, { color: colors.textMuted }]}>{chk.conclusion}</Text>

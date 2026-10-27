@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { View, Text, TextInput, ScrollView, StyleSheet } from "react-native";
 import { useTheme } from "../../src/context/ThemeContext";
 import { api } from "../../src/api";
+import { toUserMessage } from "../../src/api/errors";
 import { Header } from "../../src/components/Header";
 import { Button } from "../../src/components/Button";
 import { Card } from "../../src/components/Card";
@@ -23,8 +24,8 @@ export default function SupportScreen() {
     try {
       await api.sendSupportMessage(email, message);
       setSent(true);
-    } catch {
-      alert("Failed to send message. Please email support@mergemate.dev directly.");
+    } catch (e) {
+      alert(`${toUserMessage(e, "Failed to send message.")} You can also email support@mergemate.dev directly.`);
     } finally {
       setIsSending(false);
     }

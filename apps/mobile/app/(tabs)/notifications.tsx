@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from "react";
 import { View, Text, ScrollView, TouchableOpacity, StyleSheet, ActivityIndicator } from "react-native";
 import { useTheme } from "../../src/context/ThemeContext";
 import { api } from "../../src/api";
+import { toUserMessage } from "../../src/api/errors";
 import { Notification, NotificationFilter } from "../../src/types";
 import { Header } from "../../src/components/Header";
 import { StatusPill } from "../../src/components/StatusPill";
@@ -23,8 +24,8 @@ export default function NotificationsScreen() {
     try {
       const data = await api.getNotifications(filter);
       setItems(data);
-    } catch (e: any) {
-      setError(e.message || "Failed to load notifications.");
+    } catch (e) {
+      setError(toUserMessage(e, "Failed to load notifications."));
     } finally {
       setIsLoading(false);
     }

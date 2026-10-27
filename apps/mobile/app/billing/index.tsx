@@ -3,6 +3,7 @@ import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Linking, Platform
 import { useRouter, Redirect } from "expo-router";
 import { useTheme } from "../../src/context/ThemeContext";
 import { api } from "../../src/api";
+import { toUserMessage } from "../../src/api/errors";
 import { BillingPlan } from "../../src/types";
 import { BILLING_CONFIG } from "../../src/config/billing";
 import { Header } from "../../src/components/Header";
@@ -34,8 +35,8 @@ export default function BillingScreen() {
       } else {
         Linking.openURL(url);
       }
-    } catch (e: any) {
-      alert("Failed to initiate checkout session.");
+    } catch (e) {
+      alert(toUserMessage(e, "Failed to initiate checkout session."));
     } finally {
       setIsLoading(false);
     }
@@ -50,8 +51,8 @@ export default function BillingScreen() {
       } else {
         Linking.openURL(url);
       }
-    } catch (e: any) {
-      alert("Failed to open billing portal.");
+    } catch (e) {
+      alert(toUserMessage(e, "Failed to open billing portal."));
     } finally {
       setIsLoading(false);
     }

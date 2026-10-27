@@ -1,3 +1,4 @@
+import { AI_CONSENT_VERSION } from "../config/consent";
 import { ApiClient } from "./client";
 import {
   User,
@@ -11,6 +12,7 @@ import {
   TriageLane,
   PrDetail,
   OrgInstallation,
+  InstallationList,
   HighlightResult,
   UserSettings,
   BillingPlan,
@@ -257,12 +259,12 @@ export class MockApiClient implements ApiClient {
   ];
 
   private settings: UserSettings = {
-    notificationsEnabled: true,
-    quietHours: { enabled: true, start: "22:00", end: "08:00" },
-    aiSummariesEnabled: true,
-    theme: "dark",
-    emailAlerts: false,
+    notifications: { review: true, mention: true, mine: true },
+    quietHours: { start: "22:00", end: "08:00", timeZone: "UTC" },
+    aiSummaries: true,
   };
+
+  private metaKeyConfigured = false;
 
   private billing: BillingPlan = {
     plan: "free",
@@ -292,7 +294,7 @@ export class MockApiClient implements ApiClient {
     return { ok: true, version: "0.1.0-mock" };
   }
 
-  async startGithubAuth(_platform: "ios" | "web"): Promise<{ authorizeUrl: string; state: string }> {
+  async startGithubAuth(_platform: "ios" | "web", _codeChallenge: string): Promise<{ authorizeUrl: string; state: string }> {
     return {
       authorizeUrl: "https://github.com/login/oauth/authorize?client_id=demo&state=demo_state",
       state: "demo_state",
@@ -322,6 +324,14 @@ export class MockApiClient implements ApiClient {
     };
   }
 
+  async refreshSession(): Promise<Session> {
+    return { expiresAt: new Date(Date.now() + 86400000).toISOString() };
+  }
+
+  setUnauthorizedHandler(_handler: (() => void) | null): void {
+    // The mock never expires a session.
+  }
+
   async getMe(): Promise<User> {
     return this.user;
   }
@@ -339,7 +349,7 @@ export class MockApiClient implements ApiClient {
   }
 
   async getConsent(): Promise<{ ai: { granted: boolean; version: string } }> {
-    return { ai: { granted: this.consentGranted, version: "1.0" } };
+    return { ai: { granted: this.consentGranted, version: AI_CONSENT_VERSION } };
   }
 
   async setConsent(granted: boolean): Promise<void> {
@@ -359,8 +369,8 @@ export class MockApiClient implements ApiClient {
     throw new Error("Repo not found");
   }
 
-  async getOrgInstallations(): Promise<OrgInstallation[]> {
-    return [...this.orgs];
+  async getOrgInstallations(): Promise<InstallationList> {
+    return { items: [...this.orgs], installUrl: "https://github.com/settings/installations" };
   }
 
   async getNotifications(filter: NotificationFilter = "all"): Promise<Notification[]> {
@@ -375,6 +385,10 @@ export class MockApiClient implements ApiClient {
 
   async markNotificationDone(id: string): Promise<void> {
     this.notifications = this.notifications.filter((n) => n.id !== id);
+  }
+
+  async restoreNotification(_id: string): Promise<void> {
+    // The mock keeps no done/snooze state to undo beyond the list the screen holds.
   }
 
   async snoozeNotification(id: string, _until: string): Promise<void> {
@@ -444,7 +458,7 @@ export class MockApiClient implements ApiClient {
     this.triageQueue = this.triageQueue.filter((x) => x.prRef !== prRef);
   }
 
-  async analyzeHighlight(_imageUri: string, note?: string): Promise<HighlightResult> {
+  async analyzeHighlight(_imageUri: string, note?: string, _mimeType?: string): Promise<HighlightResult> {
     return {
       insight: `Analyzed screenshot with Meta AI vision: UI components verified with 16px padding. ${
         note ? `Note evaluated: "${note}".` : ""
@@ -452,19 +466,19 @@ export class MockApiClient implements ApiClient {
       regions: [
         {
           id: "r1",
-          x: 24,
-          y: 48,
-          width: 320,
+          x: 60,
+          y: 40,
+          width: 880,
           height: 80,
           label: "Header Bar",
           comment: "Correctly shows centered wordmark and 44pt tap target.",
         },
         {
           id: "r2",
-          x: 24,
-          y: 160,
-          width: 320,
-          height: 140,
+          x: 60,
+          y: 200,
+          width: 880,
+          height: 220,
           label: "Risk Card",
           comment: "High-risk badge clearly pairs red label with warning symbol.",
         },
@@ -478,8 +492,32 @@ export class MockApiClient implements ApiClient {
   }
 
   async updateSettings(settings: Partial<UserSettings>): Promise<UserSettings> {
-    this.settings = { ...this.settings, ...settings };
+    this.settings = {
+      ...this.settings,
+      ...settings,
+      notifications: { ...this.settings.notifications, ...settings.notifications },
+    };
     return { ...this.settings };
+  }
+
+  async registerPushToken(_deviceId: string, _token: string): Promise<void> {
+    // no-op in mock
+  }
+
+  async unregisterPushToken(_deviceId: string): Promise<void> {
+    // no-op in mock
+  }
+
+  async getMetaKeyStatus(): Promise<{ configured: boolean } | null> {
+    return { configured: this.metaKeyConfigured };
+  }
+
+  async saveMetaKey(_key: string): Promise<void> {
+    this.metaKeyConfigured = true;
+  }
+
+  async removeMetaKey(): Promise<void> {
+    this.metaKeyConfigured = false;
   }
 
   async getBillingPlan(): Promise<BillingPlan> {

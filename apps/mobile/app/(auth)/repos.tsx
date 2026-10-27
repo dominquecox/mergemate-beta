@@ -3,6 +3,7 @@ import { View, Text, ScrollView, TouchableOpacity, StyleSheet, ActivityIndicator
 import { useRouter } from "expo-router";
 import { useTheme } from "../../src/context/ThemeContext";
 import { api } from "../../src/api";
+import { toUserMessage, isApiClientError } from "../../src/api/errors";
 import { Repo, OrgInstallation } from "../../src/types";
 import { Header } from "../../src/components/Header";
 import { Button } from "../../src/components/Button";
@@ -17,19 +18,24 @@ export default function ReposScreen() {
   const [orgs, setOrgs] = useState<OrgInstallation[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [ssoUrl, setSsoUrl] = useState<string | null>(null);
+  const [installUrl, setInstallUrl] = useState("https://github.com/settings/installations");
 
   const loadData = async () => {
     setIsLoading(true);
     setError(null);
+    setSsoUrl(null);
     try {
-      const [fetchedRepos, fetchedOrgs] = await Promise.all([
+      const [fetchedRepos, installations] = await Promise.all([
         api.getRepos(),
         api.getOrgInstallations(),
       ]);
       setRepos(fetchedRepos);
-      setOrgs(fetchedOrgs);
-    } catch (e: any) {
-      setError(e.message || "Failed to load repositories.");
+      setOrgs(installations.items);
+      setInstallUrl(installations.installUrl);
+    } catch (e) {
+      setError(toUserMessage(e, "Failed to load repositories."));
+      if (isApiClientError(e, "sso_required") && e.ssoUrl) setSsoUrl(e.ssoUrl);
     } finally {
       setIsLoading(false);
     }
@@ -43,13 +49,13 @@ export default function ReposScreen() {
     try {
       const updated = await api.toggleWatchRepo(id, !current);
       setRepos((prev) => prev.map((r) => (r.id === id ? updated : r)));
-    } catch (e: any) {
-      alert("Failed to update watch status");
+    } catch (e) {
+      alert(toUserMessage(e, "Failed to update watch status"));
     }
   };
 
   const openGitHubAppConfig = () => {
-    Linking.openURL("https://github.com/settings/installations");
+    Linking.openURL(installUrl);
   };
 
   return (
@@ -72,7 +78,14 @@ export default function ReposScreen() {
           </Text>
         </View>
       ) : error ? (
-        <ErrorState message={error} onRetry={loadData} />
+        <View>
+          <ErrorState message={error} onRetry={loadData} />
+          {ssoUrl && (
+            <View style={{ alignItems: "center" }}>
+              <Button title="Authorize single sign-on on GitHub" onPress={() => Linking.openURL(ssoUrl)} variant="primary" />
+            </View>
+          )}
+        </View>
       ) : (
         <ScrollView contentContainerStyle={{ padding: spacing.base }}>
           {/* GitHub App Configuration Notice */}
@@ -111,6 +124,10 @@ export default function ReposScreen() {
                   badgeBg = colors.riskHighBg;
                   badgeText = colors.riskHigh;
                   note = "This organization's IP allow list blocks external cloud workers.";
+                } else if (org.status === "suspended") {
+                  badgeBg = colors.riskHighBg;
+                  badgeText = colors.riskHigh;
+                  note = "MergeMate is suspended for this account on GitHub.";
                 }
 
                 return (
@@ -132,6 +149,14 @@ export default function ReposScreen() {
                     <Text style={[typography.footnote, { color: colors.textSecondary, marginTop: 4 }]}>
                       {note}
                     </Text>
+
+                    {org.manageUrl && (
+                      <TouchableOpacity onPress={() => Linking.openURL(org.manageUrl!)} style={{ marginTop: spacing.xs }}>
+                        <Text style={[typography.caption, { color: colors.brandLight, fontWeight: "600" }]}>
+                          Manage repositories on GitHub →
+                        </Text>
+                      </TouchableOpacity>
+                    )}
 
                     {org.status === "sso_required" && org.ssoUrl && (
                       <TouchableOpacity

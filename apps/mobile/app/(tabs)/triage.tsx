@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from "react";
 import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator } from "react-native";
 import { useTheme } from "../../src/context/ThemeContext";
 import { api } from "../../src/api";
+import { toUserMessage } from "../../src/api/errors";
 import { TriageItem, TriageLane } from "../../src/types";
 import { Header } from "../../src/components/Header";
 import { Card } from "../../src/components/Card";
@@ -25,8 +26,8 @@ export default function TriageScreen() {
       const items = await api.getTriageQueue();
       setQueue(items);
       setTotalCount(items.length);
-    } catch (e: any) {
-      setError(e.message || "Failed to load triage queue.");
+    } catch (e) {
+      setError(toUserMessage(e, "Failed to load triage queue."));
     } finally {
       setIsLoading(false);
     }
@@ -41,7 +42,14 @@ export default function TriageScreen() {
     const current = queue[0];
     setUndoStack((prev) => [current, ...prev]);
     setQueue((prev) => prev.slice(1));
-    await api.setTriageChoice(current.prRef, lane);
+    try {
+      await api.setTriageChoice(current.prRef, lane);
+    } catch (e) {
+      // Put the card back and say why.
+      setUndoStack((prev) => prev.slice(1));
+      setQueue((prev) => [current, ...prev]);
+      setError(toUserMessage(e, "Couldn't save your choice."));
+    }
   };
 
   const handleUndo = () => {
@@ -115,7 +123,7 @@ export default function TriageScreen() {
               </View>
 
               <Text style={[typography.title2, { color: colors.text, marginTop: spacing.md }]}>
-                {currentItem.prRef.split("#")[0]}
+                {currentItem.title ?? currentItem.prRef.split("#")[0]}
               </Text>
 
               <View style={[styles.reasonBox, { backgroundColor: colors.surfaceElevated, borderRadius: radius.md, marginTop: spacing.md }]}>

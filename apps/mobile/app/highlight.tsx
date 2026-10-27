@@ -1,12 +1,17 @@
 import React, { useState } from "react";
-import { View, Text, ScrollView, TextInput, StyleSheet, ActivityIndicator } from "react-native";
+import { View, Text, ScrollView, TextInput, StyleSheet, ActivityIndicator, Image, Platform, TouchableOpacity } from "react-native";
+import * as ImagePicker from "expo-image-picker";
 import { useTheme } from "../src/context/ThemeContext";
 import { api } from "../src/api";
+import { toUserMessage } from "../src/api/errors";
 import { HighlightResult } from "../src/types";
 import { Header } from "../src/components/Header";
 import { Button } from "../src/components/Button";
 import { Card } from "../src/components/Card";
 import { ErrorState } from "../src/components/ErrorState";
+
+const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp"];
+const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 
 export default function HighlightScreen() {
   const { colors, typography, spacing, radius } = useTheme();
@@ -15,15 +20,50 @@ export default function HighlightScreen() {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [result, setResult] = useState<HighlightResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [image, setImage] = useState<ImagePicker.ImagePickerAsset | null>(null);
+
+  const accept = (picked: ImagePicker.ImagePickerResult) => {
+    if (picked.canceled || !picked.assets[0]) return;
+    const asset = picked.assets[0];
+    const type = (asset.mimeType ?? "").toLowerCase();
+    if (type && !ALLOWED_TYPES.includes(type)) {
+      setError("Use a JPEG, PNG or WebP image.");
+      return;
+    }
+    if (asset.fileSize && asset.fileSize > MAX_IMAGE_BYTES) {
+      setError("That image is too large. Pick one under 5 MB.");
+      return;
+    }
+    setError(null);
+    setResult(null);
+    setImage(asset);
+  };
+
+  const pickFromLibrary = async () => {
+    accept(await ImagePicker.launchImageLibraryAsync({ mediaTypes: ["images"], quality: 0.8, exif: false }));
+  };
+
+  const takePhoto = async () => {
+    const permission = await ImagePicker.requestCameraPermissionsAsync();
+    if (!permission.granted) {
+      setError("Camera access is off. Choose a screenshot from your library instead.");
+      return;
+    }
+    accept(await ImagePicker.launchCameraAsync({ mediaTypes: ["images"], quality: 0.8, exif: false }));
+  };
 
   const handleAnalyze = async () => {
+    if (!image) {
+      setError("Choose a screenshot first.");
+      return;
+    }
     setIsAnalyzing(true);
     setError(null);
     try {
-      const res = await api.analyzeHighlight("mock_screenshot_uri", note);
+      const res = await api.analyzeHighlight(image.uri, note, image.mimeType ?? undefined);
       setResult(res);
-    } catch (e: any) {
-      setError(e.message || "Failed to analyze screenshot.");
+    } catch (e) {
+      setError(toUserMessage(e, "Failed to analyze screenshot."));
     } finally {
       setIsAnalyzing(false);
     }
@@ -40,15 +80,30 @@ export default function HighlightScreen() {
             Capture or upload a PR screenshot or UI diff. MergeMate locates key UI regions and highlights bugs, spacing mismatches, or contrast regressions.
           </Text>
 
-          <View style={[styles.uploadBox, { backgroundColor: colors.surfaceElevated, borderColor: colors.border, borderRadius: radius.md, marginTop: spacing.md }]}>
-            <Text style={{ fontSize: 32 }}>🖼</Text>
-            <Text style={[typography.headline, { color: colors.brandLight, marginTop: 8 }]}>
-              Sample PR Screenshot Attached
-            </Text>
-            <Text style={[typography.caption, { color: colors.textMuted }]}>
-              1170 × 2532 px · JPEG · Metadata stripped
-            </Text>
-          </View>
+          <TouchableOpacity
+            onPress={pickFromLibrary}
+            accessibilityRole="button"
+            accessibilityLabel={image ? "Choose a different screenshot" : "Choose a screenshot"}
+            style={[styles.uploadBox, { backgroundColor: colors.surfaceElevated, borderColor: colors.border, borderRadius: radius.md, marginTop: spacing.md }]}
+          >
+            {image ? (
+              <>
+                <Image source={{ uri: image.uri }} style={styles.preview} resizeMode="contain" accessibilityLabel="Selected screenshot" />
+                <Text style={[typography.caption, { color: colors.textMuted, marginTop: 8 }]}>
+                  {image.width} × {image.height} px · Tap to choose another
+                </Text>
+              </>
+            ) : (
+              <>
+                <Text style={{ fontSize: 32 }}>🖼</Text>
+                <Text style={[typography.headline, { color: colors.brandLight, marginTop: 8 }]}>Choose a screenshot</Text>
+                <Text style={[typography.caption, { color: colors.textMuted }]}>JPEG, PNG or WebP · up to 5 MB</Text>
+              </>
+            )}
+          </TouchableOpacity>
+          {Platform.OS !== "web" && (
+            <Button title="Take a photo" onPress={takePhoto} variant="secondary" style={{ marginTop: spacing.sm }} />
+          )}
 
           <Text style={[typography.subhead, { color: colors.textSecondary, marginTop: spacing.md }]}>
             Optional Reviewer Note
@@ -96,9 +151,11 @@ export default function HighlightScreen() {
                 {result.insight}
               </Text>
 
-              <Text style={[typography.subhead, { color: colors.textMuted, marginTop: spacing.md, textTransform: "uppercase" }]}>
-                Detected Regions ({result.regions.length})
-              </Text>
+              {result.regions.length > 0 && (
+                <Text style={[typography.subhead, { color: colors.textMuted, marginTop: spacing.md, textTransform: "uppercase" }]}>
+                  Detected Regions ({result.regions.length})
+                </Text>
+              )}
 
               {result.regions.map((reg) => (
                 <View
@@ -111,12 +168,14 @@ export default function HighlightScreen() {
                   <View style={styles.regionHeader}>
                     <Text style={[typography.headline, { color: colors.text }]}>{reg.label}</Text>
                     <Text style={[typography.caption, { color: colors.brandLight }]}>
-                      {reg.width}×{reg.height} at ({reg.x},{reg.y})
+                      {Math.round(reg.x / 10)}% from left · {Math.round(reg.y / 10)}% from top
                     </Text>
                   </View>
-                  <Text style={[typography.footnote, { color: colors.textSecondary, marginTop: 4 }]}>
-                    {reg.comment}
-                  </Text>
+                  {reg.comment !== "" && (
+                    <Text style={[typography.footnote, { color: colors.textSecondary, marginTop: 4 }]}>
+                      {reg.comment}
+                    </Text>
+                  )}
                 </View>
               ))}
 
@@ -145,6 +204,10 @@ const styles = StyleSheet.create({
   input: {
     padding: 12,
     borderWidth: 1,
+  },
+  preview: {
+    width: "100%",
+    height: 200,
   },
   center: {
     alignItems: "center",

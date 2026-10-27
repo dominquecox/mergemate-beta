@@ -129,7 +129,7 @@ export default function SearchScreen() {
                 const parts = item.repo.split("/");
                 const owner = parts[0] || "owner";
                 const repo = parts[1] || "repo";
-                router.push(`/pr/${owner}/${repo}/7`);
+                router.push(`/pr/${owner}/${repo}/${item.number}`);
               }}
               style={[
                 styles.resultCard,

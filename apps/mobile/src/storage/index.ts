@@ -4,6 +4,10 @@ import { Platform } from "react-native";
 const SESSION_TOKEN_KEY = "mergemate_session_token";
 const AI_CONSENT_KEY = "mergemate_ai_consent";
 const RECENT_SEARCHES_KEY = "mergemate_recent_searches";
+const PENDING_SIGN_IN_KEY = "mergemate_pending_sign_in";
+const DEMO_FLAG_KEY = "mergemate_demo_session";
+const DEVICE_ID_KEY = "mergemate_device_id";
+const PUSH_ENABLED_KEY = "mergemate_push_enabled";
 
 // Fallback in-memory map for environments where neither SecureStore nor localStorage is accessible
 const memoryStorage = new Map<string, string>();
@@ -17,6 +21,31 @@ function getWebStorage(): Storage | null {
     // blocked or unavailable
   }
   return null;
+}
+
+function getSessionOnlyStorage(): Storage | null {
+  try {
+    if (typeof window !== "undefined" && window.sessionStorage) {
+      return window.sessionStorage;
+    }
+  } catch {
+    // blocked or unavailable
+  }
+  return null;
+}
+
+/** The one-time values that must survive the trip to GitHub and back. Single use, ten minutes. */
+export interface PendingSignIn {
+  state: string;
+  verifier: string;
+  createdAt: number;
+}
+
+export const PENDING_SIGN_IN_TTL_MS = 10 * 60 * 1000;
+
+function isPendingSignIn(value: unknown): value is PendingSignIn {
+  const v = value as Partial<PendingSignIn> | null;
+  return !!v && typeof v.state === "string" && typeof v.verifier === "string" && typeof v.createdAt === "number";
 }
 
 export const StorageService = {
@@ -126,6 +155,119 @@ export const StorageService = {
       }
     } catch {
       // ignore
+    }
+  },
+
+  /**
+   * Sign-in in progress. Web keeps it in sessionStorage (this tab only, gone when it closes); native keeps
+   * it in secure storage. It holds the PKCE verifier and state, never a session token.
+   */
+  async setPendingSignIn(pending: PendingSignIn): Promise<void> {
+    const raw = JSON.stringify(pending);
+    if (Platform.OS === "web") {
+      const storage = getSessionOnlyStorage();
+      if (storage) storage.setItem(PENDING_SIGN_IN_KEY, raw);
+      else memoryStorage.set(PENDING_SIGN_IN_KEY, raw);
+      return;
+    }
+    try {
+      await SecureStore.setItemAsync(PENDING_SIGN_IN_KEY, raw);
+    } catch {
+      memoryStorage.set(PENDING_SIGN_IN_KEY, raw);
+    }
+  },
+
+  /** Reads and deletes the pending sign-in so a callback can be used once. Null when missing or too old. */
+  async takePendingSignIn(now: number = Date.now()): Promise<PendingSignIn | null> {
+    let raw: string | null = null;
+    if (Platform.OS === "web") {
+      const storage = getSessionOnlyStorage();
+      raw = storage ? storage.getItem(PENDING_SIGN_IN_KEY) : (memoryStorage.get(PENDING_SIGN_IN_KEY) ?? null);
+      try {
+        storage?.removeItem(PENDING_SIGN_IN_KEY);
+      } catch {
+        // ignore
+      }
+      memoryStorage.delete(PENDING_SIGN_IN_KEY);
+    } else {
+      try {
+        raw = await SecureStore.getItemAsync(PENDING_SIGN_IN_KEY);
+        await SecureStore.deleteItemAsync(PENDING_SIGN_IN_KEY);
+      } catch {
+        raw = memoryStorage.get(PENDING_SIGN_IN_KEY) ?? null;
+      }
+      memoryStorage.delete(PENDING_SIGN_IN_KEY);
+    }
+    if (!raw) return null;
+    try {
+      const parsed: unknown = JSON.parse(raw);
+      if (!isPendingSignIn(parsed) || now - parsed.createdAt > PENDING_SIGN_IN_TTL_MS) return null;
+      return parsed;
+    } catch {
+      return null;
+    }
+  },
+
+  /** Whether the restored session is a demo session. A plain flag, not a credential. */
+  async getDemoFlag(): Promise<boolean> {
+    try {
+      if (Platform.OS === "web") {
+        const storage = getWebStorage();
+        return (storage ? storage.getItem(DEMO_FLAG_KEY) : memoryStorage.get(DEMO_FLAG_KEY)) === "true";
+      }
+      return (await SecureStore.getItemAsync(DEMO_FLAG_KEY)) === "true";
+    } catch {
+      return memoryStorage.get(DEMO_FLAG_KEY) === "true";
+    }
+  },
+
+  async setDemoFlag(isDemo: boolean): Promise<void> {
+    const val = isDemo ? "true" : "false";
+    try {
+      if (Platform.OS === "web") {
+        const storage = getWebStorage();
+        if (storage) storage.setItem(DEMO_FLAG_KEY, val);
+        else memoryStorage.set(DEMO_FLAG_KEY, val);
+        return;
+      }
+      await SecureStore.setItemAsync(DEMO_FLAG_KEY, val);
+    } catch {
+      memoryStorage.set(DEMO_FLAG_KEY, val);
+    }
+  },
+
+  /** Random id for this install, used to register and remove its push token. Native only. */
+  async getDeviceId(): Promise<string | null> {
+    try {
+      return await SecureStore.getItemAsync(DEVICE_ID_KEY);
+    } catch {
+      return memoryStorage.get(DEVICE_ID_KEY) ?? null;
+    }
+  },
+
+  async setDeviceId(id: string): Promise<void> {
+    try {
+      await SecureStore.setItemAsync(DEVICE_ID_KEY, id);
+    } catch {
+      memoryStorage.set(DEVICE_ID_KEY, id);
+    }
+  },
+
+  /** Whether the person turned push on for this device. */
+  async getPushEnabled(): Promise<boolean> {
+    try {
+      return (await SecureStore.getItemAsync(PUSH_ENABLED_KEY)) === "true";
+    } catch {
+      return memoryStorage.get(PUSH_ENABLED_KEY) === "true";
+    }
+  },
+
+  async setPushEnabled(enabled: boolean): Promise<void> {
+    const val = enabled ? "true" : "false";
+    try {
+      await SecureStore.setItemAsync(PUSH_ENABLED_KEY, val);
+    } catch {
+      memoryStorage.set(PUSH_ENABLED_KEY, val);
     }
   },
 };

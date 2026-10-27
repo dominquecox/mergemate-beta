@@ -9,25 +9,34 @@ import {
   TriageItem,
   TriageLane,
   PrDetail,
-  OrgInstallation,
+  InstallationList,
   HighlightResult,
   UserSettings,
   BillingPlan,
   PublicPost,
 } from "../types";
 
+/**
+ * The one interface the screens talk to. HttpApiClient (real API) and MockApiClient (tests and the
+ * development fallback) both implement it. Failures are thrown as ApiClientError with a message that
+ * is safe to show.
+ */
 export interface ApiClient {
   isMock: boolean;
   health(): Promise<{ ok: boolean; version: string }>;
 
-  // Auth
-  startGithubAuth(platform: "ios" | "web"): Promise<{ authorizeUrl: string; state: string }>;
+  // Auth. The real client keeps the session itself: the cookie plus an in-memory CSRF token on web, a
+  // bearer token in secure storage on native. The sessions it returns never carry either.
+  startGithubAuth(platform: "ios" | "web", codeChallenge: string): Promise<{ authorizeUrl: string; state: string }>;
   completeGithubAuth(code: string, state: string, codeVerifier: string): Promise<{ session: Session; user: User }>;
   startDemoSession(): Promise<{ session: Session; user: User }>;
+  refreshSession(): Promise<Session>;
   getMe(): Promise<User>;
   getCsrfToken(): Promise<{ csrfToken: string }>;
   logout(): Promise<void>;
   deleteAccount(): Promise<void>;
+  /** Called when the API says the session is no longer valid (after the stored token is cleared). */
+  setUnauthorizedHandler(handler: (() => void) | null): void;
 
   // AI Consent
   getConsent(): Promise<{ ai: { granted: boolean; version: string } }>;
@@ -36,12 +45,13 @@ export interface ApiClient {
   // Repos & Orgs
   getRepos(): Promise<Repo[]>;
   toggleWatchRepo(id: string, watching: boolean): Promise<Repo>;
-  getOrgInstallations(): Promise<OrgInstallation[]>;
+  getOrgInstallations(): Promise<InstallationList>;
 
   // Notifications / Inbox
   getNotifications(filter?: NotificationFilter): Promise<Notification[]>;
   markNotificationDone(id: string): Promise<void>;
   snoozeNotification(id: string, until: string): Promise<void>;
+  restoreNotification(id: string): Promise<void>;
 
   // Pull Requests
   getPrDetail(owner: string, repo: string, number: number): Promise<PrDetail>;
@@ -53,11 +63,18 @@ export interface ApiClient {
   setTriageChoice(prRef: string, lane: TriageLane): Promise<void>;
 
   // Highlight
-  analyzeHighlight(imageUri: string, note?: string): Promise<HighlightResult>;
+  analyzeHighlight(imageUri: string, note?: string, mimeType?: string): Promise<HighlightResult>;
 
   // Settings
   getSettings(): Promise<UserSettings>;
   updateSettings(settings: Partial<UserSettings>): Promise<UserSettings>;
+  registerPushToken(deviceId: string, token: string): Promise<void>;
+  unregisterPushToken(deviceId: string): Promise<void>;
+  /** Whether the user saved their own Meta key. null when this API does not offer the feature yet. */
+  getMetaKeyStatus(): Promise<{ configured: boolean } | null>;
+  /** Web only. The key is sent once and never read back. */
+  saveMetaKey(key: string): Promise<void>;
+  removeMetaKey(): Promise<void>;
 
   // Billing (Web only; iOS plan status only)
   getBillingPlan(): Promise<BillingPlan>;

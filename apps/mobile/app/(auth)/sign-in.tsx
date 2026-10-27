@@ -13,14 +13,14 @@ export default function SignInScreen() {
 
   const handleSignIn = async () => {
     clearError();
-    await signInWithGithub(Platform.OS === "ios" ? "ios" : "web");
-    router.replace("/(tabs)/inbox");
+    // With the real API this sends the person to GitHub and they come back through /auth/callback.
+    const result = await signInWithGithub(Platform.OS === "web" ? "web" : "ios");
+    if (result === "signed_in") router.replace("/(tabs)/inbox");
   };
 
   const handleDemo = async () => {
     clearError();
-    await startDemo();
-    router.replace("/(tabs)/inbox");
+    if (await startDemo()) router.replace("/(tabs)/inbox");
   };
 
   return (

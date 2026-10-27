@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { View, Text, ScrollView, StyleSheet, ActivityIndicator } from "react-native";
 import { useTheme } from "../../src/context/ThemeContext";
 import { api } from "../../src/api";
+import { toUserMessage } from "../../src/api/errors";
 import { PublicPost } from "../../src/types";
 import { Header } from "../../src/components/Header";
 import { Card } from "../../src/components/Card";
@@ -19,7 +20,7 @@ export default function NewsScreen() {
     api
       .getPublicPosts("news")
       .then(setPosts)
-      .catch((e) => setError(e.message || "Failed to load news posts."))
+      .catch((e) => setError(toUserMessage(e, "Failed to load news posts.")))
       .finally(() => setIsLoading(false));
   }, []);
 
