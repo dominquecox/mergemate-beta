@@ -20,6 +20,7 @@ import type { CompletionRequest, ModelProvider, ModelTransport } from "../ai/pro
 import type { AiTask } from "../ai/routes";
 import { RISK_JSON_SCHEMA, SUMMARY_JSON_SCHEMA } from "../ai/schemas";
 import { githubGet } from "../lib/github";
+import { getSettings } from "../lib/settings";
 import { getAccessToken } from "../lib/github-tokens";
 import type { SessionRecord } from "../lib/sessions";
 import { getBillingPlan } from "../lib/stripe-billing";
@@ -728,8 +729,11 @@ export const summarizePr = async (
   ref: PrRefParts,
   env: Env,
 ): Promise<AiRunResult> => {
-  const stores = storesFor(deps.db);
   const userId = userKey(session);
+  if (!session.demo && !(await getSettings({ ...env, DB: deps.db }, userId)).aiSummaries) {
+    throw new ApiError("forbidden", "AI summaries and risk are turned off in Settings.");
+  }
+  const stores = storesFor(deps.db);
   const { limit, remaining } = await gateAction(stores, deps.limits, session, { ...env, DB: deps.db });
   const data = await deps.prSource(session, ref);
   if (!data) throw new ApiError("upstream_unavailable", "PR data is unavailable right now. Try again later.");
@@ -768,8 +772,11 @@ export const assessPrRisk = async (
   ref: PrRefParts,
   env: Env,
 ): Promise<AiRunResult> => {
-  const stores = storesFor(deps.db);
   const userId = userKey(session);
+  if (!session.demo && !(await getSettings({ ...env, DB: deps.db }, userId)).aiSummaries) {
+    throw new ApiError("forbidden", "AI summaries and risk are turned off in Settings.");
+  }
+  const stores = storesFor(deps.db);
   const { limit, remaining } = await gateAction(stores, deps.limits, session, { ...env, DB: deps.db });
   const data = await deps.prSource(session, ref);
   if (!data) throw new ApiError("upstream_unavailable", "PR data is unavailable right now. Try again later.");
