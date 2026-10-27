@@ -668,8 +668,8 @@ export const withReservation = async <T>(
   }
 };
 
-const unusableAnswer = () =>
-  new ApiError("upstream_unavailable", "The AI service returned an unusable answer. Try again.");
+const unusableAnswer = (logDetail?: string) =>
+  new ApiError("upstream_unavailable", "The AI service returned an unusable answer. Try again.", {}, logDetail);
 
 interface AnswerSchema<T> {
   safeParse(value: unknown): { success: true; data: T } | { success: false };
@@ -710,12 +710,12 @@ export const runModelTask = async <T>(
     json = JSON.parse(stripCodeFences(reply.text)) as unknown;
   } catch {
     meter("invalid_output", reply.usage);
-    throw unusableAnswer();
+    throw unusableAnswer(`${task} answer was not JSON (${reply.text.length} chars)`);
   }
   const parsed = schema.safeParse(json);
   if (!parsed.success) {
     meter("invalid_output", reply.usage);
-    throw unusableAnswer();
+    throw unusableAnswer(`${task} answer did not match the schema`);
   }
   meter("ok", reply.usage);
   return parsed.data;

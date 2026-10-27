@@ -111,7 +111,12 @@ const requireApiKey = (env: Env) => {
   return key;
 };
 
-const unavailable = () => new ApiError("upstream_unavailable", "The AI service is unavailable. Try again.");
+const unavailable = (logDetail?: string) =>
+  new ApiError("upstream_unavailable", "The AI service is unavailable. Try again.", {}, logDetail);
+
+/** Log-only reason for a failed model call: our own error text (status codes, timeouts), capped. Never request content. */
+const failureDetail = (config: ModelConfig, error: unknown): string =>
+  `${config.provider}:${config.modelId} ${error instanceof Error ? `${error.name}: ${error.message}` : "unknown error"}`.slice(0, 200);
 
 const asCount = (value: unknown): number =>
   typeof value === "number" && Number.isFinite(value) && value >= 0 ? value : 0;
@@ -273,12 +278,13 @@ export const createModelProvider = (env: Env, task: AiTask, deps: ProviderDeps):
       let reply: { text: string; usage?: TokenUsage };
       try {
         reply = await send(request);
-      } catch {
-        throw unavailable();
+      } catch (error) {
+        if (error instanceof ApiError && error.code === "misconfigured") throw error;
+        throw unavailable(failureDetail(config, error));
       }
       // No partial or invented text: an empty answer is a failure.
       if (!reply.text.trim()) {
-        throw new ApiError("upstream_unavailable", "The AI service returned no result. Try again.");
+        throw new ApiError("upstream_unavailable", "The AI service returned no result. Try again.", {}, `${config.provider}:${config.modelId} empty text`);
       }
       return {
         text: reply.text,
