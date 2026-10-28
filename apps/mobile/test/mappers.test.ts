@@ -34,6 +34,21 @@ describe("posts", () => {
       mapPostSummary({ slug: "a", type: "changelog", title: "T", excerpt: "E", publishedAt: "2026-10-27T10:00:00.000Z" }),
     ).toMatchObject({ date: "2026-10-27", summary: "E", content: "E", type: "changelog" });
   });
+
+  it("safely unescapes literal escaped newlines from JSON content", () => {
+    expect(
+      mapPostSummary({
+        slug: "b",
+        type: "news",
+        title: "Newline Test",
+        excerpt: "Line 1\\n\\nLine 2\\r\\nLine 3",
+        publishedAt: "2026-10-27T12:00:00.000Z",
+      }),
+    ).toMatchObject({
+      summary: "Line 1\n\nLine 2\nLine 3",
+      content: "Line 1\n\nLine 2\nLine 3",
+    });
+  });
 });
 
 describe("sample-data client keeps up with the interface", () => {

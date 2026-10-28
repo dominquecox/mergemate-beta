@@ -136,13 +136,16 @@ export function mapBillingPlan(plan: ContractBillingPlan): BillingPlan {
 
 /** The list endpoint returns summaries; the excerpt stands in for the body in the news and changelog lists. */
 export function mapPostSummary(post: PostSummary | Post): PublicPost {
+  const raw = "body" in post && post.body ? post.body : post.excerpt;
+  const content = raw ? raw.replace(/\\r\\n/g, "\n").replace(/\\n/g, "\n").replace(/\\r/g, "\r") : "";
+  const summary = post.excerpt ? post.excerpt.replace(/\\r\\n/g, "\n").replace(/\\n/g, "\n").replace(/\\r/g, "\r") : "";
   return {
     slug: post.slug,
     type: post.type,
     title: post.title,
     date: post.publishedAt.slice(0, 10),
-    summary: post.excerpt,
-    content: post.excerpt,
+    summary,
+    content,
   };
 }
 
