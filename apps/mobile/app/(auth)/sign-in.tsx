@@ -1,4 +1,5 @@
 import {useScreenHeading} from "../../src/hooks/useScreenHeading";
+import {hasPendingLogout} from "../../src/auth/session-events";
 import React, { useState } from "react";
 import { View, Image, TouchableOpacity, StyleSheet, Platform, ScrollView } from "react-native";
 import { Text } from "../../src/components/Text";
@@ -15,8 +16,9 @@ import { Icon } from "../../src/components/Icon";
 export default function SignInScreen() {
   const router = useRouter();
   const heading=useScreenHeading();
-  const { signInWithGithub, startDemo, isLoading, error, clearError } = useAuth();
+  const { signInWithGithub, startDemo, signOut, isLoading, error, clearError } = useAuth();
   const { colors, typography, spacing, radius, isDark } = useTheme();
+  const logoutPending=Platform.OS==="web" && hasPendingLogout();
   const [offlineState, setOfflineState] = useState(false);
   const [lastAttempt, setLastAttempt] = useState<"github" | "demo">("github");
 
@@ -66,9 +68,11 @@ export default function SignInScreen() {
 
       {isLoading ? (
         <LoadingState
-          title={lastAttempt === "demo" ? "Starting demo mode..." : "Connecting to GitHub..."}
+          title={logoutPending?"Finishing sign-out...":lastAttempt === "demo" ? "Starting demo mode..." : "Connecting to GitHub..."}
           message="Setting up your review inbox. This only takes a moment."
         />
+      ) : logoutPending ? (
+        <ErrorState title="Sign-out is pending" message={error??"Reconnect to finish signing out of this browser."} onRetry={()=>void signOut()} retryLabel="Finish signing out"/>
       ) : error ? (
         <ErrorState
           title="Could not sign you in"

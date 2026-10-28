@@ -12,6 +12,7 @@ export const apiMode: ApiMode = resolveApiConfig(process.env.EXPO_PUBLIC_API_BAS
 
 export const api: ApiClient = createApiClient(apiMode, {
   platform: Platform.OS === "web" ? "web" : "native",
+  nativePlatform: Platform.OS === "android" ? "android" : "ios",
   tokenStore: {
     get: () => StorageService.getSessionToken(),
     set: (token) => StorageService.setSessionToken(token),

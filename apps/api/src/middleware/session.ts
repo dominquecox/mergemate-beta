@@ -3,7 +3,7 @@ import { corsOrigins, requireBinding } from "../config";
 import type { AppEnv } from "../env";
 import { ApiError } from "../errors";
 import { timingSafeEqual } from "../lib/crypto";
-import { readSessionCookie, resolveSession } from "../lib/sessions";
+import { readSessionCookie, resolveSession, resolveSpentSessionForLogout } from "../lib/sessions";
 import { clientIp, limit } from "./rate-limit";
 
 const PUBLIC_PATHS = [
@@ -66,18 +66,20 @@ export const authenticate = (): MiddlewareHandler<AppEnv> => async (c, next) => 
   }
 
   const credential = readCredential(c);
-  const session = credential
+  const logout=path==="/v1/auth/logout" && c.req.method==="POST";
+  const logoutCapability=logout || (path==="/v1/auth/csrf" && c.req.method==="GET");
+  let session = credential
     ? await resolveSession(requireBinding(c.env, "DB"), credential.token, c.get("deps").now())
     : null;
+  if(!session && credential && logoutCapability)session=await resolveSpentSessionForLogout(requireBinding(c.env,"DB"),credential.token,c.get("deps").now());
   if (!credential || !session || session.transport !== credential.transport) {
     await limitIp(c);
     throw unauthorized();
   }
 
-  await limit(c, {
-    scope: "session",
-    key: session.tokenHash,
-  });
+  // Revocation must remain possible when a stolen session exhausts its own budget.
+  if(logoutCapability)await limitIp(c);
+  else await limit(c, {scope:"session",key:session.familyId??session.tokenHash});
 
   const write = !SAFE_METHODS.has(c.req.method);
   if (write && session.transport === "cookie") {
@@ -94,7 +96,7 @@ export const authenticate = (): MiddlewareHandler<AppEnv> => async (c, next) => 
   ) {
     throw new ApiError("forbidden", "Not available in the demo.");
   }
-  if (!session.demo && session.userStatus !== "active") {
+  if (!logoutCapability && !session.demo && session.userStatus !== "active") {
     throw new ApiError("forbidden", "This account is suspended.");
   }
 

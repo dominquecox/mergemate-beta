@@ -7,7 +7,8 @@ export type ClientErrorCode =
   | "timeout"
   | "parse_failed"
   | "bot_check_unavailable"
-  | "not_configured";
+  | "not_configured"
+  | "secure_storage_unavailable";
 
 export interface ClientErrorDetails {
   status?: number;
@@ -67,6 +68,7 @@ const FIXED_COPY: Record<ClientErrorCode, string> = {
   timeout: "That took too long. Try again.",
   parse_failed: "MergeMate sent back something unexpected. Try again, or update the app.",
   bot_check_unavailable: "The quick security check couldn't load. Try again, or use the web app.",
+  secure_storage_unavailable: "Secure storage is unavailable. Unlock your device and try again.",
   not_configured: "This build isn't connected to MergeMate's servers yet.",
 };
 

@@ -25,6 +25,7 @@ export class MockApiClient implements ApiClient {
   async getFeatureFlags(){return disabledFeatureFlags();}
   invalidateCache(): void {  }
   clearCache(): void {}
+  invalidateSession():void{}
   async getPrFilePage(owner: string, repo: string, number: number, _cursor?: string | null) {return {items:(await this.getPrDetail(owner,repo,number)).files,nextCursor:null};}
   async getPrCommentPage(owner: string, repo: string, number: number, _cursor?: string | null) {return {items:(await this.getPrDetail(owner,repo,number)).comments,nextCursor:null};}
   async undoTriageChoice(_prRef: string): Promise<void> {}
@@ -317,7 +318,7 @@ export class MockApiClient implements ApiClient {
     return { ok: true, version: "0.1.0-mock" };
   }
 
-  async startGithubAuth(_platform: "ios" | "web", _codeChallenge: string): Promise<{ authorizeUrl: string; state: string }> {
+  async startGithubAuth(_platform: "ios" | "android" | "web", _codeChallenge: string): Promise<{ authorizeUrl: string; state: string }> {
     return {
       authorizeUrl: "https://github.com/login/oauth/authorize?client_id=demo&state=demo_state",
       state: "demo_state",
@@ -355,7 +356,7 @@ export class MockApiClient implements ApiClient {
     // The mock never expires a session.
   }
 
-  async getMe(): Promise<User> {
+  async getMe(): Promise<User & {demo?:boolean}> {
     return this.user;
   }
 

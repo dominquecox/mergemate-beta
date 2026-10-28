@@ -1,4 +1,5 @@
 import {FeatureFlagCache} from "./feature-flags";
+import {notifySessionChange,hasPendingLogout,setPendingLogout} from "../auth/session-events";
 import { z } from "zod";
 import { RequestCache } from "./request-cache";
 import {
@@ -83,6 +84,7 @@ export interface HttpApiClientOptions {
   baseUrl: string;
   /** `web` uses the cookie and CSRF token; `native` uses the bearer token. */
   platform: "web" | "native";
+  nativePlatform?: "ios" | "android";
   tokenStore: TokenStore;
   fetch?: typeof fetch;
   timeoutMs?: number;
@@ -105,6 +107,9 @@ interface RequestOptions<T> {
   timeoutMs?: number;
   /** The session refresh itself must not wait for the refresh it is part of. */
   isRefresh?: boolean;
+  sessionMutation?: boolean;
+  allowStaleSession?: boolean;
+  sessionGeneration?: number;
 }
 
 const DEFAULT_TIMEOUT_MS = 30_000;
@@ -132,6 +137,9 @@ export class HttpApiClient implements ApiClient {
 
   private readonly baseUrl: string;
   private readonly web: boolean;
+  private readonly nativePlatform: "ios" | "android";
+  private sessionGeneration=0;
+  private sessionOperations=Promise.resolve();
   private readonly store: TokenStore;
   private readonly fetchImpl: typeof fetch;
   private readonly timeoutMs: number;
@@ -144,6 +152,7 @@ export class HttpApiClient implements ApiClient {
   private reads = new RequestCache();
   private actions = new RequestCache();
 
+  invalidateSession():void{++this.sessionGeneration;this.clearCache();setInMemoryCsrfToken(null);this.csrfLoading=null;}
   invalidateCache(): void { this.featureFlags.clear(); this.reads.invalidate(); }
   clearCache(): void { this.featureFlags.clear(); this.reads.clear(); this.actions.clear(); this.settingsCache = null; this.repoPrivacy.clear(); }
   private repoPrivacy = new Map<string, boolean>();
@@ -151,6 +160,7 @@ export class HttpApiClient implements ApiClient {
   constructor(options: HttpApiClientOptions) {
     this.baseUrl = options.baseUrl.replace(/\/+$/, "");
     this.web = options.platform === "web";
+    this.nativePlatform=options.nativePlatform??"ios";
     this.store = options.tokenStore;
     // Bound so it can be called detached from the client, as browsers require.
     this.fetchImpl = options.fetch ?? ((input, init) => fetch(input, init));
@@ -167,8 +177,9 @@ export class HttpApiClient implements ApiClient {
   // ---------------------------------------------------------------------------------------------
 
   private request<T = void>(opts: RequestOptions<T>): Promise<T> {
+    opts={...opts,sessionGeneration:opts.sessionGeneration??this.sessionGeneration};
     if ((opts.method ?? 'GET') === 'GET') {
-      return this.reads.run(`get:${opts.auth !== false}:${!!opts.probe}:${opts.path}`, () => this.readRequest(opts));
+      return this.reads.run(`get:${opts.auth !== false}:${!!opts.probe}:${!!opts.sessionMutation}:${opts.path}`, () => this.readRequest(opts));
     }
     return this.readRequest(opts).then(value=>{
       if(/^\/(settings|consent|repos|account)(\/|$)/.test(opts.path))this.reads.invalidate();
@@ -185,6 +196,7 @@ export class HttpApiClient implements ApiClient {
     } catch {
       throw this.parseFailure(res);
     }
+    if(opts.auth!==false && !opts.allowStaleSession && opts.sessionGeneration!==this.sessionGeneration)throw new ApiClientError("unauthorized",messageForCode("unauthorized"));
     const parsed = opts.schema.safeParse(json);
     if (!parsed.success) throw this.parseFailure(res);
     return parsed.data;
@@ -201,14 +213,16 @@ export class HttpApiClient implements ApiClient {
   private async exchange(opts: RequestOptions<unknown>): Promise<Response> {
     const method = opts.method ?? "GET";
     const authed = opts.auth !== false;
+    const generation=opts.sessionGeneration??this.sessionGeneration;
     const write = !SAFE_METHODS.has(method);
     let csrfRetried = false;
     let tokenRetried = false;
 
     for (;;) {
       // A refresh swaps the native token; wait for it so this request carries the new one.
-      if (authed && !this.web && !opts.isRefresh && this.refreshing) await this.refreshing.catch(() => undefined);
+      if (authed && !opts.isRefresh && !opts.sessionMutation && this.refreshing) await this.refreshing.catch(() => undefined);
 
+      if(authed && !opts.allowStaleSession && generation!==this.sessionGeneration)throw new ApiClientError("unauthorized",messageForCode("unauthorized"));
       const headers: Record<string, string> = { accept: "application/json" };
       let body: BodyInit | undefined;
       if (opts.form) {
@@ -223,7 +237,7 @@ export class HttpApiClient implements ApiClient {
       if (authed) {
         if (this.web) {
           if (write) {
-            sentCsrf = getInMemoryCsrfToken() ?? (await this.loadCsrf());
+            sentCsrf = getInMemoryCsrfToken() ?? (await this.loadCsrf(!!(opts.sessionMutation || opts.isRefresh)));
             headers["x-csrf-token"] = sentCsrf;
           }
         } else {
@@ -236,19 +250,23 @@ export class HttpApiClient implements ApiClient {
         }
       }
 
-      const res = await this.fetchWithTimeout(`${this.baseUrl}/v1${opts.path}`, {
+      const deliver=()=>{
+      if(authed && !opts.allowStaleSession && generation!==this.sessionGeneration)throw new ApiClientError("unauthorized",messageForCode("unauthorized"));
+      return this.fetchWithTimeout(`${this.baseUrl}/v1${opts.path}`, {
         method,
         headers,
         body,
         // Web: the browser sends the HttpOnly session cookie. Native never uses cookies.
         credentials: opts.credentials ?? (this.web ? "include" : "omit"),
-      }, opts.timeoutMs);
+      }, opts.timeoutMs);};
+      const res=authed && !opts.sessionMutation && !opts.isRefresh ? await this.withCookieLock("shared",deliver) : await deliver();
 
+      if(authed && !opts.allowStaleSession && generation!==this.sessionGeneration)throw new ApiClientError("unauthorized",messageForCode("unauthorized"));
       if (res.ok) return res;
 
       const error = await this.toError(res);
 
-      if (error.code === "unauthorized" && authed) {
+      if (error.code === "unauthorized" && authed && generation===this.sessionGeneration) {
         if (!this.web && usedToken) {
           // Another request may have rotated the token while this one was in flight: retry once with it.
           const current = await this.store.get();
@@ -269,7 +287,7 @@ export class HttpApiClient implements ApiClient {
       if (this.web && authed && write && (error.code === "csrf_invalid" || error.code === "forbidden") && !csrfRetried) {
         csrfRetried = true;
         setInMemoryCsrfToken(null);
-        const fresh = await this.loadCsrf();
+        const fresh = await this.loadCsrf(!!(opts.sessionMutation || opts.isRefresh));
         if (fresh !== sentCsrf) continue;
       }
 
@@ -317,16 +335,12 @@ export class HttpApiClient implements ApiClient {
   }
 
   /** Fetches the CSRF token for the cookie session and keeps it in memory only. */
-  private loadCsrf(): Promise<string> {
-    if (!this.csrfLoading) {
-      this.csrfLoading = this.request({ path: "/auth/csrf", schema: CsrfResponse })
-        .then(({ csrfToken }) => {
-          setInMemoryCsrfToken(csrfToken);
-          return csrfToken;
-        })
-        .finally(() => {
-          this.csrfLoading = null;
-        });
+  private loadCsrf(sessionMutation=false):Promise<string>{
+    // An exclusive cookie mutation must never await a shared lock queued behind itself.
+    if(sessionMutation)return this.request({path:"/auth/csrf",schema:CsrfResponse,sessionMutation:true}).then(({csrfToken})=>{setInMemoryCsrfToken(csrfToken);return csrfToken;});
+    if(!this.csrfLoading){
+      const pending=this.request({path:"/auth/csrf",schema:CsrfResponse}).then(({csrfToken})=>{setInMemoryCsrfToken(csrfToken);return csrfToken;}).finally(()=>{if(this.csrfLoading===pending)this.csrfLoading=null;});
+      this.csrfLoading=pending;
     }
     return this.csrfLoading;
   }
@@ -335,18 +349,21 @@ export class HttpApiClient implements ApiClient {
    * Keeps what the client must hold (the bearer token on native, the CSRF token on web) and hands back
    * a session without either, so neither reaches screens or React state.
    */
-  private async adoptSession(session: z.infer<typeof AuthCallbackResponse>["session"], newSession = true): Promise<Session> {
+  private async adoptSession(session: z.infer<typeof AuthCallbackResponse>["session"], newSession = true, generation=this.sessionGeneration): Promise<Session> {
+    if(generation!==this.sessionGeneration)throw new ApiClientError("unauthorized",messageForCode("unauthorized"));
+    if(this.web ? !!session.token || !session.csrfToken : !session.token || !!session.csrfToken)throw new ApiClientError("parse_failed",messageForCode("parse_failed"));
     if(newSession)this.clearCache();
     if (this.web) {
       if (session.csrfToken) setInMemoryCsrfToken(session.csrfToken);
     } else if (session.token) {
       await this.store.set(session.token);
     }
+    if(generation!==this.sessionGeneration)throw new ApiClientError("unauthorized",messageForCode("unauthorized"));
     return { expiresAt: session.expiresAt, ...(session.demo ? { demo: true as const } : {}) };
   }
 
-  private get platformName(): "ios" | "web" {
-    return this.web ? "web" : "ios";
+  private get platformName(): "ios" | "android" | "web" {
+    return this.web ? "web" : this.nativePlatform;
   }
 
   // ---------------------------------------------------------------------------------------------
@@ -358,7 +375,8 @@ export class HttpApiClient implements ApiClient {
     return { ok: res.ok, version: res.version };
   }
 
-  async startGithubAuth(platform: "ios" | "web", codeChallenge: string) {
+  async startGithubAuth(platform: "ios" | "android" | "web", codeChallenge: string) {
+    ++this.sessionGeneration;this.clearCache();
     const res = await this.request({
       method: "POST",
       path: "/auth/github/start",
@@ -372,45 +390,56 @@ export class HttpApiClient implements ApiClient {
     return { authorizeUrl, state: res.state };
   }
 
-  async completeGithubAuth(code: string, state: string, codeVerifier: string) {
-    const res = await this.request({
-      method: "POST",
-      path: "/auth/github/callback",
-      auth: false,
-      body: { code, state, codeVerifier },
-      schema: AuthCallbackResponse,
-    });
-    return { session: await this.adoptSession(res.session), user: res.user };
+  private async withCookieLock<T>(mode:"shared"|"exclusive",operation:()=>Promise<T>):Promise<T>{
+    if(this.web && typeof navigator!=="undefined" && navigator.locks)return await navigator.locks.request(`mergemate-session:${this.baseUrl}`,{mode},operation);
+    return operation();
+  }
+  private mutateSession<T>(operation:()=>Promise<T>):Promise<T>{
+    const run=()=>this.withCookieLock("exclusive",operation);
+    const result=this.sessionOperations.then(run,run);
+    this.sessionOperations=result.then(()=>undefined,()=>undefined);return result;
   }
 
-  async startDemoSession() {
-    if (!this.turnstile) throw new ApiClientError("bot_check_unavailable", messageForCode("bot_check_unavailable"));
-    const turnstileToken = await this.turnstile();
-    const res = await this.request({
-      method: "POST",
-      path: "/auth/demo",
-      auth: false,
-      body: { turnstileToken, platform: this.platformName },
-      schema: DemoResponse,
-    });
-    return { session: await this.adoptSession(res.session), user: res.user };
+  private async finishPendingCookieLogout(generation:number){
+    if(!this.web || !hasPendingLogout())return;
+    try{await this.request({method:"POST",path:"/auth/logout",probe:true,sessionMutation:true,sessionGeneration:generation});}
+    catch(error){if(!(error instanceof ApiClientError && error.code==='unauthorized'))throw error;}
+    setPendingLogout(false);setInMemoryCsrfToken(null);this.csrfLoading=null;
   }
 
-  /** Rotates the session token (native) or the cookie and CSRF token (web). Calls share one refresh. */
-  refreshSession(): Promise<Session> {
-    if (!this.refreshing) {
-      const run = async () => {
-        const res = await this.request({
-          method: "POST",
-          path: "/auth/refresh",
-          schema: RefreshResponse,
-          isRefresh: true,
-        });
-        return this.adoptSession(res.session, false);
-      };
-      this.refreshing = run().finally(() => {
-        this.refreshing = null;
+  completeGithubAuth(code:string,state:string,codeVerifier:string){
+    const generation=++this.sessionGeneration;this.clearCache();
+    return this.mutateSession(async()=>{
+      if(generation!==this.sessionGeneration)throw new ApiClientError("unauthorized",messageForCode("unauthorized"));
+      await this.finishPendingCookieLogout(generation);
+      const res=await this.request({method:"POST",path:"/auth/github/callback",auth:false,body:{code,state,codeVerifier},schema:AuthCallbackResponse});
+      const session=await this.adoptSession(res.session,true,generation);if(this.web)setPendingLogout(false);notifySessionChange("signed-in");return {session,user:res.user};
+    });
+  }
+
+  startDemoSession(){
+    const generation=++this.sessionGeneration;this.clearCache();
+    return this.mutateSession(async()=>{
+      if(generation!==this.sessionGeneration)throw new ApiClientError("unauthorized",messageForCode("unauthorized"));
+      if(!this.turnstile)throw new ApiClientError("bot_check_unavailable",messageForCode("bot_check_unavailable"));
+      await this.finishPendingCookieLogout(generation);
+      const turnstileToken=await this.turnstile();
+      if(generation!==this.sessionGeneration)throw new ApiClientError("unauthorized",messageForCode("unauthorized"));
+      const res=await this.request({method:"POST",path:"/auth/demo",auth:false,body:{turnstileToken,platform:this.platformName},schema:DemoResponse});
+      const session=await this.adoptSession(res.session,true,generation);if(this.web)setPendingLogout(false);notifySessionChange("signed-in");return {session,user:res.user};
+    });
+  }
+
+  refreshSession():Promise<Session>{
+    if(!this.refreshing){
+      const generation=this.sessionGeneration;
+      const request=this.mutateSession(async()=>{
+        if(generation!==this.sessionGeneration)throw new ApiClientError("unauthorized",messageForCode("unauthorized"));
+        const res=await this.request({method:"POST",path:"/auth/refresh",schema:RefreshResponse,isRefresh:true,sessionGeneration:generation});
+        return this.adoptSession(res.session,false,generation);
       });
+      const pending=request.finally(()=>{if(this.refreshing===pending)this.refreshing=null;});
+      this.refreshing=pending;
     }
     return this.refreshing;
   }
@@ -418,8 +447,8 @@ export class HttpApiClient implements ApiClient {
   private readonly featureFlags=new FeatureFlagCache(()=>this.request({path:"/flags",auth:false,credentials:"omit",schema:z.unknown()}));
   getFeatureFlags(refresh=false){if(refresh)this.featureFlags.clear();return this.featureFlags.get();}
 
-  async getMe(): Promise<User> {
-    return this.request({ path: "/me", schema: UserSchema, probe: true });
+  async getMe(): Promise<User & {demo?:boolean}> {
+    return this.request({ path: "/me", schema: UserSchema.extend({demo:z.boolean().optional()}), probe: true });
   }
 
   async getCsrfToken() {
@@ -427,23 +456,22 @@ export class HttpApiClient implements ApiClient {
     return { csrfToken: await this.loadCsrf() };
   }
 
-  async logout(): Promise<void> {
-    this.clearCache();
-    try {
-      await this.request({ method: "POST", path: "/auth/logout", probe: true });
-    } finally {
-      await this.store.clear();
-      setInMemoryCsrfToken(null);
-      this.settingsCache = null;
-    }
+  logout():Promise<void>{
+    const generation=++this.sessionGeneration;this.clearCache();
+    return this.mutateSession(async()=>{
+      if(this.web){setPendingLogout(true);notifySessionChange("signed-out");}
+      try{await this.request({method:"POST",path:"/auth/logout",probe:true,sessionMutation:true,allowStaleSession:true,sessionGeneration:generation});if(this.web)setPendingLogout(false);}
+      catch(error){if(error instanceof ApiClientError && error.code==='unauthorized'){if(this.web)setPendingLogout(false);return;}throw error;}
+      finally{await this.store.clear();setInMemoryCsrfToken(null);this.csrfLoading=null;this.clearCache();notifySessionChange("signed-out");}
+    });
   }
 
-  async deleteAccount(): Promise<void> {
-    this.clearCache();
-    await this.request({ method: "DELETE", path: "/account" });
-    await this.store.clear();
-    setInMemoryCsrfToken(null);
-    this.settingsCache = null;
+  deleteAccount():Promise<void>{
+    const generation=++this.sessionGeneration;this.clearCache();
+    return this.mutateSession(async()=>{
+      await this.request({method:"DELETE",path:"/account",sessionMutation:true,sessionGeneration:generation});
+      await this.store.clear();setInMemoryCsrfToken(null);this.csrfLoading=null;this.clearCache();notifySessionChange("signed-out");
+    });
   }
 
   // ---------------------------------------------------------------------------------------------

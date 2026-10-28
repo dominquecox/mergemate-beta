@@ -1,5 +1,6 @@
+import {StorageService} from "../../src/storage";
 import React, { useEffect, useRef, useState } from "react";
-import { View, StyleSheet } from "react-native";
+import { View, StyleSheet, Platform } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useAuth } from "../../src/context/AuthContext";
 import { useTheme } from "../../src/context/ThemeContext";
@@ -31,15 +32,19 @@ export default function AuthCallbackScreen() {
     const code = typeof params.code === "string" ? params.code : undefined;
     const state = typeof params.state === "string" ? params.state : undefined;
     const errorParam = typeof params.error === "string" ? params.error : undefined;
+    // Capture once, then remove transient OAuth values from browser history immediately.
+    if(Platform.OS==="web" && typeof window!=="undefined")window.history.replaceState(window.history.state,"",window.location.pathname);
 
     const run = async () => {
       if (errorParam) {
+        if(state)await StorageService.takePendingSignIn(Date.now(),state).catch(()=>null);
         setError("Sign-in was cancelled.");
         setLocalError("Sign-in was cancelled.");
         router.replace("/(auth)/sign-in");
         return;
       }
       if (!validOAuthParams(params) || !code || !state) {
+        if(state)await StorageService.takePendingSignIn(Date.now(),state).catch(()=>null);
         setError("That sign-in link isn't valid. Start again.");
         setMissingParams(true);
         router.replace("/(auth)/sign-in");

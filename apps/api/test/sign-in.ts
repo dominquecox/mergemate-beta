@@ -29,7 +29,7 @@ export const post = (body: unknown, headers: Record<string, string> = {}): Reque
 });
 
 /** Runs start + callback against fake GitHub. Returns the credentials for later requests. */
-export const signIn = async (ctx: TestContext, platform: "ios" | "web" = "ios", user = ghUser) => {
+export const signIn = async (ctx: TestContext, platform: "ios" | "android" | "web" = "ios", user = ghUser) => {
   const call = appFor(ctx);
   ctx.net
     .on("POST", "https://github.com/login/oauth/access_token", () => json(tokenResponse()))
@@ -43,6 +43,6 @@ export const signIn = async (ctx: TestContext, platform: "ios" | "web" = "ios", 
   const body = (await res.json()) as { session: { token?: string; csrfToken?: string }; user: { id: string } };
   const cookie = res.headers.get("set-cookie")?.split(";")[0];
   const headers: Record<string, string> =
-    platform === "ios" ? { authorization: `Bearer ${body.session.token}` } : { cookie: cookie ?? "" };
+    platform !== "web" ? { authorization: `Bearer ${body.session.token}` } : { cookie: cookie ?? "" };
   return { headers, csrf: body.session.csrfToken, userId: body.user.id, res, body };
 };

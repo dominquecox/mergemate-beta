@@ -6,6 +6,7 @@ import { MockApiClient } from "./mock";
 
 export interface ApiClientDeps {
   platform: "web" | "native";
+  nativePlatform?: "ios" | "android";
   tokenStore: TokenStore;
   fetch?: typeof fetch;
   getTurnstileToken?: () => Promise<string>;
@@ -20,7 +21,7 @@ export function createUnconfiguredClient(): ApiClient {
   return new Proxy({} as ApiClient, {
     get(_target, prop) {
       if (prop === "isMock") return false;
-      if (["setUnauthorizedHandler","clearCache","invalidateCache"].includes(String(prop))) return () => undefined;
+      if (["setUnauthorizedHandler","clearCache","invalidateCache","invalidateSession"].includes(String(prop))) return () => undefined;
       if (prop === "then") return undefined;
       return () => Promise.reject(failure());
     },

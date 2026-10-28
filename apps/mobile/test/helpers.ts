@@ -1,6 +1,9 @@
-import { vi } from "vitest";
+import {setPendingLogout} from "../src/auth/session-events";
+import { beforeEach, vi } from "vitest";
 import { setInMemoryCsrfToken } from "../src/api/client";
 import { HttpApiClient, type HttpApiClientOptions, type TokenStore } from "../src/api/http";
+
+beforeEach(()=>setPendingLogout(false));
 
 export interface RecordedRequest {
   url: string;

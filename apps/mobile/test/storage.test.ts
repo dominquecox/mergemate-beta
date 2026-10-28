@@ -11,6 +11,7 @@ vi.mock("expo-secure-store", () => ({
   }),
 }));
 
+import * as SecureStore from "expo-secure-store";
 import { StorageService } from "../src/storage";
 import { Platform } from "react-native";
 
@@ -67,4 +68,24 @@ describe("StorageService", () => {
     expect(searches[1]).toBe("schema migration");
     expect(searches.length).toBe(2);
   });
+  it("fails closed rather than keeping native session credentials outside secure storage",async()=>{
+    Platform.OS="ios";
+    vi.mocked(SecureStore.setItemAsync).mockRejectedValueOnce(new Error("private-platform-detail"));
+    await expect(StorageService.setSessionToken("fixture-token")).rejects.toMatchObject({code:"secure_storage_unavailable"});
+    expect(mockSecureStore.has("mergemate_session_token")).toBe(false);
+    vi.mocked(SecureStore.getItemAsync).mockRejectedValueOnce(new Error("private-platform-detail"));
+    await expect(StorageService.getSessionToken()).rejects.toMatchObject({code:"secure_storage_unavailable"});
+  });
+  it("consumes native pending PKCE state only once under concurrent callbacks",async()=>{
+    Platform.OS="ios";await StorageService.setPendingSignIn({state:"fixture",verifier:"v".repeat(43),createdAt:Date.now()});
+    const results=await Promise.all([StorageService.takePendingSignIn(),StorageService.takePendingSignIn()]);
+    expect(results.filter(Boolean)).toHaveLength(1);expect(results.filter(x=>x===null)).toHaveLength(1);
+  });
+
+  it("does not burn a newer pending flow when an old callback is replayed",async()=>{
+    Platform.OS="ios";await StorageService.setPendingSignIn({state:"latest",verifier:"v".repeat(43),createdAt:Date.now()});
+    expect(await StorageService.takePendingSignIn(Date.now(),"old")).toBeNull();
+    expect((await StorageService.takePendingSignIn(Date.now(),"latest"))?.state).toBe("latest");
+  });
+
 });

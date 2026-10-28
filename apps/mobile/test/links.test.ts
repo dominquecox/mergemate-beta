@@ -36,3 +36,9 @@ it("opens only GitHub authorization with the expected PKCE and state",()=>{
   expect(validGitHubAuthorizeUrl(url,"s","c")).toBe(true);
   for (const candidate of [url.replace("github.com","evil.example"),url+"&state=other",url.replace("S256","plain"),url.replace("challenge=c","challenge=wrong"),"javascript:alert(1)"]) expect(validGitHubAuthorizeUrl(candidate,"s","c")).toBe(false);
 });
+
+it("routes provider denial with state safely on cold/warm native launches",()=>{
+ const url="https://app.mergemate.dev/auth/callback?error=access_denied&state=fixture&error_description=Denied";
+ for(const initial of [true,false])expect(redirectSystemPath({path:url,initial})).toBe("/auth/callback?error=access_denied&state=fixture&error_description=Denied");
+ expect(isVerifiedCallbackUrl(url+"&state=duplicate")).toBe(false);expect(nativeLinkPath(url+"&extra="+"a".repeat(5000))).toBe("/(auth)/sign-in");
+});

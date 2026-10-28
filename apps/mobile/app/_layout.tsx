@@ -1,5 +1,6 @@
 import {useReducedMotion} from "../src/hooks/useReducedMotion";
 import {ReadoutProvider} from "../src/readout/ReadoutContext";
+import {LoadingState} from "../src/components/LoadingState";
 import React, { useEffect, useRef } from "react";
 import { Stack, useRouter, useSegments } from "expo-router";
 import { StatusBar } from "expo-status-bar";
@@ -20,7 +21,7 @@ function AppContent() {
   const reducedMotion=useReducedMotion();
   const { colors, isDark } = useTheme();
   const router = useRouter();
-  const { session, isLoading } = useAuth();
+  const { user, session, isLoading } = useAuth();
   const { width } = useWindowDimensions();
   const segments = useSegments() as string[];
 
@@ -50,6 +51,8 @@ function AppContent() {
   // reaching a signed-in screen without a session: browser Back after sign-out, or a pasted URL.
   const hadSession = useRef(false);
   const onProtected = requiresSession(segments);
+  const navigatorIdentity=useRef("initial");
+  if(onProtected)navigatorIdentity.current=user?.id??"signed-out";
   useEffect(() => {
     if (session) {
       hadSession.current = true;
@@ -93,8 +96,10 @@ function AppContent() {
   const available = width - (shell.sidebar ? SIDEBAR_WIDTH : 0);
   const hasGutter = shell.kind === "public" && shell.columnMaxWidth !== undefined && !isPhoneFrame && available > shell.columnMaxWidth;
 
+  const privatePending=!session && onProtected;
   const stack = (
-    <Stack
+    <View style={{flex:1}}><View style={{flex:1,display:privatePending?"none":"flex"}}>
+    <Stack key={navigatorIdentity.current}
       screenOptions={{
         headerShown: false,
         contentStyle: { backgroundColor: colors.background },
@@ -111,7 +116,7 @@ function AppContent() {
       <Stack.Screen name="account/delete" options={{ presentation: "modal", headerShown: false }} />
       <Stack.Screen name="billing" options={{ headerShown: false }} />
       <Stack.Screen name="(public)" options={{ headerShown: false }} />
-    </Stack>
+    </Stack></View>{privatePending && <LoadingState title="Checking your session..." message="Verifying access before showing private reviews."/>}</View>
   );
 
   return (

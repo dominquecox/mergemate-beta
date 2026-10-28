@@ -1,23 +1,26 @@
 const origins = new Set(["https://app.mergemate.dev", "https://dev.mergemate.dev"]);
 const value = (input: unknown): input is string => typeof input === "string" && input.length > 0 && input.length <= 1024 && ![...input].some(char => char.charCodeAt(0) < 32 || char.charCodeAt(0) === 127);
 export function validOAuthParams(params: {code?: unknown; state?: unknown; error?: unknown}): boolean {
-  if (params.error !== undefined) return value(params.error) && params.code === undefined && params.state === undefined;
+  if (params.error !== undefined) return value(params.error) && params.code === undefined && (params.state===undefined || value(params.state));
   return value(params.code) && value(params.state);
 }
 
 /** Only HTTPS on approved hosts may deliver authorization codes to native. */
 export function isVerifiedCallbackUrl(raw: string): boolean {
+  if(raw.length>4096)return false;
   try {
     const url = new URL(raw);
     if (!origins.has(url.origin) || url.username || url.password || url.hash || url.pathname !== "/auth/callback") return false;
     const keys = [...url.searchParams.keys()];
-    if (keys.some(key => !["code", "state", "error"].includes(key)) || keys.length !== new Set(keys).size) return false;
+    const allowed=url.searchParams.has("error")?["error","state","error_description","error_uri"]:["code","state"];
+    if (keys.some(key => !allowed.includes(key)) || keys.length !== new Set(keys).size) return false;
     return validOAuthParams(Object.fromEntries(url.searchParams));
   } catch { return false; }
 }
 
 /** Cold and warm native launches share this strict route adapter. */
 export function nativeLinkPath(raw: string): string {
+  if(raw.length>4096)return "/(auth)/sign-in";
   try {
     const url = new URL(raw);
     if (!origins.has(url.origin) || url.username || url.password || url.hash) return "/(auth)/sign-in";

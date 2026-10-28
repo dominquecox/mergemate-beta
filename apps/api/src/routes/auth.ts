@@ -20,7 +20,7 @@ import { saveTokens } from "../lib/github-tokens";
 import {
   clearedSessionCookie,
   createSession,
-  deleteSession,
+  revokeSessionFamily,
   type IssuedSession,
   rotateSession,
   sessionCookie,
@@ -150,7 +150,7 @@ export const auth = new Hono<AppEnv>()
   })
 
   .post("/auth/logout", async (c) => {
-    await deleteSession(requireBinding(c.env, "DB"), c.get("session").tokenHash);
+    await revokeSessionFamily(requireBinding(c.env, "DB"), c.get("session"));
     if (c.get("session").transport === "cookie") c.header("set-cookie", clearedSessionCookie());
     return c.body(null, 204);
   })

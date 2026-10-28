@@ -13,7 +13,7 @@ export type User = z.infer<typeof User>;
 export const Me = User.extend({ demo: z.boolean() });
 export type Me = z.infer<typeof Me>;
 
-export const Platform = z.enum(["ios", "web"]);
+export const Platform = z.enum(["ios", "android", "web"]);
 export type Platform = z.infer<typeof Platform>;
 
 /**

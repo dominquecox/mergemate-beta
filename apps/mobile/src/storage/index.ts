@@ -1,3 +1,4 @@
+import {ApiClientError,messageForCode} from "../api/errors";
 import * as SecureStore from "expo-secure-store";
 import { Platform } from "react-native";
 
@@ -11,6 +12,9 @@ const PUSH_ENABLED_KEY = "mergemate_push_enabled";
 
 // Fallback in-memory map for environments where neither SecureStore nor localStorage is accessible
 const memoryStorage = new Map<string, string>();
+let pendingOperations=Promise.resolve();
+function pendingOperation<T>(operation:()=>Promise<T>):Promise<T>{const result=pendingOperations.then(operation,operation);pendingOperations=result.then(()=>undefined,()=>undefined);return result;}
+const storageUnavailable=()=>new ApiClientError("secure_storage_unavailable",messageForCode("secure_storage_unavailable"));
 
 function getWebStorage(): Storage | null {
   try {
@@ -76,7 +80,7 @@ export const StorageService = {
     try {
       return await SecureStore.getItemAsync(SESSION_TOKEN_KEY);
     } catch {
-      return memoryStorage.get(SESSION_TOKEN_KEY) || null;
+      throw storageUnavailable();
     }
   },
 
@@ -89,7 +93,7 @@ export const StorageService = {
     try {
       await SecureStore.setItemAsync(SESSION_TOKEN_KEY, token);
     } catch {
-      memoryStorage.set(SESSION_TOKEN_KEY, token);
+      throw storageUnavailable();
     }
   },
 
@@ -99,10 +103,11 @@ export const StorageService = {
       return;
     }
 
+    memoryStorage.delete(SESSION_TOKEN_KEY);
     try {
       await SecureStore.deleteItemAsync(SESSION_TOKEN_KEY);
     } catch {
-      memoryStorage.delete(SESSION_TOKEN_KEY);
+      throw storageUnavailable();
     }
   },
 
@@ -176,6 +181,7 @@ export const StorageService = {
    * it in secure storage. It holds the PKCE verifier and state, never a session token.
    */
   async setPendingSignIn(pending: PendingSignIn): Promise<void> {
+    return pendingOperation(async()=>{
     const raw = JSON.stringify(pending);
     if (Platform.OS === "web") {
       const storage = getSessionOnlyStorage();
@@ -186,42 +192,28 @@ export const StorageService = {
     try {
       await SecureStore.setItemAsync(PENDING_SIGN_IN_KEY, raw);
     } catch {
-      memoryStorage.set(PENDING_SIGN_IN_KEY, raw);
+      throw storageUnavailable();
     }
+    });
   },
 
   /** Reads and deletes the pending sign-in so a callback can be used once. Null when missing or too old. */
-  async takePendingSignIn(now: number = Date.now()): Promise<PendingSignIn | null> {
-    let raw: string | null = null;
-    if (Platform.OS === "web") {
-      const storage = getSessionOnlyStorage();
-      raw = storage ? storage.getItem(PENDING_SIGN_IN_KEY) : (memoryStorage.get(PENDING_SIGN_IN_KEY) ?? null);
-      try {
-        storage?.removeItem(PENDING_SIGN_IN_KEY);
-      } catch {
-        // ignore
-      }
-      memoryStorage.delete(PENDING_SIGN_IN_KEY);
-    } else {
-      try {
-        raw = await SecureStore.getItemAsync(PENDING_SIGN_IN_KEY);
-        await SecureStore.deleteItemAsync(PENDING_SIGN_IN_KEY);
-      } catch {
-        raw = memoryStorage.get(PENDING_SIGN_IN_KEY) ?? null;
-      }
-      memoryStorage.delete(PENDING_SIGN_IN_KEY);
-    }
-    if (!raw) return null;
-    try {
-      const parsed: unknown = JSON.parse(raw);
-      if (!isPendingSignIn(parsed) || parsed.createdAt > now || now - parsed.createdAt > PENDING_SIGN_IN_TTL_MS) return null;
-      return parsed;
-    } catch {
-      return null;
-    }
+  async takePendingSignIn(now=Date.now(),expectedState?:string):Promise<PendingSignIn|null>{
+    return pendingOperation(async()=>{
+      const storage=Platform.OS==='web'?getSessionOnlyStorage():null;
+      let raw:string|null;
+      if(Platform.OS==='web')raw=storage?storage.getItem(PENDING_SIGN_IN_KEY):memoryStorage.get(PENDING_SIGN_IN_KEY)??null;
+      else{try{raw=await SecureStore.getItemAsync(PENDING_SIGN_IN_KEY);}catch{throw storageUnavailable();}}
+      let pending:PendingSignIn|null=null;
+      try{const value:unknown=raw?JSON.parse(raw):null;if(isPendingSignIn(value) && value.createdAt<=now && now-value.createdAt<=PENDING_SIGN_IN_TTL_MS)pending=value;}catch{/* Invalid stored data is discarded. */}
+      // A replay for another state must not burn a newer, legitimate pending flow.
+      if(pending && expectedState!==undefined && pending.state!==expectedState)return null;
+      if(Platform.OS==='web')storage?.removeItem(PENDING_SIGN_IN_KEY);
+      else{try{await SecureStore.deleteItemAsync(PENDING_SIGN_IN_KEY);}catch{throw storageUnavailable();}}
+      memoryStorage.delete(PENDING_SIGN_IN_KEY);return pending;
+    });
   },
 
-  /** Whether the restored session is a demo session. A plain flag, not a credential. */
   async getDemoFlag(): Promise<boolean> {
     try {
       if (Platform.OS === "web") {

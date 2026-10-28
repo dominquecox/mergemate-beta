@@ -81,17 +81,16 @@ describe("HttpApiClient on web (cookie session)", () => {
     expect(calls.filter((c) => c.method === "POST")).toHaveLength(1);
   });
 
-  it("keeps the CSRF token and drops any session token from sign-in answers", async () => {
+  it("rejects mixed web/bearer sign-in answers without adopting either credential", async () => {
     const { client, store } = makeClient(() =>
       jsonResponse({
         session: { token: "should_never_be_kept_xxxxxxxxxx", expiresAt: NOW, csrfToken: CSRF_A },
         user: USER,
       }),
     );
-    const res = await client.completeGithubAuth("code123", "state123", "v".repeat(43));
-    expect(res.session).toEqual({ expiresAt: NOW });
+    await expect(client.completeGithubAuth("code123", "state123", "v".repeat(43))).rejects.toMatchObject({code:"parse_failed"});
     expect(store.sets).toEqual([]);
-    expect(getInMemoryCsrfToken()).toBe(CSRF_A);
+    expect(getInMemoryCsrfToken()).toBeNull();
   });
 
   it("clears the CSRF token and tells the app on 401", async () => {

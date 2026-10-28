@@ -26,6 +26,7 @@ export interface ApiClient {
   isMock: boolean;
   invalidateCache(): void;
   clearCache(): void;
+  invalidateSession(): void;
   getNotificationPage(filter?: NotificationFilter, cursor?: string | null, search?: string): Promise<{items: Notification[]; nextCursor: string | null}>;
   getRepoPage(cursor?: string | null): Promise<{items: Repo[]; nextCursor: string | null}>;
   getFeatureFlags(refresh?:boolean): Promise<FeatureFlags>;
@@ -33,11 +34,11 @@ export interface ApiClient {
 
   // Auth. The real client keeps the session itself: the cookie plus an in-memory CSRF token on web, a
   // bearer token in secure storage on native. The sessions it returns never carry either.
-  startGithubAuth(platform: "ios" | "web", codeChallenge: string): Promise<{ authorizeUrl: string; state: string }>;
+  startGithubAuth(platform: "ios" | "android" | "web", codeChallenge: string): Promise<{ authorizeUrl: string; state: string }>;
   completeGithubAuth(code: string, state: string, codeVerifier: string): Promise<{ session: Session; user: User }>;
   startDemoSession(): Promise<{ session: Session; user: User }>;
   refreshSession(): Promise<Session>;
-  getMe(): Promise<User>;
+  getMe(): Promise<User & {demo?:boolean}>;
   getCsrfToken(): Promise<{ csrfToken: string }>;
   logout(): Promise<void>;
   deleteAccount(): Promise<void>;

@@ -2,7 +2,7 @@ import type { Env } from "./env";
 import { ConfigError } from "./errors";
 
 type AppEnvName = "development" | "production";
-export type Platform = "ios" | "web";
+export type Platform = import("@mergemate/contracts").Platform;
 
 // Fixed allowlists. Config picks among these; it can never add an origin or callback.
 const WEB_ORIGINS: Record<AppEnvName, readonly string[]> = {
@@ -16,7 +16,7 @@ const SITE_ORIGINS: Record<AppEnvName, readonly string[]> = {
   production: ["https://mergemate.dev"],
 };
 
-// iOS returns through the https universal link only, never a custom scheme.
+// Native apps return through verified HTTPS Universal/App Links, never a custom scheme.
 const IOS_CALLBACKS: Record<AppEnvName, string> = {
   development: "https://dev.mergemate.dev/auth/callback",
   production: "https://app.mergemate.dev/auth/callback",
@@ -50,7 +50,7 @@ export const siteOrigin = (env: Env) => {
 };
 
 export const callbackUrl = (env: Env, platform: Platform) =>
-  platform === "ios" ? IOS_CALLBACKS[appEnv(env)] : `${webOrigin(env)}/auth/callback`;
+  platform === "web" ? `${webOrigin(env)}/auth/callback` : IOS_CALLBACKS[appEnv(env)];
 
 export const requireVar = (
   env: Env,
