@@ -237,11 +237,13 @@ export const transcribeWithMeta = async (args: {
           headers: { authorization: `Bearer ${apiKey}` },
           body: form,
           signal: AbortSignal.timeout(TRANSCRIBE_TIMEOUT_MS),
-          redirect: "error",
+          // Workers reject redirect: "error"; "manual" returns a 3xx as-is and it is refused below.
+          redirect: "manual",
         });
       } catch {
         throw transcribeUnavailable();
       }
+      if (res.status >= 300 && res.status < 400) throw transcribeUnavailable();
       if (res.status === 429 || res.status >= 500) {
         if (attempt === 0) {
           await new Promise((resolve) => setTimeout(resolve, 500));

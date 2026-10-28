@@ -447,7 +447,8 @@ export const createFetchTransport = (fetchImpl: typeof fetch = fetch): ModelTran
         headers,
         body,
         signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
-        redirect: "error",
+        // Workers reject redirect: "error"; "manual" returns a 3xx as-is, which !res.ok below rejects.
+        redirect: "manual",
       });
       if (res.status === 429 || res.status >= 500) {
         if (attempt === 0) {

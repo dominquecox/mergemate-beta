@@ -664,6 +664,18 @@ describe("createFetchTransport", () => {
     });
   });
 
+  it("never follows a redirect and uses a redirect mode Workers accept", async () => {
+    const { fn, calls } = stubFetch([302]);
+    await expect(
+      createFetchTransport(fn).complete({
+        config: { provider: "meta", modelId: "m", maxInputChars: 190_000, baseUrl: "https://x" },
+        apiKey: "k",
+        request: { system: "s", prompt: "p", maxOutputTokens: 1 },
+      }),
+    ).rejects.toThrow("upstream status 302");
+    expect(calls[0]?.init.redirect).toBe("manual");
+  });
+
   it("sends a screenshot as an input_image part", async () => {
     const { fn, calls } = stubFetch([200]);
     await createFetchTransport(fn).complete({

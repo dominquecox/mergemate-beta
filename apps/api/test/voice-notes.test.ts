@@ -309,6 +309,12 @@ describe("readWavInfo", () => {
 });
 
 describe("transcribeWithMeta", () => {
+  it("refuses a redirect instead of following it", async () => {
+    const fetchImpl = (async () => new Response(null, { status: 302, headers: { location: "https://elsewhere.example" } })) as typeof fetch;
+    await expect(
+      transcribeWithMeta({ env: { ...validModelEnv() }, fetchImpl, audio: m4aBytes(), contentType: "audio/mp4", fileName: "note.m4a" }),
+    ).rejects.toMatchObject({ code: "upstream_unavailable" });
+  });
   it("posts multipart audio with the model id and Bearer [REDACTED]", async () => {
     const seen: { url: unknown; init: RequestInit | undefined }[] = [];
     const fetchImpl = (async (url: unknown, init?: RequestInit) => {
@@ -324,6 +330,7 @@ describe("transcribeWithMeta", () => {
     });
     expect(text).toBe("hi");
     expect(seen).toHaveLength(1);
+    expect(seen[0]?.init?.redirect).toBe("manual");
     expect(String(seen[0]?.url)).toBe("https://api.meta.ai/v1/asr/transcribe");
     expect((seen[0]?.init?.headers as Record<string, string>).authorization).toBe(`Bearer ${TEST_API_KEY}`);
     const body = seen[0]?.init?.body as FormData;
