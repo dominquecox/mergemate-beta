@@ -1,3 +1,4 @@
+import {useReducedMotion} from "../src/hooks/useReducedMotion";
 import React, { useEffect, useRef } from "react";
 import { Stack, useRouter, useSegments } from "expo-router";
 import { StatusBar } from "expo-status-bar";
@@ -15,6 +16,7 @@ import { resolveHardwareBackAction, useAndroidBackHandler } from "../src/platfor
 import { registerServiceWorker } from "../src/platform/serviceWorker";
 
 function AppContent() {
+  const reducedMotion=useReducedMotion();
   const { colors, isDark } = useTheme();
   const router = useRouter();
   const { session, isLoading } = useAuth();
@@ -95,7 +97,7 @@ function AppContent() {
       screenOptions={{
         headerShown: false,
         contentStyle: { backgroundColor: colors.background },
-        animation: "slide_from_right",
+        animation: reducedMotion ? "none" : "slide_from_right",
       }}
     >
       <Stack.Screen name="index" />

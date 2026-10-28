@@ -1,7 +1,8 @@
+import {AccessibleSwitch as Switch} from "../../src/components/AccessibleSwitch";
 import { SettingsGroup, SettingsRow } from "../../src/components/SettingsRows";
 import { Avatar } from "../../src/components/Avatar";
 import React, { useState, useEffect, useCallback, useRef } from "react";
-import { View, ScrollView, TouchableOpacity, Switch, StyleSheet, Platform, Linking, Alert, TextInput, KeyboardAvoidingView } from "react-native";
+import { View, ScrollView, TouchableOpacity, StyleSheet, Platform, Linking, Alert, TextInput, KeyboardAvoidingView } from "react-native";
 import { isExternalBillingLinkAllowed } from "../../src/platform/android";
 import { Text } from "../../src/components/Text";
 import { useRouter } from "expo-router";

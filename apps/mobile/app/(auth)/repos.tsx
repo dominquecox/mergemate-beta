@@ -1,5 +1,6 @@
+import {AccessibleSwitch as Switch} from "../../src/components/AccessibleSwitch";
 import React, { useState, useEffect, useRef } from "react";
-import { View, FlatList, TouchableOpacity, StyleSheet, Linking, TextInput, Switch } from "react-native";
+import { View, FlatList, TouchableOpacity, StyleSheet, Linking, TextInput } from "react-native";
 import { Text } from "../../src/components/Text";
 import { useRouter } from "expo-router";
 import { useTheme } from "../../src/context/ThemeContext";

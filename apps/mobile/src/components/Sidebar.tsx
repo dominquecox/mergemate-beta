@@ -1,10 +1,10 @@
-import React from "react";
+import React, {useState} from "react";
 import { View, Image, Pressable, StyleSheet } from "react-native";
 import { Text } from "./Text";
-import { useRouter, useSegments } from "expo-router";
+import { Link, useRouter, useSegments } from "expo-router";
 import { useTheme } from "../context/ThemeContext";
 import { useAuth } from "../context/AuthContext";
-import { NAV_ITEMS } from "../navigation/items";
+import { NAV_ITEMS, type NavItem } from "../navigation/items";
 import { SIDEBAR_WIDTH } from "../layout/breakpoints";
 import { Icon, IconName } from "./Icon";
 
@@ -13,29 +13,24 @@ interface SidebarRowProps {
   icon: IconName;
   iconActive: IconName;
   active: boolean;
-  onPress: () => void;
+  href: NavItem["href"];
   accessibilityLabel: string;
 }
 
-function SidebarRow({ label, icon, iconActive, active, onPress, accessibilityLabel }: SidebarRowProps) {
+function SidebarRow({ label, icon, iconActive, active, href, accessibilityLabel }: SidebarRowProps) {
+  const [hovered,setHovered]=useState(false);
+  const [pressed,setPressed]=useState(false);
   const { colors, typography, radius } = useTheme();
 
   return (
-    <Pressable
-      onPress={onPress}
+    <Link href={href} asChild><Pressable onHoverIn={()=>setHovered(true)} onHoverOut={()=>setHovered(false)} onPressIn={()=>setPressed(true)} onPressOut={()=>setPressed(false)}
       accessibilityRole="link"
       accessibilityLabel={accessibilityLabel}
       accessibilityState={{ selected: active }}
-      style={(state) => {
-        const hovered = Boolean((state as { hovered?: boolean }).hovered);
-        return [
-          styles.row,
-          {
-            borderRadius: radius.md,
-            backgroundColor: active ? colors.brandSubtle : hovered || state.pressed ? colors.surfaceElevated : "transparent",
-          },
-        ];
-      }}
+      style={StyleSheet.flatten([styles.row,{
+        borderRadius:radius.md,
+        backgroundColor:active?colors.brandSubtle:hovered||pressed?colors.surfaceElevated:"transparent",
+      }])}
     >
       <Icon name={active ? iconActive : icon} size={20} color={active ? colors.brandLight : colors.textMuted} />
       <Text
@@ -46,7 +41,7 @@ function SidebarRow({ label, icon, iconActive, active, onPress, accessibilityLab
       >
         {label}
       </Text>
-    </Pressable>
+    </Pressable></Link>
   );
 }
 
@@ -106,7 +101,7 @@ export function Sidebar() {
             iconActive={item.iconActive}
             active={inTabs && segments[1] === item.name}
             accessibilityLabel={item.label}
-            onPress={() => router.navigate(item.href as Parameters<typeof router.navigate>[0])}
+            href={item.href}
           />
         ))}
       </View>
@@ -115,11 +110,11 @@ export function Sidebar() {
         <Icon name="shield-checkmark-outline" size={18} color={colors.brandLight}/>
         <Text style={[typography.footnote,{color:colors.textSecondary,flex:1}]}>Review here. Take action in GitHub.</Text>
       </View>
-      <Pressable onPress={()=>router.navigate('/(tabs)/settings')} accessibilityRole="link" accessibilityLabel="Account settings" style={[styles.account,{borderTopColor:colors.border}]}>
+      <Link href="/(tabs)/settings" asChild><Pressable accessibilityRole="link" accessibilityLabel="Account settings" style={StyleSheet.flatten([styles.account,{borderTopColor:colors.border}])}>
         <View style={[styles.avatar,{backgroundColor:colors.brandSubtle}]}><Icon name="person-outline" size={20} color={colors.brandLight}/></View>
         <View style={{flex:1,minWidth:0}}><Text style={[typography.subhead,{color:colors.text}]} numberOfLines={1}>{user?.name || user?.login || 'Your account'}</Text><Text style={[typography.caption,{color:colors.textSecondary}]}>{isDemo?'Demo workspace':'Personal workspace'}</Text></View>
         <Icon name="chevron-forward" size={16} color={colors.textMuted}/>
-      </Pressable>
+      </Pressable></Link>
     </View>
   );
 }

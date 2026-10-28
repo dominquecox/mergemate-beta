@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { Switch } from "react-native";
+import {AccessibleSwitch as Switch} from "./AccessibleSwitch";
 import { api } from "../api";
 import { toUserMessage } from "../api/errors";
 import { useAuth } from "../context/AuthContext";

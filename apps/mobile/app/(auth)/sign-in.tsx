@@ -1,3 +1,4 @@
+import {useScreenHeading} from "../../src/hooks/useScreenHeading";
 import React, { useState } from "react";
 import { View, Image, TouchableOpacity, StyleSheet, Platform, ScrollView } from "react-native";
 import { Text } from "../../src/components/Text";
@@ -13,6 +14,7 @@ import { Icon } from "../../src/components/Icon";
 
 export default function SignInScreen() {
   const router = useRouter();
+  const heading=useScreenHeading();
   const { signInWithGithub, startDemo, isLoading, error, clearError } = useAuth();
   const { colors, typography, spacing, radius, isDark } = useTheme();
   const [offlineState, setOfflineState] = useState(false);
@@ -52,6 +54,7 @@ export default function SignInScreen() {
         />
         <Text
           style={[typography.title2, { color: colors.text, marginTop: spacing.base, textAlign: "center" }]}
+          ref={heading}
           accessibilityRole="header"
         >
           Connect your GitHub

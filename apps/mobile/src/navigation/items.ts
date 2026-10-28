@@ -4,7 +4,7 @@ export interface NavItem {
   /** Tab screen name, also the last route segment. */
   name: "inbox" | "triage" | "notifications" | "settings";
   label: string;
-  href: string;
+  href: "/(tabs)/inbox" | "/(tabs)/triage" | "/(tabs)/notifications" | "/(tabs)/settings";
   icon: IconName;
   iconActive: IconName;
   /** Label announced for the bottom tab. */
