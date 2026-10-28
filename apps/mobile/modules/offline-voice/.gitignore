@@ -1,0 +1,5 @@
+# This local module owns Android source; the repository-wide generated Android ignore does not apply.
+!android/
+android/build/
+android/.gradle/
+android/.cxx/

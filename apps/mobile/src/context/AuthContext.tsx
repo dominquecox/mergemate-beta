@@ -1,3 +1,4 @@
+import {cancelReadout} from "../readout/active";
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from "react";
 import { Linking, Platform } from "react-native";
 import { User, Session } from "../types";
@@ -107,6 +108,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     api.setUnauthorizedHandler(() => {
       if (!signedInRef.current) return;
+      cancelReadout();
       setUser(null);
       setSession(null);
       setIsDemo(false);
@@ -193,6 +195,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const signOut = async () => {
+    cancelReadout();
     setIsLoading(true);
     try {
       if (!isWeb && !isDemo && !api.isMock) await unregisterPush(api).catch(() => undefined);
@@ -207,6 +210,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const deleteAccount = async () => {
+    cancelReadout();
     setIsLoading(true);
     try {
       // Throws when the API refuses, so the person is told and nothing is cleared.

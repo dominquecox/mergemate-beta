@@ -1,3 +1,5 @@
+import {ReadoutControls} from "../../../../src/components/ReadoutControls";
+import {narrationSentences} from "../../../../src/readout/text";
 import { Avatar } from "../../../../src/components/Avatar";
 import { relativeTime } from "../../../../src/format/activity";
 import { SummarySection } from "../../../../src/components/SummarySection";
@@ -203,6 +205,8 @@ export default function PrDetailScreen() {
       ) : (
         <>
           <ScrollView contentContainerStyle={{ padding:isDesktop?24:spacing.base, paddingBottom:120 }}>
+            <ReadoutControls label="Pull request summary" sentences={narrationSentences([...(detail.summary?[detail.summary.whatChanged,detail.summary.whyItMatters,...detail.summary.suggestedFocus]:[]),...(detail.risk?[`Risk level: ${detail.risk.level}.`,...detail.risk.reasons]:[])])}/>
+
             {/* PR Header */}
             <View style={[styles.headerCard, { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.lg }]}>
               <View style={styles.topRow}>

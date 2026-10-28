@@ -416,7 +416,7 @@ export class HttpApiClient implements ApiClient {
   }
 
   private readonly featureFlags=new FeatureFlagCache(()=>this.request({path:"/flags",auth:false,credentials:"omit",schema:z.unknown()}));
-  getFeatureFlags(){return this.featureFlags.get();}
+  getFeatureFlags(refresh=false){if(refresh)this.featureFlags.clear();return this.featureFlags.get();}
 
   async getMe(): Promise<User> {
     return this.request({ path: "/me", schema: UserSchema, probe: true });

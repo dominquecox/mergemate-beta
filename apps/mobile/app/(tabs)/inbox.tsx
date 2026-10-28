@@ -1,4 +1,6 @@
 import {useFeatureFlags} from "../../src/hooks/useFeatureFlags";
+import {ReadoutControls} from "../../src/components/ReadoutControls";
+import {inboxNarration} from "../../src/readout/text";
 import React, { useState, useRef } from "react";
 import { View, FlatList, RefreshControl, TouchableOpacity, Pressable, StyleSheet } from "react-native";
 import { androidRipple } from "../../src/platform/android";
@@ -98,6 +100,8 @@ export default function InboxScreen() {
           </View>
         }
       />
+
+      <ReadoutControls label="Inbox overview" sentences={inboxNarration(items)}/>
 
       {/* Segmented Filter Control */}
       <View style={[styles.filterBar, { borderBottomColor: colors.border }, { marginHorizontal:16, borderBottomWidth:0, paddingHorizontal:4, paddingVertical:4, backgroundColor:colors.surfaceElevated, borderRadius:radius.lg }]} accessibilityRole="tablist">

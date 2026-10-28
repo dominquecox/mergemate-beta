@@ -28,7 +28,7 @@ export interface ApiClient {
   clearCache(): void;
   getNotificationPage(filter?: NotificationFilter, cursor?: string | null, search?: string): Promise<{items: Notification[]; nextCursor: string | null}>;
   getRepoPage(cursor?: string | null): Promise<{items: Repo[]; nextCursor: string | null}>;
-  getFeatureFlags(): Promise<FeatureFlags>;
+  getFeatureFlags(refresh?:boolean): Promise<FeatureFlags>;
   health(): Promise<{ ok: boolean; version: string }>;
 
   // Auth. The real client keeps the session itself: the cookie plus an in-memory CSRF token on web, a

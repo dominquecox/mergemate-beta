@@ -1,4 +1,5 @@
 import {useReducedMotion} from "../src/hooks/useReducedMotion";
+import {ReadoutProvider} from "../src/readout/ReadoutContext";
 import React, { useEffect, useRef } from "react";
 import { Stack, useRouter, useSegments } from "expo-router";
 import { StatusBar } from "expo-status-bar";
@@ -155,7 +156,7 @@ export default function RootLayout() {
       <ThemeProvider>
         <AuthProvider>
           <ConsentProvider>
-            <AppContent />
+            <ReadoutProvider><AppContent /></ReadoutProvider>
           </ConsentProvider>
         </AuthProvider>
       </ThemeProvider>
