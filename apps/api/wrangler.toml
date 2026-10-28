@@ -114,7 +114,7 @@ MODEL_BASE_URL = "https://api.meta.ai/v1"
 AI_GLOBAL_DAILY_ACTIONS = "300"
 # Browser notifications (Web Push): the public half of this environment's VAPID pair (not a secret).
 # Set to the value printed by apps/api/scripts/vapid-keys.mjs (one pair per environment). Empty keeps the feature off.
-VAPID_PUBLIC_KEY = ""
+VAPID_PUBLIC_KEY = "BP6nLDiG2ZP3bOgQummV5IPezPFXGMgsDGOuPY4tBcIvgQNgrJmbTLEmWb4eCV654ndANo2-SZ4YzFt6ni_DZfk"
 # Non-secret per-env salt for hashing telemetry user indexes. Distinct per environment
 # so indexes cannot be joined across datasets.
 TELEMETRY_SALT = "submission-dev-example-salt-configure-your-own"
