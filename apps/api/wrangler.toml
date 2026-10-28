@@ -181,9 +181,9 @@ bucket_name = "mergemate-highlight-uploads-dev"
 binding = "IMAGES"
 
 # Production: api.mergemate.dev. Nothing in this environment points at a local or dev resource. The owner creates
-# each resource once (DEPLOY.md, "Production") and pastes back only the ids marked OWNER-PASTE:
-#   D1 mergemate-db                       id: OWNER-PASTE
-#   KV namespace bound as POSTS           id: OWNER-PASTE
+# each resource once (DEPLOY.md, "Production"); the database and posts namespace were verified for MM-058:
+#   D1 mergemate-db                       id verified in this production binding
+#   KV namespace bound as POSTS           id verified in this production binding
 #   Queues mergemate-github-events, mergemate-github-events-dlq, mergemate-stripe-events, mergemate-stripe-events-dlq
 #   R2 bucket mergemate-highlight-uploads (private, 1-day expiry rule)
 #   Analytics Engine datasets mergemate_events and mergemate_ai_metrics (created on first write; nothing to create)
@@ -193,7 +193,7 @@ routes = [{ pattern = "api.mergemate.dev", custom_domain = true }]
 workers_dev = false
 
 # GITHUB_APP_CLIENT_ID and GITHUB_APP_SLUG are public values of the production GitHub App (not secrets).
-# OWNER-PASTE both once that app exists; GitHub sign-in cannot work until the placeholders are replaced.
+# Dedicated production GitHub App identity supplied by the owner; dev uses its own App.
 # WEB_ORIGIN is the web app and the only allowed browser origin; SITE_ORIGIN is the public site (post and RSS links).
 # Both must match the fixed allowlists in src/config.ts, and a test pins them. STRIPE_MODE stays "disabled".
 [env.production.vars]
@@ -201,8 +201,8 @@ APP_ENV = "production"
 STRIPE_MODE = "disabled"
 WEB_ORIGIN = "https://app.mergemate.dev"
 SITE_ORIGIN = "https://mergemate.dev"
-GITHUB_APP_CLIENT_ID = "OWNER-PASTE-PRODUCTION-APP-CLIENT-ID"
-GITHUB_APP_SLUG = "OWNER-PASTE-PRODUCTION-APP-SLUG"
+GITHUB_APP_CLIENT_ID = "Iv1.submission-production-example"
+GITHUB_APP_SLUG = "submission-production-example"
 MODEL_ROUTE_SUMMARY = "meta:muse-spark-1.2"
 # Event profile: every route on Meta's Muse models. Cost profile (after judging): risk and triage on
 # workers-ai:@cf/meta/llama-3.3-70b-instruct-fp8-fast, highlight on workers-ai:@cf/meta/llama-4-scout-17b-16e-instruct.
@@ -259,14 +259,14 @@ dataset = "mergemate_ai_metrics"
 [[env.production.d1_databases]]
 binding = "DB"
 database_name = "mergemate-db"
-# OWNER-PASTE: the id printed by `wrangler d1 create mergemate-db` (DEPLOY.md, Production, step 2).
-database_id = "00000000-0000-0000-0000-000000000000"
+# Existing production database, verified by resource name and id (MM-058).
+database_id = "22222222-2222-2222-2222-222222222222"
 migrations_dir = "migrations"
 
 [[env.production.kv_namespaces]]
 binding = "POSTS"
-# OWNER-PASTE: the id printed by `wrangler kv namespace create` (DEPLOY.md, Production, step 3).
-id = "00000000000000000000000000000000"
+# Existing production posts namespace, verified by id (MM-058).
+id = "22222222222222222222222222222222"
 
 [env.production.ai]
 binding = "AI"
