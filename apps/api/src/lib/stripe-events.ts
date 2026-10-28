@@ -58,8 +58,11 @@ export async function processStripeEvent(env: Env,deps: Deps,eventId:string) {
 }
 export async function consumeStripeEvents(batch: MessageBatch<{eventId:string}>,env:Env,deps:Deps) {
   for(const message of batch.messages){
-    if(typeof message.body?.eventId!=='string' || message.body.eventId.length>255){message.ack();continue;}
+    if(typeof message.body?.eventId!=='string' || !/^evt_[A-Za-z0-9_]{1,251}$/.test(message.body.eventId)){
+      await requireBinding(env,"DB").prepare("INSERT INTO webhook_dead_letters(source,event,failed_at) VALUES('stripe','invalid_message',?)").bind(deps.now().toISOString()).run();
+      message.ack();continue;
+    }
     try{await processStripeEvent(env,deps,message.body.eventId);message.ack();}
-    catch{await requireBinding(env,"DB").prepare('UPDATE stripe_events SET attempts=attempts+1 WHERE event_id=?').bind(message.body.eventId).run();message.retry({delaySeconds:10});}
+    catch{await requireBinding(env,"DB").prepare('UPDATE stripe_events SET attempts=attempts+1 WHERE event_id=?').bind(message.body.eventId).run();message.retry({delaySeconds:Math.min(300,10*2**Math.min(5,Math.max(0,(message.attempts??1)-1)))});}
   }
 }

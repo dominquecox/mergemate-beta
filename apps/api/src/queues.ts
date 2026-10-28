@@ -14,6 +14,9 @@ export const handleQueue = async (batch: MessageBatch<unknown>, env: Env, now = 
   if (/^mergemate-github-events(-[a-z]+)?$/.test(name)) {
     return consumeGitHubEvents(batch as MessageBatch<GitHubEventMessage>, env, now, deps);
   }
+  if (/^mergemate-stripe-events(-[a-z]+)?-dlq$/.test(name)) {
+    return recordDeadLetters(batch as MessageBatch<{ eventId?: string }>, env, "stripe", now);
+  }
   if (/^mergemate-stripe-events(-[a-z]+)?$/.test(name)) {
     return consumeStripeEvents(batch as MessageBatch<{ eventId: string }>, env, {
       fetch: (input, init) => fetch(input, init),

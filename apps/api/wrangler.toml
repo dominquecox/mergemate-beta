@@ -287,6 +287,11 @@ max_batch_size = 10
 max_retries = 5
 dead_letter_queue = "mergemate-stripe-events-local-dlq"
 
+[[queues.consumers]]
+queue = "mergemate-stripe-events-local-dlq"
+max_batch_size = 10
+max_retries = 5
+
 [[env.dev.queues.producers]]
 binding = "STRIPE_EVENTS"
 queue = "mergemate-stripe-events-dev"
@@ -296,6 +301,11 @@ max_batch_size = 10
 max_retries = 5
 dead_letter_queue = "mergemate-stripe-events-dev-dlq"
 
+[[env.dev.queues.consumers]]
+queue = "mergemate-stripe-events-dev-dlq"
+max_batch_size = 10
+max_retries = 5
+
 [[env.production.queues.producers]]
 binding = "STRIPE_EVENTS"
 queue = "mergemate-stripe-events"
@@ -304,6 +314,11 @@ queue = "mergemate-stripe-events"
 max_batch_size = 10
 max_retries = 5
 dead_letter_queue = "mergemate-stripe-events-dlq"
+
+[[env.production.queues.consumers]]
+queue = "mergemate-stripe-events-dlq"
+max_batch_size = 10
+max_retries = 5
 
 [triggers]
 crons = ["*/15 * * * *"]

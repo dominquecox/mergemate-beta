@@ -320,3 +320,64 @@ describe("GET /v1/activity", () => {
     expect(ctx.db.rows("SELECT * FROM user_access_checks WHERE user_id = ?", userId)).toHaveLength(0);
   });
 });
+
+describe("webhook recovery boundaries", () => {
+  it("deduplicates simultaneous delivery attempts and applies retries idempotently", async () => {
+    const ctx = testContext(); const delivery = crypto.randomUUID();
+    const responses = await Promise.all(Array.from({ length: 8 }, () => deliver(ctx, "pull_request", prPayload(7), { delivery })));
+    expect(responses.every(r => [200, 202].includes(r.status))).toBe(true);
+    expect(ctx.db.rows("SELECT * FROM github_deliveries")).toHaveLength(1);
+    expect(ctx.queued.length).toBeGreaterThanOrEqual(1);
+    const message = ctx.queued[0]; await drain(ctx); ctx.queued.push(message); await drain(ctx);
+    expect(ctx.db.rows("SELECT number FROM pr_activity")).toEqual([{ number: 7 }]);
+  });
+  it("redelivers after queue failure without losing a durable delivery", async () => {
+    const ctx = testContext(); let down = true;
+    const queue = ctx.env.GITHUB_EVENTS;
+    if (!queue) throw new Error("Missing fixture queue");
+    const send = queue.send.bind(queue);
+    queue.send = async body => { if (down) throw new Error("offline"); return send(body); };
+    const delivery = crypto.randomUUID();
+    expect((await deliver(ctx, "pull_request", prPayload(7), { delivery })).status).toBe(502);
+    down = false;
+    expect((await deliver(ctx, "pull_request", prPayload(7), { delivery })).status).toBe(202);
+    expect(ctx.queued).toHaveLength(1);
+  });
+  it("records Stripe dead-letter IDs without retaining payloads", async () => {
+    for (const queue of ["mergemate-stripe-events-local-dlq", "mergemate-stripe-events-dev-dlq", "mergemate-stripe-events-dlq"]) {
+      const ctx = testContext(); const ackAll = vi.fn();
+      await handleQueue({ queue, messages: [{body: {eventId: "evt_failed", raw: "private payload"}}], ackAll } as unknown as MessageBatch<unknown>, ctx.env, ctx.time.now());
+      expect(ackAll).toHaveBeenCalledOnce();
+      expect(ctx.db.rows("SELECT source,delivery_id,event FROM webhook_dead_letters")).toEqual([{source:"stripe",delivery_id:"evt_failed",event:null}]);
+      expect(JSON.stringify(ctx.db.rows("SELECT * FROM webhook_dead_letters"))).not.toContain("private payload");
+    }
+  });
+});
+it("repairs a crash after the delivery insert and before queue acknowledgement", async () => {
+  const ctx = testContext(); const delivery = crypto.randomUUID();
+  await ctx.db.prepare("INSERT INTO github_deliveries(delivery_id,event,received_at,queued) VALUES(?,?,?,0)").bind(delivery,"pull_request",ctx.time.now().toISOString()).run();
+  expect((await deliver(ctx,"pull_request",prPayload(9),{delivery})).status).toBe(202);
+  expect(ctx.queued).toHaveLength(1);
+  expect(ctx.db.rows("SELECT queued FROM github_deliveries")).toEqual([{queued:1}]);
+});
+it("retries malformed queue messages with bounded backoff instead of silently acknowledging", async () => {
+  const ctx = testContext(); const ack = vi.fn(); const retry = vi.fn();
+  await handleQueue({queue:"mergemate-github-events-dev",messages:[{body:{data:{kind:"unknown"}},attempts:100,ack,retry}]} as unknown as MessageBatch<unknown>,ctx.env,ctx.time.now());
+  expect(ack).not.toHaveBeenCalled(); expect(retry).toHaveBeenCalledWith({delaySeconds:300});
+});
+it("allows an operator to redeliver a GitHub event after durable dead-letter recording", async () => {
+  const ctx=testContext();const delivery=crypto.randomUUID();
+  await deliver(ctx,"pull_request",prPayload(5),{delivery});
+  await drain(ctx,"mergemate-github-events-local-dlq");
+  expect(ctx.db.rows("SELECT * FROM github_deliveries")).toHaveLength(0);
+  expect(ctx.db.rows("SELECT delivery_id FROM webhook_dead_letters")).toEqual([{delivery_id:delivery}]);
+  expect((await deliver(ctx,"pull_request",prPayload(5),{delivery})).status).toBe(202);
+  await drain(ctx);
+  expect(ctx.db.rows("SELECT number FROM pr_activity")).toEqual([{number:5}]);
+});
+it("records malformed Stripe messages before acknowledging them", async () => {
+  const ctx=testContext();const ack=vi.fn();
+  await handleQueue({queue:"mergemate-stripe-events-dev",messages:[{body:{eventId:""},ack}]} as unknown as MessageBatch<unknown>,ctx.env,ctx.time.now());
+  expect(ack).toHaveBeenCalledOnce();
+  expect(ctx.db.rows("SELECT source,event FROM webhook_dead_letters")).toEqual([{source:"stripe",event:"invalid_message"}]);
+});

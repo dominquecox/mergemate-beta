@@ -1,4 +1,5 @@
-import type { ActivityEvent } from "@mergemate/contracts";
+import { ActivityEvent } from "@mergemate/contracts";
+import { z } from "zod";
 import type { Deps, Env } from "../env";
 import { deliverGitHubPush } from "./github-push";
 import { timingSafeEqual } from "./crypto";
@@ -56,6 +57,18 @@ export interface GitHubEventMessage {
   receivedAt: string;
   data: WebhookData;
 }
+
+
+const reference = z.object({ id: z.string(), fullName: z.string() });
+const messageSchema = z.object({
+  deliveryId: z.string().min(1).max(64), event: z.string().max(255), receivedAt: z.iso.datetime(),
+  data: z.discriminatedUnion("kind", [
+    z.object({ kind: z.literal("installation"), action: z.string(), installationId: z.string(), account: z.object({ login: z.string(), type: z.string() }), repos: z.array(reference).max(1000) }),
+    z.object({ kind: z.literal("installation_repositories"), installationId: z.string(), added: z.array(reference).max(1000), removed: z.array(reference).max(1000) }),
+    z.object({ kind: z.literal("pr"), installationId: z.string().nullable(), repo: z.string(), numbers: z.array(z.number().int().positive()).max(100), headSha: z.string().nullable(), event: ActivityEvent }),
+    z.object({ kind: z.literal("status"), installationId: z.string().nullable(), repo: z.string(), sha: z.string() }),
+  ]),
+});
 
 type Json = Record<string, unknown>;
 
@@ -223,12 +236,13 @@ export const consumeGitHubEvents = async (batch: MessageBatch<GitHubEventMessage
   }
   for (const msg of batch.messages) {
     try {
-      await applyGitHubEvent(db, msg.body);
+      const message = messageSchema.parse(msg.body);
+      await applyGitHubEvent(db, message);
       // Event writes can retry; push delivery is best effort and independently claimed.
       try { await deliverGitHubPush(env, deps, msg.body); } catch { /* Never retry an applied event for push failures. */ }
       msg.ack();
     } catch {
-      msg.retry();
+      msg.retry({ delaySeconds: Math.min(300, 10 * 2 ** Math.min(5, Math.max(0, (msg.attempts ?? 1) - 1))) });
     }
   }
   await db
@@ -239,7 +253,7 @@ export const consumeGitHubEvents = async (batch: MessageBatch<GitHubEventMessage
 
 /** Dead-letter consumer: keeps a record (ids only, no payload) of messages that exhausted retries. */
 export const recordDeadLetters = async (
-  batch: MessageBatch<Partial<GitHubEventMessage>>,
+  batch: MessageBatch<{ deliveryId?: string; event?: string; eventId?: string }>,
   env: Env,
   source: string,
   now: Date,
@@ -249,12 +263,15 @@ export const recordDeadLetters = async (
     batch.retryAll();
     return;
   }
-  await db.batch(
-    batch.messages.map((m) =>
-      db
-        .prepare("INSERT INTO webhook_dead_letters (source, delivery_id, event, failed_at) VALUES (?, ?, ?, ?)")
-        .bind(source, m.body?.deliveryId ?? null, m.body?.event ?? null, now.toISOString()),
-    ),
-  );
+  const safeId = (value: unknown) => typeof value === "string" && /^[A-Za-z0-9_.-]{1,255}$/.test(value) ? value : null;
+  await db.batch(batch.messages.flatMap((m) => {
+    const id = safeId(source === "stripe" ? m.body?.eventId : m.body?.deliveryId);
+    const record = db.prepare("INSERT INTO webhook_dead_letters (source, delivery_id, event, failed_at) VALUES (?, ?, ?, ?)")
+      .bind(source, id, safeId(m.body?.event), now.toISOString());
+    // GitHub's explicit operator redelivery must be able to requeue an exhausted delivery.
+    return source === "github" && id
+      ? [record, db.prepare("DELETE FROM github_deliveries WHERE delivery_id=?").bind(id)]
+      : [record];
+  }));
   batch.ackAll();
 };
