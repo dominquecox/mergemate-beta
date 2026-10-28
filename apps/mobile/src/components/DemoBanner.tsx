@@ -49,6 +49,8 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
+    flexWrap: "wrap",
+    gap: 8,
     borderBottomWidth: 1,
     minHeight: 48,
     zIndex: 999,
@@ -57,6 +59,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
+    flexShrink: 1,
   },
   dot: {
     width: 8,
