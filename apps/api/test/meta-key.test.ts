@@ -112,14 +112,16 @@ describe('user-key AI routing and budgets',()=>{
     expect(transport.calls).toHaveLength(1);expect(transport.calls[0]?.apiKey).toBe(key());
     expect((await usage.check('global',1)).remaining).toBe(0);
     expect(ctx.db.rows<{used:number}>('SELECT used FROM ai_usage_daily WHERE scope=?','global')).toEqual([{used:1}]);
-    await expect(analyze(deps,record(web.userId),ref,ctx.env)).rejects.toMatchObject({code:'rate_limited'});
+    // Over the user cap: summary is refused; risk falls back to its rule-based result. Neither calls the model.
+    if(task==='summary')await expect(analyze(deps,record(web.userId),ref,ctx.env)).rejects.toMatchObject({code:'rate_limited'});
+    else expect((await analyze(deps,record(web.userId),{...ref,number:ref.number+1},ctx.env)).body).toMatchObject({assessedBy:'rules'});
     expect(transport.calls).toHaveLength(1);
   });
   it('does not bypass the global budget for Workers AI, or for users without a key',async()=>{
     const {ctx,web,put}=await fixture();await put();await createDbConsentStore(ctx.env.DB).write(web.userId,true);
     await createDbUsageStore(ctx.env.DB).reserve('global',1);
     const ai=fakeAi();const transport=mockTransport();const deps={db:ctx.env.DB,transport,ai,prSource:source,limits:{free:30,pro:200,global:1}};
-    await expect(assessPrRisk(deps,record(web.userId),ref,ctx.env)).rejects.toMatchObject({code:'rate_limited'});
+    expect((await assessPrRisk(deps,record(web.userId),ref,ctx.env)).body).toMatchObject({assessedBy:'rules'});
     expect(ai.runs).toHaveLength(0);
     await ctx.env.DB.prepare('DELETE FROM user_meta_keys').run();
     await expect(summarizePr(deps,record(web.userId),ref,ctx.env)).rejects.toMatchObject({code:'rate_limited'});

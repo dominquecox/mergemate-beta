@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import type { SessionRecord } from "../src/lib/sessions";
-import { ApiError } from "../src/errors";
 import type { Env } from "../src/env";
 import { createDbConsentStore } from "../src/routes/consent";
 import { assessPrRisk, cacheKey, storesFor, summarizePr } from "../src/routes/ai-engine";
@@ -56,15 +55,15 @@ const setup = async (overrides: Partial<AiDeps> = {}): Promise<AiDeps> => {
 
 const used = async (deps: AiDeps) => (await storesFor(deps.db).usage.check("u1", 30)).remaining;
 
-const apiError = async (run: () => Promise<unknown>): Promise<ApiError> => {
-  try {
-    await run();
-  } catch (error) {
-    if (error instanceof ApiError) return error;
-    throw error;
-  }
-  throw new Error("expected an ApiError");
+const UNAVAILABLE = "AI review is unavailable right now. Rule-based checks only.";
+/** Risk never fails on a model problem: it answers with the rule-based result, marked as such. */
+const rulesOnly = async (run: () => Promise<{ body: unknown }>): Promise<{ level: string; reasons: string[]; assessedBy?: string }> => {
+  const { body } = await run();
+  const risk = body as { level: string; reasons: string[]; assessedBy?: string };
+  expect(risk.assessedBy).toBe("rules");
+  return risk;
 };
+
 
 describe("model router in the AI pipeline", () => {
   it("sends summary to meta and risk to workers-ai by default", async () => {
@@ -125,8 +124,8 @@ describe("model router in the AI pipeline", () => {
       { ...validModelEnv(), MODEL_ROUTE_RISK: "workers-ai:@cf/other/model" },
     ];
     for (const env of envs) {
-      const err = await apiError(() => assessPrRisk(deps, user, ref, env));
-      expect(err.code).toBe("misconfigured");
+      const err = await rulesOnly(() => assessPrRisk(deps, user, ref, env));
+      expect(err.reasons).toContain(UNAVAILABLE);
     }
     expect(transport.calls).toHaveLength(0);
     expect(ai.runs).toHaveLength(0);
@@ -135,8 +134,8 @@ describe("model router in the AI pipeline", () => {
 
   it("fails closed when a workers-ai route has no AI binding", async () => {
     const deps = await setup();
-    const err = await apiError(() => assessPrRisk(deps, user, ref, validModelEnv()));
-    expect(err.code).toBe("misconfigured");
+    const err = await rulesOnly(() => assessPrRisk(deps, user, ref, validModelEnv()));
+    expect(err.reasons).toContain(UNAVAILABLE);
     expect(await used(deps)).toBe(30);
   });
 
@@ -146,10 +145,10 @@ describe("model router in the AI pipeline", () => {
     ["no response", () => Promise.resolve({})],
   ])("maps %s to upstream_unavailable and releases the reservation", async (_name, reply) => {
     const deps = await setup({ ai: fakeAi(reply) });
-    const err = await apiError(() => assessPrRisk(deps, user, ref, validModelEnv()));
-    expect(err.code).toBe("upstream_unavailable");
-    expect(err.message).not.toContain("upstream detail");
-    expect(err.message).not.toContain("JSON Mode");
+    const err = await rulesOnly(() => assessPrRisk(deps, user, ref, validModelEnv()));
+    expect(err.reasons).toContain(UNAVAILABLE);
+    expect(JSON.stringify(err)).not.toContain("upstream detail");
+    expect(JSON.stringify(err)).not.toContain("JSON Mode");
     expect(await used(deps)).toBe(30);
     expect((await storesFor(deps.db).usage.check("global", 100)).remaining).toBe(100);
   });
@@ -160,9 +159,9 @@ describe("model router in the AI pipeline", () => {
     ["an object that fails the schema", { level: "low" }],
   ])("discards %s, caches nothing and releases the reservation", async (_name, response) => {
     const deps = await setup({ ai: fakeAi(async () => ({ response })) });
-    const err = await apiError(() => assessPrRisk(deps, user, ref, validModelEnv()));
-    expect(err.code).toBe("upstream_unavailable");
-    expect(err.message).not.toContain("critical");
+    const err = await rulesOnly(() => assessPrRisk(deps, user, ref, validModelEnv()));
+    expect(err.reasons).toContain(UNAVAILABLE);
+    expect(JSON.stringify(err)).not.toContain("critical");
     expect(await used(deps)).toBe(30);
     expect(await storesFor(deps.db).cache.get(cacheKey("u1", "o/r#1", "abc", "risk"))).toBeUndefined();
   });
@@ -235,8 +234,8 @@ describe("Muse Spark Open on Workers AI", () => {
   it("treats an empty Chat Completions answer as a failed call", async () => {
     const ai = fakeAi(async () => ({ choices: [{ message: { content: null } }] }));
     const deps = await setup({ ai });
-    const error = await apiError(() => assessPrRisk(deps, user, ref, openEnv()));
-    expect(error.code).toBe("upstream_unavailable");
+    const error = await rulesOnly(() => assessPrRisk(deps, user, ref, openEnv()));
+    expect(error.reasons).toContain(UNAVAILABLE);
   });
 });
 
@@ -273,7 +272,7 @@ describe("AI metering", () => {
     const env = { ...validModelEnv(), AI_METRICS: metrics };
 
     const invalid = await setup({ ai: fakeAi(async () => ({ response: "not json", usage: { prompt_tokens: 9, completion_tokens: 2 } })) });
-    await apiError(() => assessPrRisk(invalid, user, ref, env));
+    await rulesOnly(() => assessPrRisk(invalid, user, ref, env));
     expect(metrics.points).toHaveLength(1);
     expect(metrics.points[0]?.blobs).toEqual(["risk", "workers-ai", LLAMA, "invalid_output"]);
     expect(metrics.points[0]?.doubles?.slice(0, 2)).toEqual([9, 2]);
@@ -283,7 +282,7 @@ describe("AI metering", () => {
         throw new Error("JSON Mode couldn't be met");
       }),
     });
-    await apiError(() => assessPrRisk(failing, user, ref, env));
+    await rulesOnly(() => assessPrRisk(failing, user, ref, env));
     expect(metrics.points).toHaveLength(2);
     expect(metrics.points[1]?.blobs).toEqual(["risk", "workers-ai", LLAMA, "upstream_error"]);
     expect(metrics.points[1]?.doubles?.slice(0, 2)).toEqual([0, 0]);
@@ -296,7 +295,7 @@ describe("AI metering", () => {
     await assessPrRisk(deps, user, ref, env);
     await assessPrRisk(deps, user, ref, env);
     expect(metrics.points).toHaveLength(1);
-    await apiError(() => assessPrRisk(deps, user, { ...ref, number: 2 }, { ...env, MODEL_ROUTE_RISK: "" }));
+    await rulesOnly(() => assessPrRisk(deps, user, { ...ref, number: 2 }, { ...env, MODEL_ROUTE_RISK: "" }));
     expect(metrics.points).toHaveLength(1);
   });
 
@@ -306,8 +305,8 @@ describe("AI metering", () => {
     const result = await assessPrRisk(deps, user, ref, env);
     expect(result.body).toMatchObject({ level: "low" });
     const failing = await setup({ ai: fakeAi(async () => Promise.reject(new Error("x"))) });
-    const err = await apiError(() => assessPrRisk(failing, user, ref, env));
-    expect(err.code).toBe("upstream_unavailable");
+    const err = await rulesOnly(() => assessPrRisk(failing, user, ref, env));
+    expect(err.reasons).toContain(UNAVAILABLE);
   });
 
   it("works without an AI_METRICS binding", async () => {

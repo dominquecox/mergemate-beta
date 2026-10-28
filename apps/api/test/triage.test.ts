@@ -186,7 +186,7 @@ describe("real triage queue", () => {
     stubPr(ctx, "me/tool", 4, { draft: true });
     const item = laneOf(await queue(ctx, headers), "acme/api#1");
     expect(item?.lane).toBe("needs_you");
-    expect(item?.reasons).toContain("Authored with a coding agent.");
+    expect(item?.reasons).toContain("Opened by a bot or app account.");
   });
 
   it("leaves out pull requests the user cannot access, and keeps the rest", async () => {

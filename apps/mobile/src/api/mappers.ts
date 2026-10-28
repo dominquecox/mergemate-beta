@@ -165,3 +165,12 @@ export function mapHighlight(result: ContractHighlightResult): HighlightResult {
     })),
   };
 }
+
+/** "How this was assessed", matching what actually ran for this answer. */
+export function riskAssessmentText(assessedBy: PrRisk["assessedBy"]): string {
+  const rules =
+    "Fixed rules check for possible secrets, failing checks, sensitive areas (auth, payments, migrations), missing tests and very large diffs.";
+  const guidance = "This is review guidance, not a security guarantee.";
+  if (assessedBy === "rules") return `${rules} Only these rules ran this time: the AI review was unavailable. ${guidance}`;
+  return `${rules} Meta AI then reads the change and adds its own reasons. AI can raise the level, never lower what the rules found. ${guidance}`;
+}

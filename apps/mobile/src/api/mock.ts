@@ -241,6 +241,9 @@ export class MockApiClient implements ApiClient {
           "Modifies core auth middleware",
         ],
         coverage: { analyzedFiles: 4, skippedFiles: 0, truncatedFiles: 0 },
+        secretFindings: [{ file: "config/stripe.ts", line: 12, rule: "credential-assignment" }],
+        quality: { needsCloserLook: true, reasons: ["No tests for the changed logic."] },
+        assessedBy: "rules_and_ai",
       },
       secretWarning: {
         file: "config/stripe.ts",

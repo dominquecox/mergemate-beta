@@ -16,6 +16,7 @@ import { PrDetail } from "../../../../src/types";
 import { Header } from "../../../../src/components/Header";
 import { StatusPill } from "../../../../src/components/StatusPill";
 import { RiskBadge } from "../../../../src/components/RiskBadge";
+import { riskAssessmentText } from "../../../../src/api/mappers";
 import { AIBlock } from "../../../../src/components/AIBlock";
 import { Button } from "../../../../src/components/Button";
 import { EmptyState } from "../../../../src/components/EmptyState";
@@ -242,6 +243,12 @@ export default function PrDetailScreen() {
                     {detail.secretWarning.maskedSnippet}
                   </Text>
                 </View>
+                {(detail.risk?.secretFindings?.length ?? 0) > 1 && (
+                  <Text style={[typography.footnote, { color: colors.text, marginTop: 6 }]} selectable>
+                    Also at {detail.risk!.secretFindings!.slice(1, 6).map((finding) => `${finding.file}:${finding.line}`).join(", ")}
+                    {detail.risk!.secretFindings!.length > 6 ? ` and ${detail.risk!.secretFindings!.length - 6} more` : ""}.
+                  </Text>
+                )}
               </View>
             )}
 
@@ -296,7 +303,7 @@ export default function PrDetailScreen() {
                       <Icon
                         name="ellipse"
                         size={8}
-                        color={detail.risk!.level === "high" ? colors.riskHigh : colors.riskMedium}
+                        color={detail.risk!.level === "high" ? colors.riskHigh : detail.risk!.level === "medium" ? colors.riskMedium : colors.riskLow}
                         style={styles.reasonDot}
                       />
                       <Text style={[typography.body, { color: colors.text, flex: 1 }]}>{reason}</Text>
@@ -304,8 +311,15 @@ export default function PrDetailScreen() {
                   ))}
                 </View>
 
+                {detail.risk.quality?.needsCloserLook && (
+                  <View style={{marginTop:12}}>
+                    <Text style={[typography.subhead,{color:colors.text,fontWeight:"600"}]} accessibilityRole="header">Needs a closer look</Text>
+                    {detail.risk.quality.reasons.map((reason,idx)=><Text key={idx} style={[typography.footnote,{color:colors.textSecondary,marginTop:4}]}>{reason}</Text>)}
+                  </View>
+                )}
+
                 <TouchableOpacity accessibilityRole="button" accessibilityLabel="How this was assessed" accessibilityState={{expanded:assessmentOpen}} aria-expanded={assessmentOpen} onPress={()=>setAssessmentOpen(open=>!open)} style={{flexDirection:"row",alignItems:"center",gap:8,minHeight:44,padding:12,marginTop:12,backgroundColor:colors.surfaceElevated,borderRadius:12}}><Icon name="information-circle-outline" size={18} color={colors.brandLight}/><Text style={[typography.footnote,{color:colors.textSecondary,flex:1}]}>How this was assessed</Text><Icon name={assessmentOpen?'chevron-up':'chevron-down'} size={16} color={colors.textSecondary}/></TouchableOpacity>
-                {assessmentOpen && <Text style={[typography.footnote,{color:colors.textSecondary,padding:12}]}>Evaluated against sensitive file boundaries, migrations, authentication middleware, and secret patterns. This is review guidance, not a security guarantee.</Text>}
+                {assessmentOpen && <Text style={[typography.footnote,{color:colors.textSecondary,padding:12}]}>{riskAssessmentText(detail.risk.assessedBy)}</Text>}
               </View>
             )}
 

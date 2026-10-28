@@ -38,6 +38,8 @@ export const PrRisk = z.object({
   coverage: AnalysisCoverage,
   secretFindings: z.array(SecretFinding).optional(),
   quality: QualityCheck.optional(),
+  /** How the level was reached: fixed rules plus the AI model, or the rules alone when the model was unavailable. */
+  assessedBy: z.enum(["rules_and_ai", "rules"]).optional(),
 });
 export type PrRisk = z.infer<typeof PrRisk>;
 

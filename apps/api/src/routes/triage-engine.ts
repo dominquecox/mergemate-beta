@@ -20,6 +20,7 @@ import {
   buildPrPrompt,
   cacheKey,
   commonSignals,
+  isBotLogin,
   redactSecrets,
   runModelTask,
   scoreTriageLane,
@@ -89,7 +90,7 @@ const rulesLane = (item: Notification, data: PrData | null): RulesLane => {
       ? signals.qualityInput
       : // Details unavailable: only what the inbox itself shows.
         {
-          authorIsBot: item.author.endsWith("[bot]"),
+          authorIsBot: isBotLogin(item.author),
           coAuthoredByBot: false,
           hasTests: null,
           hasTodo: false,

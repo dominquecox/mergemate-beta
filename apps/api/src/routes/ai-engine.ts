@@ -31,7 +31,7 @@ import { getBillingPlan } from "../lib/stripe-billing";
 import type { ConsentStore } from "./consent";
 import { createDbConsentStore, requireConsent } from "./consent";
 import type { AiBinding, AppEnv, Deps, Env } from "../env";
-import { ApiError } from "../errors";
+import { ApiError, ConfigError } from "../errors";
 import { fetchPrDetail } from "./github";
 
 /** Storage key for per-user AI state. Demo sessions share one key but only read fixtures. */
@@ -221,15 +221,66 @@ export const redactSecrets = (text: string): { text: string; redacted: boolean }
   return { text: out, redacted };
 };
 
-/** Finds possible leaked secrets with file and line. Values are never included. */
+const CREDENTIAL_NAME = /(?:api[_-]?key|client[_-]?secret|passwd|password|secret|token)[A-Za-z0-9_-]*/i;
+// A quoted literal: `apiKey: "…"`, `password = '…'`. Template literals with `${` are code, not values.
+const QUOTED_CREDENTIAL = new RegExp(
+  `${CREDENTIAL_NAME.source}['"]?\\s*[:=]\\s*(['"\`])([^'"\`\\s]{12,})\\1`, "i",
+);
+// An unquoted value that ends the line, as in .env or YAML: `API_KEY=…`, `token: …`.
+const BARE_CREDENTIAL = new RegExp(
+  `${CREDENTIAL_NAME.source}['"]?\\s*[:=]\\s*([A-Za-z0-9_./+=-]{12,})\\s*(?:#.*)?$`, "i",
+);
+const PLACEHOLDER = /^(?:x+|\*+|<.*>|\$\{.*\}|.*(?:changeme|example|placeholder|dummy|your[_-]|redacted).*)$/i;
+// Words, identifiers and member chains without digits (`requireApiKey`, `config.apiKey`, `x-access-token`,
+// `authorization_code`) are names, not values. Real generated credentials almost always contain digits.
+const NAME_LIKE = /^[A-Za-z_$][A-Za-z_$.-]*$/;
+// URLs are endpoints; credentials embedded in a URL are caught by the connection-string rule.
+const URL_LIKE = /^[a-z][a-z0-9+.-]*:\/\//i;
+
+const credentialValue = (value: string | undefined): boolean =>
+  !!value && !value.includes("${") && !PLACEHOLDER.test(value) && !NAME_LIKE.test(value) && !URL_LIKE.test(value);
+
+/** True when a line assigns what looks like a real credential value to a credential-named key. */
+export const assignsCredential = (line: string): boolean =>
+  credentialValue(QUOTED_CREDENTIAL.exec(line)?.[2]) || credentialValue(BARE_CREDENTIAL.exec(line)?.[1]);
+
+/** Warning rules: the precise credential check replaces the broad redaction pattern. */
+const DETECT_RULES: { rule: string; test: (line: string) => boolean }[] = SECRET_RULES.map(({ rule, pattern }) =>
+  rule === "credential-assignment"
+    ? { rule, test: assignsCredential }
+    : { rule, test: (line: string) => { pattern.lastIndex = 0; return pattern.test(line); } },
+);
+
+const HUNK = /^@@ -\d+(?:,\d+)? \+(\d+)(?:,\d+)? @@/;
+
+/**
+ * Finds possible leaked secrets in the lines this PR adds, with the file's own line number. Values are never
+ * included. Removed and unchanged lines are not reported. A patch without hunk headers is read as new content.
+ */
 export const scanPatch = (file: string, patch: string): SecretFinding[] => {
   const findings: SecretFinding[] = [];
-  patch.split("\n").forEach((lineText, index) => {
-    for (const { rule, pattern } of SECRET_RULES) {
-      pattern.lastIndex = 0;
-      if (pattern.test(lineText)) findings.push({ file, line: index + 1, rule });
+  let next = 1;
+  let inHunk = false;
+  for (const raw of patch.split("\n")) {
+    const hunk = HUNK.exec(raw);
+    if (hunk) {
+      next = Number(hunk[1]);
+      inHunk = true;
+      continue;
     }
-  });
+    if (raw.startsWith("\\")) continue; // "\ No newline at end of file"
+    let text: string | null = raw;
+    if (inHunk) {
+      if (raw.startsWith("-")) continue;
+      text = raw.startsWith("+") ? raw.slice(1) : null;
+    }
+    const line = next;
+    next += 1;
+    if (text === null) continue;
+    for (const { rule, test } of DETECT_RULES) {
+      if (test(text)) findings.push({ file, line, rule });
+    }
+  }
   return findings;
 };
 
@@ -337,7 +388,14 @@ export const assessRiskSignals = (input: RiskSignalInput): { level: RiskLevel; r
   }
   if (input.hasTests === false) raise("medium", "No tests changed.");
   if (input.totalChanged > 1000) raise("medium", "Very large diff.");
-  if (reasons.length === 0) reasons.push("No risk signals: small change with tests and passing checks.");
+  if (reasons.length === 0) {
+    // Only claim what was seen: missing evidence is named, never reported as passing.
+    reasons.push(
+      input.checksFailing === null
+        ? "No rule-based risk signals. Checks have not reported a result yet."
+        : "No risk signals: small change with tests and passing checks.",
+    );
+  }
   return { level, reasons };
 };
 
@@ -356,7 +414,8 @@ export interface QualitySignalInput {
 /** Flags PRs that need a closer look, especially agent-authored ones. */
 export const assessQuality = (input: QualitySignalInput): { needsCloserLook: boolean; reasons: string[] } => {
   const reasons: string[] = [];
-  if (input.authorIsBot || input.coAuthoredByBot) reasons.push("Authored with a coding agent.");
+  if (input.authorIsBot) reasons.push("Opened by a bot or app account.");
+  if (input.coAuthoredByBot) reasons.push("Commits are co-authored by a coding agent.");
   if (input.hasTests === false) reasons.push("No tests for the changed logic.");
   if (input.hasTodo) reasons.push("Contains TODO or placeholder code.");
   if (input.checksFailing === true) reasons.push("Checks are failing.");
@@ -498,7 +557,20 @@ interface GhCommit {
 }
 
 const TEST_PATH = /(\b__tests__\b|\btests?\b|\bspec\b|\.test\.|\.spec\.)/i;
-const CO_AUTHOR_BOT = /co-authored-by:[^\n]*\[bot\]/i;
+// Files that hold logic. A PR that changes none (docs, images, config) has no tests to expect.
+const CODE_PATH = /\.(?:[cm]?[jt]sx?|py|rb|go|rs|java|kt|kts|swift|m|mm|c|cc|cpp|h|hpp|cs|php|scala|sql|sh|ex|exs|dart|vue|svelte)$/i;
+// Co-author trailers of known coding agents and bot accounts. Only these are attributed; nothing is guessed.
+const CO_AUTHOR_AGENT =
+  /^co-authored-by:[^\n]*(?:\[bot\]|<noreply@anthropic\.com>|<cursoragent@cursor\.com>|<[^>]*copilot[^>]*@users\.noreply\.github\.com>)/im;
+// GitHub's Copilot coding agent opens PRs as the "Copilot" account, without the [bot] suffix.
+export const isBotLogin = (login: string): boolean => login.endsWith("[bot]") || login === "Copilot";
+
+/** true: a check failed. false: every check finished and none failed. null: no checks, or some still running. */
+export const checksOutcome = (checks: { state: string }[]): boolean | null => {
+  if (checks.some((check) => check.state === "failure")) return true;
+  if (checks.length === 0 || checks.some((check) => check.state === "queued" || check.state === "in_progress")) return null;
+  return false;
+};
 
 /** Maps fetched PR detail onto the signals the AI pipeline needs. */
 export const toPrData = (detail: PrDetail, commits: GhCommit[]): PrData => ({
@@ -511,12 +583,14 @@ export const toPrData = (detail: PrDetail, commits: GhCommit[]): PrData => ({
     additions: file.additions,
     deletions: file.deletions,
   })),
-  authorIsBot: detail.author.endsWith("[bot]"),
+  authorIsBot: isBotLogin(detail.author),
   coAuthoredByBot: commits.some(
-    (commit) => (commit.author?.login ?? "").endsWith("[bot]") || CO_AUTHOR_BOT.test(commit.commit.message),
+    (commit) => isBotLogin(commit.author?.login ?? "") || CO_AUTHOR_AGENT.test(commit.commit.message),
   ),
-  hasTests: detail.files.some((file) => TEST_PATH.test(file.path)),
-  checksFailing: detail.checks.some((check) => check.state === "failure"),
+  hasTests: detail.files.some((file) => TEST_PATH.test(file.path))
+    ? true
+    : detail.files.some((file) => CODE_PATH.test(file.path)) ? false : null,
+  checksFailing: checksOutcome(detail.checks),
 });
 
 /**
@@ -567,6 +641,7 @@ export const FIXTURE_RISK = {
   coverage: { analyzedFiles: 1, skippedFiles: 0, truncatedFiles: 0 },
   secretFindings: [],
   quality: { needsCloserLook: false, reasons: [] as string[] },
+  assessedBy: "rules_and_ai",
 };
 
 export const FIXTURE_TRIAGE: TriageItem[] = [
@@ -795,7 +870,36 @@ export const summarizePr = async (
   return { body, limit, remaining: left };
 };
 
-/** Full risk pipeline: deterministic signals floor the model level, never the reverse. */
+/** Errors that end the AI part of a risk check without hiding the rule-based result: limits, model down, bad answer. */
+const RULES_FALLBACK = new Set(["rate_limited", "upstream_unavailable", "misconfigured"]);
+const isRulesFallback = (error: unknown): error is ApiError => error instanceof ApiError && RULES_FALLBACK.has(error.code);
+
+/** The rule-based part of a risk check. Needs no model, so it is always available once the PR is readable. */
+const ruleRisk = (data: PrData, coverage: AnalysisCoverage) => {
+  const signals = commonSignals(data);
+  const deterministic = assessRiskSignals({
+    files: signals.files,
+    totalChanged: signals.totalChanged,
+    secretFindings: signals.secretFindings,
+    hasTests: data.hasTests,
+    checksFailing: data.checksFailing,
+  });
+  const quality = assessQuality(signals.qualityInput);
+  return {
+    deterministic,
+    rest: {
+      coverage,
+      secretFindings: signals.secretFindings,
+      quality: { needsCloserLook: quality.needsCloserLook, reasons: quality.reasons },
+    },
+  };
+};
+
+/**
+ * Full risk pipeline: deterministic signals floor the model level, never the reverse. When the AI part cannot run
+ * (daily limit, model unavailable or an unusable answer) the rule-based result is returned on its own, marked as
+ * such and not cached, so a possible secret or failing check is never hidden by an AI outage.
+ */
 export const assessPrRisk = async (
   deps: AiDeps,
   session: SessionRecord,
@@ -807,54 +911,70 @@ export const assessPrRisk = async (
     throw new ApiError("forbidden", "AI summaries and risk are turned off in Settings.");
   }
   const stores = storesFor(deps.db);
-  const { limit, remaining, model, limits } = await gateAction(stores, deps.limits, session, { ...env, DB: deps.db }, "risk");
+  let gate: Awaited<ReturnType<typeof gateAction>> | undefined;
+  let data: PrData | null = null;
+  const rulesOnly = async (error: ApiError): Promise<AiRunResult> => {
+    if (error.code !== "rate_limited") {
+      // Same content-free detail the error handler would have logged; the client sees the rule-based result.
+      const detail = error instanceof ConfigError ? error.detail : error.logDetail;
+      console.error(JSON.stringify({ event: "risk_rules_only", code: error.code, ...(detail ? { detail } : {}) }));
+    }
+    data ??= await deps.prSource(session, ref);
+    if (!data) throw error;
+    const { coverage } = buildDiffContext(data);
+    const { deterministic, rest } = ruleRisk(data, coverage);
+    const why = error.code === "rate_limited"
+      ? "AI review is paused: the daily AI limit is reached. Rule-based checks only."
+      : "AI review is unavailable right now. Rule-based checks only.";
+    const body: PrRisk = { level: deterministic.level, reasons: [...deterministic.reasons, why], ...rest, assessedBy: "rules" };
+    return { body, limit: gate?.limit ?? 0, remaining: error.code === "rate_limited" ? 0 : (gate?.remaining ?? 0) };
+  };
+  try {
+    gate = await gateAction(stores, deps.limits, session, { ...env, DB: deps.db }, "risk");
+  } catch (error) {
+    if (isRulesFallback(error)) return rulesOnly(error);
+    throw error;
+  }
+  const { limit, model, limits } = gate;
 
-  const data = await deps.prSource(session, ref);
+  data = await deps.prSource(session, ref);
   if (!data) throw new ApiError("upstream_unavailable", "PR data is unavailable right now. Try again later.");
+  const prData = data;
   const refStr = prRefString(ref);
-  const key = cacheKey(userId, refStr, data.headSha, "risk");
+  const key = cacheKey(userId, refStr, prData.headSha, "risk");
   const hit = await stores.cache.get<PrRisk>(key);
-  if (hit) return { body: hit, limit, remaining };
-  const signals = commonSignals(data);
-  const provider = createModelProvider(model.env, "risk", deps);
-  // Each route gets only as much PR context as its model's window holds; coverage reports the rest.
-  const { context, coverage } = buildDiffContext(data, provider.config.maxInputChars);
-  const { text } = redactSecrets(context);
-  const { value: body, remaining: left } = await withReservation(stores, limits, userId, limit, async () => {
-    const answer = await runModelTask(
-      env,
-      provider,
-      "risk",
-      {
-        system: RISK_SYSTEM,
-        prompt: buildPrPrompt(text),
-        maxOutputTokens: RISK_MAX_TOKENS,
-        jsonSchema: RISK_JSON_SCHEMA,
-      },
-      ModelRisk,
-    );
-    const deterministic = assessRiskSignals({
-      files: signals.files,
-      totalChanged: signals.totalChanged,
-      secretFindings: signals.secretFindings,
-      hasTests: data.hasTests,
-      checksFailing: data.checksFailing,
+  if (hit) return { body: hit, limit, remaining: gate.remaining };
+  try {
+    const provider = createModelProvider(model.env, "risk", deps);
+    // Each route gets only as much PR context as its model's window holds; coverage reports the rest.
+    const { context, coverage } = buildDiffContext(prData, provider.config.maxInputChars);
+    const { text } = redactSecrets(context);
+    const { value: body, remaining: left } = await withReservation(stores, limits, userId, limit, async () => {
+      const answer = await runModelTask(
+        env,
+        provider,
+        "risk",
+        {
+          system: RISK_SYSTEM,
+          prompt: buildPrPrompt(text),
+          maxOutputTokens: RISK_MAX_TOKENS,
+          jsonSchema: RISK_JSON_SCHEMA,
+        },
+        ModelRisk,
+      );
+      const { deterministic, rest } = ruleRisk(prData, coverage);
+      const reasons = [...deterministic.reasons, ...answer.reasons].filter(
+        (reason, index, all) => all.indexOf(reason) === index,
+      );
+      const result: PrRisk = { level: maxLevel(deterministic.level, answer.level), reasons, ...rest, assessedBy: "rules_and_ai" };
+      await stores.cache.set(key, userId, result);
+      return result;
     });
-    const quality = assessQuality(signals.qualityInput);
-    const reasons = [...deterministic.reasons, ...answer.reasons].filter(
-      (reason, index, all) => all.indexOf(reason) === index,
-    );
-    const result: PrRisk = {
-      level: maxLevel(deterministic.level, answer.level),
-      reasons,
-      coverage,
-      secretFindings: signals.secretFindings,
-      quality: { needsCloserLook: quality.needsCloserLook, reasons: quality.reasons },
-    };
-    await stores.cache.set(key, userId, result);
-    return result;
-  });
-  return { body, limit, remaining: left };
+    return { body, limit, remaining: left };
+  } catch (error) {
+    if (isRulesFallback(error)) return rulesOnly(error);
+    throw error;
+  }
 };
 
 export const HIGHLIGHT_SYSTEM =

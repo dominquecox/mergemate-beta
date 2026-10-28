@@ -59,7 +59,9 @@ const stubModel = (ctx: ReturnType<typeof testContext>) => {
 };
 
 /** Assembled at runtime so the secret scan stays clean. Not real. */
-const leaked = () => `api_key = "${"k".repeat(20)}"`;
+// Realistic shape: generated credentials contain digits. Built from parts so no scanner sees a literal value.
+const LEAKED_VALUE = `k${"7".repeat(10)}${"q".repeat(9)}`;
+const leaked = () => `api_key = "${LEAKED_VALUE}"`;
 
 describe("AI flow with real GitHub data", () => {
   it("summarizes with the user token, redacts leaks and caches by head SHA", async () => {
@@ -89,7 +91,7 @@ describe("AI flow with real GitHub data", () => {
     const modelCalls = ctx.net.calls.filter((c) => c.url === "https://api.meta.ai/v1/responses");
     expect(modelCalls).toHaveLength(1);
     expect(modelCalls[0]?.body ?? "").toContain("[REDACTED]");
-    expect(modelCalls[0]?.body ?? "").not.toContain("k".repeat(20));
+    expect(modelCalls[0]?.body ?? "").not.toContain(LEAKED_VALUE);
 
     const second = await call("/v1/prs/acme/api/7/summary", { method: "POST", headers });
     expect(second.status).toBe(200);
@@ -127,7 +129,7 @@ describe("AI flow with real GitHub data", () => {
     expect(body.quality.needsCloserLook).toBe(true);
     expect(ai.runs.map((run) => run.model)).toEqual(["@cf/meta/llama-3.3-70b-instruct-fp8-fast"]);
     expect(JSON.stringify(ai.runs[0]?.inputs)).toContain("[REDACTED]");
-    expect(JSON.stringify(ai.runs[0]?.inputs)).not.toContain("k".repeat(20));
+    expect(JSON.stringify(ai.runs[0]?.inputs)).not.toContain(LEAKED_VALUE);
 
     const summary = await call("/v1/prs/acme/api/8/summary", { method: "POST", headers });
     expect(summary.status).toBe(200);
@@ -148,8 +150,12 @@ describe("AI flow with real GitHub data", () => {
       body: JSON.stringify({ ai: { granted: true, version: "1" } }),
     });
     expect((await call("/v1/prs/acme/api/7/summary", { method: "POST", headers })).status).toBe(200);
+    // Risk keeps its rule-based checks when AI is paused; only the AI part stops.
     const paused = await call("/v1/prs/acme/api/7/risk", { method: "POST", headers });
-    expect(paused.status).toBe(429);
+    expect(paused.status).toBe(200);
+    const pausedBody = (await paused.json()) as { assessedBy: string; reasons: string[] };
+    expect(pausedBody.assessedBy).toBe("rules");
+    expect(pausedBody.reasons).toContain("AI review is paused: the daily AI limit is reached. Rule-based checks only.");
   });
 
   it("deletes AI rows with the account", async () => {
