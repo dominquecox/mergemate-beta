@@ -1,10 +1,6 @@
+import type { AdmissionNamespace } from "./rate-policy";
 import type { GitHubEventMessage } from "./lib/github-webhooks";
 import type { SessionRecord } from "./lib/sessions";
-
-/** Minimal shape of a Workers Rate Limiting binding. */
-export interface RateLimiter {
-  limit(options: { key: string }): Promise<{ success: boolean }>;
-}
 
 export type RefreshOutcome = "ok" | "reauth" | "unavailable";
 
@@ -60,9 +56,7 @@ export interface Env {
   STRIPE_PRICE_PRO_ANNUAL?: string;
   STRIPE_EVENTS?: Pick<Queue<{ eventId: string }>, "send">;
   DB?: D1Database;
-  IP_RATE_LIMITER?: RateLimiter;
-  SESSION_RATE_LIMITER?: RateLimiter;
-  SUPPORT_RATE_LIMITER?: RateLimiter;
+  RATE_ADMISSION?: AdmissionNamespace;
   TOKEN_REFRESHER?: TokenRefresherNamespace;
   TELEMETRY?: AnalyticsEngineDataset;
   /** One content-free data point per model call. Metering is skipped when absent. */

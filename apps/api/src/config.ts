@@ -69,7 +69,7 @@ export const requireVar = (
 };
 
 export const requireBinding = <
-  K extends "DB" | "SESSION_RATE_LIMITER" | "SUPPORT_RATE_LIMITER" | "TOKEN_REFRESHER" | "TELEMETRY" | "POSTS" | "GITHUB_EVENTS",
+  K extends "DB" | "RATE_ADMISSION" | "TOKEN_REFRESHER" | "TELEMETRY" | "POSTS" | "GITHUB_EVENTS",
 >(
   env: Env,
   name: K,

@@ -24,21 +24,6 @@ AI_GLOBAL_DAILY_ACTIONS = "300"
 # so indexes cannot be joined across datasets.
 TELEMETRY_SALT = "submission-local-example-salt-configure-your-own"
 
-[[ratelimits]]
-name = "IP_RATE_LIMITER"
-namespace_id = "1001"
-simple = { limit = 60, period = 60 }
-
-[[ratelimits]]
-name = "SESSION_RATE_LIMITER"
-namespace_id = "1003"
-simple = { limit = 300, period = 60 }
-
-[[ratelimits]]
-name = "SUPPORT_RATE_LIMITER"
-namespace_id = "1005"
-simple = { limit = 5, period = 60 }
-
 [[kv_namespaces]]
 binding = "POSTS"
 id = "local-posts"
@@ -66,9 +51,17 @@ migrations_dir = "migrations"
 name = "TOKEN_REFRESHER"
 class_name = "TokenRefresher"
 
+[[durable_objects.bindings]]
+name = "RATE_ADMISSION"
+class_name = "RateAdmission"
+
 [[migrations]]
 tag = "v1"
 new_sqlite_classes = ["TokenRefresher"]
+
+[[migrations]]
+tag = "v2-rate-admission"
+new_sqlite_classes = ["RateAdmission"]
 
 [[analytics_engine_datasets]]
 binding = "TELEMETRY"
@@ -120,21 +113,6 @@ AI_GLOBAL_DAILY_ACTIONS = "300"
 # so indexes cannot be joined across datasets.
 TELEMETRY_SALT = "submission-dev-example-salt-configure-your-own"
 
-[[env.dev.ratelimits]]
-name = "IP_RATE_LIMITER"
-namespace_id = "1001"
-simple = { limit = 60, period = 60 }
-
-[[env.dev.ratelimits]]
-name = "SESSION_RATE_LIMITER"
-namespace_id = "1003"
-simple = { limit = 300, period = 60 }
-
-[[env.dev.ratelimits]]
-name = "SUPPORT_RATE_LIMITER"
-namespace_id = "1005"
-simple = { limit = 5, period = 60 }
-
 [[env.dev.queues.producers]]
 binding = "GITHUB_EVENTS"
 queue = "mergemate-github-events-dev"
@@ -151,6 +129,10 @@ queue = "mergemate-github-events-dev-dlq"
 [[env.dev.durable_objects.bindings]]
 name = "TOKEN_REFRESHER"
 class_name = "TokenRefresher"
+
+[[env.dev.durable_objects.bindings]]
+name = "RATE_ADMISSION"
+class_name = "RateAdmission"
 
 [[env.dev.analytics_engine_datasets]]
 binding = "TELEMETRY"
@@ -216,21 +198,6 @@ AI_GLOBAL_DAILY_ACTIONS = "300"
 # so indexes cannot be joined across datasets.
 TELEMETRY_SALT = "submission-production-example-salt-configure-your-own"
 
-[[env.production.ratelimits]]
-name = "IP_RATE_LIMITER"
-namespace_id = "1002"
-simple = { limit = 60, period = 60 }
-
-[[env.production.ratelimits]]
-name = "SESSION_RATE_LIMITER"
-namespace_id = "1004"
-simple = { limit = 300, period = 60 }
-
-[[env.production.ratelimits]]
-name = "SUPPORT_RATE_LIMITER"
-namespace_id = "1006"
-simple = { limit = 5, period = 60 }
-
 [[env.production.queues.producers]]
 binding = "GITHUB_EVENTS"
 queue = "mergemate-github-events"
@@ -247,6 +214,10 @@ queue = "mergemate-github-events-dlq"
 [[env.production.durable_objects.bindings]]
 name = "TOKEN_REFRESHER"
 class_name = "TokenRefresher"
+
+[[env.production.durable_objects.bindings]]
+name = "RATE_ADMISSION"
+class_name = "RateAdmission"
 
 [[env.production.analytics_engine_datasets]]
 binding = "TELEMETRY"
@@ -326,3 +297,11 @@ crons = ["*/15 * * * *"]
 crons = ["*/15 * * * *"]
 [env.production.triggers]
 crons = ["*/15 * * * *"]
+
+# Admission must run on every network request, including previously cacheable public GETs.
+[cache]
+enabled = false
+[env.dev.cache]
+enabled = false
+[env.production.cache]
+enabled = false

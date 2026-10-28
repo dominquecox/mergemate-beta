@@ -3,6 +3,7 @@ import type { Env } from './env';
 import { checkPushReceipts } from './lib/push';
 import { handleQueue } from './queues';
 
+export { RateAdmission } from './rate-admission';
 export { TokenRefresher } from './token-refresher';
 
 const app = createApp();

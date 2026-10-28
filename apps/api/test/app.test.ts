@@ -2,11 +2,14 @@ import { ErrorBody, HealthResponse } from "@mergemate/contracts";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createApp } from "../src/app";
 import type { Env } from "../src/env";
-import { fakeLimiter } from "./helpers";
+import { fakeLimiter, fakeAdmissionNamespace, type FixtureLimiters } from "./helpers";
 
 const app = createApp();
 const base: Env = { APP_ENV: "development" };
-const request = (path: string, env: Env, init?: RequestInit) => app.request(path, init, { ...base, ...env });
+const request = (path: string, env: Env & Partial<FixtureLimiters>, init?: RequestInit) => app.request(path, init, {
+  ...base, ...env,
+  ...(env.RATE_ADMISSION?{}:env.IP_RATE_LIMITER?{RATE_ADMISSION:fakeAdmissionNamespace(scope=>scope==='ip'?env.IP_RATE_LIMITER:scope==='session'?env.SESSION_RATE_LIMITER:env.SUPPORT_RATE_LIMITER)}:{}),
+});
 
 afterEach(() => vi.restoreAllMocks());
 
@@ -66,7 +69,9 @@ describe("rate limiting", () => {
     expect(res.headers.get("retry-after")).toBe("60");
     expect(res.headers.get("strict-transport-security")).toContain("max-age=");
     expect(ErrorBody.parse(await res.json()).error.code).toBe("rate_limited");
-    expect(env.IP_RATE_LIMITER.keys).toEqual(["203.0.113.7", "203.0.113.7"]);
+    expect(env.IP_RATE_LIMITER.keys).toHaveLength(2);
+    expect(env.IP_RATE_LIMITER.keys[0]).toMatch(/^ip:[a-f0-9]{64}$/);
+    expect(env.IP_RATE_LIMITER.keys[0]).toBe(env.IP_RATE_LIMITER.keys[1]);
   });
 
   it("runs before route logic, so unknown routes are limited too", async () => {
@@ -114,11 +119,11 @@ describe("rate limiting", () => {
     expect(limited.headers.get("access-control-allow-origin")).toBe("https://dev.mergemate.dev");
   });
 
-  it("fails closed with misconfigured when the binding is missing", async () => {
+  it("fails closed with503 when authoritative admission is missing", async () => {
     const log = vi.spyOn(console, "error").mockImplementation(() => {});
     const res = await request("/v1/health", {});
-    expect(res.status).toBe(500);
-    expect(ErrorBody.parse(await res.json()).error.code).toBe("misconfigured");
-    expect(log).toHaveBeenCalledWith(expect.stringContaining("IP_RATE_LIMITER binding is missing"));
+    expect(res.status).toBe(503);
+    expect(ErrorBody.parse(await res.json()).error.code).toBe("rate_limit_unavailable");
+    expect(log).not.toHaveBeenCalled();
   });
 });

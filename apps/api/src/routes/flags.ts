@@ -26,5 +26,5 @@ export const flags = new Hono<AppEnv>().get('/flags', async c => {
   } catch { value=null; } // Unavailable/malformed configuration fails closed.
   const record=value && typeof value==='object' && !Array.isArray(value) ? value as Record<string,unknown> : {};
   const body: FeatureFlags={voice_readout:record.voice_readout===true,voice_notes:record.voice_notes===true};
-  return c.json(body,200,{'cache-control':'public, max-age=60'});
+  return c.json(body,200,{'cache-control':'no-store'});
 });

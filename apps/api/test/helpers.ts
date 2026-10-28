@@ -1,7 +1,17 @@
-import type { AiBinding, Deps, Env, RateLimiter, RefreshOutcome } from "../src/env";
+import type { AdmissionNamespace, AdmissionScope } from "../src/rate-policy";
+import type { AiBinding, Deps, Env, RefreshOutcome } from "../src/env";
 import type { ModelTransport } from "../src/ai/provider";
 import { refreshTokens } from "../src/lib/github-tokens";
 import { TestD1 } from "./d1";
+
+export interface RateLimiter { limit(options:{key:string}):Promise<{success:boolean}> }
+export type FixtureLimiters = { IP_RATE_LIMITER:RateLimiter;SESSION_RATE_LIMITER:RateLimiter;SUPPORT_RATE_LIMITER:RateLimiter };
+export const fakeAdmissionNamespace = (lookup:(scope:AdmissionScope)=>RateLimiter|undefined):AdmissionNamespace => ({
+  getByName(name) { return { async admit(scope) {
+    const limiter=lookup(scope);if(!limiter)throw new Error('Fixture admission unavailable');
+    const {success}=await limiter.limit({key:name});return {success,retryAfter:success?0:60};
+  } }; },
+});
 
 /** In-memory limiter: allows `max` calls per key. */
 export const fakeLimiter = (max = Number.POSITIVE_INFINITY): RateLimiter & { keys: string[] } => {
@@ -141,7 +151,7 @@ export const clock = (start = "2026-10-27T12:00:00Z") => {
 };
 
 export interface TestContext {
-  env: Env & { DB: D1Database };
+  env: Env & FixtureLimiters & { DB: D1Database };
   db: TestD1;
   net: ReturnType<typeof fakeNetwork>;
   time: ReturnType<typeof clock>;
@@ -156,7 +166,7 @@ export interface TestContext {
 }
 
 /** A full test environment: real migrations, fake GitHub, serialized fake token refresher. */
-export const testContext = (overrides: Partial<Env> = {}): TestContext => {
+export const testContext = (overrides: Partial<Env & FixtureLimiters> = {}): TestContext => {
   const db = new TestD1();
   const net = fakeNetwork();
   const time = clock();
@@ -180,6 +190,7 @@ export const testContext = (overrides: Partial<Env> = {}): TestContext => {
     TOKEN_ENCRYPTION_KEY: testEncryptionKey("2"),
     TURNSTILE_SECRET_KEY: "test-turnstile-not-real",
     DB: db as unknown as D1Database,
+    RATE_ADMISSION: fakeAdmissionNamespace(scope=>scope==='ip'?env.IP_RATE_LIMITER:scope==='session'?env.SESSION_RATE_LIMITER:env.SUPPORT_RATE_LIMITER),
     IP_RATE_LIMITER: ipLimiter,
     SESSION_RATE_LIMITER: sessionLimiter,
     TOKEN_REFRESHER: {

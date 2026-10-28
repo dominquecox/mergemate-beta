@@ -1,5 +1,5 @@
 import type { Context, MiddlewareHandler } from "hono";
-import { requireBinding } from "../config";
+import { corsOrigins, requireBinding } from "../config";
 import type { AppEnv } from "../env";
 import { ApiError } from "../errors";
 import { timingSafeEqual } from "../lib/crypto";
@@ -23,7 +23,7 @@ const DEMO_WRITES = new Set(["/v1/auth/logout"]);
 const DEMO_FIXTURE_POSTS = [/^\/v1\/prs\/[^/]+\/[^/]+\/\d+\/(summary|risk)$/];
 
 const limitIp = (c: Context<AppEnv>) =>
-  limit(c, { name: "IP_RATE_LIMITER", limiter: c.env.IP_RATE_LIMITER, key: clientIp(c), retryAfter: 60 });
+  limit(c, { scope: "ip", key: clientIp(c) });
 
 /**
  * Counts CORS preflights (OPTIONS) against the IP limit. Runs before CORS because CORS
@@ -31,7 +31,11 @@ const limitIp = (c: Context<AppEnv>) =>
  * is free. Other requests pass through untouched and are charged once in authenticate().
  */
 export const limitPreflight = (): MiddlewareHandler<AppEnv> => async (c, next) => {
-  if (c.req.method === "OPTIONS") await limitIp(c);
+  if (c.req.method === "OPTIONS") {
+    const origin=c.req.header("origin");
+    if(origin&&corsOrigins(c.env).includes(origin)){c.header("access-control-allow-origin",origin);c.header("access-control-allow-credentials","true");c.header("vary","Origin");}
+    await limitIp(c);
+  }
   return next();
 };
 
@@ -71,10 +75,8 @@ export const authenticate = (): MiddlewareHandler<AppEnv> => async (c, next) => 
   }
 
   await limit(c, {
-    name: "SESSION_RATE_LIMITER",
-    limiter: c.env.SESSION_RATE_LIMITER,
+    scope: "session",
     key: session.tokenHash,
-    retryAfter: 60,
   });
 
   const write = !SAFE_METHODS.has(c.req.method);

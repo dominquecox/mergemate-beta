@@ -9,7 +9,7 @@ import { parseBody, parseValue } from "../lib/validate";
 
 const PAGE_SIZE = 50;
 const RSS_ITEMS = 20;
-const PUBLIC_CACHE = "public, max-age=60";
+const PUBLIC_CACHE = "no-store";
 const RESEND_URL = "https://api.resend.com/emails";
 
 /** Reads the published index from KV, keeping only entries that match the contract. */
@@ -102,10 +102,8 @@ ${items
 
   .post("/public/support", async (c) => {
     await limit(c, {
-      name: "SUPPORT_RATE_LIMITER",
-      limiter: c.env.SUPPORT_RATE_LIMITER,
+      scope: "support",
       key: clientIp(c),
-      retryAfter: 60,
     });
     const body = await parseBody(c, SupportRequest);
     await verifyTurnstile(c, body.turnstileToken);

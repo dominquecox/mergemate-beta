@@ -33,12 +33,12 @@ const seed = (ctx: TestContext) => {
 };
 
 describe("public posts", () => {
-  it("lists only valid entries, newest first, filtered by type and cacheable", async () => {
+  it("lists only valid entries, newest first, filtered by type and admitted before each network read", async () => {
     const ctx = testContext();
     seed(ctx);
     const call = appFor(ctx);
     const all = await call("/v1/public/posts");
-    expect(all.headers.get("cache-control")).toBe("public, max-age=60");
+    expect(all.headers.get("cache-control")).toBe("no-store");
     expect(PostList.parse(await all.json()).items.map((p) => p.slug)).toEqual(["latest-news", "v1-0", "first-news"]);
     const news = PostList.parse(await (await call("/v1/public/posts?type=news")).json());
     expect(news.items.map((p) => p.slug)).toEqual(["latest-news", "first-news"]);

@@ -59,6 +59,7 @@ const FIXED_COPY: Record<ClientErrorCode, string> = {
   not_found: "We couldn't find that.",
   validation_failed: "That request wasn't valid. Check it and try again.",
   rate_limited: "You've reached a limit for now. Try again in a little while.",
+  rate_limit_unavailable: "MergeMate is temporarily unavailable. Please try again shortly.",
   upstream_unavailable: "MergeMate couldn't reach GitHub or the AI service. Try again in a moment.",
   misconfigured: "MergeMate isn't set up correctly on our side yet. Try again later.",
   internal: "Something went wrong on our side. Try again.",

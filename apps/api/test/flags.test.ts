@@ -4,11 +4,11 @@ import { appFor, post, signIn } from './sign-in';
 import { fakeLimiter, testContext } from './helpers';
 
 describe('public feature flags',()=>{
-  it('serves default-off booleans anonymously with a 60-second cache and security headers',async()=>{
+  it('serves default-off booleans anonymously with an internal KV cache and non-cacheable HTTP responses',async()=>{
     const ctx=testContext();const get=vi.spyOn(ctx.env.POSTS as KVNamespace,'get');const prepare=vi.spyOn(ctx.db,'prepare');
     const response=await appFor(ctx)('/v1/flags');
     expect(response.status).toBe(200);expect(await response.json()).toEqual({voice_readout:false,voice_notes:false});
-    expect(response.headers.get('cache-control')).toBe('public, max-age=60');
+    expect(response.headers.get('cache-control')).toBe('no-store');
     expect(response.headers.get('strict-transport-security')).toContain('max-age=');expect(response.headers.get('x-content-type-options')).toBe('nosniff');
     expect(get).toHaveBeenCalledWith('flags:v1',{cacheTtl:60});expect(prepare).not.toHaveBeenCalled();
   });
