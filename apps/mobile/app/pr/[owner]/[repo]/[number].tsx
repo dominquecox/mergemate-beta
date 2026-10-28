@@ -59,17 +59,19 @@ export default function PrDetailScreen() {
     return false;
   }, showNoteInput || assessmentOpen);
 
-  const pageLock=useRef(false);
+  // Files and comments page independently: loading one never shows a spinner on, blocks, or reports an error for the other.
+  type PageSection='files'|'comments';
+  const pageLock=useRef<Record<PageSection,boolean>>({files:false,comments:false});
   const routeVersion=useRef(0);
-  const [pageBusy,setPageBusy]=useState(false);
-  const [pageError,setPageError]=useState<string|null>(null);
+  const [pageBusy,setPageBusy]=useState<Record<PageSection,boolean>>({files:false,comments:false});
+  const [pageError,setPageError]=useState<Record<PageSection,string|null>>({files:null,comments:null});
   const [fileCursor,setFileCursor]=useState<string|null>('1');
   const [commentCursor,setCommentCursor]=useState<string|null>('review:1');
-  const loadPage=async(section:'files'|'comments')=>{
-    if(pageLock.current)return;
+  const loadPage=async(section:PageSection)=>{
+    if(pageLock.current[section])return;
     const cursor=section==='files'?fileCursor:commentCursor;
     if(!cursor)return;
-    pageLock.current=true;setPageBusy(true);setPageError(null);
+    pageLock.current[section]=true;setPageBusy(b=>({...b,[section]:true}));setPageError(e=>({...e,[section]:null}));
     const version=routeVersion.current;
     try{
       if(section==='files'){
@@ -81,10 +83,10 @@ export default function PrDetailScreen() {
         if(version!==routeVersion.current)return;
         setDetail(prev=>prev?{...prev,comments:[...new Map([...prev.comments,...page.items].map(comment=>[comment.id,comment])).values()]}:prev);setCommentCursor(page.nextCursor);
       }
-    }catch(e){if(version===routeVersion.current)setPageError(toUserMessage(e,'Could not load this page.'));}
-    finally{if(version===routeVersion.current){pageLock.current=false;setPageBusy(false);}}
+    }catch(e){if(version===routeVersion.current){const message=toUserMessage(e,'Could not load this page.');setPageError(prev=>({...prev,[section]:message}));}}
+    finally{if(version===routeVersion.current){pageLock.current[section]=false;setPageBusy(b=>({...b,[section]:false}));}}
   };
-  useEffect(()=>{routeVersion.current++;pageLock.current=false;setPageBusy(false);setFileCursor('1');setCommentCursor('review:1');return()=>{routeVersion.current++;};},[owner,repo,number]);
+  useEffect(()=>{routeVersion.current++;pageLock.current={files:false,comments:false};setPageBusy({files:false,comments:false});setPageError({files:null,comments:null});setFileCursor('1');setCommentCursor('review:1');return()=>{routeVersion.current++;};},[owner,repo,number]);
 
   const loadPr = useCallback(async () => {
     const version=routeVersion.current;
@@ -362,12 +364,13 @@ export default function PrDetailScreen() {
               )}
             </View>
 
-            {fileCursor && <Button title={detail.files.length?'Load more files':'Load files'} loading={pageBusy} onPress={()=>loadPage('files')} variant="secondary"/>}
-            {pageError && <Text accessibilityRole="alert" style={[typography.footnote,{color:colors.riskHigh,padding:16}]}>{pageError}</Text>}
+            {fileCursor && <Button title={detail.files.length?'Load more files':'Load files'} loading={pageBusy.files} onPress={()=>loadPage('files')} variant="secondary"/>}
+            {pageError.files && <Text accessibilityRole="alert" style={[typography.footnote,{color:colors.riskHigh,padding:16}]}>{pageError.files}</Text>}
             <View style={[styles.card,{backgroundColor:colors.surface,borderColor:colors.border,borderRadius:radius.lg,marginTop:16}]}>
               <Text accessibilityRole="header" style={[typography.headline,{color:colors.text}]}>Conversation</Text>
               {detail.comments.map(comment=><View key={comment.id} style={{paddingVertical:12,borderBottomWidth:1,borderBottomColor:colors.border}}><Text style={[typography.footnote,{color:colors.textSecondary}]}>@{comment.author}</Text><Text style={[typography.body,{color:colors.text,marginTop:4}]}>{comment.body}</Text></View>)}
-              {commentCursor?<Button title="Load comments" loading={pageBusy} onPress={()=>loadPage('comments')} variant="ghost"/>:detail.comments.length===0?<Text style={[typography.footnote,{color:colors.textSecondary}]}>No comments.</Text>:null}
+              {commentCursor?<Button title="Load comments" loading={pageBusy.comments} onPress={()=>loadPage('comments')} variant="ghost"/>:detail.comments.length===0?<Text style={[typography.footnote,{color:colors.textSecondary}]}>No comments.</Text>:null}
+              {pageError.comments && <Text accessibilityRole="alert" style={[typography.footnote,{color:colors.riskHigh,paddingTop:12}]}>{pageError.comments}</Text>}
             </View>
 
             {/* Inline Note Editor */}
