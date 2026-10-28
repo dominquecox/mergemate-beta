@@ -1,5 +1,5 @@
 import { ErrorBody } from "@mergemate/contracts";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { demoHeaders } from "./demo-session";
 import { fakeAi, json, testContext, validModelEnv } from "./helpers";
 import type { RecordedCall, TestContext } from "./helpers";
@@ -191,5 +191,30 @@ describe("AI flow with real GitHub data", () => {
       body: form,
     });
     expect(res.status).toBe(403);
+  });
+});
+
+describe("diagnosable AI failures", () => {
+  it("a rejected Meta key logs one setup line with the response's request id, and nothing private", async () => {
+    const ctx = testContext({ ...validModelEnv(), MODEL_API_KEY: "model-key-fixture" });
+    const call = appFor(ctx);
+    const { headers } = await signIn(ctx, "ios");
+    stubPr(ctx, 9, "ccc333", [{ filename: "src/private.ts", status: "modified", additions: 1, deletions: 0, patch: "+PRIVATE-SOURCE-FIXTURE" }], { runs: [], statuses: [] });
+    ctx.net.on("POST", "https://api.meta.ai/v1/responses", () => json({ error: { message: "PROVIDER-BODY-FIXTURE" } }, 401));
+    await call("/v1/consent", {
+      method: "PUT",
+      headers: { "content-type": "application/json", ...headers },
+      body: JSON.stringify({ ai: { granted: true, version: "1" } }),
+    });
+    const logs: string[] = [];
+    vi.spyOn(console, "error").mockImplementation((line: unknown) => void logs.push(String(line)));
+    const res = await call("/v1/prs/acme/api/9/summary", { method: "POST", headers });
+    vi.restoreAllMocks();
+
+    expect(res.status).toBe(500);
+    expect(ErrorBody.parse(await res.json()).error.code).toBe("misconfigured");
+    expect(ctx.net.calls.filter((c) => c.url === "https://api.meta.ai/v1/responses")).toHaveLength(1);
+    expect(logs).toEqual([JSON.stringify({ requestId: res.headers.get("x-request-id"), code: "misconfigured", detail: "MODEL_API_KEY rejected by meta (401)" })]);
+    expect(logs.join("\n")).not.toMatch(/model-key-fixture|PRIVATE-SOURCE-FIXTURE|PROVIDER-BODY-FIXTURE|acme\/api/);
   });
 });

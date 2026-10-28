@@ -112,6 +112,22 @@ const requireApiKey = (env: Env) => {
   return key;
 };
 
+/**
+ * Marks a per-request env whose MODEL_API_KEY is the person's own saved Meta key (not a Worker setting), so a
+ * rejected key is reported to them instead of as a MergeMate setup problem.
+ */
+export const USER_OWNED_KEY: unique symbol = Symbol("userOwnedMetaKey");
+type KeyedEnv = Env & { [USER_OWNED_KEY]?: true };
+export const withUserOwnedKey = (env: Env, key: string): Env => ({ ...env, MODEL_API_KEY: key, [USER_OWNED_KEY]: true }) as KeyedEnv;
+
+/** A model service answered with a non-success HTTP status. Carries the status only, never the body. */
+export class UpstreamStatusError extends Error {
+  override readonly name = "UpstreamStatusError";
+  constructor(readonly status: number) {
+    super(`upstream status ${status}`);
+  }
+}
+
 const unavailable = (logDetail?: string) =>
   new ApiError("upstream_unavailable", "The AI service is unavailable. Try again.", {}, logDetail);
 
@@ -274,6 +290,7 @@ export const createModelProvider = (env: Env, task: AiTask, deps: ProviderDeps):
   const config = resolveModelConfig(env, task);
   type Send = (request: CompletionRequest) => Promise<{ text: string; usage?: TokenUsage }>;
   let send: Send;
+  const userOwnedKey = (env as KeyedEnv)[USER_OWNED_KEY] === true;
   if (config.provider === "meta") {
     const apiKey = requireApiKey(env);
     send = (request) => deps.transport.complete({ config, apiKey, request });
@@ -292,6 +309,14 @@ export const createModelProvider = (env: Env, task: AiTask, deps: ProviderDeps):
         reply = await send(request);
       } catch (error) {
         if (error instanceof ApiError && error.code === "misconfigured") throw error;
+        // A rejected key is a setup problem, not an outage: retrying cannot fix it.
+        if (error instanceof UpstreamStatusError && (error.status === 401 || error.status === 403)) {
+          if (userOwnedKey) {
+            throw new ApiError("forbidden", "Meta rejected your saved key. Replace or remove it in web Settings.", {},
+              `${config.provider}:${config.modelId} user key rejected (${error.status})`);
+          }
+          throw new ConfigError(`MODEL_API_KEY rejected by ${config.provider} (${error.status})`);
+        }
         throw unavailable(failureDetail(config, error));
       }
       // No partial or invented text: an empty answer is a failure.

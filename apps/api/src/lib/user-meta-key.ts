@@ -2,7 +2,7 @@ import { requireBinding } from '../config';
 import type { Deps, Env } from '../env';
 import { ApiError } from '../errors';
 import { createTokenCipher } from './crypto';
-import { resolveModelConfig } from '../ai/provider';
+import { resolveModelConfig, withUserOwnedKey } from '../ai/provider';
 import { resolveRoute, type AiTask } from '../ai/routes';
 
 const context = (userId: string) => `meta:${userId}:key`;
@@ -48,6 +48,6 @@ export async function userModelContext(env: Env,userId: string,task: AiTask): Pr
   try {
     const cipher=await createTokenCipher(env);
     const key=await cipher.decrypt(row.key_version,row.ciphertext,context(userId));
-    return {env:{...env,MODEL_API_KEY:key},ownsMetaKey:true};
+    return {env:withUserOwnedKey(env,key),ownsMetaKey:true};
   } catch { throw new ApiError('upstream_unavailable','Your saved Meta key is unavailable. Replace or remove it in web Settings.'); }
 }

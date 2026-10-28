@@ -29,15 +29,18 @@ export const githubGet = async <T>(deps: Deps, token: string, path: string): Pro
         },
         signal: AbortSignal.timeout(TIMEOUT_MS),
       });
-    } catch {
+    } catch (error) {
       if (attempt === 0) {
         await sleep(500);
         continue;
       }
-      throw unavailable("github api fetch failed");
+      // Timeout and network failure need different fixes; neither detail carries the path or token.
+      throw unavailable(error instanceof Error && error.name === "TimeoutError" ? "github api timeout" : "github api fetch failed");
     }
     if (res.ok) return (await res.json()) as T;
     if ((res.status === 429 || res.status >= 500) && attempt === 0) {
+      // Release the connection before retrying: an unread body keeps it open until the request ends.
+      await res.body?.cancel().catch(() => undefined);
       await sleep(500);
       continue;
     }

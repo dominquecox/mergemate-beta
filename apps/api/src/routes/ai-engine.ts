@@ -18,7 +18,7 @@ import type {
 import type { MiddlewareHandler } from "hono";
 import { recordAiCall } from "../ai/metrics";
 import type { AiOutcome } from "../ai/metrics";
-import { createModelProvider, transcribeWithMeta } from "../ai/provider";
+import { UpstreamStatusError, createModelProvider, transcribeWithMeta } from "../ai/provider";
 import type { CompletionRequest, ModelProvider, ModelTransport } from "../ai/provider";
 import type { AiTask } from "../ai/routes";
 import { RISK_JSON_SCHEMA, SUMMARY_JSON_SCHEMA } from "../ai/schemas";
@@ -527,14 +527,19 @@ export const responsesOutputText = (data: ResponsesApiResponse): string =>
     .join("");
 
 /** Muse Spark reasons before answering (about 200 tokens on a tiny prompt at high effort), so a short request needs a longer wait. */
-const UPSTREAM_TIMEOUT_MS = 60000;
+/** One deadline for the whole model call, retry included, so it ends before the app's 60 s request timeout. */
+const UPSTREAM_DEADLINE_MS = 50_000;
+/** Retry only when this much of the deadline is left; a retry that cannot finish only adds waiting. */
+const MIN_RETRY_MS = 10_000;
+const RETRY_DELAY_MS = 500;
 /** Reasoning tokens count against max_output_tokens; leave room so the answer is not cut off. */
 const META_MIN_OUTPUT_TOKENS = 4096;
 
 /**
  * Plain-fetch transport for Meta's Responses API (`POST {base}/responses`), the shape Meta's own
  * samples use. Chat Completions on api.meta.ai returns 200 with an empty body, so it is not used.
- * `store: false` keeps request content out of Meta's stored responses. Retries once on 429/5xx.
+ * `store: false` keeps request content out of Meta's stored responses. Retries once on 429/5xx while the
+ * shared deadline allows it; 401/403 are never retried.
  */
 export const createFetchTransport = (fetchImpl: typeof fetch = fetch): ModelTransport => ({
   async complete({ config, apiKey, request }) {
@@ -549,23 +554,27 @@ export const createFetchTransport = (fetchImpl: typeof fetch = fetch): ModelTran
       reasoning: { effort: "low" },
       store: false,
     });
+    const deadline = Date.now() + UPSTREAM_DEADLINE_MS;
+    const signal = AbortSignal.timeout(UPSTREAM_DEADLINE_MS);
     for (let attempt = 0; attempt < 2; attempt += 1) {
       const res = await fetchImpl(`${config.baseUrl}/responses`, {
         method: "POST",
         headers,
         body,
-        signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
+        signal,
         // Workers reject redirect: "error"; "manual" returns a 3xx as-is, which !res.ok below rejects.
         redirect: "manual",
       });
-      if (res.status === 429 || res.status >= 500) {
-        if (attempt === 0) {
-          await new Promise((resolve) => setTimeout(resolve, 500));
+      if (!res.ok) {
+        // Release the connection: an unread body keeps it open until the request ends.
+        await res.body?.cancel().catch(() => undefined);
+        const retryable = res.status === 429 || res.status >= 500;
+        if (retryable && attempt === 0 && deadline - Date.now() > MIN_RETRY_MS + RETRY_DELAY_MS) {
+          await new Promise((resolve) => setTimeout(resolve, RETRY_DELAY_MS));
           continue;
         }
-        throw new Error(`upstream status ${res.status}`);
+        throw new UpstreamStatusError(res.status);
       }
-      if (!res.ok) throw new Error(`upstream status ${res.status}`);
       const data = (await res.json()) as ResponsesApiResponse;
       const text = responsesOutputText(data);
       if (!text.trim()) throw new Error(`empty upstream reply (status ${data.status ?? "unknown"})`);
