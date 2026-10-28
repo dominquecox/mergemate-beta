@@ -238,7 +238,9 @@ export default function ReposScreen() {
                     </View>
                   </View>
 
-                  <Switch disabled={watching.includes(repo.id)} value={repo.watching} onValueChange={()=>toggleWatch(repo.id,repo.watching)} accessibilityLabel={`${repo.watching?"Stop watching":"Watch"} ${repo.fullName}`} trackColor={{false:colors.surfaceSecondary,true:colors.brand}} thumbColor="#FFFFFF"/>
+                  <View style={styles.switchWrap}>
+                    <Switch disabled={watching.includes(repo.id)} value={repo.watching} onValueChange={()=>toggleWatch(repo.id,repo.watching)} accessibilityLabel={`${repo.watching?"Stop watching":"Watch"} ${repo.fullName}`} trackColor={{false:colors.surfaceSecondary,true:colors.brand}} thumbColor="#FFFFFF"/>
+                  </View>
                 </View>)}
         />
       )}
@@ -247,6 +249,12 @@ export default function ReposScreen() {
 }
 
 const styles = StyleSheet.create({
+  switchWrap: {
+    minHeight: 44,
+    minWidth: 44,
+    justifyContent: "center",
+    alignItems: "center",
+  },
   noticeRow: {
     flexDirection: "row",
     alignItems: "flex-start",
