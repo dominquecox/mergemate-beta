@@ -171,6 +171,10 @@ export interface BillingPlan {
   status: string;
   renewsAt?: string;
   cancelAt?: string;
+  /** The 7-day trial applies to a first subscription only. */
+  trialEligible: boolean;
+  /** A billing account with history exists, so the portal can be opened (also after a fall back to Free). */
+  canManage: boolean;
 }
 
 export interface PublicPost {

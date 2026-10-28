@@ -7,13 +7,17 @@ import { useTheme } from "../../src/context/ThemeContext";
 import { api } from "../../src/api";
 import { toUserMessage } from "../../src/api/errors";
 import { BillingPlan } from "../../src/types";
-import { BILLING_CONFIG } from "../../src/config/billing";
+import { BILLING_CONFIG, billingAttention, billingStatusLabel, canStartCheckout } from "../../src/config/billing";
 import { Header } from "../../src/components/Header";
 import { Button } from "../../src/components/Button";
 import { EmptyState } from "../../src/components/EmptyState";
 import { ErrorState } from "../../src/components/ErrorState";
 import { LoadingState } from "../../src/components/LoadingState";
 import { Icon } from "../../src/components/Icon";
+
+/** "November 4, 2026" in the person's locale. */
+const formatBillingDate = (iso: string) =>
+  new Date(iso).toLocaleDateString(undefined, { year: "numeric", month: "long", day: "numeric" });
 
 export default function BillingScreen() {
   if (Platform.OS !== "web") {
@@ -44,6 +48,17 @@ export default function BillingScreen() {
   useEffect(() => {
     loadBilling();
   }, [loadBilling]);
+
+  // Back from the billing portal or another device: refresh quietly so the plan shown is current.
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    const refresh = () => {
+      if (document.visibilityState !== "visible") return;
+      api.getBillingPlan().then(setBilling).catch(() => undefined);
+    };
+    document.addEventListener("visibilitychange", refresh);
+    return () => document.removeEventListener("visibilitychange", refresh);
+  }, []);
 
   const handleUpgrade = async (priceKey: "pro_monthly" | "pro_annual") => {
     setIsLoading(true);
@@ -120,7 +135,7 @@ export default function BillingScreen() {
               </View>
               <View style={[styles.badge, { backgroundColor: colors.brandSubtle }]}>
                 <Text style={[typography.caption, { color: colors.brandLight, fontWeight: "700" }]}>
-                  {billing.status.toUpperCase()}
+                  {billingStatusLabel(billing.status).toUpperCase()}
                 </Text>
               </View>
             </View>
@@ -128,10 +143,25 @@ export default function BillingScreen() {
             <Text style={[typography.body, { color: colors.textSecondary, marginTop: spacing.xs }]}>
               {billing.plan === "pro"
                 ? "More AI summaries and risk checks every day, triage deck, secret alerts, and live pull request updates."
-                : "Upgrade to Pro for more AI summaries and risk checks every day across your team repositories."}
+                : canStartCheckout(billing.status)
+                  ? "Upgrade to Pro for more AI summaries and risk checks every day across your team repositories."
+                  : "Your subscription is waiting on a payment. Free limits apply until it goes through."}
             </Text>
 
-            {billing.plan === "pro" && (
+            {(billing.cancelAt || billing.renewsAt) && (
+              <Text style={[typography.callout, { color: colors.text, marginTop: spacing.xs }]}>
+                {billing.cancelAt
+                  ? `Pro ends on ${formatBillingDate(billing.cancelAt)}. You keep Pro until then.`
+                  : `${billing.status === "trialing" ? "Trial ends and billing starts" : "Renews"} on ${formatBillingDate(billing.renewsAt!)}.`}
+              </Text>
+            )}
+            {billingAttention(billing.status) && (
+              <Text style={[typography.callout, { color: colors.riskMedium, marginTop: spacing.xs }]} accessibilityRole="alert">
+                {billingAttention(billing.status)}
+              </Text>
+            )}
+
+            {billing.canManage && (
               <Button
                 title="Manage Billing in Customer Portal"
                 onPress={handlePortal}
@@ -143,7 +173,7 @@ export default function BillingScreen() {
           </Section>
 
           {/* Pricing Comparison (US-19) */}
-          {billing.plan === "free" && (
+          {billing.plan === "free" && canStartCheckout(billing.status) && (
             <View style={{ marginTop: spacing.lg }}>
               <Text
                 style={[typography.title2, { color: colors.text, textAlign: "center" }]}
@@ -205,9 +235,11 @@ export default function BillingScreen() {
                     <Text style={[typography.title2, { color: colors.text }]} accessibilityRole="header">
                       {BILLING_CONFIG.pro.name}
                     </Text>
-                    <Text style={[typography.caption, { color: colors.riskLow, fontWeight: "700", marginTop: 2 }]}>
-                      7-day free trial included
-                    </Text>
+                    {billing.trialEligible && (
+                      <Text style={[typography.caption, { color: colors.riskLow, fontWeight: "700", marginTop: 2 }]}>
+                        {BILLING_CONFIG.pro.monthly.trialLabel} included
+                      </Text>
+                    )}
                   </View>
                   <View style={{alignItems:"flex-start",width:"100%",marginTop:12}}>
                     <Text style={[typography.title1, { color: colors.brandLight, fontWeight: "700" }]}>
@@ -222,6 +254,7 @@ export default function BillingScreen() {
                       {billingCycle === "monthly"
                         ? BILLING_CONFIG.pro.monthly.billingText
                         : BILLING_CONFIG.pro.annual.billingText}
+                      {billing.trialEligible ? " after a 7-day free trial" : ""}
                     </Text>
                   </View>
                 </View>
@@ -236,11 +269,9 @@ export default function BillingScreen() {
                 </View>
 
                 <Button
-                  title={
-                    billingCycle === "monthly"
-                      ? `Start 7-Day Free Trial (${BILLING_CONFIG.pro.monthly.label})`
-                      : `Start 7-Day Free Trial (${BILLING_CONFIG.pro.annual.label})`
-                  }
+                  title={`${billing.trialEligible ? "Start 7-Day Free Trial" : "Upgrade to Pro"} (${
+                    billingCycle === "monthly" ? BILLING_CONFIG.pro.monthly.label : BILLING_CONFIG.pro.annual.label
+                  })`}
                   onPress={() =>
                     handleUpgrade(
                       billingCycle === "monthly"

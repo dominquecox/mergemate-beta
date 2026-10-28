@@ -289,7 +289,9 @@ export class MockApiClient implements ApiClient {
 
   private billing: BillingPlan = {
     plan: "free",
-    status: "active",
+    status: "none",
+    trialEligible: true,
+    canManage: false,
   };
 
   private publicPosts: PublicPost[] = [

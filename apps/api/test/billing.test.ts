@@ -49,6 +49,26 @@ describe('billing sessions',()=>{
     expect(body.get('success_url')).toBe(origin+'/billing/success');expect(body.get('cancel_url')).toBe(origin+'/billing/cancelled');expect(body.get('line_items[0][price]')).toBe('price_monthly');
     expect(call?.headers.get('idempotency-key')).toBeTruthy();expect(await getBillingPlan(ctx.env,s.userId)).toMatchObject({plan:'free'});
   });
+  it('starts the advertised 7-day trial on a first subscription only',async()=>{
+    const {ctx}=setup();const s=await web(ctx);const app=appFor(ctx);
+    expect(await getBillingPlan(ctx.env,s.userId)).toMatchObject({trialEligible:true,canManage:false});
+    expect((await app('/v1/billing/checkout',post({priceKey:'pro_annual'},s.headers))).status).toBe(200);
+    const first=new URLSearchParams(ctx.net.calls.find(c=>c.method==='POST'&&c.url.endsWith('/checkout/sessions'))?.body??'');
+    expect(first.get('subscription_data[trial_period_days]')).toBe('7');
+    // A returning customer (an earlier subscription, now canceled) gets no second trial, even if local state lags.
+    ctx.net.on('GET','https://api.stripe.com/v1/subscriptions',{data:[subscription('canceled')],has_more:false});
+    expect((await app('/v1/billing/checkout',post({priceKey:'pro_monthly'},s.headers))).status).toBe(200);
+    const again=new URLSearchParams(ctx.net.calls.filter(c=>c.method==='POST'&&c.url.endsWith('/checkout/sessions')).at(-1)?.body??'');
+    expect(again.has('subscription_data[trial_period_days]')).toBe(false);
+  });
+  it('keeps the portal reachable after a fall back to Free, and reports trial use',async()=>{
+    const {ctx}=setup();const s=await web(ctx);await mapped(ctx,s.userId);
+    await ctx.db.prepare("UPDATE billing_accounts SET plan='free',status='canceled',subscription_id=NULL WHERE user_id=?").bind(s.userId).run();
+    expect(await getBillingPlan(ctx.env,s.userId)).toMatchObject({plan:'free',status:'canceled',trialEligible:false,canManage:true});
+    expect((await appFor(ctx)('/v1/billing/portal',post({},s.headers))).status).toBe(200);
+    await ctx.db.prepare("UPDATE billing_accounts SET deleting=1 WHERE user_id=?").bind(s.userId).run();
+    expect(await getBillingPlan(ctx.env,s.userId)).toMatchObject({canManage:false});
+  });
   it('uses only the mapped customer for portal and rejects attacker links from upstream',async()=>{
     const {ctx}=setup();const s=await web(ctx);await mapped(ctx,s.userId);const app=appFor(ctx);
     expect((await app('/v1/billing/portal',post({},s.headers))).status).toBe(200);
@@ -98,6 +118,20 @@ describe('verified billing events',()=>{
     const requests=ctx.net.calls.length;await processStripeEvent(ctx.env,ctx.deps,'evt_test');expect(ctx.net.calls).toHaveLength(requests);
     sub=subscription('canceled');signed=event(ctx,'evt_cancel');await acceptStripeEvent(ctx.env,ctx.deps,signed.raw,signed.signature);await processStripeEvent(ctx.env,ctx.deps,'evt_cancel');expect(await getBillingPlan(ctx.env,s.userId)).toMatchObject({plan:'free'});
     signed=event(ctx,'evt_delayed','checkout.session.completed');await acceptStripeEvent(ctx.env,ctx.deps,signed.raw,signed.signature);await processStripeEvent(ctx.env,ctx.deps,'evt_delayed');expect(await getBillingPlan(ctx.env,s.userId)).toMatchObject({plan:'free'});
+  });
+  it('follows trial, cancel-at-period-end, failed payment, annual upgrade and recovery from canonical state',async()=>{
+    const {ctx}=setup();const s=await web(ctx);await mapped(ctx,s.userId);let sub:ReturnType<typeof subscription>=subscription('trialing');let n=0;
+    ctx.net.on('GET','https://api.stripe.com/v1/subscriptions',()=>json({data:[sub],has_more:false}));
+    const apply=async(type='customer.subscription.updated')=>{const id=`evt_state_${++n}`;const signed=event(ctx,id,type);await acceptStripeEvent(ctx.env,ctx.deps,signed.raw,signed.signature);await processStripeEvent(ctx.env,ctx.deps,id);return getBillingPlan(ctx.env,s.userId);};
+    expect(await apply('customer.subscription.created')).toMatchObject({plan:'pro',status:'trialing',renewsAt:new Date(1800000000*1000).toISOString(),cancelAt:null,trialEligible:false,canManage:true});
+    sub={...subscription('active'),cancel_at_period_end:true};
+    expect(await apply()).toMatchObject({plan:'pro',status:'active',renewsAt:null,cancelAt:new Date(1800000000*1000).toISOString()});
+    sub=subscription('past_due');
+    expect(await apply('invoice.payment_failed')).toMatchObject({plan:'free',status:'past_due',canManage:true});
+    sub=subscription('unpaid');
+    expect(await apply()).toMatchObject({plan:'free',status:'unpaid'});
+    sub={...subscription('active'),items:{data:[{price:{id:'price_annual'},current_period_end:1900000000}]}};
+    expect(await apply('invoice.paid')).toMatchObject({plan:'pro',status:'active',renewsAt:new Date(1900000000*1000).toISOString(),cancelAt:null});
   });
   it('does not grant pro for an unapproved price',async()=>{
     const {ctx}=setup();const s=await web(ctx);await mapped(ctx,s.userId);const sub=subscription();sub.items.data=[{price:{id:'price_other'},current_period_end:1800000000}];ctx.net.on('GET','https://api.stripe.com/v1/subscriptions',{data:[sub],has_more:false});const good=event(ctx);await acceptStripeEvent(ctx.env,ctx.deps,good.raw,good.signature);await processStripeEvent(ctx.env,ctx.deps,'evt_test');expect(await getBillingPlan(ctx.env,s.userId)).toMatchObject({plan:'free'});

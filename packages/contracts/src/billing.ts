@@ -5,6 +5,10 @@ export const BillingPlan = z.object({
   status: z.string(),
   renewsAt: IsoDateTime.nullable(),
   cancelAt: IsoDateTime.nullable(),
+  /** True until this account has had a subscription; the 7-day trial is for a first subscription only. Missing (an older API) reads as false. */
+  trialEligible: z.boolean().default(false),
+  /** True when a billing account with history exists, so the portal can be opened (including after a fall back to Free). */
+  canManage: z.boolean().default(false),
 });
 export type BillingPlan = z.infer<typeof BillingPlan>;
 export const CheckoutRequest = z.object({ priceKey: z.enum(["pro_monthly", "pro_annual"]) }).strict();

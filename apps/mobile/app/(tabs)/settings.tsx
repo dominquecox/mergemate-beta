@@ -23,6 +23,7 @@ import { LoadingState } from "../../src/components/LoadingState";
 import { useLayout } from "../../src/layout/useLayout";
 import { Icon } from "../../src/components/Icon";
 import { BrowserNotificationsRow } from "../../src/components/BrowserNotificationsRow";
+import { billingStatusLabel } from "../../src/config/billing";
 
 export default function SettingsScreen() {
   const router = useRouter();
@@ -47,7 +48,9 @@ export default function SettingsScreen() {
 
   const [billing, setBilling] = useState<BillingPlan>({
     plan: "free",
-    status: "active",
+    status: "none",
+    trialEligible: false,
+    canManage: false,
   });
 
   // null means this API does not offer the feature, so the section is left out.
@@ -217,7 +220,7 @@ export default function SettingsScreen() {
           </SettingsGroup>
           <SettingsGroup title="Workspace repositories">
             <SettingsRow first label="Configure repositories" detail="Manage which repositories appear in your inbox" icon="folder-open-outline" onPress={()=>router.push('/(auth)/repos')}/>
-            {canShowBillingRow && <SettingsRow label={Platform.OS==='web'?'Manage Billing & Plans':'Manage Plan'} detail={billing.status.replace(/_/g,' ')} icon="card-outline" onPress={handleManagePlan} trailing={<View style={{flexDirection:'row',alignItems:'center',gap:8}}><View style={{paddingHorizontal:8,paddingVertical:3,borderRadius:9999,backgroundColor:colors.brandSubtle}}><Text style={[typography.caption,{color:colors.brandLight,textTransform:'uppercase'}]}>{billing.plan}</Text></View><Icon name="chevron-forward" size={16} color={colors.textSecondary}/></View>}/>}
+            {canShowBillingRow && <SettingsRow label={Platform.OS==='web'?'Manage Billing & Plans':'Manage Plan'} detail={billingStatusLabel(billing.status)} icon="card-outline" onPress={handleManagePlan} trailing={<View style={{flexDirection:'row',alignItems:'center',gap:8}}><View style={{paddingHorizontal:8,paddingVertical:3,borderRadius:9999,backgroundColor:colors.brandSubtle}}><Text style={[typography.caption,{color:colors.brandLight,textTransform:'uppercase'}]}>{billing.plan}</Text></View><Icon name="chevron-forward" size={16} color={colors.textSecondary}/></View>}/>}
           </SettingsGroup>
           <SettingsGroup title="Push notifications & triage">
             {([['review','Review requests','When someone asks for your review'],['mention','Mentions','When someone mentions you'],['mine','My pull requests','Updates to pull requests you opened']] as const).map(([kind,label,hint],index)=><SettingsRow key={kind} first={index===0} label={label} detail={hint} trailing={<Switch value={settings?.notifications[kind] ?? true} onValueChange={value=>{if(settings)void saveSettings({notifications:{...settings.notifications,[kind]:value}});}} disabled={isDemo || !settings || saving || preferenceBusy} accessibilityLabel={label} trackColor={{false:colors.surfaceSecondary,true:colors.brand}} thumbColor="#FFFFFF"/>}/>)}

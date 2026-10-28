@@ -6,8 +6,15 @@ import { ApiError } from "../errors";
 import { expireCheckout, openCheckouts, stripeRequest, subscriptions } from "./stripe";
 export type BillingAccount = { user_id:string; customer_id:string|null; plan:"free"|"pro"; status:string; subscription_id:string|null; renews_at:string|null; cancel_at:string|null; deleting:number };
 export async function getBillingPlan(env: Env, userId: string): Promise<BillingPlan> {
-  const row=await requireBinding(env,"DB").prepare('SELECT plan,status,renews_at,cancel_at FROM billing_accounts WHERE user_id=?').bind(userId).first<BillingAccount>();
-  return {plan:row?.plan??"free",status:row?.status??"none",renewsAt:row?.renews_at??null,cancelAt:row?.cancel_at??null};
+  const row=await requireBinding(env,"DB").prepare('SELECT plan,status,renews_at,cancel_at,customer_id,subscription_id,deleting FROM billing_accounts WHERE user_id=?').bind(userId).first<BillingAccount>();
+  const status=row?.status??"none";
+  // "none" means no subscription has ever been recorded for this account (webhooks keep the last status otherwise).
+  const subscribedBefore=status!=="none" || Boolean(row?.subscription_id);
+  return {
+    plan:row?.plan??"free",status,renewsAt:row?.renews_at??null,cancelAt:row?.cancel_at??null,
+    trialEligible:!subscribedBefore,
+    canManage:Boolean(row?.customer_id) && !row?.deleting && subscribedBefore,
+  };
 }
 export async function billingOperation<T>(env: Env,deps: Deps,userId: string,run:(row:BillingAccount)=>Promise<T>,deleting=false): Promise<T> {
   const db=requireBinding(env,"DB");const token=crypto.randomUUID();

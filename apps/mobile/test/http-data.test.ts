@@ -309,8 +309,8 @@ describe("highlight, billing and public content", () => {
   });
 
   it("maps the billing plan", async () => {
-    const { client } = native(() => jsonResponse({ plan: "free", status: "none", renewsAt: null, cancelAt: null }));
-    await expect(client.getBillingPlan()).resolves.toEqual({ plan: "free", status: "none" });
+    const { client } = native(() => jsonResponse({ plan: "free", status: "none", renewsAt: null, cancelAt: null, trialEligible: true, canManage: false }));
+    await expect(client.getBillingPlan()).resolves.toEqual({ plan: "free", status: "none", trialEligible: true, canManage: false });
   });
 
   it("lists public posts without a session and maps them to the news and changelog cards", async () => {

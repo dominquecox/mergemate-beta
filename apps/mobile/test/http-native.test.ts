@@ -172,7 +172,7 @@ describe("HttpApiClient on native (bearer session)", () => {
   });
 
   it("reads the billing plan with the bearer token", async () => {
-    const { client } = native(() => jsonResponse({ plan: "pro", status: "active", renewsAt: NOW, cancelAt: null }));
-    await expect(client.getBillingPlan()).resolves.toEqual({ plan: "pro", status: "active", renewsAt: NOW });
+    const { client } = native(() => jsonResponse({ plan: "pro", status: "active", renewsAt: NOW, cancelAt: null, trialEligible: false, canManage: true }));
+    await expect(client.getBillingPlan()).resolves.toEqual({ plan: "pro", status: "active", renewsAt: NOW, trialEligible: false, canManage: true });
   });
 });

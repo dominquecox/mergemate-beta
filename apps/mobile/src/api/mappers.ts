@@ -129,6 +129,8 @@ export function mapBillingPlan(plan: ContractBillingPlan): BillingPlan {
   return {
     plan: plan.plan,
     status: plan.status,
+    trialEligible: plan.trialEligible,
+    canManage: plan.canManage,
     ...(plan.renewsAt ? { renewsAt: plan.renewsAt } : {}),
     ...(plan.cancelAt ? { cancelAt: plan.cancelAt } : {}),
   };
