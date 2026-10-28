@@ -199,3 +199,11 @@ describe('site routing and headers', () => {
     assert.equal((await dispatch('https://evil.example/')).status, 404);
   });
 });
+
+it('preserves public post URLs with fixed-target redirects and leaves waitlist routes intact',async()=>{
+  for(const [path,target] of [['/news','/news'],['/changelog','/changelog'],['/news/hello?next=https://evil.example','/posts/hello'],['/changelog/release-one','/posts/release-one']]){
+    const response=await dispatch(origin+path);assert.equal(response.status,302);assert.equal(response.headers.get('Location'),'https://app.mergemate.dev'+target);assert.equal(response.headers.get('Cache-Control'),'no-cache');
+  }
+  const bad=await dispatch(origin+'/news/bad%2Fslug');assert.equal(bad.status,404);
+  const home=await dispatch(origin+'/');assert.equal(home.status,200);assert.match(await home.text(),/waitlist/i);
+});

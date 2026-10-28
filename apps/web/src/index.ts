@@ -153,6 +153,9 @@ export default {
     }
 
     const { pathname } = new URL(request.url);
+    const legacyPost = /^\/(?:news|changelog)\/([a-z0-9](?:[a-z0-9-]{0,98}[a-z0-9])?)$/.exec(pathname);
+    if (legacyPost) return withHeaders(new Response(null, {status:302,headers:{Location:`/posts/${legacyPost[1]}`}}),csp,{"Cache-Control":"no-cache"});
+
     if (pathname === "/health") {
       return withHeaders(Response.json({ ok: true }), csp, { "Cache-Control": "no-store" });
     }

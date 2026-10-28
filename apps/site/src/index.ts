@@ -147,6 +147,10 @@ async function handle(request: Request, env: Env, ctx: ExecutionContext): Promis
   if (url.pathname === '/api/waitlist' && request.method === 'POST') return signup(request, env, ctx);
   if (url.pathname === '/waitlist/remove') return removal(request, env, url);
   if (request.method !== 'GET' && request.method !== 'HEAD') return error('method_not_allowed', 405);
+  // Existing public RSS URLs stay stable; the app's public reader owns article rendering.
+  const article=/^\/(news|changelog)\/([a-z0-9](?:[a-z0-9-]{0,98}[a-z0-9])?)$/.exec(url.pathname);
+  const publicList=['/news','/changelog'].includes(url.pathname)?url.pathname:null;
+  if(article||publicList)return secure(new Response(null,{status:302,headers:{Location:`https://app.mergemate.dev${article?`/posts/${article[2]}`:publicList}`}}),'html');
   if (url.pathname === '/api/health') return json({ ok: true });
   if (url.pathname === '/api/config') return json({ siteKey: env.TURNSTILE_SITE_KEY });
   const file = Object.hasOwn(PAGES, url.pathname) ? PAGES[url.pathname] : (ASSETS.test(url.pathname) ? url.pathname : null);

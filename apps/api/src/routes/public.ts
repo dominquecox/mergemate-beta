@@ -14,14 +14,16 @@ const RESEND_URL = "https://api.resend.com/emails";
 
 /** Reads the published index from KV, keeping only entries that match the contract. */
 const readIndex = async (c: Context<AppEnv>) => {
-  const raw: unknown = await requireBinding(c.env, "POSTS").get("posts:index", "json");
-  const entries = Array.isArray(raw) ? raw : [];
+  let raw:unknown;
+  try { raw=await requireBinding(c.env,"POSTS").get("posts:index","json"); }
+  catch { throw new ApiError("upstream_unavailable","Published updates are unavailable."); }
+  if(raw!==null && !Array.isArray(raw))throw new ApiError("upstream_unavailable","Published updates are unavailable.");
+  const entries=Array.isArray(raw)?raw:[];
+  const seen=new Set<string>();
   return entries
-    .flatMap((e) => {
-      const parsed = PostSummary.safeParse(e);
-      return parsed.success ? [parsed.data] : [];
-    })
-    .sort((a, b) => Date.parse(b.publishedAt) - Date.parse(a.publishedAt));
+    .flatMap((e) => { const parsed=PostSummary.safeParse(e);return parsed.success?[parsed.data]:[]; })
+    .sort((a,b)=>Date.parse(b.publishedAt)-Date.parse(a.publishedAt)||a.slug.localeCompare(b.slug)||a.type.localeCompare(b.type))
+    .filter(post=>{if(seen.has(post.slug))return false;seen.add(post.slug);return true;});
 };
 
 /**
@@ -92,6 +94,8 @@ ${items
     const raw: unknown = await requireBinding(c.env, "POSTS").get(`posts:${slug}`, "json");
     const post = Post.safeParse(raw);
     if (!post.success || post.data.slug !== slug) throw new ApiError("not_found", "Not found.");
+    const published=(await readIndex(c)).find(item=>item.slug===slug);
+    if(!published || published.type!==post.data.type || published.publishedAt!==post.data.publishedAt)throw new ApiError("not_found","Not found.");
     c.header("cache-control", PUBLIC_CACHE);
     return c.json({ ...post.data, body: sanitizeMarkdown(post.data.body) } satisfies Post);
   })

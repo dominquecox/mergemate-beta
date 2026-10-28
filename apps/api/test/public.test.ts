@@ -154,3 +154,34 @@ describe("POST /v1/public/support", () => {
     expect((await appFor(ctx)("/v1/public/support", post(valid))).status).toBe(502);
   });
 });
+it("deduplicates index slugs deterministically and keeps only the newest publication",async()=>{
+  const ctx=testContext();const older=summary('one','news','2026-10-20T10:00:00Z');const newer={...older,publishedAt:'2026-10-28T10:00:00Z',title:'New title'};
+  ctx.kv.set('posts:index',JSON.stringify([older,newer,older]));
+  const response=await appFor(ctx)('/v1/public/posts?type=news');
+  expect(PostList.parse(await response.json()).items).toEqual([newer]);
+});
+it("never serves an unlisted or mismatched published snapshot or private fields",async()=>{
+  const ctx=testContext();const post={...summary('hidden','news','2026-10-28T10:00:00Z'),body:'Published only after index commit',draft_json:'private',actor_email:'private'};
+  ctx.kv.set('posts:hidden',JSON.stringify(post));
+  const call=appFor(ctx);expect((await call('/v1/public/posts/hidden')).status).toBe(404);
+  ctx.kv.set('posts:index',JSON.stringify([{...post,publishedAt:'2026-10-20T10:00:00Z'}]));
+  expect((await call('/v1/public/posts/hidden')).status).toBe(404);
+  ctx.kv.set('posts:index',JSON.stringify([post]));
+  const response=await call('/v1/public/posts/hidden');expect(response.status).toBe(200);
+  const body=await response.json() as Record<string,unknown>;expect(body.body).toBe(post.body);expect(body.draft_json).toBeUndefined();expect(body.actor_email).toBeUndefined();
+});
+
+it("reports malformed/unavailable indexes instead of fabricated empty updates",async()=>{
+  const ctx=testContext();ctx.kv.set('posts:index',JSON.stringify({private:'not-an-index'}));
+  const response=await appFor(ctx)('/v1/public/posts');expect(response.status).toBe(502);expect(response.headers.get('cache-control')).toBe('no-store');
+});
+
+it("pages a bounded public index without duplicate slugs",async()=>{
+  const ctx=testContext();const entries=Array.from({length:53},(_,n)=>summary(`post-${n}`,'news','2026-10-28T10:00:00Z'));
+  ctx.kv.set('posts:index',JSON.stringify(entries));const call=appFor(ctx);
+  const first=PostList.parse(await (await call('/v1/public/posts?type=news')).json());
+  const second=PostList.parse(await (await call('/v1/public/posts?type=news&cursor='+first.nextCursor)).json());
+  expect(first.items).toHaveLength(50);expect(second.items).toHaveLength(3);expect(second.nextCursor).toBeNull();
+  expect(new Set([...first.items,...second.items].map(p=>p.slug)).size).toBe(53);
+  expect((await call('/v1/public/posts?cursor=10001')).status).toBe(422);
+});

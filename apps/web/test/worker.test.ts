@@ -248,3 +248,10 @@ describe("Android App Links (/.well-known/assetlinks.json)", () => {
     expect(buildAssetLinks("https://api.mergemate.dev", "").isPlaceholder).toBe(true);
   });
 });
+
+it("routes stable public RSS detail paths to the full reader without reflecting query destinations",async()=>{
+  for(const path of ['/news/hello','/changelog/release-one?next=https://evil.example']){
+    const response=await get(path);expect(response.status).toBe(302);expect(response.headers.get('Location')).toBe(path.startsWith('/news')?'/posts/hello':'/posts/release-one');
+    expect(response.headers.get('Cache-Control')).toBe('no-cache');
+  }
+});

@@ -91,6 +91,8 @@ export interface ApiClient {
 
   // Public
   getPublicPosts(type: "news" | "changelog"): Promise<PublicPost[]>;
+  getPublicPostPage(type:"news"|"changelog",cursor?:string|null):Promise<{items:PublicPost[];nextCursor:string|null}>;
+  getPublicPost(slug:string):Promise<PublicPost>;
   sendSupportMessage(email: string, message: string): Promise<void>;
 }
 

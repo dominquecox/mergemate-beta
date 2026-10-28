@@ -71,7 +71,11 @@ describe("MM-035 UI Polish & Accessibility", () => {
     );
     expect(screens.length).toBeGreaterThanOrEqual(17);
     for (const file of screens) {
-      const src = fs.readFileSync(file, "utf8");
+      const route = fs.readFileSync(file, "utf8");
+      // Public reader routes delegate their real state branches to a shared component.
+      const src = route.includes('components/PublicPostReader')
+        ? route + fs.readFileSync(path.resolve(__dirname, '../src/components/PublicPostReader.tsx'), 'utf8')
+        : route;
       expect(src, `${path.basename(file)} missing LoadingState`).toContain("LoadingState");
       expect(src, `${path.basename(file)} missing EmptyState`).toContain("EmptyState");
       expect(src, `${path.basename(file)} missing ErrorState`).toContain("ErrorState");

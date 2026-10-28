@@ -16,6 +16,8 @@ import {
   MetaKeyStatus,
   NotificationPage,
   PostList,
+  Post,
+  PostSlug,
   PrDetail as PrDetailSchema,
   PrFile as PrFileSchema,
   PrThread as PrThreadSchema,
@@ -726,8 +728,22 @@ export class HttpApiClient implements ApiClient {
   // ---------------------------------------------------------------------------------------------
 
   async getPublicPosts(type: "news" | "changelog"): Promise<PublicPost[]> {
-    const res = await this.request({ path: `/public/posts?type=${enc(type)}`, auth: false, schema: PostList });
-    return res.items.map(mapPostSummary);
+    return (await this.getPublicPostPage(type)).items;
+  }
+
+  async getPublicPostPage(type:"news"|"changelog",cursor?:string|null):Promise<{items:PublicPost[];nextCursor:string|null}> {
+    if(cursor && (!/^\d+$/.test(cursor) || Number(cursor)>10_000))throw new ApiClientError("validation_failed",messageForCode("validation_failed"));
+    const res=await this.request({path:`/public/posts?type=${enc(type)}${cursor?`&cursor=${enc(cursor)}`:''}`,auth:false,schema:PostList});
+    if(res.nextCursor!==null && (!/^\d+$/.test(res.nextCursor) || Number(res.nextCursor)<=Number(cursor??0) || Number(res.nextCursor)>10_000))throw new ApiClientError("parse_failed",messageForCode("parse_failed"));
+    const seen=new Set<string>();
+    return {items:res.items.filter(post=>{if(seen.has(post.slug))return false;seen.add(post.slug);return true;}).map(mapPostSummary),nextCursor:res.nextCursor};
+  }
+
+  async getPublicPost(slug:string):Promise<PublicPost> {
+    if(!PostSlug.safeParse(slug).success)throw new ApiClientError("not_found",messageForCode("not_found"));
+    const post=await this.request({path:`/public/posts/${enc(slug)}`,auth:false,schema:Post});
+    if(post.slug!==slug)throw new ApiClientError("parse_failed",messageForCode("parse_failed"));
+    return mapPostSummary(post);
   }
 
   async sendSupportMessage(email: string, message: string): Promise<void> {

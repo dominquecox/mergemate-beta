@@ -1,3 +1,4 @@
+import { ApiClientError } from "./errors";
 import { AI_CONSENT_VERSION } from "../config/consent";
 import { ApiClient } from "./client";
 import {
@@ -554,6 +555,17 @@ export class MockApiClient implements ApiClient {
 
   async getPublicPosts(type: "news" | "changelog"): Promise<PublicPost[]> {
     return this.publicPosts.filter((p) => p.type === type);
+  }
+
+  async getPublicPostPage(type:"news"|"changelog",cursor?:string|null):Promise<{items:PublicPost[];nextCursor:string|null}> {
+    const all=await this.getPublicPosts(type);const offset=Number(cursor??0);
+    if(!Number.isSafeInteger(offset)||offset<0)throw new ApiClientError("validation_failed","Invalid page.");
+    return {items:all.slice(offset,offset+50),nextCursor:offset+50<all.length?String(offset+50):null};
+  }
+  async getPublicPost(slug:string):Promise<PublicPost> {
+    const post=this.publicPosts.find(item=>item.slug===slug);
+    if(!post)throw new ApiClientError("not_found","This post is unavailable.");
+    return post;
   }
 
   async sendSupportMessage(_email: string, _message: string): Promise<void> {
