@@ -10,7 +10,7 @@ STRIPE_MODE = "test"
 WEB_ORIGIN = "http://localhost:8081"
 SITE_ORIGIN = "https://dev.mergemate.dev"
 GITHUB_APP_CLIENT_ID = "Iv1.submission-dev-example"
-GITHUB_APP_SLUG = "submission-production-example"
+GITHUB_APP_SLUG = "submission-dev-example"
 MODEL_ROUTE_SUMMARY = "meta:muse-spark-1.2"
 # Event profile: every route on Meta's Muse models. Cost profile (after judging): risk and triage on
 # workers-ai:@cf/meta/llama-3.3-70b-instruct-fp8-fast, highlight on workers-ai:@cf/meta/llama-4-scout-17b-16e-instruct.
@@ -106,7 +106,7 @@ STRIPE_MODE = "test"
 WEB_ORIGIN = "https://dev.mergemate.dev"
 SITE_ORIGIN = "https://dev.mergemate.dev"
 GITHUB_APP_CLIENT_ID = "Iv1.submission-dev-example"
-GITHUB_APP_SLUG = "submission-production-example"
+GITHUB_APP_SLUG = "submission-dev-example"
 MODEL_ROUTE_SUMMARY = "meta:muse-spark-1.2"
 # Event profile: every route on Meta's Muse models. Cost profile (after judging): risk and triage on
 # workers-ai:@cf/meta/llama-3.3-70b-instruct-fp8-fast, highlight on workers-ai:@cf/meta/llama-4-scout-17b-16e-instruct.
