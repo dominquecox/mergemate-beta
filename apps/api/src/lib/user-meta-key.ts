@@ -26,7 +26,7 @@ export async function verifyMetaKey(env: Env,deps: Deps,key: string) {
     response=await deps.fetch(`${config.baseUrl}/responses`,{
       method:'POST',headers:{authorization:`Bearer ${key}`,'content-type':'application/json','cf-aig-collect-log':'false','cf-aig-skip-cache':'true','cf-aig-max-attempts':'1','cf-aig-no-wholesale':'true'},
       body:JSON.stringify({model:config.modelId,input:'Reply OK.',max_output_tokens:16,reasoning:{effort:'low'},store:false}),
-      signal:AbortSignal.timeout(20_000),redirect:'error',
+      signal:AbortSignal.timeout(20_000),redirect:'manual', // Workers reject 'error'; a 3xx fails !response.ok below
     });
   } catch { throw new ApiError('upstream_unavailable','The Meta key could not be checked. Try again.'); }
   if(!response.ok){

@@ -19,8 +19,12 @@ export const verifyTurnstile = async (c: Context<AppEnv>, token: string) => {
       }),
       signal: AbortSignal.timeout(20_000),
     })
-    .then((res) => (res.ok ? (res.json() as Promise<{ success?: boolean }>) : null))
-    .catch(() => null);
-  if (!result) throw new ApiError("upstream_unavailable", "The bot check is unavailable. Try again.");
-  if (result.success !== true) throw new ApiError("forbidden", "The bot check failed. Try again.");
+    .then(async (res) => (res.ok ? ((await res.json()) as { success?: boolean; "error-codes"?: unknown }) : `siteverify status ${res.status}`))
+    .catch((e: unknown) => `siteverify ${e instanceof Error ? e.name : "error"}`);
+  // Logs carry only the status or Cloudflare's error codes, never the token or secret.
+  if (typeof result === "string") throw new ApiError("upstream_unavailable", "The bot check is unavailable. Try again.", {}, result);
+  if (result.success !== true) {
+    const codes = Array.isArray(result["error-codes"]) ? result["error-codes"].filter((v) => typeof v === "string").join(",") : "";
+    throw new ApiError("forbidden", "The bot check failed. Try again.", {}, `turnstile rejected ${codes || "unknown"}`);
+  }
 };

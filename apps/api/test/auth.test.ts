@@ -1,5 +1,5 @@
 import { ErrorBody } from "@mergemate/contracts";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { json, testContext } from "./helpers";
 import { appFor, ghUser, post, signIn, tokenResponse, verifierPair } from "./sign-in";
 
@@ -264,6 +264,19 @@ describe("demo", () => {
     ctx.net.on("POST", "https://challenges.cloudflare.com/turnstile/v0/siteverify", () => turnstile(false));
     const res = await appFor(ctx)("/v1/auth/demo", post({ turnstileToken: "tt", platform: "web" }));
     expect(res.status).toBe(403);
+    expect(ctx.db.rows("SELECT * FROM sessions")).toHaveLength(0);
+  });
+
+  it("logs only the siteverify status when the bot check service fails", async () => {
+    const ctx = testContext();
+    ctx.net.on("POST", "https://challenges.cloudflare.com/turnstile/v0/siteverify", () => new Response("down", { status: 500 }));
+    const logged: string[] = [];
+    const spy = vi.spyOn(console, "error").mockImplementation((line: unknown) => { logged.push(String(line)); });
+    const res = await appFor(ctx)("/v1/auth/demo", post({ turnstileToken: "secret-token-value", platform: "web" }));
+    spy.mockRestore();
+    expect(res.status).toBe(502);
+    expect(logged.join("\n")).toContain("siteverify status 500");
+    expect(logged.join("\n")).not.toContain("secret-token-value");
     expect(ctx.db.rows("SELECT * FROM sessions")).toHaveLength(0);
   });
 });
