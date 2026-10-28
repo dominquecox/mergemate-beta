@@ -1,3 +1,5 @@
+import fs from "node:fs";
+import path from "node:path";
 import { describe, it, expect } from "vitest";
 import { NOW, USER, errorResponse, jsonResponse, makeClient, type Handler } from "./helpers";
 
@@ -335,6 +337,11 @@ describe("highlight, billing and public content", () => {
       code: "bot_check_unavailable",
     });
     expect(without.calls).toHaveLength(0);
+  });
+
+  it("support form source validates email address before submission", () => {
+    const supportSource = fs.readFileSync(path.resolve(__dirname, "../app/(public)/support.tsx"), "utf8");
+    expect(supportSource).toContain("Please enter a valid email address.");
   });
 
   it("reads health without a session", async () => {

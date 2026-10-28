@@ -27,6 +27,10 @@ export default function SupportScreen() {
       setError("Please enter both your email address and your message before sending.");
       return;
     }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+      setError("Please enter a valid email address.");
+      return;
+    }
     setIsSending(true);
     setError(null);
     try {
