@@ -1,3 +1,5 @@
+import fs from "node:fs";
+import path from "node:path";
 import { describe, it, expect, vi } from "vitest";
 import { getInMemoryCsrfToken, setInMemoryCsrfToken } from "../src/api/client";
 import { ApiClientError } from "../src/api/errors";
@@ -179,5 +181,11 @@ describe("HttpApiClient on web (cookie session)", () => {
     await client.getMe();
     expect(store.gets).toBe(0);
     expect(store.sets).toEqual([]);
+  });
+
+  it("enforces aria-checked on billing plan radio controls for WCAG accessibility", () => {
+    const billingSource = fs.readFileSync(path.resolve(__dirname, "../app/billing/index.tsx"), "utf8");
+    expect(billingSource).toContain('checked: billingCycle === "monthly"');
+    expect(billingSource).toContain('checked: billingCycle === "annual"');
   });
 });

@@ -163,7 +163,7 @@ export default function BillingScreen() {
                 <TouchableOpacity
                   onPress={() => setBillingCycle("monthly")}
                   accessibilityRole="radio"
-                  accessibilityState={{ selected: billingCycle === "monthly" }}
+                  accessibilityState={{ selected: billingCycle === "monthly", checked: billingCycle === "monthly" }}
                   accessibilityLabel={`Monthly plan, ${BILLING_CONFIG.pro.monthly.label}`}
                   style={[
                     styles.cycleTab,
@@ -180,7 +180,7 @@ export default function BillingScreen() {
                 <TouchableOpacity
                   onPress={() => setBillingCycle("annual")}
                   accessibilityRole="radio"
-                  accessibilityState={{ selected: billingCycle === "annual" }}
+                  accessibilityState={{ selected: billingCycle === "annual", checked: billingCycle === "annual" }}
                   accessibilityLabel={`Annual plan, ${BILLING_CONFIG.pro.annual.label}, 25 percent off`}
                   style={[
                     styles.cycleTab,
