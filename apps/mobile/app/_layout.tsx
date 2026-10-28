@@ -12,6 +12,7 @@ import { AppFonts } from "../src/components/AppFonts";
 import { Sidebar } from "../src/components/Sidebar";
 import { SIDEBAR_WIDTH, resolveShell, requiresSession } from "../src/layout/breakpoints";
 import { resolveHardwareBackAction, useAndroidBackHandler } from "../src/platform/android";
+import { registerServiceWorker } from "../src/platform/serviceWorker";
 
 function AppContent() {
   const { colors, isDark } = useTheme();
@@ -19,6 +20,11 @@ function AppContent() {
   const { session, isLoading } = useAuth();
   const { width } = useWindowDimensions();
   const segments = useSegments() as string[];
+
+  // Web release builds: the service worker serves the offline page and receives Web Push. Never prompts.
+  useEffect(() => {
+    if (Platform.OS === "web" && !__DEV__) void registerServiceWorker();
+  }, []);
 
   // Android hardware Back / gesture back from secondary tabs returns to Inbox before exiting the app.
   useAndroidBackHandler(() => {

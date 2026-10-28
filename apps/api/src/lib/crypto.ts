@@ -15,6 +15,9 @@ const fromBase64 = (value: string) => {
   return Uint8Array.from(binary, (ch) => ch.charCodeAt(0));
 };
 
+/** Decodes base64 or base64url (padding optional). Throws on malformed input. */
+export const fromBase64url = fromBase64;
+
 /** 256-bit random value, base64url encoded. */
 export const randomToken = () => base64url(crypto.getRandomValues(new Uint8Array(32)));
 

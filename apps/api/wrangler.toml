@@ -20,6 +20,9 @@ MODEL_ROUTE_HIGHLIGHT = "meta:muse-spark-1.2"
 MODEL_BASE_URL = "https://api.meta.ai/v1"
 # Initial value; confirm before launch.
 AI_GLOBAL_DAILY_ACTIONS = "300"
+# Browser notifications (Web Push): the public half of this environment's VAPID pair (not a secret).
+# Set to the value printed by apps/api/scripts/vapid-keys.mjs (one pair per environment). Empty keeps the feature off.
+VAPID_PUBLIC_KEY = ""
 # Non-secret per-env salt for hashing telemetry user indexes. Distinct per environment
 # so indexes cannot be joined across datasets.
 TELEMETRY_SALT = "submission-local-example-salt-configure-your-own"
@@ -109,6 +112,9 @@ MODEL_ROUTE_HIGHLIGHT = "meta:muse-spark-1.2"
 MODEL_BASE_URL = "https://api.meta.ai/v1"
 # Initial value; confirm before launch.
 AI_GLOBAL_DAILY_ACTIONS = "300"
+# Browser notifications (Web Push): the public half of this environment's VAPID pair (not a secret).
+# Set to the value printed by apps/api/scripts/vapid-keys.mjs (one pair per environment). Empty keeps the feature off.
+VAPID_PUBLIC_KEY = ""
 # Non-secret per-env salt for hashing telemetry user indexes. Distinct per environment
 # so indexes cannot be joined across datasets.
 TELEMETRY_SALT = "submission-dev-example-salt-configure-your-own"
@@ -194,6 +200,9 @@ MODEL_ROUTE_HIGHLIGHT = "meta:muse-spark-1.2"
 MODEL_BASE_URL = "https://api.meta.ai/v1"
 # Initial value; confirm before launch.
 AI_GLOBAL_DAILY_ACTIONS = "300"
+# Browser notifications (Web Push): the public half of this environment's VAPID pair (not a secret).
+# Set to the value printed by apps/api/scripts/vapid-keys.mjs (one pair per environment). Empty keeps the feature off.
+VAPID_PUBLIC_KEY = ""
 # Non-secret per-env salt for hashing telemetry user indexes. Distinct per environment
 # so indexes cannot be joined across datasets.
 TELEMETRY_SALT = "submission-production-example-salt-configure-your-own"

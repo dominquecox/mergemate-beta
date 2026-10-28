@@ -7,6 +7,7 @@ import { ApiClientError, toUserMessage } from "../api/errors";
 import { createPkcePair } from "../auth/pkce";
 import { validGitHubAuthorizeUrl } from "../navigation/links";
 import { refreshPushRegistration, unregisterPush } from "../push/registration";
+import { disableWebPush, dropWebPush, refreshWebPush } from "../push/web";
 
 export type SignInResult = "signed_in" | "redirected" | "failed";
 
@@ -81,6 +82,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             .then((fresh) => setSession(fresh))
             .catch(() => undefined);
           if (!isWeb) refreshPushRegistration(api).catch(() => undefined);
+          else refreshWebPush(api, me.id).catch(() => undefined);
         }
       }
     } catch (e) {
@@ -109,6 +111,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setSession(null);
       setIsDemo(false);
       StorageService.setDemoFlag(false).catch(() => undefined);
+      // The server removed this browser's push row with the session; stop the browser subscription too.
+      if (isWeb && !api.isMock) dropWebPush().catch(() => undefined);
       setError("Your session has ended. Sign in again to continue.");
     });
     return () => api.setUnauthorizedHandler(null);
@@ -125,6 +129,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(res.user);
     setIsDemo(demo);
     if (!demo && !api.isMock && !isWeb) refreshPushRegistration(api).catch(() => undefined);
+    // Web: keeps this person's browser registered, and removes one left by someone else (the demo never has one).
+    if (!api.isMock && isWeb) (demo ? dropWebPush() : refreshWebPush(api, res.user.id)).catch(() => undefined);
   };
 
   const signInWithGithub = async (_platform: "ios" | "web"): Promise<SignInResult> => {
@@ -190,6 +196,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setIsLoading(true);
     try {
       if (!isWeb && !isDemo && !api.isMock) await unregisterPush(api).catch(() => undefined);
+      if (isWeb && !isDemo && !api.isMock) await disableWebPush(api).catch(() => undefined);
       await api.logout();
     } catch {
       // The local session is cleared either way.

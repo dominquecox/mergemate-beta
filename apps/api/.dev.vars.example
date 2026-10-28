@@ -12,6 +12,8 @@ TOKEN_ENCRYPTION_KEY_PREVIOUS=
 STRIPE_SECRET_KEY=
 STRIPE_WEBHOOK_SECRET=
 EXPO_ACCESS_TOKEN=
+# Web Push private key (base64url, 32 bytes). Generate the pair with: node apps/api/scripts/vapid-keys.mjs
+VAPID_PRIVATE_KEY=
 RESEND_API_KEY=
 TURNSTILE_SECRET_KEY=
 # Support mail addresses (not secret, but kept out of the repo)
@@ -30,6 +32,8 @@ SUPPORT_EMAIL=
 # MODEL_ROUTE_TRIAGE=
 # MODEL_ROUTE_HIGHLIGHT=
 # MODEL_BASE_URL=
+# The matching Web Push public key is in wrangler.toml [vars] (not a secret); uncomment only to override locally.
+# VAPID_PUBLIC_KEY=
 # Optional, not a secret: the AI Gateway id for Workers AI calls. Leave unset to call without a gateway.
 # AI_GATEWAY_ID=
 # Non-secret per-env salt for hashing telemetry user indexes (like wrangler.toml TELEMETRY_SALT).

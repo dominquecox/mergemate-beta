@@ -34,7 +34,8 @@ export async function deliverGitHubPush(env: Env, deps: Deps, message: GitHubEve
     // checked yet. Everyone else is skipped without GitHub calls, so a busy repo cannot exhaust the
     // Worker's subrequest budget on unrelated users. Candidates are still re-verified below.
     const users = await db.prepare(`SELECT u.id FROM users u WHERE u.status='active' AND u.id>?
-      AND EXISTS(SELECT 1 FROM push_tokens p WHERE p.user_id=u.id)
+      AND (EXISTS(SELECT 1 FROM push_tokens p WHERE p.user_id=u.id)
+        OR EXISTS(SELECT 1 FROM web_push_subscriptions w WHERE w.user_id=u.id))
       AND (EXISTS(SELECT 1 FROM user_repo_access a WHERE a.user_id=u.id AND a.full_name=? COLLATE NOCASE)
         OR NOT EXISTS(SELECT 1 FROM user_access_checks c WHERE c.user_id=u.id))
       ORDER BY u.id LIMIT 100`).bind(after, data.repo).all<{ id: string }>();
@@ -56,16 +57,18 @@ export async function deliverGitHubPush(env: Env, deps: Deps, message: GitHubEve
             .bind(user.id, data.repo).first())) break;
           const token = await getAccessToken(env, user.id, deps.now());
           let kind: NotificationKind | undefined;
+          let title = "";
           for (const query of queries) {
             const q = `repo:${data.repo} is:pr is:open archived:false ${query.qualifier}`;
             // Use the same supported qualifiers and 1,000-result ceiling as the inbox.
             // Exact numeric matching happens locally, never through a text/title search.
             for (let page = 1; page <= 10; page++) {
-              const result = await githubGet<{ items: { number: number }[]; total_count: number; incomplete_results: boolean }>(
+              const result = await githubGet<{ items: { number: number; title?: string }[]; total_count: number; incomplete_results: boolean }>(
                 deps, token, `/search/issues?q=${encodeURIComponent(q)}&sort=updated&order=desc&per_page=100&page=${page}`,
               );
               if (result.incomplete_results) throw new Error("Incomplete notification lookup");
-              if (result.items.some((item) => item.number === number)) { kind = query.kind; break; }
+              const found = result.items.find((item) => item.number === number);
+              if (found) { kind = query.kind; title = found.title ?? ""; break; }
               if (page * 100 >= result.total_count || result.items.length < 100) break;
             }
             if (kind) break;
@@ -86,7 +89,9 @@ export async function deliverGitHubPush(env: Env, deps: Deps, message: GitHubEve
           // response (or a crash before recording the outcome) must remain claimed.
           let outcome = "failed";
           try {
-            const sent = await sendPushNotification(env, deps, { userId: user.id, kind, notificationId: id }, { retry: false });
+            const sent = await sendPushNotification(
+              env, deps, { userId: user.id, kind, notificationId: id, target: { repo: data.repo, number, title } }, { retry: false },
+            );
             outcome = sent.suppressed ? "suppressed" : sent.accepted > 0 ? "accepted" : "failed";
           } catch { /* A push failure must not retry this queue message. */ }
           await db.prepare("UPDATE notification_push SET outcome=? WHERE user_id=? AND notification_id=?")

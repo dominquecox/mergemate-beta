@@ -46,6 +46,9 @@ export interface Env {
   TOKEN_ENCRYPTION_KEY_PREVIOUS?: string;
   TURNSTILE_SECRET_KEY?: string;
   EXPO_ACCESS_TOKEN?: string;
+  /** Web Push (VAPID, RFC 8292) key pair: public key in [vars] (unpadded base64url, 65-byte uncompressed point), private scalar as a secret. */
+  VAPID_PUBLIC_KEY?: string;
+  VAPID_PRIVATE_KEY?: string;
   RESEND_API_KEY?: string;
   EMAIL_FROM?: string;
   SUPPORT_EMAIL?: string;

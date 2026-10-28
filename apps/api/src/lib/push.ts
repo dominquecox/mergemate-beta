@@ -3,9 +3,11 @@ import { z } from 'zod';
 import { requireBinding } from '../config';
 import type { Deps, Env } from '../env';
 import { ApiError, ConfigError } from '../errors';
+import { siteOrigin } from '../config';
 import { sha256Hex } from './crypto';
 import { getSettings, inQuietHours } from './settings';
 import { IDLE_TTL_MS } from './sessions';
+import { loadVapid, MAX_PLAINTEXT, sendWebPush } from './web-push';
 
 const EXPO_BASE = 'https://exp.host/--/api/v2/push';
 const COPY: Record<Kind, string> = {
@@ -55,11 +57,14 @@ async function expoRequest(
   throw new ApiError('upstream_unavailable', 'The push service is unavailable.');
 }
 
-export interface PushNotice { userId: string; kind: Kind; notificationId: string }
+/** Where a notification leads. Only browsers get it (in the encrypted payload); Expo pushes stay generic. */
+export interface PushTarget { repo: string; number: number; title: string }
+export interface PushNotice { userId: string; kind: Kind; notificationId: string; target?: PushTarget }
+interface PushResult { accepted: number; removed: number; failed: number; suppressed: boolean }
 interface Device { user_id: string; device_id: string; token: string }
 
 /** Internal sender: callers must resolve the recipient's repository access before calling. */
-export async function sendPushNotification(env: Env, deps: Deps, notice: PushNotice, options: { retry?: boolean } = {}) {
+export async function sendPushNotification(env: Env, deps: Deps, notice: PushNotice, options: { retry?: boolean } = {}): Promise<PushResult> {
   if (!NotificationKind.safeParse(notice.kind).success || !/^[A-Za-z0-9_-]{8,400}$/.test(notice.notificationId)) {
     throw new ApiError('validation_failed', 'Invalid push notification.');
   }
@@ -71,6 +76,80 @@ export async function sendPushNotification(env: Env, deps: Deps, notice: PushNot
     return settings.notifications[notice.kind] && !inQuietHours(settings.quietHours, deps.now());
   };
   if (!(await permitted())) return { accepted: 0, removed: 0, failed: 0, suppressed: true };
+  // Browsers first: they need no provider account, so an Expo configuration problem cannot block them.
+  const web = await sendWebNotifications(env, deps, notice, permitted);
+  let expo: PushResult;
+  try {
+    expo = await sendExpoNotification(env, deps, notice, options, permitted);
+  } catch (error) {
+    if (web.accepted > 0) return { ...web, failed: web.failed + 1 };
+    throw error;
+  }
+  return {
+    accepted: expo.accepted + web.accepted,
+    removed: expo.removed + web.removed,
+    failed: expo.failed + web.failed,
+    suppressed: expo.suppressed && web.accepted === 0,
+  };
+}
+
+// eslint-disable-next-line no-control-regex -- stripping control characters is the point
+const SAFE_TITLE = /[\u0000-\u001f\u007f]/g;
+const clip = (value: string, max: number) => {
+  const text = value.replace(SAFE_TITLE, ' ').replace(/\s+/g, ' ').trim();
+  return text.length > max ? `${text.slice(0, max - 1)}…` : text;
+};
+
+interface WebRow { user_id: string; device_id: string; endpoint: string; p256dh: string; auth: string }
+
+/** Web Push to this user's browsers. Never throws: a browser that fails must not affect other channels. */
+async function sendWebNotifications(
+  env: Env, deps: Deps, notice: PushNotice, permitted: () => Promise<boolean>,
+): Promise<PushResult> {
+  const none = { accepted: 0, removed: 0, failed: 0, suppressed: false };
+  const target = notice.target;
+  if (!target || !/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(target.repo) || target.repo.split('/').some((part) => /^\.+$/.test(part))
+    || !Number.isSafeInteger(target.number) || target.number <= 0) return none;
+  try {
+    const vapid = await loadVapid(env);
+    if (!vapid) return none;
+    const db = requireBinding(env, 'DB');
+    const now = deps.now();
+    const rows = await db.prepare(`
+      SELECT w.user_id,w.device_id,w.endpoint,w.p256dh,w.auth FROM web_push_subscriptions w
+      JOIN sessions s ON s.token_hash=w.session_hash
+      JOIN users u ON u.id=w.user_id
+      WHERE w.user_id=? AND s.user_id=w.user_id AND s.demo=0 AND u.status='active'
+        AND s.expires_at>? AND s.last_seen_at>?
+      ORDER BY w.device_id LIMIT 5
+    `).bind(notice.userId, now.toISOString(), new Date(now.getTime() - IDLE_TTL_MS).toISOString()).all<WebRow>();
+    if (!rows.results.length) return none;
+    // The message carries only repo#number, the title and the kind. Never code, and it is encrypted for the browser.
+    const message = { v: 1, kind: notice.kind, repo: target.repo, number: target.number, title: clip(target.title, 140) };
+    if (new TextEncoder().encode(JSON.stringify(message)).length > MAX_PLAINTEXT) return none;
+    const subject = siteOrigin(env);
+    const result: PushResult = { ...none };
+    for (const row of rows.results) {
+      if (!(await permitted())) return { ...result, suppressed: result.accepted === 0 };
+      const outcome = await sendWebPush(deps, vapid, subject, row, message);
+      if (outcome === 'ok') result.accepted++;
+      else if (outcome === 'gone') {
+        await db.prepare('DELETE FROM web_push_subscriptions WHERE user_id=? AND device_id=? AND endpoint=?')
+          .bind(row.user_id, row.device_id, row.endpoint).run();
+        result.removed++;
+      } else result.failed++;
+    }
+    return result;
+  } catch {
+    return { ...none, failed: 1 };
+  }
+}
+
+async function sendExpoNotification(
+  env: Env, deps: Deps, notice: PushNotice, options: { retry?: boolean },
+  permitted: () => Promise<boolean>,
+): Promise<PushResult> {
+  const db = requireBinding(env, 'DB');
   const now = deps.now();
   const devices = await db.prepare(`
     SELECT p.user_id,p.device_id,p.token FROM push_tokens p

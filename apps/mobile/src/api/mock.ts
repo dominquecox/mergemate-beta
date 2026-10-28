@@ -529,6 +529,18 @@ export class MockApiClient implements ApiClient {
     // no-op in mock
   }
 
+  async getWebPushKey(): Promise<string | null> {
+    return null; // the mock offers no browser notifications
+  }
+
+  async registerWebPush(): Promise<void> {
+    // no-op in mock
+  }
+
+  async unregisterWebPush(): Promise<void> {
+    // no-op in mock
+  }
+
   async getMetaKeyStatus(): Promise<{ configured: boolean } | null> {
     return { configured: this.metaKeyConfigured };
   }

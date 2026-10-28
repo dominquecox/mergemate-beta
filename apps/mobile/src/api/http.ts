@@ -24,6 +24,7 @@ import {
   PrRisk as PrRiskSchema,
   PrSummary as PrSummarySchema,
   PushTokenRegistered,
+  WebPushKey,
   RefreshResponse,
   RepoPage,
   Settings as SettingsSchema,
@@ -671,6 +672,24 @@ export class HttpApiClient implements ApiClient {
 
   async unregisterPushToken(deviceId: string): Promise<void> {
     await this.request({ method: "DELETE", path: "/push/tokens", body: { deviceId } });
+  }
+
+  async getWebPushKey(): Promise<string | null> {
+    try {
+      return (await this.request({ path: "/push/web-key", schema: WebPushKey })).publicKey;
+    } catch (e) {
+      // An API without the feature (or without a key configured) answers not_found; the settings row is left out.
+      if (e instanceof ApiClientError && e.code === "not_found") return null;
+      throw e;
+    }
+  }
+
+  async registerWebPush(deviceId: string, subscription: { endpoint: string; keys: { p256dh: string; auth: string } }): Promise<void> {
+    await this.request({ method: "POST", path: "/push/web", body: { deviceId, ...subscription }, schema: PushTokenRegistered });
+  }
+
+  async unregisterWebPush(deviceId: string): Promise<void> {
+    await this.request({ method: "DELETE", path: "/push/web", body: { deviceId } });
   }
 
   async getMetaKeyStatus(): Promise<{ configured: boolean } | null> {

@@ -78,6 +78,10 @@ export interface ApiClient {
   updateSettings(settings: Partial<UserSettings>): Promise<UserSettings>;
   registerPushToken(deviceId: string, token: string): Promise<void>;
   unregisterPushToken(deviceId: string): Promise<void>;
+  /** The server's Web Push public key, or null when this API does not offer browser notifications. */
+  getWebPushKey(): Promise<string | null>;
+  registerWebPush(deviceId: string, subscription: { endpoint: string; keys: { p256dh: string; auth: string } }): Promise<void>;
+  unregisterWebPush(deviceId: string): Promise<void>;
   /** Whether the user saved their own Meta key. null when this API does not offer the feature yet. */
   getMetaKeyStatus(): Promise<{ configured: boolean } | null>;
   /** Web only. The key is sent once and never read back. */

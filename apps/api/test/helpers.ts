@@ -95,6 +95,8 @@ export interface RecordedCall {
   url: string;
   headers: Headers;
   body: string | null;
+  /** Binary request bodies (Web Push messages). */
+  bytes?: Uint8Array | undefined;
 }
 
 type Handler = (call: RecordedCall) => Response | Promise<Response>;
@@ -114,6 +116,7 @@ export const fakeNetwork = () => {
       url,
       headers: new Headers(init?.headers),
       body: typeof init?.body === "string" ? init.body : null,
+      bytes: init?.body instanceof Uint8Array ? init.body : undefined,
     };
     calls.push(call);
     if (url.startsWith("https://api.github.com/") && method !== "GET" && !/\/applications\/[^/]+\/grant$/.test(url)) {
