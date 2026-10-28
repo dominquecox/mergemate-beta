@@ -164,6 +164,7 @@ export default function BillingScreen() {
                   onPress={() => setBillingCycle("monthly")}
                   accessibilityRole="radio"
                   accessibilityState={{ selected: billingCycle === "monthly", checked: billingCycle === "monthly" }}
+                  aria-checked={billingCycle === "monthly"}
                   accessibilityLabel={`Monthly plan, ${BILLING_CONFIG.pro.monthly.label}`}
                   style={[
                     styles.cycleTab,
@@ -181,6 +182,7 @@ export default function BillingScreen() {
                   onPress={() => setBillingCycle("annual")}
                   accessibilityRole="radio"
                   accessibilityState={{ selected: billingCycle === "annual", checked: billingCycle === "annual" }}
+                  aria-checked={billingCycle === "annual"}
                   accessibilityLabel={`Annual plan, ${BILLING_CONFIG.pro.annual.label}, 25 percent off`}
                   style={[
                     styles.cycleTab,
