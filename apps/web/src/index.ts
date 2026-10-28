@@ -11,16 +11,15 @@ export interface Env {
   API_ORIGIN?: string;
   /**
    * Comma-separated SHA-256 signing certificate fingerprints from Play App Signing (and optional debug keystore
-   * on dev). Placeholder until the owner supplies the release SHA-256 from Play Console -> App integrity.
+   * on dev). Must match the actual package signing certificate; missing/invalid values return 503.
    */
   ANDROID_SHA256_FINGERPRINTS?: string;
+  /** Actual application-identifier entitlement (Apple prefix + bundle identifier), never a signing key. */
+  IOS_APP_ID?: string;
 }
 
 export const ANDROID_PACKAGE_PROD = "dev.mergemate.app";
 export const ANDROID_PACKAGE_DEV = "dev.mergemate.app.dev";
-export const PLACEHOLDER_ANDROID_SHA256 =
-  "00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00";
-
 const SHA256_FINGERPRINT_RE = /^([0-9A-F]{2}:){31}[0-9A-F]{2}$/i;
 
 export interface AssetLinkEntry {
@@ -32,51 +31,24 @@ export interface AssetLinkEntry {
   };
 }
 
-/** Validates configured SHA-256 certificate fingerprints, falling back to the placeholder until Play App Signing is set. */
-export function parseAndroidFingerprints(raw: string | undefined): {
-  fingerprints: string[];
-  isPlaceholder: boolean;
-} {
-  if (!raw) {
-    return { fingerprints: [PLACEHOLDER_ANDROID_SHA256], isPlaceholder: true };
-  }
-  const valid = Array.from(
-    new Set(
-      raw
-        .split(/[\s,]+/)
-        .map((s) => s.trim().toUpperCase())
-        .filter((s) => SHA256_FINGERPRINT_RE.test(s)),
-    ),
-  );
-  const nonPlaceholder = valid.filter((s) => s !== PLACEHOLDER_ANDROID_SHA256);
-  if (nonPlaceholder.length === 0) {
-    return { fingerprints: [PLACEHOLDER_ANDROID_SHA256], isPlaceholder: true };
-  }
-  return { fingerprints: nonPlaceholder, isPlaceholder: false };
+/** Missing, malformed or all-zero configuration never publishes a fabricated association. */
+export function parseAndroidFingerprints(raw: string | undefined): { fingerprints: string[]; configured: boolean } {
+  const fingerprints = [...new Set((raw ?? "").trim().split(/[\s,]+/).filter(Boolean).map(s => s.toUpperCase()))];
+  const configured = fingerprints.length > 0 && fingerprints.every(s => SHA256_FINGERPRINT_RE.test(s) && !/^(00:){31}00$/.test(s));
+  return { fingerprints: configured ? fingerprints : [], configured };
 }
 
-/**
- * Digital Asset Links statement list for Android App Links (/auth/callback).
- * Production (api.mergemate.dev) authorizes dev.mergemate.app only; dev/local also authorizes dev.mergemate.app.dev.
- */
-export function buildAssetLinks(apiOrigin: string, rawFingerprints?: string): {
-  entries: AssetLinkEntry[];
-  isPlaceholder: boolean;
-} {
-  const { fingerprints, isPlaceholder } = parseAndroidFingerprints(rawFingerprints);
-  const packages =
-    apiOrigin === "https://api.mergemate.dev"
-      ? [ANDROID_PACKAGE_PROD]
-      : [ANDROID_PACKAGE_PROD, ANDROID_PACKAGE_DEV];
-  const entries: AssetLinkEntry[] = packages.map((packageName) => ({
-    relation: ["delegate_permission/common.handle_all_urls"],
-    target: {
-      namespace: "android_app",
-      package_name: packageName,
-      sha256_cert_fingerprints: fingerprints,
-    },
-  }));
-  return { entries, isPlaceholder };
+export function buildAssetLinks(apiOrigin: string, rawFingerprints?: string): { entries: AssetLinkEntry[]; configured: boolean } {
+  const { fingerprints, configured } = parseAndroidFingerprints(rawFingerprints);
+  const packageName = apiOrigin === "https://api.mergemate.dev" ? ANDROID_PACKAGE_PROD : ANDROID_PACKAGE_DEV;
+  return { configured, entries: configured ? [{ relation: ["delegate_permission/common.handle_all_urls"], target: {
+    namespace: "android_app", package_name: packageName, sha256_cert_fingerprints: fingerprints,
+  } }] : [] };
+}
+
+export function buildAppleAssociation(appId?: string) {
+  if (!appId || !/^[A-Z0-9]{10}\.dev\.mergemate\.app$/.test(appId)) return null;
+  return { applinks: { apps: [], details: [{ appID: appId, paths: ["/auth/callback", "/pr/*"] }] } };
 }
 
 const HSTS = "max-age=31536000; includeSubDomains";
@@ -128,9 +100,15 @@ function withHeaders(response: Response, csp: string, extra: Record<string, stri
   return out;
 }
 
+function associationResponse(request: Request, body: unknown, configured: boolean, csp: string) {
+  return withHeaders(new Response(request.method === "HEAD" ? null : JSON.stringify(body), { status: configured ? 200 : 503 }), csp, {
+    "Content-Type": "application/json; charset=utf-8", "Cache-Control": configured ? "public, max-age=3600" : "no-store",
+  });
+}
+
 /** Identifies sensitive file probe paths that must never fall back to index.html and must 404. */
 export function isSensitiveProbe(pathname: string): boolean {
-  if (pathname.startsWith("/.") && pathname !== "/.well-known/assetlinks.json") return true;
+  if (pathname.startsWith("/.") && !["/.well-known/assetlinks.json", "/.well-known/apple-app-site-association"].includes(pathname)) return true;
   if (pathname.endsWith(".map")) return true;
   if (["/package.json", "/package-lock.json", "/tsconfig.json", "/wrangler.toml", "/wrangler.jsonc", "/README.md"].includes(pathname)) return true;
   if (pathname.startsWith("/src/") || pathname.startsWith("/migrations/") || pathname.startsWith("/apps/") || pathname.startsWith("/node_modules/")) return true;
@@ -161,11 +139,12 @@ export default {
     }
 
     if (pathname === "/.well-known/assetlinks.json") {
-      const { entries, isPlaceholder } = buildAssetLinks(apiOrigin, env.ANDROID_SHA256_FINGERPRINTS);
-      return withHeaders(Response.json(entries), csp, {
-        "Content-Type": "application/json; charset=utf-8",
-        "Cache-Control": isPlaceholder ? "no-store" : "public, max-age=3600",
-      });
+      const { entries, configured } = buildAssetLinks(apiOrigin, env.ANDROID_SHA256_FINGERPRINTS);
+      return associationResponse(request, configured ? entries : { error: "association_not_configured" }, configured, csp);
+    }
+    if (pathname === "/.well-known/apple-app-site-association") {
+      const association = buildAppleAssociation(env.IOS_APP_ID);
+      return associationResponse(request, association ?? { error: "association_not_configured" }, Boolean(association), csp);
     }
 
     if (isSensitiveProbe(pathname)) {

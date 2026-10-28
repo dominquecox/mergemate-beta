@@ -15,14 +15,17 @@ export function resolveAppName(variant = process.env.APP_VARIANT): string {
 export default ({ config }: ConfigContext): ExpoConfig => {
   const variant = process.env.APP_VARIANT;
   const base = appJson.expo as unknown as ExpoConfig;
+  const host = variant === "development" ? "dev.mergemate.dev" : "app.mergemate.dev";
   return {
     ...base,
     ...config,
     name: resolveAppName(variant),
+    ios: { ...base.ios, ...config.ios, associatedDomains: [`applinks:${host}`] },
     android: {
       ...base.android,
       ...config.android,
       package: resolveAndroidPackage(variant),
+      intentFilters: [{ action: "VIEW", autoVerify: true, category: ["BROWSABLE", "DEFAULT"], data: [{ scheme: "https", host, pathPrefix: "/auth/callback" }, { scheme: "https", host, pathPrefix: "/pr/" }] }],
     },
   };
 };

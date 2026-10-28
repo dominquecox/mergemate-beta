@@ -3,7 +3,6 @@ import { describe, expect, it } from "vitest";
 import worker, {
   ANDROID_PACKAGE_DEV,
   ANDROID_PACKAGE_PROD,
-  PLACEHOLDER_ANDROID_SHA256,
   buildAssetLinks,
   buildCsp,
   isSensitiveProbe,
@@ -190,31 +189,11 @@ describe("CSP", () => {
 
 
 describe("Android App Links (/.well-known/assetlinks.json)", () => {
-  it("serves assetlinks.json on dev with both prod and dev packages and placeholder SHA-256", async () => {
-    const res = await get("/.well-known/assetlinks.json", env("https://api-dev.mergemate.dev"));
-    expect(res.status).toBe(200);
-    expect(res.headers.get("Content-Type")).toContain("application/json");
-    expect(res.headers.get("Cache-Control")).toBe("no-store");
-    expectSecurityHeaders(res, "https://api-dev.mergemate.dev");
-    const body = await res.json();
-    expect(body).toEqual([
-      {
-        relation: ["delegate_permission/common.handle_all_urls"],
-        target: {
-          namespace: "android_app",
-          package_name: ANDROID_PACKAGE_PROD,
-          sha256_cert_fingerprints: [PLACEHOLDER_ANDROID_SHA256],
-        },
-      },
-      {
-        relation: ["delegate_permission/common.handle_all_urls"],
-        target: {
-          namespace: "android_app",
-          package_name: ANDROID_PACKAGE_DEV,
-          sha256_cert_fingerprints: [PLACEHOLDER_ANDROID_SHA256],
-        },
-      },
-    ]);
+  it("returns a non-cacheable JSON failure without configured fingerprints", async () => {
+    const res = await get("/.well-known/assetlinks.json");
+    expect(res.status).toBe(503); expect(res.headers.get("Content-Type")).toContain("application/json");
+    expect(res.headers.get("Cache-Control")).toBe("no-store"); expect(res.headers.has("location")).toBe(false);
+    expect(await res.json()).toEqual({error:"association_not_configured"});
   });
 
   it("serves assetlinks.json on prod with only dev.mergemate.app and caches when real SHA-256 is set", async () => {
@@ -240,12 +219,35 @@ describe("Android App Links (/.well-known/assetlinks.json)", () => {
     ]);
   });
 
-  it("rejects malformed fingerprints and falls back to the placeholder", () => {
-    expect(parseAndroidFingerprints("not-a-sha256")).toEqual({
-      fingerprints: [PLACEHOLDER_ANDROID_SHA256],
-      isPlaceholder: true,
-    });
-    expect(buildAssetLinks("https://api.mergemate.dev", "").isPlaceholder).toBe(true);
+  it("fails closed for missing, malformed, mixed and zero fingerprints", () => {
+    for (const raw of [undefined,"","not-a-sha256",Array(32).fill("00").join(":"),Array(32).fill("AB").join(":")+",invalid"]) {
+      expect(parseAndroidFingerprints(raw)).toEqual({fingerprints:[],configured:false});
+      expect(buildAssetLinks("https://api.mergemate.dev",raw)).toEqual({entries:[],configured:false});
+    }
+  });
+  it("binds dev association to the dev package only", async () => {
+    const res=await get("/.well-known/assetlinks.json",{...env(),ANDROID_SHA256_FINGERPRINTS:Array(32).fill("AB").join(":")});
+    expect(res.status).toBe(200); const body=await res.json() as {target:{package_name:string}}[];
+    expect(body.map(x=>x.target.package_name)).toEqual([ANDROID_PACKAGE_DEV]);
+  });
+});
+
+describe("Apple universal links",()=>{
+  it("serves only explicitly configured app identity as JSON without redirects",async()=>{
+    const e={...env(),IOS_APP_ID:"ABCD123456.dev.mergemate.app"};
+    const res=await get("/.well-known/apple-app-site-association",e);
+    expect(res.status).toBe(200); expect(res.headers.get("Content-Type")).toContain("application/json");
+    expect(res.headers.get("Cache-Control")).toBe("public, max-age=3600"); expect(res.headers.has("location")).toBe(false);
+    expect(await res.json()).toEqual({applinks:{apps:[],details:[{appID:e.IOS_APP_ID,paths:["/auth/callback","/pr/*"]}]}});
+    const head=await get("/.well-known/apple-app-site-association",e,{method:"HEAD"});
+    expect(head.status).toBe(200);expect(await head.text()).toBe("");
+  });
+  it("never serves a fabricated identity or SPA fallback",async()=>{
+    for (const IOS_APP_ID of [undefined,"","invalid","ABCD123456.wrong.app"]) {
+      const res=await get("/.well-known/apple-app-site-association",{...env(),...(IOS_APP_ID === undefined ? {} : {IOS_APP_ID})});
+      expect(res.status).toBe(503);expect(res.headers.get("Cache-Control")).toBe("no-store");
+      expect(res.headers.get("Content-Type")).toContain("application/json");
+    }
   });
 });
 

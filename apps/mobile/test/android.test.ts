@@ -20,9 +20,6 @@ import {
   ANDROID_DEV_PACKAGE,
   ANDROID_PACKAGE,
   MIN_TOUCH_TARGET_DP,
-  buildNativeCallbackSchemeUrl,
-  isAndroidWebUserAgent,
-  isAppLinkCallbackUrl,
   isExternalBillingLinkAllowed,
   resolveHardwareBackAction,
 } from "../src/platform/android";
@@ -90,6 +87,19 @@ describe("MM-053 Android app configuration & parity", () => {
     ]);
   });
 
+  it("isolates associated domains and PR/auth links by native variant", () => {
+    for (const [variant,host] of [["development","dev.mergemate.dev"],["production","app.mergemate.dev"]]) {
+      const before=process.env.APP_VARIANT; process.env.APP_VARIANT=variant;
+      try {
+        const result=resolveConfig({projectRoot:process.cwd(),staticConfigPath:null,packageJsonPath:null,config:{name:"MergeMate",slug:"mergemate"}});
+        expect(result.ios?.associatedDomains).toEqual([`applinks:${host}`]);
+        expect(result.android?.intentFilters?.[0]?.data).toEqual([
+          {scheme:"https",host,pathPrefix:"/auth/callback"},{scheme:"https",host,pathPrefix:"/pr/"},
+        ]);
+      } finally { if(before===undefined) delete process.env.APP_VARIANT; else process.env.APP_VARIANT=before; }
+    }
+  });
+
   it("defines EAS build profiles for android-dev (APK), android-preview (AAB), and android-production (AAB)", () => {
     expect(easJson.cli.appVersionSource).toBe("remote");
     expect(easJson.build["android-dev"]).toMatchObject({
@@ -114,36 +124,6 @@ describe("MM-053 Android app configuration & parity", () => {
         EXPO_PUBLIC_API_BASE_URL: "https://api.mergemate.dev",
       },
     });
-  });
-
-  it("recognizes Android App Link and custom-scheme sign-in callbacks and restricts web bounce to Android user-agents", () => {
-    expect(isAppLinkCallbackUrl("https://app.mergemate.dev/auth/callback?code=c1&state=s1")).toBe(true);
-    expect(isAppLinkCallbackUrl("https://dev.mergemate.dev/auth/callback?code=c1&state=s1")).toBe(true);
-    expect(isAppLinkCallbackUrl("mergemate://auth/callback?code=c1&state=s1")).toBe(true);
-    expect(isAppLinkCallbackUrl("https://evil.example.com/auth/callback?code=c1&state=s1")).toBe(false);
-    expect(isAppLinkCallbackUrl("https://app.mergemate.dev/inbox")).toBe(false);
-
-    expect(buildNativeCallbackSchemeUrl({ code: "abc", state: "xyz" })).toBe(
-      "mergemate://auth/callback?code=abc&state=xyz",
-    );
-    expect(buildNativeCallbackSchemeUrl({})).toBeNull();
-
-    expect(
-      isAndroidWebUserAgent(
-        "Mozilla/5.0 (Linux; Android 15; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Mobile Safari/537.36",
-      ),
-    ).toBe(true);
-    expect(
-      isAndroidWebUserAgent(
-        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
-      ),
-    ).toBe(false);
-    expect(
-      isAndroidWebUserAgent(
-        "Mozilla/5.0 (iPhone; CPU iPhone OS 18_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.1 Mobile/15E148 Safari/604.1",
-      ),
-    ).toBe(false);
-    expect(isAndroidWebUserAgent(undefined)).toBe(false);
   });
 
   it("resolves Android hardware Back and system back-swipe order deterministically", () => {

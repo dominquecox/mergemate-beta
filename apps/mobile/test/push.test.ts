@@ -118,6 +118,11 @@ describe("sign-in in progress", () => {
     expect(await StorageService.takePendingSignIn(1000 + PENDING_SIGN_IN_TTL_MS + 1)).toBeNull();
   });
 
+  it("rejects a future-dated pending sign-in", async () => {
+    await StorageService.setPendingSignIn({ state: "s1", verifier: "v".repeat(43), createdAt: 2000 });
+    expect(await StorageService.takePendingSignIn(1000)).toBeNull();
+  });
+
   it("ignores damaged data", async () => {
     secure.set("mergemate_pending_sign_in", "{not json");
     expect(await StorageService.takePendingSignIn()).toBeNull();

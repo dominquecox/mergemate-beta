@@ -1,7 +1,7 @@
 # Non-secret config only. This Worker serves the Expo web export (apps/mobile/dist) with security headers.
 # Build the export first: EXPO_PUBLIC_API_BASE_URL=<api origin> npm run export:web -w @mergemate/mobile
 # Top level = local `wrangler dev`; API_ORIGIN feeds the CSP connect-src and must match the app's API base URL.
-# ANDROID_SHA256_FINGERPRINTS holds the Play App Signing SHA-256 for /.well-known/assetlinks.json (placeholder until set).
+# ANDROID_SHA256_FINGERPRINTS holds the Play App Signing SHA-256 for /.well-known/assetlinks.json (503 until actual signing identifiers are set).
 name = "mergemate-web"
 main = "src/index.ts"
 compatibility_date = "2026-10-01"
@@ -16,7 +16,8 @@ not_found_handling = "single-page-application"
 
 [vars]
 API_ORIGIN = "http://localhost:8787"
-ANDROID_SHA256_FINGERPRINTS = "00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00"
+ANDROID_SHA256_FINGERPRINTS = ""
+IOS_APP_ID = ""
 
 # Deployed environments. Each serves only from its custom domain, which the deploy creates.
 [env.dev]
@@ -33,7 +34,8 @@ not_found_handling = "single-page-application"
 
 [env.dev.vars]
 API_ORIGIN = "https://api-dev.mergemate.dev"
-ANDROID_SHA256_FINGERPRINTS = "00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00"
+ANDROID_SHA256_FINGERPRINTS = ""
+IOS_APP_ID = ""
 
 # Production: app.mergemate.dev. API_ORIGIN feeds the CSP connect-src and must be the origin the export was built
 # against (EXPO_PUBLIC_API_BASE_URL=https://api.mergemate.dev); the headers and CSP are the same code as dev. The
@@ -52,4 +54,5 @@ not_found_handling = "single-page-application"
 
 [env.production.vars]
 API_ORIGIN = "https://api.mergemate.dev"
-ANDROID_SHA256_FINGERPRINTS = "00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00"
+ANDROID_SHA256_FINGERPRINTS = ""
+IOS_APP_ID = ""

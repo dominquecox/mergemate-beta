@@ -214,7 +214,7 @@ export const StorageService = {
     if (!raw) return null;
     try {
       const parsed: unknown = JSON.parse(raw);
-      if (!isPendingSignIn(parsed) || now - parsed.createdAt > PENDING_SIGN_IN_TTL_MS) return null;
+      if (!isPendingSignIn(parsed) || parsed.createdAt > now || now - parsed.createdAt > PENDING_SIGN_IN_TTL_MS) return null;
       return parsed;
     } catch {
       return null;

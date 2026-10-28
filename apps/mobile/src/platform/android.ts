@@ -38,55 +38,6 @@ export function triggerAndroidHaptic(): void {
 }
 
 /**
- * Returns true only when the browser user-agent is an Android browser (`navigator.userAgent` contains "Android").
- * Desktop and iOS web return false so they keep the standard sign-in error screen.
- */
-export function isAndroidWebUserAgent(
-  userAgent: string | undefined = typeof navigator !== "undefined" ? navigator.userAgent : undefined,
-): boolean {
-  return typeof userAgent === "string" && userAgent.includes("Android");
-}
-
-/**
- * Builds the custom-scheme fallback URL (`mergemate://auth/callback?...`) used when an Android browser
- * lands on `/auth/callback` before Play App Signing SHA-256 verification is active.
- */
-export function buildNativeCallbackSchemeUrl(params: {
-  code?: string;
-  state?: string;
-  error?: string;
-}): string | null {
-  const query = new URLSearchParams();
-  if (params.code) query.set("code", params.code);
-  if (params.state) query.set("state", params.state);
-  if (params.error) query.set("error", params.error);
-  const qs = query.toString();
-  if (!qs) return null;
-  return `mergemate://auth/callback?${qs}`;
-}
-
-/** Checks whether an incoming URL is an Android App Link / Universal Link or custom-scheme auth callback. */
-export function isAppLinkCallbackUrl(rawUrl: string): boolean {
-  try {
-    const parsed = new URL(rawUrl);
-    if (parsed.protocol === "mergemate:") {
-      return (
-        (parsed.host === "auth" && parsed.pathname === "/callback") ||
-        parsed.pathname === "/auth/callback"
-      );
-    }
-    if (parsed.protocol === "https:") {
-      const validHost =
-        parsed.hostname === "app.mergemate.dev" || parsed.hostname === "dev.mergemate.dev";
-      return validHost && parsed.pathname.startsWith("/auth/callback");
-    }
-    return false;
-  } catch {
-    return false;
-  }
-}
-
-/**
  * Store policy gate (specs/ANDROID.md "Billing on Android"):
  * In-app Stripe checkout is web-only. Native iOS and Android only open the external web billing page
  * from Settings when external billing links are allowed (`allowExternalBillingLink = true` by default;

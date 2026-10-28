@@ -5,6 +5,7 @@ import { StorageService } from "../storage";
 import { api } from "../api";
 import { ApiClientError, toUserMessage } from "../api/errors";
 import { createPkcePair } from "../auth/pkce";
+import { validGitHubAuthorizeUrl } from "../navigation/links";
 import { refreshPushRegistration, unregisterPush } from "../push/registration";
 
 export type SignInResult = "signed_in" | "redirected" | "failed";
@@ -139,6 +140,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       const { verifier, challenge } = await createPkcePair();
       const { authorizeUrl, state } = await api.startGithubAuth(platform, challenge);
+      if (!validGitHubAuthorizeUrl(authorizeUrl, state, challenge)) throw new Error("Invalid sign-in destination");
       await StorageService.setPendingSignIn({ state, verifier, createdAt: Date.now() });
       await openAuthorizeUrl(authorizeUrl);
       return "redirected";
