@@ -178,6 +178,7 @@ describe("AI flow with real GitHub data", () => {
     expect(ctx.db.rows("SELECT * FROM consent_grants")).toEqual([]);
     expect(ctx.db.rows("SELECT * FROM ai_usage_daily")).toEqual([]);
     expect(ctx.db.rows("SELECT * FROM ai_results_cache")).toEqual([]);
+    expect(ctx.db.rows("SELECT * FROM ai_inflight")).toEqual([]);
   });
 
   it("keeps demo highlight out of the demo", async () => {

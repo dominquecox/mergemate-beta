@@ -6,11 +6,12 @@ import { View, ScrollView, TouchableOpacity, TextInput, StyleSheet, Linking, Sha
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAndroidBackHandler } from "../../../../src/platform/android";
 import { Text } from "../../../../src/components/Text";
-import { useLocalSearchParams } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { useLayout } from "../../../../src/layout/useLayout";
 import { useTheme } from "../../../../src/context/ThemeContext";
 import { api } from "../../../../src/api";
 import { toUserMessage } from "../../../../src/api/errors";
+import { aiNoticeAction, applyAiRetry } from "../../../../src/api/aiRetry";
 import { useConsent } from "../../../../src/context/ConsentContext";
 import { PrDetail } from "../../../../src/types";
 import { Header } from "../../../../src/components/Header";
@@ -36,6 +37,7 @@ export default function PrDetailScreen() {
   const { colors, typography, spacing, radius } = useTheme();
   const {isDesktop}=useLayout();
   const { aiConsentGranted } = useConsent();
+  const router = useRouter();
 
   const [assessmentOpen,setAssessmentOpen]=useState(false);
   const [expandedFiles,setExpandedFiles]=useState<string[]>([]);
@@ -107,6 +109,22 @@ export default function PrDetailScreen() {
   useEffect(() => {
     loadPr();
   }, [loadPr]);
+
+  // Retries only the AI parts that are missing; the PR itself stays on screen.
+  const aiRetryLock=useRef(false);
+  const [aiRetrying,setAiRetrying]=useState(false);
+  const retryAi=async()=>{
+    if(aiRetryLock.current||!detail)return;
+    aiRetryLock.current=true;setAiRetrying(true);
+    const version=routeVersion.current;const n=Number(number);
+    try{
+      const [summary,risk]=await Promise.all([
+        detail.summary?Promise.resolve(null):Promise.allSettled([api.getPrSummary(owner,repo,n)]).then(([r])=>r),
+        detail.risk?Promise.resolve(null):Promise.allSettled([api.getPrRisk(owner,repo,n)]).then(([r])=>r),
+      ]);
+      if(version===routeVersion.current)setDetail(prev=>prev?applyAiRetry(prev,summary,risk):prev);
+    }finally{aiRetryLock.current=false;if(version===routeVersion.current)setAiRetrying(false);}
+  };
 
   // GitHub computes mergeability in the background. While it reports "unknown", re-read the PR a few times.
   const [mergeRechecks, setMergeRechecks] = useState(0);
@@ -271,15 +289,18 @@ export default function PrDetailScreen() {
                 {detail.aiNotice.code === "consent_required" && !detail.summary ? (
                   <AIBlock title="AI Summary">
                     <Text style={[typography.body, { color: colors.text }]}>{detail.aiNotice.message}</Text>
+                    <Button title="Open Settings" variant="secondary" onPress={()=>router.push("/(tabs)/settings")} style={{marginTop:12,alignSelf:"flex-start"}}/>
                   </AIBlock>
                 ) : (
                   <View style={[styles.card, { backgroundColor: colors.surfaceElevated, borderColor: colors.border, borderRadius: radius.lg }]}>
                     <Text style={[typography.headline, { color: colors.text }]} accessibilityRole="header">
                       AI summary unavailable
                     </Text>
-                    <Text style={[typography.body, { color: colors.textSecondary, marginTop: 4 }]}>
+                    <Text style={[typography.body, { color: colors.textSecondary, marginTop: 4 }]} accessibilityLiveRegion="polite">
                       {detail.aiNotice.message}
                     </Text>
+                    {aiNoticeAction(detail.aiNotice.code)==="retry" && <Button title="Try again" variant="secondary" loading={aiRetrying} onPress={retryAi} style={{marginTop:12,alignSelf:"flex-start"}} accessibilityLabel="Try the AI summary again"/>}
+                    {aiNoticeAction(detail.aiNotice.code)==="settings" && <Button title="Open Settings" variant="secondary" onPress={()=>router.push("/(tabs)/settings")} style={{marginTop:12,alignSelf:"flex-start"}}/>}
                   </View>
                 )}
               </View>

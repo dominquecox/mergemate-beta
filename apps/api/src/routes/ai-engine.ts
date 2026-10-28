@@ -171,7 +171,48 @@ export const aiUserDeletion = (db: D1Database, userId: string) => [
   db.prepare("DELETE FROM consent_grants WHERE user_id = ?").bind(userId),
   db.prepare("DELETE FROM ai_usage_daily WHERE scope IN (?, ?, ?)").bind(userId, `${userId}:triage`, `${userId}:metakey`),
   db.prepare("DELETE FROM ai_results_cache WHERE user_id = ?").bind(userId),
+  db.prepare("DELETE FROM ai_inflight WHERE user_id = ?").bind(userId),
 ];
+
+/** How long a claim on identical work holds before another request may take over (longer than one model call). */
+const INFLIGHT_TTL_MS = 90_000;
+/** How long an identical request waits for the first one's result; below the app's 60 s request timeout. */
+const INFLIGHT_WAIT_MS = 50_000;
+const INFLIGHT_POLL_MS = 1_000;
+
+/** Claims `key` for this request. True when it was free or its previous claim expired. */
+export const claimWork = async (db: D1Database, key: string, userId: string, now = Date.now()): Promise<boolean> => {
+  const result = await db
+    .prepare(
+      `INSERT INTO ai_inflight (key, user_id, expires_at) VALUES (?, ?, ?)
+       ON CONFLICT (key) DO UPDATE SET expires_at = excluded.expires_at WHERE ai_inflight.expires_at <= ?`,
+    )
+    .bind(key, userId, new Date(now + INFLIGHT_TTL_MS).toISOString(), new Date(now).toISOString())
+    .run();
+  return (result.meta.changes ?? 0) > 0;
+};
+
+export const releaseWork = async (db: D1Database, key: string): Promise<void> => {
+  await db.prepare("DELETE FROM ai_inflight WHERE key = ?").bind(key).run();
+};
+
+const sleep = (ms: number) => new Promise<void>((done) => setTimeout(done, ms));
+
+/**
+ * Waits for the request that holds `key` to store its result. Undefined when that request ended without one
+ * (it failed), so the caller may claim the work itself.
+ */
+const waitForResult = async <T>(deps: AiDeps, cache: ResultCache, key: string): Promise<T | undefined> => {
+  const wait = deps.sleep ?? sleep;
+  for (let waited = 0; waited < INFLIGHT_WAIT_MS; waited += INFLIGHT_POLL_MS) {
+    await wait(INFLIGHT_POLL_MS);
+    const done = await cache.get<T>(key);
+    if (done) return done;
+    const holder = await deps.db.prepare("SELECT 1 AS held FROM ai_inflight WHERE key = ?").bind(key).first();
+    if (!holder) return undefined;
+  }
+  throw new ApiError("upstream_unavailable", "This summary is still being prepared. Try again in a moment.");
+};
 
 export const actionHeaders = (check: { limit: number; remaining: number }): Record<string, string> => ({
   "x-actions-limit": String(check.limit),
@@ -305,6 +346,9 @@ const SKIPPED_PATHS = [
 ];
 const MAX_FILES = 300;
 const MAX_FILE_CHARS = 8000;
+/** A truncated file shorter than this tells the model nothing; leave the room for smaller files instead. */
+const MIN_TRUNCATED_CHARS = 400;
+const FILE_SEPARATOR = "\n\n";
 const MAX_TOTAL_CHARS = 190000;
 const TRUNCATION_MARKER = "\n…[truncated]";
 
@@ -342,19 +386,24 @@ export const buildDiffContext = (
       continue;
     }
     const body = `File: ${file.path}\n${file.patch}`;
-    const room = Math.min(MAX_FILE_CHARS, budget);
+    // The blank line that joins this part to the previous one counts against the budget too.
+    const separator = parts.length > 0 ? FILE_SEPARATOR.length : 0;
+    const room = Math.min(MAX_FILE_CHARS, budget - separator);
     if (body.length <= room) {
       parts.push(body);
-      budget -= body.length;
+      budget -= body.length + separator;
       analyzedFiles += 1;
-    } else {
-      parts.push(body.slice(0, Math.max(0, room - TRUNCATION_MARKER.length)) + TRUNCATION_MARKER);
-      budget = 0;
+    } else if (room >= MIN_TRUNCATED_CHARS) {
+      // One long file uses at most its own share; the rest of the budget stays for the other files.
+      parts.push(body.slice(0, room - TRUNCATION_MARKER.length) + TRUNCATION_MARKER);
+      budget -= room + separator;
       truncatedFiles += 1;
+    } else {
+      skippedFiles += 1;
     }
   }
   return {
-    context: head + parts.join("\n\n"),
+    context: head + parts.join(FILE_SEPARATOR),
     coverage: { analyzedFiles, skippedFiles, truncatedFiles },
   };
 };
@@ -656,6 +705,8 @@ export interface AiDeps {
   ai?: AiBinding | undefined;
   prSource: PrDataSource;
   limits: AiActionLimits;
+  /** Waits between checks for identical work in progress; injected so tests do not sleep. */
+  sleep?: (ms: number) => Promise<void>;
 }
 
 export interface AiStores {
@@ -846,6 +897,29 @@ export const summarizePr = async (
   const key = cacheKey(userId, refStr, data.headSha, "summary");
   const hit = await stores.cache.get<PrSummary>(key);
   if (hit) return { body: hit, limit, remaining };
+  // Identical work already running for this user (a double tap, two tabs): wait for its result, charge nothing.
+  if (!(await claimWork(deps.db, key, userId))) {
+    const shared = await waitForResult<PrSummary>(deps, stores.cache, key);
+    if (shared) return { body: shared, limit, remaining };
+    if (!(await claimWork(deps.db, key, userId))) {
+      throw new ApiError("upstream_unavailable", "This summary is still being prepared. Try again in a moment.");
+    }
+  }
+  try {
+    return await generateSummary(deps, stores, env, { key, userId, limit, model, limits }, data);
+  } finally {
+    await releaseWork(deps.db, key).catch(() => undefined);
+  }
+};
+
+const generateSummary = async (
+  deps: AiDeps,
+  stores: AiStores,
+  env: Env,
+  run: { key: string; userId: string; limit: number; model: Awaited<ReturnType<typeof gateAction>>["model"]; limits: AiActionLimits },
+  data: PrData,
+): Promise<AiRunResult> => {
+  const { key, userId, limit, model, limits } = run;
   const provider = createModelProvider(model.env, "summary", deps);
   // Each route gets only as much PR context as its model's window holds; coverage reports the rest.
   const { context, coverage } = buildDiffContext(data, provider.config.maxInputChars);

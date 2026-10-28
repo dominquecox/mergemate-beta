@@ -10,6 +10,7 @@ import {
   assessRiskSignals,
   buildDiffContext,
   cacheKey,
+  claimWork,
   containsTodo,
   createDbCache,
   createDbUsageStore,
@@ -224,6 +225,25 @@ describe("buildDiffContext", () => {
     });
     expect(context).toContain("…[truncated]");
     expect(coverage.truncatedFiles).toBe(1);
+  });
+
+  it("keeps analyzing the other files after one long file is truncated (large PRs)", () => {
+    // A 163-file PR whose biggest file exceeds the per-file share used to report 0 analyzed, 162 skipped.
+    const files = [
+      { path: "src/huge.ts", patch: "h".repeat(50_000), additions: 5000, deletions: 0 },
+      ...Array.from({ length: 162 }, (_, i) => ({ path: `src/f${i}.ts`, patch: `+line ${i}`, additions: 1, deletions: 0 })),
+    ];
+    const { context, coverage } = buildDiffContext({ title: "t", description: "d", files });
+    expect(coverage).toEqual({ analyzedFiles: 162, skippedFiles: 0, truncatedFiles: 1 });
+    expect(context).toContain("src/f161.ts");
+  });
+
+  it("spreads a small model window across files and reports what did not fit", () => {
+    const files = Array.from({ length: 20 }, (_, i) => ({ path: `src/f${i}.ts`, patch: "p".repeat(9000), additions: 100, deletions: 0 }));
+    const { context, coverage } = buildDiffContext({ title: "t", description: "d", files }, 50_000);
+    expect(coverage.truncatedFiles).toBe(7); // six full shares, then the remaining room still holds a useful part
+    expect(coverage.analyzedFiles + coverage.truncatedFiles + coverage.skippedFiles).toBe(20);
+    expect(context.length).toBeLessThanOrEqual(50_000);
   });
 
   it("caps considered files at 300", () => {
@@ -441,6 +461,71 @@ describe("usage reservation", () => {
     limited: results.filter(
       (r) => r.status === "rejected" && r.reason instanceof ApiError && r.reason.code === "rate_limited",
     ).length,
+  });
+
+  describe("identical requests at the same time", () => {
+    const ref = { owner: "o", repo: "r", number: 77 };
+    const quick = async () => { await new Promise((resolve) => setTimeout(resolve, 2)); };
+    const inflight = (db: D1Database) => (db as unknown as TestD1).rows("SELECT key FROM ai_inflight");
+
+    it("share one model call and one charge, and leave no claim behind", async () => {
+      const transport = slowTransport();
+      const deps = { ...(await grantedDeps(transport)), sleep: quick };
+      const results = await Promise.all(Array.from({ length: 5 }, () => summarizePr(deps, user, ref, validModelEnv())));
+      expect(transport.calls).toHaveLength(1);
+      expect(usedRows(deps.db, "u1")).toEqual([1]);
+      expect(new Set(results.map((r) => JSON.stringify(r.body))).size).toBe(1);
+      expect(inflight(deps.db)).toEqual([]);
+    });
+
+    it("take over when the first request fails, and are charged only for the call that succeeds", async () => {
+      let calls = 0;
+      const transport = slowTransport(async () => {
+        calls += 1;
+        if (calls === 1) throw new Error("upstream");
+        return { text: summaryText };
+      });
+      const deps = { ...(await grantedDeps(transport)), sleep: quick };
+      const [first, second] = await Promise.allSettled([
+        summarizePr(deps, user, ref, validModelEnv()),
+        summarizePr(deps, user, ref, validModelEnv()),
+      ]);
+      expect(first.status).toBe("rejected");
+      expect(second.status).toBe("fulfilled");
+      expect(transport.calls).toHaveLength(2);
+      expect(usedRows(deps.db, "u1")).toEqual([1]);
+      expect(inflight(deps.db)).toEqual([]);
+    });
+
+    it("ignore an expired claim left by a request that crashed", async () => {
+      const transport = slowTransport();
+      const deps = await grantedDeps(transport);
+      const key = cacheKey("u1", "o/r#77", "abc", "summary");
+      await deps.db.prepare("INSERT INTO ai_inflight (key, user_id, expires_at) VALUES (?, 'u1', ?)").bind(key, "2000-01-01T00:00:00.000Z").run();
+      await summarizePr(deps, user, ref, validModelEnv());
+      expect(transport.calls).toHaveLength(1);
+    });
+
+    it("give up with a retry message instead of calling the model twice", async () => {
+      const transport = slowTransport();
+      const deps = { ...(await grantedDeps(transport)), sleep: async () => undefined };
+      expect(await claimWork(deps.db, cacheKey("u1", "o/r#77", "abc", "summary"), "u1")).toBe(true);
+      const err = await apiError(() => summarizePr(deps, user, ref, validModelEnv()));
+      expect(err.code).toBe("upstream_unavailable");
+      expect(err.message).toContain("still being prepared");
+      expect(transport.calls).toHaveLength(0);
+      expect(usedRows(deps.db, "u1")).toEqual([]);
+    });
+
+    it("never make one person wait on another person's work", async () => {
+      const transport = slowTransport();
+      const deps = { ...(await grantedDeps(transport)), sleep: async () => undefined };
+      await seedUser(deps.db, "u2", 4343);
+      await createDbConsentStore(deps.db).write("u2", true);
+      expect(await claimWork(deps.db, cacheKey("u2", "o/r#77", "abc", "summary"), "u2")).toBe(true);
+      await summarizePr(deps, user, ref, validModelEnv());
+      expect(transport.calls).toHaveLength(1);
+    });
   });
 
   it("holds the user cap under parallel requests", async () => {
