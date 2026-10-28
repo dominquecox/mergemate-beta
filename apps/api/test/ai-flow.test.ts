@@ -183,6 +183,7 @@ describe("AI flow with real GitHub data", () => {
 
   it("keeps demo highlight out of the demo", async () => {
     const ctx = testContext({ ...validModelEnv() });
+    ctx.kv.set("flags:v1",JSON.stringify({highlight:true}));
     const form = new FormData();
     form.append("image", new File([new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])], "s.png"));
     const res = await appFor(ctx)("/v1/highlight", {

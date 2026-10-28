@@ -1,3 +1,4 @@
+import {disabledFeatureFlags} from "./feature-flags";
 import { ApiClientError } from "./errors";
 import { AI_CONSENT_VERSION } from "../config/consent";
 import { ApiClient } from "./client";
@@ -21,6 +22,7 @@ import {
 } from "../types";
 
 export class MockApiClient implements ApiClient {
+  async getFeatureFlags(){return disabledFeatureFlags();}
   invalidateCache(): void {  }
   clearCache(): void {}
   async getPrFilePage(owner: string, repo: string, number: number, _cursor?: string | null) {return {items:(await this.getPrDetail(owner,repo,number)).files,nextCursor:null};}

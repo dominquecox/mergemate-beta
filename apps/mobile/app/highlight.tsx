@@ -1,3 +1,4 @@
+import {useFeatureFlags} from "../src/hooks/useFeatureFlags";
 import { Section } from "../src/components/ScreenDesign";
 import React, { useState } from "react";
 import { View, ScrollView, TextInput, StyleSheet, Image, Platform, TouchableOpacity, KeyboardAvoidingView } from "react-native";
@@ -21,6 +22,7 @@ const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 export default function HighlightScreen() {
   const { colors, typography, spacing, radius } = useTheme();
 
+  const flags=useFeatureFlags();
   const [note, setNote] = useState("");
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [result, setResult] = useState<HighlightResult | null>(null);
@@ -45,10 +47,12 @@ export default function HighlightScreen() {
   };
 
   const pickFromLibrary = async () => {
+    if(!flags.highlight)return;
     accept(await ImagePicker.launchImageLibraryAsync({ mediaTypes: ["images"], quality: 0.8, exif: false }));
   };
 
   const takePhoto = async () => {
+    if(!flags.highlight)return;
     const permission = await ImagePicker.requestCameraPermissionsAsync();
     if (!permission.granted) {
       setError("Camera access is off. Choose a screenshot from your library instead.");
@@ -58,6 +62,7 @@ export default function HighlightScreen() {
   };
 
   const handleAnalyze = async () => {
+    if (!flags.highlight)return;
     if (!image) {
       setError("Choose a screenshot first.");
       return;
@@ -73,6 +78,8 @@ export default function HighlightScreen() {
       setIsAnalyzing(false);
     }
   };
+
+  if(!flags.highlight)return <View style={[styles.root,{backgroundColor:colors.background}]}><Header title="Screenshot Insight" showBack/><EmptyState icon="image-outline" title="Screenshot highlight is unavailable" message="This feature isn’t enabled. You can keep reviewing pull requests from Inbox."/></View>;
 
   return (
     <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={[styles.root, { backgroundColor: colors.background }]}>

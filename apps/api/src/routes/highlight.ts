@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import { readFeatureFlags } from "./flags";
 import {
   actionHeaders,
   actionLimits,
@@ -77,6 +78,7 @@ export const createHighlightRouter = (deps: HighlightRouterDeps = {}) => {
   router.use(noStore);
 
   router.post("/", async (c) => {
+    if (!(await readFeatureFlags(c.env)).highlight) throw new ApiError("not_found", "Screenshot highlight is unavailable.");
     const session = c.get("session");
     await requireConsent(createDbConsentStore(requireBinding(c.env, "DB")), userKey(session));
     const form = await c.req.parseBody().catch(() => null);

@@ -1,3 +1,4 @@
+import {useFeatureFlags} from "../../src/hooks/useFeatureFlags";
 import React, { useState, useRef } from "react";
 import { View, FlatList, RefreshControl, TouchableOpacity, Pressable, StyleSheet } from "react-native";
 import { androidRipple } from "../../src/platform/android";
@@ -20,6 +21,7 @@ import { usePagedList } from "../../src/hooks/usePagedList";
 
 export default function InboxScreen() {
   const router = useRouter();
+  const flags=useFeatureFlags();
   const { colors, typography, spacing, radius } = useTheme();
   const { isDesktop } = useLayout();
 
@@ -85,14 +87,14 @@ export default function InboxScreen() {
             >
               <Icon name="search-outline" size={22} color={colors.textSecondary} />
             </TouchableOpacity>
-            <TouchableOpacity
+            {flags.highlight && <TouchableOpacity
               onPress={() => router.push("/highlight")}
               style={styles.iconBtn}
               accessibilityRole="button"
               accessibilityLabel="Highlight screenshot"
             >
               <Icon name="camera-outline" size={22} color={colors.textSecondary} />
-            </TouchableOpacity>
+            </TouchableOpacity>}
           </View>
         }
       />

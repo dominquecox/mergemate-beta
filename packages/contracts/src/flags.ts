@@ -4,5 +4,6 @@ import { z } from 'zod';
 export const FeatureFlags = z.object({
   voice_readout: z.boolean().default(false),
   voice_notes: z.boolean().default(false),
+  highlight: z.boolean().default(false),
 }).strict();
 export type FeatureFlags = z.infer<typeof FeatureFlags>;

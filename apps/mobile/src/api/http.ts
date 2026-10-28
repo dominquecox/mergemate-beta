@@ -1,3 +1,4 @@
+import {FeatureFlagCache} from "./feature-flags";
 import { z } from "zod";
 import { RequestCache } from "./request-cache";
 import {
@@ -90,6 +91,7 @@ export interface HttpApiClientOptions {
 }
 
 interface RequestOptions<T> {
+  credentials?: "omit";
   method?: "GET" | "POST" | "PUT" | "DELETE";
   path: string;
   body?: unknown;
@@ -142,8 +144,8 @@ export class HttpApiClient implements ApiClient {
   private reads = new RequestCache();
   private actions = new RequestCache();
 
-  invalidateCache(): void { this.reads.invalidate(); }
-  clearCache(): void { this.reads.clear(); this.actions.clear(); this.settingsCache = null; this.repoPrivacy.clear(); }
+  invalidateCache(): void { this.featureFlags.clear(); this.reads.invalidate(); }
+  clearCache(): void { this.featureFlags.clear(); this.reads.clear(); this.actions.clear(); this.settingsCache = null; this.repoPrivacy.clear(); }
   private repoPrivacy = new Map<string, boolean>();
 
   constructor(options: HttpApiClientOptions) {
@@ -239,7 +241,7 @@ export class HttpApiClient implements ApiClient {
         headers,
         body,
         // Web: the browser sends the HttpOnly session cookie. Native never uses cookies.
-        credentials: this.web ? "include" : "omit",
+        credentials: opts.credentials ?? (this.web ? "include" : "omit"),
       }, opts.timeoutMs);
 
       if (res.ok) return res;
@@ -412,6 +414,9 @@ export class HttpApiClient implements ApiClient {
     }
     return this.refreshing;
   }
+
+  private readonly featureFlags=new FeatureFlagCache(()=>this.request({path:"/flags",auth:false,credentials:"omit",schema:z.unknown()}));
+  getFeatureFlags(){return this.featureFlags.get();}
 
   async getMe(): Promise<User> {
     return this.request({ path: "/me", schema: UserSchema, probe: true });

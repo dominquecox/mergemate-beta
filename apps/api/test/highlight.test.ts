@@ -2,8 +2,11 @@ import { ErrorBody, HighlightResult } from "@mergemate/contracts";
 import { describe, expect, it } from "vitest";
 import { storesFor } from "../src/routes/ai-engine";
 import { demoHeaders } from "./demo-session";
-import { fakeAi, fakeDataset, testContext, validModelEnv } from "./helpers";
+import { fakeAi, fakeDataset, testContext as baseContext, validModelEnv } from "./helpers";
 import { appFor, signIn } from "./sign-in";
+
+// Explicitly opt in for the feature-on cases; missing flags stay off elsewhere.
+const testContext: typeof baseContext = (...args) => { const ctx=baseContext(...args);ctx.kv.set('flags:v1',JSON.stringify({highlight:true}));return ctx; };
 
 const pngFile = (bytes: Uint8Array, name = "shot.png") => new File([bytes], name, { type: "image/png" });
 
