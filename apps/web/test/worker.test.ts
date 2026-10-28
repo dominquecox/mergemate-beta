@@ -132,7 +132,7 @@ describe("CSP", () => {
   it("never allows inline or eval scripts, frames or a wildcard", () => {
     const csp = buildCsp("https://api.mergemate.dev");
     const directive = (name: string) => csp.split("; ").find((d) => d.startsWith(`${name} `)) ?? "";
-    expect(directive("script-src")).toBe("script-src 'self' https://challenges.cloudflare.com");
+    expect(directive("script-src")).toBe("script-src 'self' https://challenges.cloudflare.com https://static.cloudflareinsights.com");
     expect(directive("script-src")).not.toMatch(/unsafe-inline|unsafe-eval/);
     expect(directive("frame-src")).toBe("frame-src https://challenges.cloudflare.com");
     expect(directive("frame-ancestors")).toBe("frame-ancestors 'none'");
@@ -150,7 +150,7 @@ describe("CSP", () => {
     ["http://localhost:8787"],
   ])("limits connect-src to self and %s", async (origin) => {
     const res = await get("/", env(origin));
-    expect(res.headers.get("Content-Security-Policy")).toContain(`connect-src 'self' ${origin};`);
+    expect(res.headers.get("Content-Security-Policy")).toContain(`connect-src 'self' ${origin} https://cloudflareinsights.com;`);
     expectSecurityHeaders(res, origin);
   });
 

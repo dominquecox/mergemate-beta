@@ -91,13 +91,14 @@ const STATIC_HEADERS: Record<string, string> = {
 /**
  * script-src never allows inline code or eval. style-src keeps 'unsafe-inline' because the Expo export ships an
  * inline <style id="expo-reset"> and react-native-web injects its stylesheet and style attributes at runtime.
+ * Cloudflare Web Analytics (auto-injected at the edge, kept on by the owner) needs its beacon script and report host.
  */
 export function buildCsp(apiOrigin: string): string {
   return [
     "default-src 'self'",
-    "script-src 'self' https://challenges.cloudflare.com",
+    "script-src 'self' https://challenges.cloudflare.com https://static.cloudflareinsights.com",
     "frame-src https://challenges.cloudflare.com",
-    `connect-src 'self' ${apiOrigin}`,
+    `connect-src 'self' ${apiOrigin} https://cloudflareinsights.com`,
     "img-src 'self' data: https://avatars.githubusercontent.com",
     "style-src 'self' 'unsafe-inline'",
     "font-src 'self' data:",
