@@ -127,6 +127,15 @@ function withHeaders(response: Response, csp: string, extra: Record<string, stri
   return out;
 }
 
+/** Identifies sensitive file probe paths that must never fall back to index.html and must 404. */
+export function isSensitiveProbe(pathname: string): boolean {
+  if (pathname.startsWith("/.") && pathname !== "/.well-known/assetlinks.json") return true;
+  if (pathname.endsWith(".map")) return true;
+  if (["/package.json", "/package-lock.json", "/tsconfig.json", "/wrangler.toml", "/wrangler.jsonc", "/README.md"].includes(pathname)) return true;
+  if (pathname.startsWith("/src/") || pathname.startsWith("/migrations/") || pathname.startsWith("/apps/") || pathname.startsWith("/node_modules/")) return true;
+  return false;
+}
+
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const apiOrigin = validApiOrigin(env.API_ORIGIN);
@@ -155,7 +164,15 @@ export default {
       });
     }
 
+    if (isSensitiveProbe(pathname)) {
+      return withHeaders(new Response("Not Found", { status: 404 }), csp, { "Cache-Control": "no-store" });
+    }
+
     const response = await env.ASSETS.fetch(request);
+    if (pathname === "/sw.js" || pathname === "/service-worker.js") {
+      return withHeaders(response, csp, { "Service-Worker-Allowed": "/", "Cache-Control": "no-cache" });
+    }
+
     const isHtml = (response.headers.get("Content-Type") ?? "").toLowerCase().startsWith("text/html");
     if (isHtml) return withHeaders(response, csp, { "Cache-Control": "no-cache" });
     // Only real hashed build output is immutable. A missing /_expo/ file falls back to HTML (above) or errors.

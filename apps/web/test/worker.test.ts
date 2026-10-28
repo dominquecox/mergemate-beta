@@ -6,6 +6,7 @@ import worker, {
   PLACEHOLDER_ANDROID_SHA256,
   buildAssetLinks,
   buildCsp,
+  isSensitiveProbe,
   parseAndroidFingerprints,
   validApiOrigin,
   type Env,
@@ -91,6 +92,39 @@ describe("web worker headers", () => {
     expect(res.status).toBe(405);
     expect(res.headers.get("Allow")).toBe("GET, HEAD");
     expectSecurityHeaders(res);
+  });
+
+  it("blocks repository, config, source-map, and dotfile leak probes with 404 and no-store", async () => {
+    const probes = [
+      "/.env",
+      "/.dev.vars",
+      "/.git/config",
+      "/wrangler.toml",
+      "/wrangler.jsonc",
+      "/package.json",
+      "/tsconfig.json",
+      "/README.md",
+      "/src/index.ts",
+      "/migrations/0001_init.sql",
+      "/_expo/static/js/web/entry.js.map",
+    ];
+    for (const probe of probes) {
+      expect(isSensitiveProbe(probe), `${probe} should be identified as sensitive probe`).toBe(true);
+      const res = await get(probe);
+      expect(res.status, `probe ${probe} status`).toBe(404);
+      expect(res.headers.get("Cache-Control")).toBe("no-store");
+      expectSecurityHeaders(res);
+    }
+  });
+
+  it("adds Service-Worker-Allowed and no-cache headers to service workers", async () => {
+    for (const swPath of ["/sw.js", "/service-worker.js"]) {
+      const res = await get(swPath);
+      expect(res.status).toBe(200);
+      expect(res.headers.get("Service-Worker-Allowed")).toBe("/");
+      expect(res.headers.get("Cache-Control")).toBe("no-cache");
+      expectSecurityHeaders(res);
+    }
   });
 });
 
