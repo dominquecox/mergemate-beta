@@ -49,6 +49,12 @@ describe('conditional Inbox operations',()=>{
   expect((await call('/v1/notifications/abcdefgh/state',post(input('done'),session.headers))).status).toBe(422);
   ctx.net.on('GET','https://api.github.com/repos/acme/api/pulls/7',()=>json({message:'Not Found'},404));expect((await mutate(input('done'))).status).toBe(404);expect(ctx.db.rows('SELECT * FROM notification_state')).toEqual([]);
  });
+ it('requires CSRF for cookie-authenticated state and preference writes',async()=>{
+  const {ctx,call}=await setup(),web=await signIn(ctx,'web');
+  expect((await call(`/v1/notifications/${id}/state`,post(input('done'),web.headers))).status).toBe(403);
+  expect((await call('/v1/inbox/preference',{...post({filter:'mine'},web.headers),method:'PUT'})).status).toBe(403);
+  expect((await call(`/v1/notifications/${id}/state`,post(input('done'),{...web.headers,'x-csrf-token':web.csrf??''}))).status).toBe(200);
+ });
  it('prevents legacy writes from silently clobbering a receipt-managed state',async()=>{
   const {call,mutate,session}=await setup();await mutate(input('done'));
   for(const action of ['done','restore'])expect((await call(`/v1/notifications/${id}/${action}`,post({},session.headers))).status).toBe(409);
@@ -69,7 +75,7 @@ describe('conditional Inbox operations',()=>{
  });
  it('keeps the newest duplicate revision and sorts equal timestamps deterministically without AI',async()=>{
   const {ctx,session,call}=await setup();const result=(number:number,updated:string)=>({number,title:'fixture',state:'open',user:{login:'fixture'},updated_at:updated,repository_url:'https://api.github.com/repos/acme/api'});
-  ctx.net.on('GET','https://api.github.com/search/issues?',(request:{url:string})=>json({total_count:2,items:request.url.includes('review-requested')?[result(7,observed),result(8,observed)]:[result(7,'2026-10-27T11:00:00Z')]}));
-  const page=NotificationPage.parse(await(await call('/v1/notifications',{headers:session.headers})).json());expect(page.items[0]).toMatchObject({number:7,kind:'review',updatedAt:'2026-10-27T11:00:00Z'});expect(ctx.net.calls.some(c=>c.url.includes('/responses'))).toBe(false);
+  ctx.net.on('GET','https://api.github.com/search/issues?',(request:{url:string})=>json({total_count:2,items:request.url.includes('review-requested')?[result(7,observed),result(8,observed),result(9,observed)]:[result(7,'2026-10-27T11:00:00Z')]}));
+  const page=NotificationPage.parse(await(await call('/v1/notifications',{headers:session.headers})).json());expect(page.items.slice(1).map(row=>row.id)).toEqual([notificationId('acme/api',8),notificationId('acme/api',9)].sort());expect(page.items[0]).toMatchObject({number:7,kind:'review',updatedAt:'2026-10-27T11:00:00Z'});expect(ctx.net.calls.some(c=>c.url.includes('/responses'))).toBe(false);
  });
 });
