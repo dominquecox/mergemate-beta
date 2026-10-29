@@ -11,13 +11,13 @@ await new Promise(r=>server.listen(0,'127.0.0.1',r));const base=`http://127.0.0.
 try{
  browser=await chromium.launch({headless:true,channel:'chrome'});
  for(const width of [393,1440])for(const mode of ['on','off','consent-off','demo']){
-  const context=await browser.newContext({viewport:{width,height:1050},serviceWorkers:'block'});const page=await context.newPage();page.setDefaultTimeout(20000);const errors=[];page.on('pageerror',e=>errors.push(e.message));let calls=0,pendingResolve,held=false;
+  const context=await browser.newContext({viewport:{width,height:1050},serviceWorkers:'block'});const page=await context.newPage();page.setDefaultTimeout(20000);const errors=[];page.on('pageerror',e=>errors.push(e.message));let calls=0,pendingResolve,held=false,userId='highlight-fixture';
   const reply=async(route,status,body)=>{try{await route.fulfill({status,headers:{'content-type':'application/json','access-control-allow-origin':base,'access-control-allow-credentials':'true','access-control-allow-headers':'content-type,x-csrf-token','access-control-allow-methods':'GET,POST,DELETE,OPTIONS'},body:JSON.stringify(body)});}catch{/* Explicitly cancelled fixture requests have no response consumer. */}};
   await context.route('**/*',async route=>{
    const request=route.request(),url=new URL(request.url());if(url.origin===base||['blob:','data:'].includes(url.protocol))return route.continue();if(url.origin!=='https://api-dev.mergemate.dev')return route.abort();
    if(request.method()==='OPTIONS')return reply(route,204,undefined);const path=url.pathname.replace('/v1','');
    if(path==='/flags')return reply(route,200,{voice_readout:false,voice_notes:false,highlight:mode!=='off'});
-   if(path==='/me')return reply(route,200,{id:'highlight-fixture',login:'fixture',name:'Fixture',avatarUrl:base+'/favicon.ico',demo:mode==='demo'});
+   if(path==='/me')return reply(route,200,{id:userId,login:'fixture',name:'Fixture',avatarUrl:base+'/favicon.ico',demo:mode==='demo'});
    if(path==='/auth/refresh')return reply(route,200,{session:{expiresAt:'2099-01-01T00:00:00.000Z',csrfToken:'fixture-csrf',demo:mode==='demo'}});
    if(path==='/auth/csrf')return reply(route,200,{csrfToken:'fixture-csrf'});
    if(path==='/consent')return reply(route,200,{ai:{granted:mode!=='consent-off',version:'1',at:'2026-10-29T00:00:00.000Z'}});
@@ -42,9 +42,10 @@ try{
    held=true;const prior=calls;await analyze.click();await page.waitForFunction(()=>document.body.innerText.includes('Analyzing screenshot...'));await pick('metadata.jpg');held=false;pendingResolve?.();await page.getByText('No screenshot analyzed yet',{exact:true}).waitFor();assert.equal(await page.getByText('STALE_RESULT_MUST_NOT_RENDER',{exact:true}).count(),0);assert.equal(calls,prior+1);
    await analyze.click();await page.getByText('No reliable region was suggested. Read the explanation and inspect the image yourself.',{exact:true}).waitFor();await page.screenshot({path:`${proof}/no-regions-${width}.png`,fullPage:true});
    await page.getByRole('button',{name:'Remove screenshot',exact:true}).click();await choose.waitFor();assert(await analyze.isDisabled());assert.equal(await page.getByRole('img',{name:'Selected screenshot',exact:true}).count(),0);
+   await pick('pixels.png');userId='other-fixture';const refreshed=page.waitForResponse(response=>response.url().endsWith('/v1/me'));await page.evaluate(()=>{const peer=new BroadcastChannel('mergemate-session-v1');peer.postMessage({v:1,kind:'signed-in'});peer.close();});await refreshed;await page.getByRole('img',{name:'Selected screenshot',exact:true}).waitFor({state:'hidden'});await choose.waitFor();
    await pick('pixels.png');await page.evaluate(()=>{Object.defineProperty(document,'visibilityState',{configurable:true,get:()=> 'hidden'});document.dispatchEvent(new Event('visibilitychange'));});await choose.waitFor();assert.equal(await page.getByRole('img',{name:'Selected screenshot',exact:true}).count(),0);
   }
   if(mode!=='on')assert.equal(calls,0);assert.deepEqual(errors,[]);assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));await page.screenshot({path:`${proof}/${mode}-${width}.png`,fullPage:true});await context.close();
  }
- console.log('PASS Highlight browser:8 scenarios393/1440, actual file picker, failure/retry, safe rendering, stale replacement, empty regions, remove/background and flag/consent/demo gates. API/model fixture replies only.');
+ console.log('PASS Highlight browser:8 scenarios393/1440, actual file picker, failure/retry, safe rendering, stale replacement, empty regions, remove/account-switch/background and flag/consent/demo gates. API/model fixture replies only.');
 }finally{await browser?.close();await new Promise(r=>server.close(r));}
