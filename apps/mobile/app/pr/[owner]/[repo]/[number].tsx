@@ -38,7 +38,7 @@ export default function PrDetailScreen() {
 
   const { colors, typography, spacing, radius } = useTheme();
   const {isDesktop}=useLayout();
-  const { aiConsentGranted } = useConsent();
+  const { aiConsentGranted, aiSummaries } = useConsent();
   const router = useRouter();
 
   const [assessmentOpen,setAssessmentOpen]=useState(false);
@@ -106,7 +106,7 @@ export default function PrDetailScreen() {
       if(version===routeVersion.current)setIsLoading(false);
     }
     // Reload when AI is switched on or off, so the summary and risk appear or go.
-  }, [owner, repo, number, aiConsentGranted]);
+  }, [owner, repo, number, aiConsentGranted, aiSummaries]);
 
   useEffect(() => {
     loadPr();

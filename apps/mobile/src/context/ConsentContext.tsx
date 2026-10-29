@@ -12,6 +12,8 @@ interface ConsentContextType {
   /** The separate "AI summaries and risk" preference. Meaningful only while consent is granted. */
   aiSummaries: boolean;
   isLoading: boolean;
+  /** False until the server's answer for this account arrived (always true in the demo). */
+  loaded: boolean;
   /** The change being saved right now. */
   pending: AiChoicePending | null;
   /** Why the last read or change did not go through, in plain words. */
@@ -75,6 +77,7 @@ export function ConsentProvider({ children }: { children: React.ReactNode }) {
     needsReview: live && needsConsentReview(state.prefs),
     aiSummaries: isDemo ? true : live && (state.prefs?.aiSummaries ?? false),
     isLoading: live && state.loading,
+    loaded: !live || state.prefs !== null,
     pending: state.pending,
     error: isDemo && userId !== null ? null : state.error,
     grantConsent,

@@ -65,15 +65,18 @@ export class AiChoices {
     for (const listener of [...this.listeners]) listener();
   }
 
-  /** Reads the canonical choices. A failed refresh keeps what was last confirmed and says so. */
-  async refresh(): Promise<boolean> {
+  /**
+   * Reads the canonical choices. A failed refresh keeps what was last confirmed and says so. A read that follows a
+   * failed change passes keepMessage so the reason for that failure stays on screen.
+   */
+  async refresh(keepMessage = false): Promise<boolean> {
     const generation = this.generation;
     try {
       const prefs = await this.api.getAiPreferences();
       if (generation !== this.generation) return false;
       // A change in flight will return a newer answer; do not let this older read replace it.
       if (this.busy) return true;
-      this.set({ loading: false, prefs, error: null });
+      this.set({ loading: false, prefs, ...(keepMessage ? {} : { error: null }) });
       return true;
     } catch (e) {
       if (generation !== this.generation) return false;
@@ -98,7 +101,7 @@ export class AiChoices {
       this.busy = false;
       this.set({ pending: null, error: toUserMessage(e, "Couldn't save your choice. Try again.") });
       // The choices changed somewhere else: show the server's state, keep the message.
-      if (e instanceof ApiClientError && e.code === "consent_changed") await this.refresh();
+      if (e instanceof ApiClientError && e.code === "consent_changed") await this.refresh(true);
       return false;
     }
   }
@@ -112,7 +115,7 @@ export class AiChoices {
     const expectedRevision = this.revision();
     if (!expectedRevision) {
       this.set({ error: "Your AI choices aren't loaded yet. Try again in a moment." });
-      void this.refresh();
+      void this.refresh(true);
       return false;
     }
     return this.change("grant", { action: "grant", version: AI_CONSENT_VERSION, expectedRevision });
@@ -127,7 +130,7 @@ export class AiChoices {
     const expectedRevision = this.revision();
     if (!expectedRevision) {
       this.set({ error: "Your AI choices aren't loaded yet. Try again in a moment." });
-      void this.refresh();
+      void this.refresh(true);
       return false;
     }
     return this.change("summaries", { action: "summaries", enabled, expectedRevision });

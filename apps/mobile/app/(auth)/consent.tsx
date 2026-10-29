@@ -10,6 +10,7 @@ import { Header } from "../../src/components/Header";
 import { EmptyState } from "../../src/components/EmptyState";
 import { LoadingState } from "../../src/components/LoadingState";
 import { Icon } from "../../src/components/Icon";
+import { ErrorState } from "../../src/components/ErrorState";
 import { useAuth } from "../../src/context/AuthContext";
 
 const SENT = [
@@ -28,7 +29,7 @@ export default function ConsentScreen() {
   const router = useRouter();
   const { colors, typography, spacing, radius } = useTheme();
   const { isDemo } = useAuth();
-  const { aiConsentGranted, needsReview, isLoading, pending, error, grantConsent, revokeConsent, refreshConsent } = useConsent();
+  const { aiConsentGranted, needsReview, isLoading, loaded, pending, error, grantConsent, revokeConsent, refreshConsent } = useConsent();
   const [saved, setSaved] = useState<"granted" | "revoked" | null>(null);
   const saving = pending === "grant" || pending === "revoke";
 
@@ -66,6 +67,12 @@ export default function ConsentScreen() {
         />
       ) : isLoading ? (
         <LoadingState title="Loading your choice..." message="Reading your AI settings." />
+      ) : !loaded ? (
+        <ErrorState
+          title="Could not load your AI choice"
+          message={error ?? "MergeMate could not read your AI choice. Nothing has been sent to an AI model."}
+          onRetry={() => void refreshConsent()}
+        />
       ) : saving ? (
         <LoadingState title="Saving your choice..." message="Waiting for MergeMate to confirm." />
       ) : saved ? (
