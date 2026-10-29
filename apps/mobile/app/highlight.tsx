@@ -32,7 +32,7 @@ export default function HighlightScreen() {
   const [flagBlocked,setFlagBlocked]=useState(false);
   const abort=()=>{sequence.current++;pending.current?.abort();pending.current=null;lock.current=false;};
   const clear=useCallback(()=>{sequence.current++;pending.current?.abort();pending.current=null;lock.current=false;const old=selected.current;selected.current=null;if(old)void releasePickedImage(old.uri).catch(()=>{});},[]);
-  useFocusEffect(useCallback(()=>()=>{clear();setImage(null);setResult(null);setIsAnalyzing(false);setNote("");},[clear]));
+  useFocusEffect(useCallback(()=>{setFlagBlocked(false);return()=>{clear();setImage(null);setResult(null);setIsAnalyzing(false);setNote("");};},[clear]));
   useEffect(()=>{
     const reset=()=>{clear();setImage(null);setResult(null);setIsAnalyzing(false);setNote("");};
     const off=onSessionChange(reset),app=AppState.addEventListener('change',state=>{if(state!=='active')reset();});
