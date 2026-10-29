@@ -175,8 +175,8 @@ const STATUS_STATE: Record<GhStatus["state"], CheckState> = {
 const httpsUrl=(value:string|null)=>{try{const url=new URL(value??'');return url.protocol==='https:'&&!url.username&&!url.password&&(url.hostname==='github.com'||url.hostname.endsWith('.github.com'))?{url:url.toString()}:{};}catch{return {};}};
 const runCheck=(run:GhCheckRun,index:number):PrCheck=>({id:`run:${run.id??`${run.name}:${index}`}`,name:run.name,state:checkRunState(run),...httpsUrl(run.html_url)});
 const statusCheck=(status:GhStatus):PrCheck=>({id:`status:${status.context}`,name:status.context,state:STATUS_STATE[status.state],...httpsUrl(status.target_url)});
-export function workspaceFile(file:GhFile){
- const patch=file.patch?.slice(0,65536);let adds=0,deletes=0,inHunk=false;
+export function workspaceFile(file:GhFile,cap=true){
+ const patch=cap?file.patch?.slice(0,65536):file.patch;let adds=0,deletes=0,inHunk=false;
  for(const line of (patch??'').split('\n')){if(/^@@ -\d+(?:,\d+)? \+\d+(?:,\d+)? @@/.test(line))inHunk=true;else if(inHunk&&line.startsWith('+'))adds++;else if(inHunk&&line.startsWith('-'))deletes++;}
  return {path:file.filename,status:file.status,additions:file.additions,deletions:file.deletions,...(file.previous_filename?{previousPath:file.previous_filename}:{}),...(patch?{patch}:{}),patchState:!patch?'unavailable' as const:patch.length!==(file.patch?.length??0)||adds!==file.additions||deletes!==file.deletions?'partial' as const:'available' as const};
 }
@@ -243,7 +243,7 @@ export const fetchPrDetail = async (
     additions: pull.additions,
     deletions: pull.deletions,
     changedFiles: pull.changed_files,
-    files:files.map(workspaceFile),
+    files:files.map(file=>workspaceFile(file,false)),
     checks,
     checkCursor:checkRuns.check_runs.length===100?"runs:5":statuses.statuses.length===100?"status:5":null,
     threads: toThreads(review, conversation),
@@ -364,7 +364,7 @@ export const github = new Hono<AppEnv>()
     if(scope!==undefined&&scope!==bound)throw new ApiError('validation_failed','Cursor belongs to another workspace.');
     if((revision&&revision!==pull.head.sha)||(c.req.query('head')&&c.req.query('head')!==pull.head.sha))throw new ApiError('pr_changed','This PR changed. Refresh the workspace.');
     let items:unknown[],length:number;
-    if(section==='files'){const rows=await githubGet<GhFile[]>(deps,token,`${base}/pulls/${number}/files?per_page=${limit}&page=${page}`);length=rows.length;items=rows.map(workspaceFile);}
+    if(section==='files'){const rows=await githubGet<GhFile[]>(deps,token,`${base}/pulls/${number}/files?per_page=${limit}&page=${page}`);length=rows.length;items=rows.map(file=>workspaceFile(file));}
     else if(section==='checks'){
       if(source==='runs'){const rows=await githubGet<{check_runs:GhCheckRun[]}>(deps,token,`${base}/commits/${pull.head.sha}/check-runs?per_page=${limit}&page=${page}`);length=rows.check_runs.length;items=rows.check_runs.map((row,index)=>runCheck(row,(page-1)*limit+index));}
       else{const rows=await githubGet<{statuses:GhStatus[]}>(deps,token,`${base}/commits/${pull.head.sha}/status?per_page=${limit}&page=${page}`);length=rows.statuses.length;items=rows.statuses.map(statusCheck);}

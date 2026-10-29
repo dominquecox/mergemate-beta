@@ -26,6 +26,7 @@ export class MockApiClient implements ApiClient {
   invalidateCache(): void {  }
   clearCache(): void {}
   invalidateSession():void{}
+  async getPrCheckPage(owner:string,repo:string,number:number){return {items:(await this.getPrDetail(owner,repo,number)).checks,nextCursor:null};}
   async getPrFilePage(owner: string, repo: string, number: number, _cursor?: string | null) {return {items:(await this.getPrDetail(owner,repo,number)).files,nextCursor:null};}
   async getPrCommentPage(owner: string, repo: string, number: number, _cursor?: string | null) {return {items:(await this.getPrDetail(owner,repo,number)).comments,nextCursor:null};}
   async undoTriageChoice(_prRef: string): Promise<void> {}
