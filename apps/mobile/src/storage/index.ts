@@ -2,6 +2,7 @@ import {ApiClientError,messageForCode} from "../api/errors";
 import * as SecureStore from "expo-secure-store";
 import { Platform } from "react-native";
 
+const LOCAL_CLEANUP_PENDING_KEY = "mergemate_local_cleanup_pending";
 const SESSION_TOKEN_KEY = "mergemate_session_token";
 const AI_CONSENT_KEY = "mergemate_ai_consent";
 const RECENT_SEARCHES_KEY = "mergemate_recent_searches";
@@ -12,6 +13,7 @@ const PUSH_ENABLED_KEY = "mergemate_push_enabled";
 
 // Fallback in-memory map for environments where neither SecureStore nor localStorage is accessible
 const memoryStorage = new Map<string, string>();
+let recentAccount:string|null=null,recentSearches:string[]=[];
 let pendingOperations=Promise.resolve();
 function pendingOperation<T>(operation:()=>Promise<T>):Promise<T>{const result=pendingOperations.then(operation,operation);pendingOperations=result.then(()=>undefined,()=>undefined);return result;}
 const storageUnavailable=()=>new ApiClientError("secure_storage_unavailable",messageForCode("secure_storage_unavailable"));
@@ -53,6 +55,24 @@ function isPendingSignIn(value: unknown): value is PendingSignIn {
 }
 
 export const StorageService = {
+  /** Erase account-owned local data; the caller serializes credentials separately. Theme stays device-owned. */
+  async clearAccountData():Promise<void>{
+    let failed=false;
+    for(const key of [AI_CONSENT_KEY,RECENT_SEARCHES_KEY,DEMO_FLAG_KEY,DEVICE_ID_KEY,PUSH_ENABLED_KEY,'mergemate.webPushUser']){
+      memoryStorage.delete(key);
+      try{if(Platform.OS==='web'){if(typeof window!=='undefined')window.localStorage.removeItem(key);}else await SecureStore.deleteItemAsync(key);}
+      catch{failed=true;}
+    }
+    if(!failed){try{if(Platform.OS==='web'){if(typeof window!=='undefined')window.localStorage.removeItem(LOCAL_CLEANUP_PENDING_KEY);}else await SecureStore.deleteItemAsync(LOCAL_CLEANUP_PENDING_KEY);memoryStorage.delete(LOCAL_CLEANUP_PENDING_KEY);}catch{failed=true;}}
+    if(failed){memoryStorage.set(LOCAL_CLEANUP_PENDING_KEY,'1');try{if(Platform.OS==='web'){if(typeof window!=='undefined')window.localStorage.setItem(LOCAL_CLEANUP_PENDING_KEY,'1');}else await SecureStore.setItemAsync(LOCAL_CLEANUP_PENDING_KEY,'1');}catch{/* Inaccessible storage retains the in-memory fence; manual device/site erasure remains available. */}throw storageUnavailable();}
+  },
+
+  async getLocalCleanupPending():Promise<boolean>{
+    if(memoryStorage.get(LOCAL_CLEANUP_PENDING_KEY)==='1')return true;
+    if(Platform.OS==='web')return getWebStorage()?.getItem(LOCAL_CLEANUP_PENDING_KEY)==='1';
+    try{return await SecureStore.getItemAsync(LOCAL_CLEANUP_PENDING_KEY)==='1';}catch{throw storageUnavailable();}
+  },
+
   async getThemeMode(): Promise<"dark" | "light" | "system"> {
     try {
       const value = Platform.OS === "web" ? getWebStorage()?.getItem("mergemate_theme") : await SecureStore.getItemAsync("mergemate_theme");
@@ -141,40 +161,19 @@ export const StorageService = {
     }
   },
 
-  async getRecentSearches(): Promise<string[]> {
-    try {
-      let raw: string | null = null;
-      if (Platform.OS === "web") {
-        const storage = getWebStorage();
-        raw = storage ? storage.getItem(RECENT_SEARCHES_KEY) : memoryStorage.get(RECENT_SEARCHES_KEY) || null;
-      } else {
-        raw = await SecureStore.getItemAsync(RECENT_SEARCHES_KEY);
-      }
-      if (raw) {
-        return JSON.parse(raw);
-      }
-    } catch {
-      // ignore
-    }
-    return [];
+  /** Private query text is session-memory only, never written to browser or native storage. */
+  setRecentSearchAccount(account:string|null):void {
+    if(recentAccount!==account){recentAccount=account;recentSearches=[];}
+    memoryStorage.delete(RECENT_SEARCHES_KEY);
+    try{getWebStorage()?.removeItem(RECENT_SEARCHES_KEY);}catch{/* Never read legacy shared history. */}
+    void SecureStore.deleteItemAsync(RECENT_SEARCHES_KEY).catch(()=>undefined);
   },
-
-  async addRecentSearch(query: string): Promise<void> {
-    try {
-      const existing = await this.getRecentSearches();
-      const updated = [query, ...existing.filter((q) => q.toLowerCase() !== query.toLowerCase())].slice(0, 5);
-      const val = JSON.stringify(updated);
-      if (Platform.OS === "web") {
-        const storage = getWebStorage();
-        if (storage) storage.setItem(RECENT_SEARCHES_KEY, val);
-        else memoryStorage.set(RECENT_SEARCHES_KEY, val);
-      } else {
-        await SecureStore.setItemAsync(RECENT_SEARCHES_KEY, val);
-      }
-    } catch {
-      // ignore
-    }
+  async getRecentSearches(account=recentAccount):Promise<string[]>{return account!==null&&account===recentAccount?[...recentSearches]:[];},
+  async addRecentSearch(query:string,account=recentAccount):Promise<void>{
+    const value=query.trim();if(account===null||account!==recentAccount||!value||value.length>120)return;
+    recentSearches=[value,...recentSearches.filter(item=>item.toLowerCase()!==value.toLowerCase())].slice(0,5);
   },
+  async clearRecentSearches(account=recentAccount):Promise<void>{if(account===recentAccount)recentSearches=[];},
 
   /**
    * Sign-in in progress. Web keeps it in sessionStorage (this tab only, gone when it closes); native keeps

@@ -53,6 +53,10 @@ function AppContent() {
   const onProtected = requiresSession(segments);
   const navigatorIdentity=useRef("initial");
   if(onProtected)navigatorIdentity.current=user?.id??"signed-out";
+  useEffect(()=>{
+    if(!isLoading && session && user?.deletionPending && onProtected && segments.join('/')!=='account/delete')router.replace('/account/delete');
+  },[isLoading,session,user?.deletionPending,onProtected,segments,router]);
+
   useEffect(() => {
     if (session) {
       hadSession.current = true;
@@ -96,7 +100,7 @@ function AppContent() {
   const available = width - (shell.sidebar ? SIDEBAR_WIDTH : 0);
   const hasGutter = shell.kind === "public" && shell.columnMaxWidth !== undefined && !isPhoneFrame && available > shell.columnMaxWidth;
 
-  const privatePending=!session && onProtected;
+  const privatePending=(!session || (user?.deletionPending && segments.join('/')!=='account/delete')) && onProtected;
   const stack = (
     <View style={{flex:1}}><View style={{flex:1,display:privatePending?"none":"flex"}}>
     <Stack key={navigatorIdentity.current}

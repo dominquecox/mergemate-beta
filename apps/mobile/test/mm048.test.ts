@@ -19,7 +19,7 @@ describe("MM-048 diff rows", () => {
   it("wraps diff text by default instead of scrolling sideways", () => {
     const screen = fs.readFileSync(path.join(__dirname, "../app/pr/[owner]/[repo]/[number].tsx"), "utf8");
     expect(screen).not.toMatch(/<ScrollView horizontal[^>]*>\s*<Text selectable[^>]*>\{file\.patchSnippet/);
-    expect(screen).toContain("<DiffView patch={file.patchSnippet}/>");
+    expect(screen).toMatch(/<DiffView patch=\{file\.patchSnippet\} wrap=\{/);
     const view = fs.readFileSync(path.join(__dirname, "../src/components/DiffView.tsx"), "utf8");
     expect(view).toContain("useState(true)");
   });

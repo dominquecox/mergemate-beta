@@ -25,10 +25,11 @@ export const Notification = z.object({
   summaryLine: z.string().optional(),
   updatedAt: IsoDateTime,
   read: z.boolean(),
+  stateToken:z.uuid().nullable().optional(),
 });
 export type Notification = z.infer<typeof Notification>;
 
-export const NotificationPage = pageOf(Notification);
+export const NotificationPage = pageOf(Notification).extend({serverTime:IsoDateTime.optional(),refreshAt:IsoDateTime.nullable().optional()});
 export type NotificationPage = z.infer<typeof NotificationPage>;
 
 export const SnoozeRequest = z.object({
@@ -82,10 +83,13 @@ export const PrFile = z.object({
   deletions: z.number().int().nonnegative(),
   /** Unified diff for this file; absent for binary or very large files. */
   patch: z.string().optional(),
+  previousPath:z.string().optional(),
+  patchState:z.enum(["available","partial","unavailable"]).optional(),
 });
 export type PrFile = z.infer<typeof PrFile>;
 
 export const PrCheck = z.object({
+  id:z.string().optional(),
   name: z.string(),
   state: CheckState,
   url: z.url().optional(),
@@ -101,6 +105,9 @@ export const PrComment = z.object({
 export type PrComment = z.infer<typeof PrComment>;
 
 export const PrThread = z.object({
+  kind:z.enum(["review","conversation","review-summary"]).optional(),
+  reviewState:z.string().optional(),
+  outdated:z.boolean().optional(),
   id: z.string(),
   /** File path for review threads; null for the main conversation. */
   path: z.string().nullable(),
@@ -132,6 +139,7 @@ export const PrDetail = z.object({
   /** Files listed here; `changedFiles` is the full count. */
   files: z.array(PrFile),
   checks: z.array(PrCheck),
+  checkCursor:z.string().nullable().optional(),
   threads: z.array(PrThread),
   createdAt: IsoDateTime,
   updatedAt: IsoDateTime,
@@ -159,3 +167,12 @@ export const ActivityResponse = z.object({
   serverTime: IsoDateTime,
 });
 export type ActivityResponse = z.infer<typeof ActivityResponse>;
+
+export const InboxPreference=z.object({filter:NotificationFilter}).strict();
+export const InboxMutation=z.object({operationId:z.uuid(),expectedOperationId:z.uuid().nullable(),action:z.enum(['done','snooze','restore']),observedUpdatedAt:IsoDateTime,durationMinutes:z.number().int().min(1).max(525600).optional()}).strict().refine(value=>value.action==='snooze'?value.durationMinutes!==undefined:value.durationMinutes===undefined);
+export type InboxMutation=z.infer<typeof InboxMutation>;
+export const InboxReceipt=z.object({operationId:z.uuid(),doneAt:IsoDateTime.nullable(),snoozedUntil:IsoDateTime.nullable(),updatedAt:IsoDateTime});
+export type InboxReceipt=z.infer<typeof InboxReceipt>;
+
+export const InboxUndo=z.object({itemId:z.string(),receipt:InboxReceipt}).nullable();
+export type InboxUndo=z.infer<typeof InboxUndo>;

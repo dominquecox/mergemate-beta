@@ -3,12 +3,14 @@ import type { ErrorCode } from "@mergemate/contracts";
 /** API error codes plus the failures that happen before or after the API answers. */
 export type ClientErrorCode =
   | ErrorCode
+  | "cancelled"
   | "network"
   | "timeout"
   | "parse_failed"
   | "bot_check_unavailable"
   | "not_configured"
-  | "secure_storage_unavailable";
+  | "secure_storage_unavailable"
+  | "local_cleanup_incomplete";
 
 export interface ClientErrorDetails {
   status?: number;
@@ -51,13 +53,17 @@ export function formatWait(seconds: number): string {
 }
 
 const FIXED_COPY: Record<ClientErrorCode, string> = {
+  cancelled: "Request cancelled.",
+  state_conflict:"This item changed on another device. Refresh your inbox and try again.",
   unauthorized: "Your session has ended. Sign in again to continue.",
   forbidden: "That isn't available for this account.",
   csrf_invalid: "Your session needs a quick refresh. Try again.",
+  consent_changed:"Your AI choices changed elsewhere. Review them and try again.",
   consent_required: "Turn on AI to use this. You choose what gets sent.",
   sso_required: "Your organization requires single sign-on. Authorize MergeMate on GitHub, then try again.",
   payload_too_large: "That file is too large.",
   not_found: "We couldn't find that.",
+  pr_changed:"This pull request changed. Refresh the workspace before loading more.",
   validation_failed: "That request wasn't valid. Check it and try again.",
   rate_limited: "You've reached a limit for now. Try again in a little while.",
   rate_limit_unavailable: "MergeMate is temporarily unavailable. Please try again shortly.",
@@ -68,6 +74,7 @@ const FIXED_COPY: Record<ClientErrorCode, string> = {
   timeout: "That took too long. Try again.",
   parse_failed: "MergeMate sent back something unexpected. Try again, or update the app.",
   bot_check_unavailable: "The quick security check couldn't load. Try again, or use the web app.",
+  local_cleanup_incomplete: "Your account was deleted. Clear this browser’s site data or this device’s app data to finish removing local information.",
   secure_storage_unavailable: "Secure storage is unavailable. Unlock your device and try again.",
   not_configured: "This build isn't connected to MergeMate's servers yet.",
 };

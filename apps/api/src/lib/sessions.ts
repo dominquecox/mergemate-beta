@@ -19,6 +19,7 @@ export interface SessionRecord {
   csrfToken: string | null;
   expiresAt: string;
   userStatus: string | null;
+  deletionPending?:boolean;
 }
 
 interface SessionRow {
@@ -31,6 +32,7 @@ interface SessionRow {
   last_seen_at: string;
   expires_at: string;
   status: string | null;
+  deletion_pending?:number;
 }
 
 export interface IssuedSession {
@@ -65,7 +67,7 @@ export const resolveSession = async (db: D1Database, token: string, now: Date): 
   const tokenHash = await sha256Hex(token);
   const row = await db
     .prepare(
-      `SELECT s.token_hash, s.family_id, s.user_id, s.demo, s.transport, s.csrf_token, s.last_seen_at, s.expires_at, u.status
+      `SELECT s.token_hash, s.family_id, s.user_id, s.demo, s.transport, s.csrf_token, s.last_seen_at, s.expires_at, u.status, EXISTS(SELECT 1 FROM account_deletions d WHERE d.user_id=s.user_id AND d.state='pending') AS deletion_pending
        FROM sessions s LEFT JOIN users u ON u.id = s.user_id
        WHERE s.token_hash = ?`,
     )
@@ -94,6 +96,7 @@ export const resolveSession = async (db: D1Database, token: string, now: Date): 
     csrfToken: row.csrf_token,
     expiresAt: row.expires_at,
     userStatus: row.status,
+    deletionPending:row.deletion_pending===1,
   };
 };
 
@@ -126,6 +129,7 @@ export const rotateSession=async(db:D1Database,session:SessionRecord,now:Date):P
       SELECT ?,user_id,demo,transport,?,?,?,expires_at,COALESCE(NULLIF(family_id,''),token_hash) FROM sessions s
       WHERE token_hash=? AND transport=? AND expires_at>? AND last_seen_at>?
         AND (demo=1 OR EXISTS(SELECT 1 FROM users u WHERE u.id=s.user_id AND u.status='active'))
+        AND NOT EXISTS(SELECT 1 FROM account_deletions d WHERE d.user_id=s.user_id AND d.state='pending')
     `).bind(tokenHash,csrfToken,stamp,stamp,session.tokenHash,session.transport,stamp,idle),
     db.prepare(`INSERT INTO session_lineage(token_hash,family_id,user_id,demo,transport,csrf_token,last_seen_at,expires_at)
       SELECT token_hash,COALESCE(NULLIF(family_id,''),token_hash),user_id,demo,transport,csrf_token,last_seen_at,expires_at

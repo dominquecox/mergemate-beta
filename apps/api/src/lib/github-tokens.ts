@@ -67,6 +67,13 @@ export const getAccessToken = async (env: Env, userId: string, now: Date): Promi
   return decryptAccess(env, userId, row);
 };
 
+/** Exact encrypted-row snapshot for deletion fencing; never returned to clients or logs. */
+export const getDeletionTokenSnapshot=async(env:Env,userId:string,now:Date)=>{
+  await getAccessToken(env,userId,now);
+  const row=await loadRow(env,userId);if(!row)throw reauth();
+  return {token:await decryptAccess(env,userId,row),encryptedAccess:row.access_token};
+};
+
 /**
  * The refresh itself. Runs inside the per-user Durable Object (serialized), and re-checks
  * freshness first because a queued caller may find the work already done.

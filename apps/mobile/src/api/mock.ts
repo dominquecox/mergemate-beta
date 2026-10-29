@@ -1,5 +1,7 @@
+import type {PrSearchFilters,PrSearchPage} from '@mergemate/contracts';
 import {disabledFeatureFlags} from "./feature-flags";
-import { ApiClientError } from "./errors";
+import { ApiClientError, messageForCode } from "./errors";
+import type { AiPreferenceUpdate, AiPreferences } from "@mergemate/contracts";
 import { AI_CONSENT_VERSION } from "../config/consent";
 import { ApiClient } from "./client";
 import {
@@ -22,10 +24,13 @@ import {
 } from "../types";
 
 export class MockApiClient implements ApiClient {
+  async searchPrs(_filters:PrSearchFilters,_cursor?:string|null,_signal?:AbortSignal):Promise<PrSearchPage>{throw new ApiClientError('not_configured','Search needs a configured API.');}
   async getFeatureFlags(){return disabledFeatureFlags();}
+  invalidateInbox():void {}
   invalidateCache(): void {  }
   clearCache(): void {}
   invalidateSession():void{}
+  async getPrCheckPage(owner:string,repo:string,number:number){return {items:(await this.getPrDetail(owner,repo,number)).checks,nextCursor:null};}
   async getPrFilePage(owner: string, repo: string, number: number, _cursor?: string | null) {return {items:(await this.getPrDetail(owner,repo,number)).files,nextCursor:null};}
   async getPrCommentPage(owner: string, repo: string, number: number, _cursor?: string | null) {return {items:(await this.getPrDetail(owner,repo,number)).comments,nextCursor:null};}
   async undoTriageChoice(_prRef: string): Promise<void> {}
@@ -39,6 +44,14 @@ export class MockApiClient implements ApiClient {
     return {items: all.slice(start,start+25), nextCursor: start+25 < all.length ? String(start+25) : null};
   }
 
+  async transcribeVoice():Promise<string>{throw new ApiClientError('forbidden','Recording is unavailable in demo mode.');}
+  async getPrivateNotes():Promise<import('@mergemate/contracts').PrivateNote[]>{return [];}
+  async savePrivateNote():Promise<import('@mergemate/contracts').PrivateNote>{throw new ApiClientError('forbidden','Private notes are unavailable in demo mode.');}
+  async removePrivateNote():Promise<void>{throw new ApiClientError('forbidden','Private notes are unavailable in demo mode.');}
+  async getInboxUndo(){return null;}
+  async getInboxPreference(){return {filter:'all' as const};}
+  async setInboxPreference(filter:NotificationFilter){return {filter};}
+  async mutateInboxItem():Promise<import('@mergemate/contracts').InboxReceipt>{throw new ApiClientError('forbidden','Inbox changes are unavailable in demo mode.');}
   public isMock = true;
 
   private user: User = {
@@ -378,6 +391,39 @@ export class MockApiClient implements ApiClient {
 
   async setConsent(granted: boolean): Promise<void> {
     this.consentGranted = granted;
+  }
+
+  private aiSummariesPref = true;
+  private aiRevision = 1;
+
+  private aiPrefs(): AiPreferences {
+    return {
+      ai: { granted: this.consentGranted, version: AI_CONSENT_VERSION, currentVersion: AI_CONSENT_VERSION },
+      aiSummaries: this.aiSummariesPref,
+      revision: `mock-${this.aiRevision}`,
+    };
+  }
+
+  async getAiPreferences(): Promise<AiPreferences> {
+    return this.aiPrefs();
+  }
+
+  async updateAiPreferences(update: AiPreferenceUpdate): Promise<AiPreferences> {
+    if (update.action !== "revoke" && update.expectedRevision !== this.aiPrefs().revision) {
+      throw new ApiClientError("consent_changed", messageForCode("consent_changed"));
+    }
+    if (update.action === "grant") {
+      this.consentGranted = true;
+      this.aiSummariesPref = true;
+    } else if (update.action === "revoke") {
+      this.consentGranted = false;
+      this.aiSummariesPref = false;
+    } else {
+      if (update.enabled && !this.consentGranted) throw new ApiClientError("consent_required", messageForCode("consent_required"));
+      this.aiSummariesPref = update.enabled;
+    }
+    this.aiRevision += 1;
+    return this.aiPrefs();
   }
 
   async getRepos(): Promise<Repo[]> {

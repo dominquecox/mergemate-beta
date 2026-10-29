@@ -1,9 +1,14 @@
+import {PrivateNotes} from "../../../../src/components/PrivateNotes";
+import {useAuth} from '../../../../src/context/AuthContext';
+import {usePrWorkspace} from '../../../../src/hooks/usePrWorkspace';
+import {discussionGroups} from '../../../../src/workspace/state';
+import {githubUrl} from '../../../../src/api/urls';
 import {ReadoutControls} from "../../../../src/components/ReadoutControls";
 import {narrationSentences} from "../../../../src/readout/text";
 import { Avatar } from "../../../../src/components/Avatar";
 import { relativeTime } from "../../../../src/format/activity";
 import { SummarySection } from "../../../../src/components/SummarySection";
-import React, { useState, useEffect, useCallback, useRef } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { View, ScrollView, TouchableOpacity, TextInput, StyleSheet, Linking, Share, Platform, KeyboardAvoidingView } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAndroidBackHandler } from "../../../../src/platform/android";
@@ -11,11 +16,8 @@ import { Text } from "../../../../src/components/Text";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useLayout } from "../../../../src/layout/useLayout";
 import { useTheme } from "../../../../src/context/ThemeContext";
-import { api } from "../../../../src/api";
-import { toUserMessage } from "../../../../src/api/errors";
-import { aiNoticeAction, applyAiRetry } from "../../../../src/api/aiRetry";
+import { aiNoticeAction } from "../../../../src/api/aiRetry";
 import { useConsent } from "../../../../src/context/ConsentContext";
-import { PrDetail } from "../../../../src/types";
 import { Header } from "../../../../src/components/Header";
 import { StatusPill } from "../../../../src/components/StatusPill";
 import { RiskBadge } from "../../../../src/components/RiskBadge";
@@ -29,26 +31,25 @@ import { Icon } from "../../../../src/components/Icon";
 import { DiffView } from "../../../../src/components/DiffView";
 import { MergeStateChip } from "../../../../src/components/MergeStateChip";
 
-export default function PrDetailScreen() {
-  const { owner, repo, number } = useLocalSearchParams<{
-    owner: string;
-    repo: string;
-    number: string;
-  }>();
-
+export default function PrDetailScreen(){
+ const {owner,repo,number}=useLocalSearchParams<{owner:string;repo:string;number:string}>(),{user}=useAuth();
+ if(!owner||!repo||!number||!/^[-A-Za-z0-9_.]{1,100}$/.test(owner)||!/^[-A-Za-z0-9_.]{1,100}$/.test(repo)||[owner,repo].some(value=>value==='.'||value==='..')||!/^[1-9]\d{0,9}$/.test(number))return <View style={{flex:1}}><Header title="PR Review Detail" showBack/><ErrorState title="Invalid pull request" message="Open a valid pull request from your Inbox."/></View>;
+ return user?<PrWorkspace key={`${user.id}:${owner}/${repo}#${number}`} owner={owner} repo={repo} number={number}/>:<LoadingState title="Checking your session..." message="Verifying access before showing this pull request."/>;
+}
+function PrWorkspace({owner,repo,number}:{owner:string;repo:string;number:string}){
   const { colors, typography, spacing, radius } = useTheme();
   const {isDesktop}=useLayout();
-  const { aiConsentGranted } = useConsent();
+  const { aiConsentGranted, aiSummaries } = useConsent();
   const router = useRouter();
 
   const [assessmentOpen,setAssessmentOpen]=useState(false);
   const [expandedFiles,setExpandedFiles]=useState<string[]>([]);
-  const [detail, setDetail] = useState<PrDetail | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [notes, setNotes] = useState<string[]>([]);
+  const {detail,isLoading,isRefreshing,error,loadPr,loadPage,pageBusy,pageError,capped,fileCursor,commentCursor,checkCursor,retryAi,aiRetrying}=usePrWorkspace(owner,repo,Number(number),aiConsentGranted&&aiSummaries);
+  const [fileWrap,setFileWrap]=useState<Record<string,boolean>>({}),[collapsedThreads,setCollapsedThreads]=useState<string[]>([]),[linkError,setLinkError]=useState<string|null>(null);
+  const scroll=useRef<React.ComponentRef<typeof ScrollView>>(null),scrollOffset=useRef(0);
+  useEffect(()=>{setExpandedFiles([]);setCollapsedThreads([]);},[detail?.headSha]);
+  useEffect(()=>{if(!detail||isLoading)return;const frame=requestAnimationFrame(()=>scroll.current?.scrollTo({y:scrollOffset.current,animated:false}));return()=>cancelAnimationFrame(frame);},[isLoading]);
   const [showNoteInput, setShowNoteInput] = useState(false);
-  const [newNote, setNewNote] = useState("");
   const insets = useSafeAreaInsets();
   const bottomInset = Platform.OS === "web" ? 0 : insets.bottom;
 
@@ -64,118 +65,29 @@ export default function PrDetailScreen() {
     return false;
   }, showNoteInput || assessmentOpen);
 
-  // Files and comments page independently: loading one never shows a spinner on, blocks, or reports an error for the other.
-  type PageSection='files'|'comments';
-  const pageLock=useRef<Record<PageSection,boolean>>({files:false,comments:false});
-  const routeVersion=useRef(0);
-  const [pageBusy,setPageBusy]=useState<Record<PageSection,boolean>>({files:false,comments:false});
-  const [pageError,setPageError]=useState<Record<PageSection,string|null>>({files:null,comments:null});
-  const [fileCursor,setFileCursor]=useState<string|null>('1');
-  const [commentCursor,setCommentCursor]=useState<string|null>('review:1');
-  const loadPage=async(section:PageSection)=>{
-    if(pageLock.current[section])return;
-    const cursor=section==='files'?fileCursor:commentCursor;
-    if(!cursor)return;
-    pageLock.current[section]=true;setPageBusy(b=>({...b,[section]:true}));setPageError(e=>({...e,[section]:null}));
-    const version=routeVersion.current;
-    try{
-      if(section==='files'){
-        const page=await api.getPrFilePage(owner,repo,Number(number),cursor);
-        if(version!==routeVersion.current)return;
-        setDetail(prev=>prev?{...prev,files:[...new Map([...prev.files,...page.items].map(file=>[file.filename,file])).values()]}:prev);setFileCursor(page.nextCursor);
-      }else{
-        const page=await api.getPrCommentPage(owner,repo,Number(number),cursor);
-        if(version!==routeVersion.current)return;
-        setDetail(prev=>prev?{...prev,comments:[...new Map([...prev.comments,...page.items].map(comment=>[comment.id,comment])).values()]}:prev);setCommentCursor(page.nextCursor);
-      }
-    }catch(e){if(version===routeVersion.current){const message=toUserMessage(e,'Could not load this page.');setPageError(prev=>({...prev,[section]:message}));}}
-    finally{if(version===routeVersion.current){pageLock.current[section]=false;setPageBusy(b=>({...b,[section]:false}));}}
-  };
-  useEffect(()=>{routeVersion.current++;pageLock.current={files:false,comments:false};setPageBusy({files:false,comments:false});setPageError({files:null,comments:null});setFileCursor('1');setCommentCursor('review:1');return()=>{routeVersion.current++;};},[owner,repo,number]);
-
-  const loadPr = useCallback(async () => {
-    const version=routeVersion.current;
-    setIsLoading(true);
-    setError(null);
-    try {
-      const data = await api.getPrDetail(owner || "owner", repo || "repo", parseInt(number || "1", 10));
-      if(version===routeVersion.current)setDetail(data);
-    } catch (e) {
-      if(version===routeVersion.current)setError(toUserMessage(e, "We couldn't load this pull request right now. Please try again."));
-    } finally {
-      if(version===routeVersion.current)setIsLoading(false);
-    }
-    // Reload when AI is switched on or off, so the summary and risk appear or go.
-  }, [owner, repo, number, aiConsentGranted]);
-
-  useEffect(() => {
-    loadPr();
-  }, [loadPr]);
-
-  // Retries only the AI parts that are missing; the PR itself stays on screen.
-  const aiRetryLock=useRef(false);
-  const [aiRetrying,setAiRetrying]=useState(false);
-  const retryAi=async()=>{
-    if(aiRetryLock.current||!detail)return;
-    aiRetryLock.current=true;setAiRetrying(true);
-    const version=routeVersion.current;const n=Number(number);
-    try{
-      const [summary,risk]=await Promise.all([
-        detail.summary?Promise.resolve(null):Promise.allSettled([api.getPrSummary(owner,repo,n)]).then(([r])=>r),
-        detail.risk?Promise.resolve(null):Promise.allSettled([api.getPrRisk(owner,repo,n)]).then(([r])=>r),
-      ]);
-      if(version===routeVersion.current)setDetail(prev=>prev?applyAiRetry(prev,summary,risk):prev);
-    }finally{aiRetryLock.current=false;if(version===routeVersion.current)setAiRetrying(false);}
-  };
-
-  // GitHub computes mergeability in the background. While it reports "unknown", re-read the PR a few times.
-  const [mergeRechecks, setMergeRechecks] = useState(0);
-  useEffect(() => {
-    if (detail?.mergeState !== "unknown" || mergeRechecks >= 3) return;
-    const timer = setTimeout(async () => {
-      setMergeRechecks((count) => count + 1);
-      try {
-        const fresh = await api.getPrMetadata(owner || "owner", repo || "repo", parseInt(number || "1", 10));
-        setDetail((current) => (current ? { ...current, mergeState: fresh.mergeState } : current));
-      } catch {
-        // Keep showing "Checking merge status"; it never claims ready.
-      }
-    }, 4000);
-    return () => clearTimeout(timer);
-  }, [detail?.mergeState, mergeRechecks, owner, repo, number]);
-
   const handleShare = async () => {
-    if (detail) {
-      await Share.share({
-        message: `${detail.title} (${detail.owner}/${detail.repo}#${detail.number})\n${detail.htmlUrl}`,
-      });
+    const url=githubUrl(detail?.htmlUrl);if(detail&&url){try{await Share.share({
+        message: `${detail.title} (${detail.owner}/${detail.repo}#${detail.number})\n${url}`,
+      });}catch{setLinkError("Sharing is unavailable. Open this PR in GitHub instead.");}
     }
   };
 
-  const openInGitHub = () => {
-    if (detail?.htmlUrl) {
-      Linking.openURL(detail.htmlUrl);
-    }
-  };
+  const openLink=async(value:string|undefined)=>{setLinkError(null);const url=githubUrl(value);if(!url){setLinkError('This GitHub link is unavailable.');return;}try{await Linking.openURL(url);}catch{setLinkError('Could not open GitHub. Try again.');}};
+  const openInGitHub=()=>void openLink(detail?.htmlUrl);
 
-  const addLocalNote = () => {
-    if (newNote.trim()) {
-      setNotes((prev) => [...prev, newNote.trim()]);
-      setNewNote("");
-      setShowNoteInput(false);
-    }
-  };
 
   return (
     <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={[styles.root, { backgroundColor: colors.background }]}>
       <Header
         title="PR Review Detail"
+        onBack={()=>{if(router.canGoBack())router.back();else router.replace("/(tabs)/inbox");}}
         showBack
         rightAction={
           <TouchableOpacity
             onPress={handleShare}
             accessibilityRole="button"
             accessibilityLabel="Share pull request"
+            disabled={!detail?.htmlUrl}
             style={styles.shareBtn}
           >
             <Icon name="share-outline" size={22} color={colors.textSecondary} />
@@ -186,13 +98,13 @@ export default function PrDetailScreen() {
       {isLoading ? (
         <LoadingState
           title="Loading pull request..."
-          message="Fetching AI summary, risk checks, and changed files."
+          message="Checking GitHub access and pull request metadata."
         />
-      ) : error ? (
+      ) : error&&!detail ? (
         <ErrorState
           title="Couldn't load pull request"
           message={error}
-          onRetry={loadPr}
+          onRetry={()=>void loadPr()}
         />
       ) : !detail ? (
         <EmptyState
@@ -200,13 +112,15 @@ export default function PrDetailScreen() {
           title="Pull request not found"
           message="This pull request may have been removed or moved in GitHub."
           actionTitle="Try Again"
-          onAction={loadPr}
+          onAction={()=>void loadPr()}
         />
       ) : (
         <>
-          <ScrollView contentContainerStyle={{ padding:isDesktop?24:spacing.base, paddingBottom:120 }}>
+          <ScrollView testID="pr-workspace-scroll" ref={scroll} onScroll={event=>{scrollOffset.current=event.nativeEvent.contentOffset.y;}} scrollEventThrottle={16} contentContainerStyle={{ padding:isDesktop?24:spacing.base, paddingBottom:120 }}>
             <ReadoutControls label="Pull request summary" sentences={narrationSentences([...(detail.summary?[detail.summary.whatChanged,detail.summary.whyItMatters,...detail.summary.suggestedFocus]:[]),...(detail.risk?[`Risk level: ${detail.risk.level}.`,...detail.risk.reasons]:[])])}/>
 
+            <Button title="Refresh workspace" variant="ghost" loading={isRefreshing} onPress={()=>void loadPr()}/>
+            {(error||linkError)&&<Text accessibilityRole="alert" style={{color:colors.riskHigh,padding:12}}>{error??linkError}</Text>}
             {/* PR Header */}
             <View style={[styles.headerCard, { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.lg }]}>
               <View style={styles.topRow}>
@@ -351,11 +265,11 @@ export default function PrDetailScreen() {
             {/* CI Checks List */}
             <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.lg, marginTop: spacing.sm }]}>
               <Text style={[typography.headline, { color: colors.text }]} accessibilityRole="header">
-                Checks ({detail.checks.filter((c) => c.conclusion === "success").length}/{detail.checks.length})
+                Checks ({detail.checks.filter((c) => c.conclusion === "success").length}/{detail.checks.length} loaded)
               </Text>
               {detail.checks.length === 0 ? (
                 <Text style={[typography.footnote, { color: colors.textMuted, marginTop: spacing.xs }]}>
-                  No status checks have been reported for this pull request yet.
+                  {checkCursor?"Checks are still being loaded. Continue checking all pages.":"No status checks have been reported for this pull request."}
                 </Text>
               ) : (
                 <View style={{ marginTop: spacing.xs }}>
@@ -373,11 +287,14 @@ export default function PrDetailScreen() {
                         color={chk.conclusion === "success" ? colors.riskLow : chk.conclusion === "failure" ? colors.riskHigh : colors.textMuted}
                       />
                       <Text style={[typography.subhead, { color: colors.text, flex: 1 }]}>{chk.name}</Text>
-                      <Text style={[typography.caption, { color: colors.textMuted }]}>{chk.conclusion}</Text>
+                      <Text style={[typography.caption, { color: colors.textMuted }]}>{chk.status==='completed'?chk.conclusion:chk.status}</Text>{chk.url&&<Button title="Open check in GitHub" variant="ghost" onPress={()=>openLink(chk.url)}/>}
                     </View>
                   ))}
                 </View>
               )}
+              {checkCursor&&<Button title={detail.checks.length?'Load more checks':'Load checks'} loading={pageBusy.checks} onPress={()=>loadPage('checks')} variant="ghost"/>}
+              {pageError.checks&&<Text accessibilityRole="alert" style={{color:colors.riskHigh}}>{pageError.checks}</Text>}
+              {capped.checks&&<Text style={{color:colors.textSecondary}}>Check pagination limit reached. Open this PR in GitHub for the full history.</Text>}
             </View>
 
             </View>
@@ -393,10 +310,12 @@ export default function PrDetailScreen() {
                 </Text>
               ) : (
                 <View style={{ marginTop: spacing.xs }}>
-                  {detail.files.map((file, idx) => (
-                    <View key={file.filename} style={{marginTop:12,backgroundColor:colors.surfaceElevated,borderRadius:8,overflow:"hidden"}}>
-                      <TouchableOpacity accessibilityRole="button" accessibilityLabel={`Toggle diff for ${file.filename}`} accessibilityState={{expanded:expandedFiles.includes(file.filename)}} aria-expanded={expandedFiles.includes(file.filename)} onPress={()=>setExpandedFiles(prev=>prev.includes(file.filename)?prev.filter(name=>name!==file.filename):[...prev,file.filename])} style={{flexDirection:"row",alignItems:"center",padding:12,gap:8,minHeight:48}}><Icon name={expandedFiles.includes(file.filename)?"chevron-down":"chevron-forward"} size={16} color={colors.textSecondary}/><Text style={[typography.code,{color:colors.text,flex:1}]}>{file.filename}</Text><Text style={[typography.code,{color:colors.riskLow,fontSize:11}]}>+{file.additions}</Text><Text style={[typography.code,{color:colors.riskHigh,fontSize:11}]}>-{file.deletions}</Text></TouchableOpacity>
-                      {expandedFiles.includes(file.filename) && (file.patchSnippet ? <DiffView patch={file.patchSnippet}/> : <Text style={[typography.code,{color:colors.textSecondary,padding:12,borderTopWidth:1,borderTopColor:colors.border}]}>Diff unavailable. Open this pull request in GitHub.</Text>)}
+                  {detail.files.map((file) => (
+                    <View testID={`workspace-file-${file.filename}`} key={file.filename} style={{marginTop:12,backgroundColor:colors.surfaceElevated,borderRadius:8,overflow:"hidden"}}>
+                      <TouchableOpacity accessibilityRole="button" accessibilityLabel={`Toggle diff for ${file.filename}`} accessibilityState={{expanded:expandedFiles.includes(file.filename)}} aria-expanded={expandedFiles.includes(file.filename)} onPress={()=>setExpandedFiles(prev=>prev.includes(file.filename)?prev.filter(name=>name!==file.filename):[...prev,file.filename])} style={{flexDirection:"row",alignItems:"center",padding:12,gap:8,minHeight:48}}><Icon name={expandedFiles.includes(file.filename)?"chevron-down":"chevron-forward"} size={16} color={colors.textSecondary}/><Text style={[typography.code,{color:colors.text,flex:1}]}>{file.filename} · {file.status}</Text><Text style={[typography.code,{color:colors.riskLow,fontSize:11}]}>+{file.additions}</Text><Text style={[typography.code,{color:colors.riskHigh,fontSize:11}]}>-{file.deletions}</Text></TouchableOpacity>
+                      {file.previousPath&&<Text style={{color:colors.textSecondary,paddingHorizontal:12}}>Previously: {file.previousPath}</Text>}
+                      {expandedFiles.includes(file.filename)&&file.patchState==='partial'&&<Text accessibilityRole="alert" style={{color:colors.textSecondary,padding:12}}>Partial patch: this is not the complete diff. Open this PR in GitHub for the full file.</Text>}
+                      {expandedFiles.includes(file.filename) && (file.patchSnippet ? <DiffView patch={file.patchSnippet} wrap={Object.prototype.hasOwnProperty.call(fileWrap,file.filename)?fileWrap[file.filename]??true:true} onWrapChange={wrap=>setFileWrap(old=>({...old,[file.filename]:wrap}))}/> : <Text style={[typography.code,{color:colors.textSecondary,padding:12,borderTopWidth:1,borderTopColor:colors.border}]}>Patch unavailable: the file may be binary, empty or too large for GitHub to include. Open this PR in GitHub.</Text>)}
                     </View>
                   ))}
                 </View>
@@ -404,70 +323,17 @@ export default function PrDetailScreen() {
             </View>
 
             {fileCursor && <Button title={detail.files.length?'Load more files':'Load files'} loading={pageBusy.files} onPress={()=>loadPage('files')} variant="secondary"/>}
+            {capped.files&&<Text style={{color:colors.textSecondary}}>File pagination limit reached. Open this PR in GitHub for remaining files.</Text>}
             {pageError.files && <Text accessibilityRole="alert" style={[typography.footnote,{color:colors.riskHigh,padding:16}]}>{pageError.files}</Text>}
             <View style={[styles.card,{backgroundColor:colors.surface,borderColor:colors.border,borderRadius:radius.lg,marginTop:16}]}>
               <Text accessibilityRole="header" style={[typography.headline,{color:colors.text}]}>Conversation</Text>
-              {detail.comments.map(comment=><View key={comment.id} style={{paddingVertical:12,borderBottomWidth:1,borderBottomColor:colors.border}}><Text style={[typography.footnote,{color:colors.textSecondary}]}>@{comment.author}</Text><Text style={[typography.body,{color:colors.text,marginTop:4}]}>{comment.body}</Text></View>)}
+              {discussionGroups(detail.comments).map(group=><View key={group.id} style={{paddingVertical:12,borderBottomWidth:1,borderBottomColor:colors.border}}><TouchableOpacity accessibilityRole="button" accessibilityLabel={group.kind==='conversation'?'Toggle PR conversation':group.kind==='review-summary'?`Toggle submitted review by ${group.comments[0]?.author??'reviewer'}`:`Toggle review discussion for ${group.path??'file unavailable'}${group.line?` line ${group.line}`:''}`} accessibilityState={{expanded:!collapsedThreads.includes(group.id)}} aria-expanded={!collapsedThreads.includes(group.id)} onPress={()=>setCollapsedThreads(old=>old.includes(group.id)?old.filter(id=>id!==group.id):[...old,group.id])} style={{minHeight:44,justifyContent:'center'}}><Text style={[typography.subhead,{color:colors.text}]}>{group.kind==='conversation'?'PR conversation':group.kind==='review-summary'?`Review: ${(group.reviewState??'submitted').toLowerCase().replaceAll('_',' ')}`:`Review discussion · ${group.path??'file unavailable'}${group.line?`:${group.line}`:''}${group.outdated?' (outdated)':''}`}</Text></TouchableOpacity>{!collapsedThreads.includes(group.id)&&group.comments.map(comment=><View key={comment.id} style={{paddingVertical:8}}><Text style={[typography.footnote,{color:colors.textSecondary}]}>@{comment.author} · {relativeTime(comment.createdAt)}</Text><Text selectable style={[typography.body,{color:colors.text,marginTop:4}]}>{comment.body||'No review message.'}</Text></View>)}</View>)}
               {commentCursor?<Button title="Load comments" loading={pageBusy.comments} onPress={()=>loadPage('comments')} variant="ghost"/>:detail.comments.length===0?<Text style={[typography.footnote,{color:colors.textSecondary}]}>No comments.</Text>:null}
+              {capped.comments&&<Text style={{color:colors.textSecondary}}>Discussion pagination limit reached. Open this PR in GitHub for the full history.</Text>}
               {pageError.comments && <Text accessibilityRole="alert" style={[typography.footnote,{color:colors.riskHigh,paddingTop:12}]}>{pageError.comments}</Text>}
             </View>
 
-            {/* Inline Note Editor */}
-            {showNoteInput && (
-              <View style={[styles.card, { backgroundColor: colors.surfaceElevated, borderColor: colors.border, borderRadius: radius.lg, marginTop: spacing.sm }]}>
-                <Text style={[typography.headline, { color: colors.text }]} accessibilityRole="header">
-                  Add Private Note
-                </Text>
-                <TextInput
-                  value={newNote}
-                  onChangeText={setNewNote}
-                  placeholder="Write a personal review note..."
-                  placeholderTextColor={colors.textMuted}
-                  accessibilityLabel="Personal review note"
-                  style={[
-                    styles.noteInput,
-                    {
-                      backgroundColor: colors.surface,
-                      borderColor: colors.border,
-                      color: colors.text,
-                      borderRadius: radius.md,
-                      marginTop: spacing.xs,
-                    },
-                  ]}
-                />
-                <View style={styles.noteActions}>
-                  <Button
-                    title="Cancel"
-                    onPress={() => {
-                      setShowNoteInput(false);
-                      setNewNote("");
-                    }}
-                    variant="secondary"
-                    style={{ flex: 1 }}
-                  />
-                  <Button
-                    title="Save Note"
-                    onPress={addLocalNote}
-                    variant="primary"
-                    style={{ flex: 1 }}
-                  />
-                </View>
-              </View>
-            )}
-
-            {/* Local Notes */}
-            {notes.length > 0 && (
-              <View style={[styles.card, { backgroundColor: colors.surfaceElevated, borderColor: colors.border, borderRadius: radius.lg, marginTop: spacing.sm }]}>
-                <Text style={[typography.headline, { color: colors.text }]} accessibilityRole="header">
-                  My Notes ({notes.length})
-                </Text>
-                {notes.map((note, idx) => (
-                  <Text key={idx} style={[typography.body, { color: colors.textSecondary, marginTop: 4 }]}>
-                    • {note}
-                  </Text>
-                ))}
-              </View>
-            )}
+            {showNoteInput && <PrivateNotes context={{kind:'pr',repo:`${owner}/${repo}`,number:Number(number)}}/>}
           </ScrollView>
 
           {/* Bottom Bar: Open in GitHub and Add note. STRICTLY NO MERGE, APPROVE, OR COMMENT CONTROLS ON GITHUB (US-12) */}
@@ -481,6 +347,7 @@ export default function PrDetailScreen() {
             <Button
               title="Open in GitHub ↗"
               onPress={openInGitHub}
+              disabled={!detail.htmlUrl}
               variant="primary"
               style={{ flex: 2 }}
             />

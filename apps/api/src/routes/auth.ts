@@ -1,3 +1,4 @@
+import {deletionPending} from "../lib/account-deletion";
 import {
   AuthCallbackRequest,
   type AuthCallbackResponse,
@@ -134,7 +135,7 @@ export const auth = new Hono<AppEnv>()
     await saveTokens(c.env, user.id, exchange.tokens, now);
     const transport = transportFor(pending.platform);
     const issued = await createSession(db, { userId: user.id, transport, now });
-    const res: AuthCallbackResponse = { session: sessionBody(c, issued, transport, false), user: toUser(user) };
+    const res: AuthCallbackResponse = { session: sessionBody(c, issued, transport, false), user: { ...toUser(user), ...(await deletionPending(db,user.id)?{deletionPending:true}:{}) } };
     return c.json(res);
   })
 
@@ -177,5 +178,5 @@ export const auth = new Hono<AppEnv>()
       .bind(session.userId)
       .first<UserRow>();
     if (!row) throw new ApiError("unauthorized", "Sign in to continue.");
-    return c.json({ ...toUser(row), demo: false } satisfies Me);
+    return c.json({ ...toUser(row), demo: false, ...(session.deletionPending?{deletionPending:true}:{}) } satisfies Me);
   });

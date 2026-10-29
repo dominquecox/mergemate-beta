@@ -1,3 +1,4 @@
+import {searchPrs} from './routes/search';
 import { Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import type { AppEnv, Deps } from "./env";
@@ -22,6 +23,7 @@ import { github } from "./routes/github";
 import { health } from "./routes/health";
 import { createHighlightRouter } from "./routes/highlight";
 import { createVoiceNotesRouter } from "./routes/voice-notes";
+import {notes} from "./routes/notes";
 import { notifications } from "./routes/notifications";
 import { publicContent } from "./routes/public";
 import { telemetry } from "./routes/telemetry";
@@ -73,6 +75,8 @@ export const createApp = (deps: Deps = defaultDeps) => {
   app.route("/v1", billingWebhooks);
   app.route("/v1", github);
   app.route("/v1", notifications);
+  app.route("/v1", notes);
+  app.route("/v1", searchPrs);
   app.route("/v1", telemetry);
   app.route("/v1", activity);
   app.route("/v1", publicContent);

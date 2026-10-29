@@ -7,6 +7,7 @@ import { MockApiClient } from "./mock";
 export interface ApiClientDeps {
   platform: "web" | "native";
   nativePlatform?: "ios" | "android";
+  onAccountDeleted?:()=>Promise<void>;
   tokenStore: TokenStore;
   fetch?: typeof fetch;
   getTurnstileToken?: () => Promise<string>;

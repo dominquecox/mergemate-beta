@@ -1,13 +1,20 @@
+import {PrSearchFilters,PrSearchPage} from '@mergemate/contracts';
+import type {WorkspaceRead} from './client';
+import {PrCheck as PrCheckSchema} from '@mergemate/contracts';
 import {FeatureFlagCache} from "./feature-flags";
 import {notifySessionChange,hasPendingLogout,setPendingLogout} from "../auth/session-events";
 import { z } from "zod";
 import { RequestCache } from "./request-cache";
 import {
+  PrivateNotes,PrivateNote,VoiceNoteResult,SavePrivateNote,type NoteContext,
+  InboxPreference,InboxMutation,InboxReceipt,InboxUndo,
   AuthCallbackResponse,
   AuthStartResponse,
   BillingLink,
   BillingPlan as BillingPlanSchema,
   ConsentState,
+  AiPreferences,
+  type AiPreferenceUpdate,
   CsrfResponse,
   DemoResponse,
   ErrorBody,
@@ -65,7 +72,7 @@ import {
   mapInstallations,
   mapPostSummary,
   mapPrDetail,
-  mapFile,
+  mapFile,mapCheck,
   mapComments,
   secretWarningFromRisk,
 } from "./mappers";
@@ -85,6 +92,7 @@ export interface HttpApiClientOptions {
   /** `web` uses the cookie and CSRF token; `native` uses the bearer token. */
   platform: "web" | "native";
   nativePlatform?: "ios" | "android";
+  onAccountDeleted?:()=>Promise<void>;
   tokenStore: TokenStore;
   fetch?: typeof fetch;
   timeoutMs?: number;
@@ -93,11 +101,13 @@ export interface HttpApiClientOptions {
 }
 
 interface RequestOptions<T> {
+  signal?:AbortSignal;
   credentials?: "omit";
   method?: "GET" | "POST" | "PUT" | "DELETE";
   path: string;
   body?: unknown;
   form?: FormData;
+  audio?:ArrayBuffer;
   /** Parse the JSON body with this schema. Leave out for empty (204) answers. */
   schema?: z.ZodType<T>;
   /** Public endpoints skip the session. Default true. */
@@ -138,6 +148,7 @@ export class HttpApiClient implements ApiClient {
   private readonly baseUrl: string;
   private readonly web: boolean;
   private readonly nativePlatform: "ios" | "android";
+  private readonly onAccountDeleted?:()=>Promise<void>;
   private sessionGeneration=0;
   private sessionOperations=Promise.resolve();
   private readonly store: TokenStore;
@@ -153,6 +164,7 @@ export class HttpApiClient implements ApiClient {
   private actions = new RequestCache();
 
   invalidateSession():void{++this.sessionGeneration;this.clearCache();setInMemoryCsrfToken(null);this.csrfLoading=null;}
+  invalidateInbox():void {this.reads.invalidate('inbox:');}
   invalidateCache(): void { this.featureFlags.clear(); this.reads.invalidate(); }
   clearCache(): void { this.featureFlags.clear(); this.reads.clear(); this.actions.clear(); this.settingsCache = null; this.repoPrivacy.clear(); }
   private repoPrivacy = new Map<string, boolean>();
@@ -161,6 +173,7 @@ export class HttpApiClient implements ApiClient {
     this.baseUrl = options.baseUrl.replace(/\/+$/, "");
     this.web = options.platform === "web";
     this.nativePlatform=options.nativePlatform??"ios";
+    this.onAccountDeleted=options.onAccountDeleted;
     this.store = options.tokenStore;
     // Bound so it can be called detached from the client, as browsers require.
     this.fetchImpl = options.fetch ?? ((input, init) => fetch(input, init));
@@ -178,11 +191,11 @@ export class HttpApiClient implements ApiClient {
 
   private request<T = void>(opts: RequestOptions<T>): Promise<T> {
     opts={...opts,sessionGeneration:opts.sessionGeneration??this.sessionGeneration};
-    if ((opts.method ?? 'GET') === 'GET') {
+    if ((opts.method ?? 'GET') === 'GET' && !opts.signal) {
       return this.reads.run(`get:${opts.auth !== false}:${!!opts.probe}:${!!opts.sessionMutation}:${opts.path}`, () => this.readRequest(opts));
     }
     return this.readRequest(opts).then(value=>{
-      if(/^\/(settings|consent|repos|account)(\/|$)/.test(opts.path))this.reads.invalidate();
+      if(/^\/(settings|consent|repos|account|inbox)(\/|$)/.test(opts.path))this.reads.invalidate();
       return value;
     });
   }
@@ -225,7 +238,7 @@ export class HttpApiClient implements ApiClient {
       if(authed && !opts.allowStaleSession && generation!==this.sessionGeneration)throw new ApiClientError("unauthorized",messageForCode("unauthorized"));
       const headers: Record<string, string> = { accept: "application/json" };
       let body: BodyInit | undefined;
-      if (opts.form) {
+      if(opts.audio){headers["content-type"]="audio/wav";body=opts.audio;}else if (opts.form) {
         body = opts.form;
       } else if (opts.body !== undefined) {
         headers["content-type"] = "application/json";
@@ -257,8 +270,9 @@ export class HttpApiClient implements ApiClient {
         headers,
         body,
         // Web: the browser sends the HttpOnly session cookie. Native never uses cookies.
+        ...(opts.signal?{signal:opts.signal}:{}),
         credentials: opts.credentials ?? (this.web ? "include" : "omit"),
-      }, opts.timeoutMs);};
+      }, opts.timeoutMs,opts.signal);};
       const res=authed && !opts.sessionMutation && !opts.isRefresh ? await this.withCookieLock("shared",deliver) : await deliver();
 
       if(authed && !opts.allowStaleSession && generation!==this.sessionGeneration)throw new ApiClientError("unauthorized",messageForCode("unauthorized"));
@@ -295,18 +309,24 @@ export class HttpApiClient implements ApiClient {
     }
   }
 
-  private async fetchWithTimeout(url: string, init: RequestInit, timeoutMs?: number): Promise<Response> {
+  private async fetchWithTimeout(url: string, init: RequestInit, timeoutMs?: number,signal?:AbortSignal): Promise<Response> {
     const controller = new AbortController();
+    const caller = init.signal ?? signal ?? undefined;
     const timer = setTimeout(() => controller.abort(), timeoutMs ?? this.timeoutMs);
+    // React Native's installed abort-controller has no AbortSignal.any().
+    const cancel=()=>controller.abort();
+    if(caller?.aborted)cancel();else caller?.addEventListener('abort',cancel,{once:true});
     try {
       return await this.fetchImpl(url, { ...init, signal: controller.signal });
     } catch (e) {
+      if(caller?.aborted)throw new ApiClientError("cancelled",messageForCode("cancelled"));
       if (controller.signal.aborted) {
         throw new ApiClientError("timeout", messageForCode("timeout"));
       }
       throw new ApiClientError("network", messageForCode("network"));
     } finally {
       clearTimeout(timer);
+      caller?.removeEventListener('abort',cancel);
     }
   }
 
@@ -469,8 +489,13 @@ export class HttpApiClient implements ApiClient {
   deleteAccount():Promise<void>{
     const generation=++this.sessionGeneration;this.clearCache();
     return this.mutateSession(async()=>{
-      await this.request({method:"DELETE",path:"/account",sessionMutation:true,sessionGeneration:generation});
-      await this.store.clear();setInMemoryCsrfToken(null);this.csrfLoading=null;this.clearCache();notifySessionChange("signed-out");
+      if(generation!==this.sessionGeneration)throw new ApiClientError('unauthorized',messageForCode('unauthorized'));
+      // Once delivered for this identity, finish its cleanup before a queued new sign-in can adopt credentials.
+      const response=await this.exchange({method:"DELETE",path:"/account",sessionMutation:true,sessionGeneration:generation,allowStaleSession:true});
+      if(response.status!==204)throw new ApiClientError('parse_failed',messageForCode('parse_failed'),{status:response.status});
+      const cleanup=await Promise.allSettled([this.store.clear(),this.onAccountDeleted?.()]);
+      setInMemoryCsrfToken(null);this.csrfLoading=null;this.clearCache();notifySessionChange("signed-out");
+      if(cleanup.some(result=>result.status==='rejected'))throw new ApiClientError('local_cleanup_incomplete',messageForCode('local_cleanup_incomplete'),{status:204});
     });
   }
 
@@ -490,6 +515,14 @@ export class HttpApiClient implements ApiClient {
       body: { ai: { granted, version: AI_CONSENT_VERSION } },
       schema: ConsentState,
     });
+  }
+
+  async getAiPreferences() {
+    return this.request({ path: "/consent/preferences", schema: AiPreferences });
+  }
+
+  async updateAiPreferences(update: AiPreferenceUpdate) {
+    return this.request({ method: "PUT", path: "/consent/preferences", body: update, schema: AiPreferences });
   }
 
   // ---------------------------------------------------------------------------------------------
@@ -522,7 +555,21 @@ export class HttpApiClient implements ApiClient {
   // Notifications
   // ---------------------------------------------------------------------------------------------
 
-  getNotificationPage(filter: NotificationFilter = 'all', cursor?: string | null, search = ''): Promise<{items: Notification[]; nextCursor: string | null}> {
+  getInboxUndo(){return this.request({path:"/inbox/undo",schema:InboxUndo});}
+  getInboxPreference(){return this.request({path:'/inbox/preference',schema:InboxPreference});}
+  async setInboxPreference(filter:NotificationFilter){return this.request({method:'PUT',path:'/inbox/preference',body:{filter},schema:InboxPreference});}
+  async mutateInboxItem(id:string,input:import('@mergemate/contracts').InboxMutation){
+    const body=InboxMutation.parse(input);
+    const receipt=await this.actions.run(`inbox-operation:${id}:${body.operationId}`,()=>this.request({method:'POST',path:`/notifications/${enc(id)}/state`,body,schema:InboxReceipt}));
+    this.reads.invalidate('inbox:');return receipt;
+  }
+
+  async searchPrs(filters:PrSearchFilters,cursor?:string|null,signal?:AbortSignal){
+    const parsed=PrSearchFilters.parse(filters),params=new URLSearchParams();for(const [key,value] of Object.entries(parsed))if(value)params.set(key,value);if(cursor)params.set('cursor',cursor);
+    return this.request({path:'/search/prs?'+params.toString(),schema:PrSearchPage,signal});
+  }
+
+  getNotificationPage(filter: NotificationFilter = 'all', cursor?: string | null, search = ''): Promise<{items: Notification[]; nextCursor: string | null;serverTime?:string;refreshAt?:string|null}> {
     const path = `/notifications?filter=${enc(filter)}${cursor ? `&cursor=${enc(cursor)}` : ''}${search ? `&search=${enc(search)}` : ''}`;
     return this.reads.run(`inbox:${path}`, () => this.request({path, schema: NotificationPage}), 15_000);
   }
@@ -550,33 +597,35 @@ export class HttpApiClient implements ApiClient {
   // Pull requests
   // ---------------------------------------------------------------------------------------------
 
-  async getPrFilePage(owner: string, repo: string, number: number, cursor?: string | null) {
-    const page=await this.request({path:`${prPath(owner,repo,number)}/pages/files${cursor?`?cursor=${enc(cursor)}`:''}`,schema:z.object({items:z.array(PrFileSchema),nextCursor:z.string().nullable()})});
-    return {items:page.items.map(mapFile),nextCursor:page.nextCursor};
+  private workspacePagePath(owner:string,repo:string,number:number,section:string,cursor?:string|null,options?:WorkspaceRead){return `${prPath(owner,repo,number)}/pages/${section}?v=2${cursor?`&cursor=${enc(cursor)}`:''}${options?.headSha?`&head=${enc(options.headSha)}`:''}`;}
+  async getPrFilePage(owner:string,repo:string,number:number,cursor?:string|null,options?:WorkspaceRead){
+    const page=await this.request({path:this.workspacePagePath(owner,repo,number,'files',cursor,options),signal:options?.signal,schema:z.object({items:z.array(PrFileSchema),nextCursor:z.string().nullable(),headSha:z.string().optional(),capped:z.boolean().optional()})});return {...page,items:page.items.map(mapFile)};
+  }
+  async getPrCommentPage(owner:string,repo:string,number:number,cursor?:string|null,options?:WorkspaceRead){
+    const page=await this.request({path:this.workspacePagePath(owner,repo,number,'comments',cursor,options),signal:options?.signal,schema:z.object({items:z.array(PrThreadSchema),nextCursor:z.string().nullable(),headSha:z.string().optional(),capped:z.boolean().optional()})});return {...page,items:mapComments(page.items)};
+  }
+  async getPrCheckPage(owner:string,repo:string,number:number,cursor?:string|null,options?:WorkspaceRead){
+    const page=await this.request({path:this.workspacePagePath(owner,repo,number,'checks',cursor,options),signal:options?.signal,schema:z.object({items:z.array(PrCheckSchema),nextCursor:z.string().nullable(),headSha:z.string().optional(),capped:z.boolean().optional()})});return {...page,items:page.items.map(mapCheck)};
   }
 
-  async getPrCommentPage(owner: string, repo: string, number: number, cursor?: string | null) {
-    const page=await this.request({path:`${prPath(owner,repo,number)}/pages/comments${cursor?`?cursor=${enc(cursor)}`:''}`,schema:z.object({items:z.array(PrThreadSchema),nextCursor:z.string().nullable()})});
-    return {items:mapComments(page.items).map(comment=>({...comment,id:`${cursor?.split(':')[0] ?? 'review'}:${comment.id}`})),nextCursor:page.nextCursor};
+  async getPrMetadata(owner: string, repo: string, number: number,signal?:AbortSignal,workspace=false): Promise<PrDetail> {
+    return mapPrDetail(await this.request({ path: `${prPath(owner, repo, number)}?lazy=1${workspace?'&workspace=1':''}`,signal, schema: PrDetailSchema }));
   }
 
-  async getPrMetadata(owner: string, repo: string, number: number): Promise<PrDetail> {
-    return mapPrDetail(await this.request({ path: `${prPath(owner, repo, number)}?lazy=1`, schema: PrDetailSchema }));
-  }
-
-  async getPrDetail(owner: string, repo: string, number: number): Promise<PrDetail> {
+  async getPrDetail(owner: string, repo: string, number: number,signal?:AbortSignal): Promise<PrDetail> {
+    if(signal)return this.loadPrDetail(owner,repo,number,signal);
     return this.reads.run(`detail:${prPath(owner, repo, number)}`, () => this.loadPrDetail(owner, repo, number), 30_000);
   }
 
-  private async loadPrDetail(owner: string, repo: string, number: number): Promise<PrDetail> {
+  private async loadPrDetail(owner: string, repo: string, number: number,signal?:AbortSignal): Promise<PrDetail> {
     const path = prPath(owner, repo, number);
-    const contract = await this.request({ path: `${path}?lazy=1`, schema: PrDetailSchema });
+    const contract = await this.request({ path: `${path}?lazy=1`,signal, schema: PrDetailSchema });
     const detail = mapPrDetail(contract);
 
     // Summary and risk are separate AI calls. If one is unavailable the PR still opens, with a plain reason.
     const [summary, risk] = await Promise.allSettled([
-      this.request({ method: "POST", path: `${path}/summary`, schema: PrSummarySchema, timeoutMs: AI_TIMEOUT_MS }),
-      this.request({ method: "POST", path: `${path}/risk`, schema: PrRiskSchema, timeoutMs: AI_TIMEOUT_MS }),
+      this.request({ method: "POST", path: `${path}/summary`,signal, schema: PrSummarySchema, timeoutMs: AI_TIMEOUT_MS }),
+      this.request({ method: "POST", path: `${path}/risk`,signal, schema: PrRiskSchema, timeoutMs: AI_TIMEOUT_MS }),
     ]);
     if (summary.status === "fulfilled") detail.summary = summary.value;
     if (risk.status === "fulfilled") {
@@ -596,19 +645,19 @@ export class HttpApiClient implements ApiClient {
     return detail;
   }
 
-  getPrSummary(owner: string, repo: string, number: number): Promise<PrSummary> {
+  getPrSummary(owner: string, repo: string, number: number,signal?:AbortSignal): Promise<PrSummary> {
     return this.request({
       method: "POST",
-      path: `${prPath(owner, repo, number)}/summary`,
+      path: `${prPath(owner, repo, number)}/summary`,signal,
       schema: PrSummarySchema,
       timeoutMs: AI_TIMEOUT_MS,
     });
   }
 
-  getPrRisk(owner: string, repo: string, number: number): Promise<PrRisk> {
+  getPrRisk(owner: string, repo: string, number: number,signal?:AbortSignal): Promise<PrRisk> {
     return this.request({
       method: "POST",
-      path: `${prPath(owner, repo, number)}/risk`,
+      path: `${prPath(owner, repo, number)}/risk`,signal,
       schema: PrRiskSchema,
       timeoutMs: AI_TIMEOUT_MS,
     });
@@ -639,14 +688,24 @@ export class HttpApiClient implements ApiClient {
   // Highlight
   // ---------------------------------------------------------------------------------------------
 
-  async analyzeHighlight(imageUri: string, note?: string, mimeType?: string): Promise<HighlightResult> {
+  async transcribeVoice(bytes:Uint8Array,signal?:AbortSignal):Promise<string>{
+    return (await this.request({method:'POST',path:'/voice-notes',audio:new Uint8Array(bytes).buffer,schema:VoiceNoteResult,timeoutMs:AI_TIMEOUT_MS,...(signal?{signal}:{})})).text;
+  }
+  async getPrivateNotes(context:NoteContext){return (await this.request({path:`/notes?context=${enc(JSON.stringify(context))}`,schema:PrivateNotes})).items;}
+  async savePrivateNote(input:import('@mergemate/contracts').SavePrivateNote){
+    const body=SavePrivateNote.parse(input);
+    return this.actions.run(`note:${body.id}`,()=>this.request({method:'POST',path:'/notes',body,schema:PrivateNote}));
+  }
+  async removePrivateNote(id:string,context:NoteContext){await this.request({method:'DELETE',path:`/notes/${enc(id)}?context=${enc(JSON.stringify(context))}`});}
+
+  async analyzeHighlight(imageUri: string, note?: string, mimeType?: string,signal?:AbortSignal): Promise<HighlightResult> {
     const form = new FormData();
     const type = mimeType ?? "image/jpeg";
     if (this.web) {
       // On the web the picked image is a blob or data URL the browser can read back.
       let blob: Blob;
       try {
-        blob = await (await this.fetchImpl(imageUri)).blob();
+        blob = await (await this.fetchImpl(imageUri,{...(signal?{signal}:{})})).blob();
       } catch {
         throw new ApiClientError("validation_failed", "We couldn't read that image. Pick it again.");
       }
@@ -664,6 +723,7 @@ export class HttpApiClient implements ApiClient {
       form,
       schema: HighlightResultSchema,
       timeoutMs: AI_TIMEOUT_MS,
+      ...(signal?{signal}:{}),
     });
     return mapHighlight(res);
   }

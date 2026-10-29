@@ -29,17 +29,20 @@ try{
       const request=route.request(),url=new URL(request.url());if(url.origin===base||url.protocol==='data:')return route.continue();if(url.origin!=='https://api-dev.mergemate.dev')return route.abort();
       const headers={'content-type':'application/json','access-control-allow-origin':base,'access-control-allow-credentials':'true','access-control-allow-headers':'content-type,x-csrf-token','access-control-allow-methods':'GET,POST,PUT,DELETE,OPTIONS'};
       const reply=(status,body)=>route.fulfill({status,headers,body:JSON.stringify(body)});if(request.method()==='OPTIONS')return route.fulfill({status:204,headers});const path=url.pathname.replace('/v1','');
-      if(path==='/me')return reply(signedIn?200:401,signedIn?{id:'fixture-user',login:'fixture',name:'Fixture',avatarUrl:base+'/favicon.ico',demo:false}:{error:{code:'unauthorized',message:'Sign in.',requestId:'fixture'}});
+      if(path==='/inbox/preference')return reply(200,{filter:'all'});
+   if(path==='/inbox/undo')return reply(200,null);
+   if(path==='/me')return reply(signedIn?200:401,signedIn?{id:'fixture-user',login:'fixture',name:'Fixture',avatarUrl:base+'/favicon.ico',demo:false}:{error:{code:'unauthorized',message:'Sign in.',requestId:'fixture'}});
       if(path==='/auth/refresh')return reply(200,{session:{expiresAt:'2099-01-01T00:00:00.000Z'}});
       if(path==='/me/installations')return reply(200,{items:[],installUrl:'https://github.com/apps/mergemate/installations/new'});
       if(path==='/repos')return reply(200,{items:[{id:'fixture-repo',fullName:'fixture/repo',private:true,watching:watched}],nextCursor:null});
       if(path==='/repos/fixture-repo/watch'){watchWrites++;watched=request.postDataJSON().watching;return reply(200,{id:'fixture-repo',fullName:'fixture/repo',watching:watched});}
+      if(path==='/search/prs')return reply(200,{items:[],nextCursor:null,candidates:0,incomplete:false,capped:false});
       if(path==='/notifications')return reply(200,{items:[],nextCursor:null});
       if(path==='/auth/csrf')return reply(200,{csrfToken:'local-fixture-csrf'});
       if(path==='/settings'){if(request.method()==='PUT'){settingsWrites++;preferences=request.postDataJSON();await new Promise(resolve=>setTimeout(resolve,100));}return reply(200,preferences);}
       if(path==='/push/web-key')return reply(200,{publicKey:'B'+'A'.repeat(86)});
       if(path==='/billing/plan')return reply(200,{plan:'free',status:'active',renewsAt:null,cancelAt:null});
-      if(path==='/consent')return reply(200,{ai:{granted:false,version:null,at:null}});
+      if(path==='/consent/preferences')return reply(200,{ai:{granted:false,version:'1',currentVersion:'1'},aiSummaries:true,revision:'fixture'});if(path==='/consent')return reply(200,{ai:{granted:false,version:null,at:null}});
       return reply(404,{error:{code:'not_found',message:'Unavailable',requestId:'fixture'}});
     });
     const heading=async name=>{const h=page.getByRole('heading',{name,exact:true});await h.waitFor().catch(async error=>{console.error('fixture route:',page.url(),'body:',(await page.locator('body').innerText()).slice(0,1500));await page.screenshot({path:`${proof}/failure-${width}.png`});throw error;});await page.waitForFunction(label=>document.activeElement?.textContent===label,name);assert.equal(await h.getAttribute('tabindex'),'-1');};

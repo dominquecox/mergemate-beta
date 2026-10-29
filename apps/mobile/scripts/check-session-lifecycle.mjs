@@ -45,6 +45,8 @@ try{
    if(path==='/auth/logout'){if(offlineLogout)return route.abort('internetdisconnected');signedIn=false;return reply(204,null);}
    if(path==='/flags')return reply(200,{voice_readout:true,voice_notes:false,highlight:false});
    if(!signedIn)return fail(401,'unauthorized');
+   if(path==='/inbox/preference')return reply(200,{filter:'all'});
+   if(path==='/inbox/undo')return reply(200,null);
    if(path==='/me')return reply(200,user());
    if(path==='/auth/csrf')return reply(200,{csrfToken:'fixture-csrf'});
    if(path==='/auth/refresh'){activeRefresh++;maxRefresh=Math.max(maxRefresh,activeRefresh);await new Promise(resolve=>setTimeout(resolve,refreshDelay));activeRefresh--;return reply(200,{session:{expiresAt:'2099-01-01T00:00:00.000Z',csrfToken:'fixture-csrf'}});}
@@ -52,7 +54,7 @@ try{
    if(path==='/notifications')return reply(200,{items:[{id:'fixture-notification',kind:'review',repo:`fixture-${current}/repo`,number:7,title:`Private review for ${current}`,author:'fixture',status:'open',updatedAt:'2026-10-28T12:00:00.000Z',read:false}],nextCursor:null});
    if(path==='/settings')return reply(200,{notifications:{review:true,mention:true,mine:false},quietHours:null,aiSummaries:false});
    if(path==='/billing/plan')return reply(200,{plan:'free',status:'active',renewsAt:null,cancelAt:null});
-   if(path==='/consent')return reply(200,{ai:{granted:false,version:null,at:null}});
+   if(path==='/consent/preferences')return reply(200,{ai:{granted:false,version:'1',currentVersion:'1'},aiSummaries:true,revision:'fixture'});if(path==='/consent')return reply(200,{ai:{granted:false,version:null,at:null}});
    return fail(404,'not_found');
   });
   const page=await context.newPage();page.setDefaultTimeout(15000);page.on('pageerror',error=>errors.push(error.message));

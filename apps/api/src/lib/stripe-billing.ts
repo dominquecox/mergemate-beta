@@ -16,8 +16,8 @@ export async function getBillingPlan(env: Env, userId: string): Promise<BillingP
     canManage:Boolean(row?.customer_id) && !row?.deleting && subscribedBefore,
   };
 }
-export async function billingOperation<T>(env: Env,deps: Deps,userId: string,run:(row:BillingAccount)=>Promise<T>,deleting=false): Promise<T> {
-  const db=requireBinding(env,"DB");const token=crypto.randomUUID();
+export async function billingOperation<T>(env: Env,deps: Deps,userId: string,run:(row:BillingAccount)=>Promise<T>,deleting=false,operationOwner?:string): Promise<T> {
+  const db=requireBinding(env,"DB");const token=operationOwner??crypto.randomUUID();
   await db.prepare("INSERT INTO billing_accounts(user_id,updated_at) SELECT id,? FROM users WHERE id=? ON CONFLICT(user_id) DO NOTHING").bind(deps.now().toISOString(),userId).run();
   const acquired=await db.prepare(`UPDATE billing_accounts SET operation_token=?,deleting=CASE WHEN ? THEN 1 ELSE deleting END WHERE user_id=? AND operation_token IS NULL${deleting?"":" AND deleting=0"}`).bind(token,deleting?1:0,userId).run();
   if (acquired.meta.changes!==1) throw new ApiError("rate_limited","Another billing operation is in progress. Try again.",{"retry-after":"2"});
@@ -34,7 +34,7 @@ export async function ensureCustomer(env: Env,deps: Deps,row: BillingAccount) {
   await requireBinding(env,"DB").prepare('UPDATE billing_accounts SET customer_id=?,updated_at=? WHERE user_id=?').bind(value.data.id,deps.now().toISOString(),row.user_id).run();
   return value.data.id;
 }
-export async function cancelBillingBeforeDelete(env: Env,deps: Deps,userId: string) {
+export async function cancelBillingBeforeDelete(env: Env,deps: Deps,userId: string,deletionLease?:string) {
   await billingOperation(env,deps,userId,async account=>{
     if(!account.customer_id)return;
     for(const session of await openCheckouts(env,deps,account.customer_id))await expireCheckout(env,deps,session.id);
@@ -43,5 +43,5 @@ export async function cancelBillingBeforeDelete(env: Env,deps: Deps,userId: stri
       const value=z.object({id:z.string(),status:z.literal("canceled")}).safeParse(await stripeRequest(env,deps,"DELETE",`/subscriptions/${encodeURIComponent(sub.id)}`));
       if(!value.success || value.data.id!==sub.id)throw new ApiError("upstream_unavailable","Subscription cancellation could not be confirmed.");
     }
-  },true);
+  },true,deletionLease?`deletion:${deletionLease}`:undefined);
 }

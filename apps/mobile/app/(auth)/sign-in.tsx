@@ -16,7 +16,7 @@ import { Icon } from "../../src/components/Icon";
 export default function SignInScreen() {
   const router = useRouter();
   const heading=useScreenHeading();
-  const { signInWithGithub, startDemo, signOut, isLoading, error, clearError } = useAuth();
+  const { signInWithGithub, startDemo, signOut, isLoading, error, clearError, localCleanupPending, retryLocalCleanup } = useAuth();
   const { colors, typography, spacing, radius, isDark } = useTheme();
   const logoutPending=Platform.OS==="web" && hasPendingLogout();
   const [offlineState, setOfflineState] = useState(false);
@@ -73,6 +73,8 @@ export default function SignInScreen() {
         />
       ) : logoutPending ? (
         <ErrorState title="Sign-out is pending" message={error??"Reconnect to finish signing out of this browser."} onRetry={()=>void signOut()} retryLabel="Finish signing out"/>
+      ) : localCleanupPending ? (
+        <ErrorState title="Account deleted" message={error??"Clear this browser's site data or this device's app data before signing in again."} onRetry={()=>void retryLocalCleanup()} retryLabel="Clear local data"/>
       ) : error ? (
         <ErrorState
           title="Could not sign you in"

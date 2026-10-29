@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { View, TouchableOpacity, StyleSheet } from "react-native";
 import { Text } from "./Text";
+import { useRouter } from "expo-router";
 import { useTheme } from "../context/ThemeContext";
 import { useConsent } from "../context/ConsentContext";
 import { AnalysisCoverage } from "../types";
@@ -20,10 +21,12 @@ export function AIBlock({
   cachedTime,
 }: AIBlockProps) {
   const { colors, typography, spacing, radius } = useTheme();
-  const { aiConsentGranted, grantConsent } = useConsent();
+  const router = useRouter();
+  const { aiConsentGranted, aiSummaries } = useConsent();
   const [voted, setVoted] = useState<"up" | "down" | null>(null);
 
-  if (!aiConsentGranted) {
+  if (!aiConsentGranted || !aiSummaries) {
+    const needsConsent = !aiConsentGranted;
     return (
       <View
         style={[
@@ -43,16 +46,18 @@ export function AIBlock({
           </Text>
         </View>
         <Text style={[typography.body, { color: colors.text, marginVertical: spacing.sm }]}>
-          Turn on AI summaries to see what changed and why it matters in seconds.
+          {needsConsent
+            ? "AI summaries are off. Read what would be sent to an AI model, then choose."
+            : "AI summaries and risk are turned off in Settings."}
         </Text>
         <TouchableOpacity
-          onPress={grantConsent}
+          onPress={() => router.push(needsConsent ? "/(auth)/consent" : "/(tabs)/settings")}
           style={[styles.turnOnBtn, { backgroundColor: colors.brand, borderRadius: radius.md }]}
           accessibilityRole="button"
-          accessibilityLabel="Turn on AI Insights"
+          accessibilityLabel={needsConsent ? "Review AI consent" : "Open AI settings"}
         >
           <Text style={[typography.subhead, { color: "#FFFFFF", fontWeight: "600" }]}>
-            Turn on AI Insights
+            {needsConsent ? "Review and turn on AI" : "Open Settings"}
           </Text>
         </TouchableOpacity>
       </View>

@@ -39,7 +39,8 @@ function expectSecurityHeaders(res: Response, apiOrigin = "https://api-dev.merge
   expect(res.headers.get("Strict-Transport-Security")).toBe("max-age=31536000; includeSubDomains");
   expect(res.headers.get("X-Content-Type-Options")).toBe("nosniff");
   expect(res.headers.get("Referrer-Policy")).toBe("strict-origin-when-cross-origin");
-  expect(res.headers.get("Permissions-Policy")).toBe("camera=(), microphone=(), geolocation=()");
+  expect(res.headers.get("Content-Security-Policy")).toContain("media-src 'self' blob:");
+  expect(res.headers.get("Permissions-Policy")).toBe("camera=(), microphone=(self), geolocation=()");
   expect(res.headers.get("Content-Security-Policy")).toBe(buildCsp(apiOrigin));
 }
 
@@ -137,7 +138,7 @@ describe("CSP", () => {
     expect(directive("frame-ancestors")).toBe("frame-ancestors 'none'");
     expect(directive("base-uri")).toBe("base-uri 'none'");
     expect(directive("form-action")).toBe("form-action 'self'");
-    expect(directive("img-src")).toBe("img-src 'self' data: https://avatars.githubusercontent.com");
+    expect(directive("img-src")).toBe("img-src 'self' data: blob: https://avatars.githubusercontent.com");
     expect(directive("style-src")).toBe("style-src 'self' 'unsafe-inline'");
     expect(directive("font-src")).toBe("font-src 'self' data:");
     expect(csp).not.toContain("*");
@@ -149,7 +150,7 @@ describe("CSP", () => {
     ["http://localhost:8787"],
   ])("limits connect-src to self and %s", async (origin) => {
     const res = await get("/", env(origin));
-    expect(res.headers.get("Content-Security-Policy")).toContain(`connect-src 'self' ${origin} https://cloudflareinsights.com;`);
+    expect(res.headers.get("Content-Security-Policy")).toContain(`connect-src 'self' blob: ${origin} https://cloudflareinsights.com;`);
     expectSecurityHeaders(res, origin);
   });
 

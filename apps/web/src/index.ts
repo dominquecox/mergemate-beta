@@ -57,7 +57,7 @@ const STATIC_HEADERS: Record<string, string> = {
   "Strict-Transport-Security": HSTS,
   "X-Content-Type-Options": "nosniff",
   "Referrer-Policy": "strict-origin-when-cross-origin",
-  "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
+  "Permissions-Policy": "camera=(), microphone=(self), geolocation=()",
 };
 
 /**
@@ -70,10 +70,11 @@ export function buildCsp(apiOrigin: string): string {
     "default-src 'self'",
     "script-src 'self' https://challenges.cloudflare.com https://static.cloudflareinsights.com",
     "frame-src https://challenges.cloudflare.com",
-    `connect-src 'self' ${apiOrigin} https://cloudflareinsights.com`,
-    "img-src 'self' data: https://avatars.githubusercontent.com",
+    `connect-src 'self' blob: ${apiOrigin} https://cloudflareinsights.com`,
+    "img-src 'self' data: blob: https://avatars.githubusercontent.com",
     "style-src 'self' 'unsafe-inline'",
     "font-src 'self' data:",
+    "media-src 'self' blob:",
     "base-uri 'none'",
     "form-action 'self'",
     "frame-ancestors 'none'",

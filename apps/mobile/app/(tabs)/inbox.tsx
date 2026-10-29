@@ -1,11 +1,16 @@
+import * as Crypto from "expo-crypto";
+import type {InboxReceipt} from "@mergemate/contracts";
+import {useAuth} from "../../src/context/AuthContext";
+import {ApiClientError} from "../../src/api/errors";
+import {Button} from "../../src/components/Button";
 import {useFeatureFlags} from "../../src/hooks/useFeatureFlags";
 import {ReadoutControls} from "../../src/components/ReadoutControls";
 import {inboxNarration} from "../../src/readout/text";
-import React, { useState, useRef } from "react";
-import { View, FlatList, RefreshControl, TouchableOpacity, Pressable, StyleSheet } from "react-native";
+import React, { useState, useRef,useEffect,useCallback } from "react";
+import {AppState,Platform, View, FlatList, RefreshControl, TouchableOpacity, Pressable, StyleSheet } from "react-native";
 import { androidRipple } from "../../src/platform/android";
 import { Text } from "../../src/components/Text";
-import { useRouter } from "expo-router";
+import { useRouter,useFocusEffect } from "expo-router";
 import { useTheme } from "../../src/context/ThemeContext";
 import { api } from "../../src/api";
 import { toUserMessage } from "../../src/api/errors";
@@ -21,52 +26,90 @@ import { useLayout } from "../../src/layout/useLayout";
 
 import { usePagedList } from "../../src/hooks/usePagedList";
 
-export default function InboxScreen() {
+export default function InboxScreen(){const {user}=useAuth();return user?<InboxBootstrap key={user.id}/>:<LoadingState title="Loading your inbox..." message="Checking your account."/>;}
+function InboxBootstrap(){
+ const [initial,setInitial]=useState<NotificationFilter|null>(null),[error,setError]=useState(false);const mounted=useRef(true);
+ const load=async()=>{setError(false);try{const saved=await api.getInboxPreference();if(mounted.current)setInitial(saved.filter);}catch{if(mounted.current)setError(true);}};
+ useEffect(()=>{void load();return()=>{mounted.current=false;};},[]);
+ if(initial!==null)return <InboxWorkspace initialFilter={initial}/>;
+ if(error)return <View style={{flex:1}}><Header title="Inbox"/><ErrorState title="Could not load your Inbox preference" message="Retry, or use All temporarily without changing your saved filter." onRetry={load}/><Button title="Use All temporarily" variant="secondary" onPress={()=>setInitial('all')}/></View>;
+ return <LoadingState title="Loading your inbox..." message="Restoring your saved filter."/>;
+}
+function InboxWorkspace({initialFilter}:{initialFilter:NotificationFilter}) {
   const router = useRouter();
   const flags=useFeatureFlags();
   const { colors, typography, spacing, radius } = useTheme();
   const { isDesktop } = useLayout();
 
-  const [filter, setFilter] = useState<NotificationFilter>("all");
-  const {items,setItems,loading:isLoading,busy:isRefreshing,error,setError,refresh:fetchItems,more,hasMore} = usePagedList(`inbox:${filter}`, cursor=>api.getNotificationPage(filter,cursor));
-  const [undoItem, setUndoItem] = useState<Notification | null>(null);
-  const actionLock = useRef(false);
-  const [acting,setActing] = useState(false);
-  const onRefresh = () => { api.invalidateCache(); void fetchItems(); };
-
-  // The card leaves the list at once; if the API refuses, it comes back and the reason is shown.
-  const applyAction = async (item: Notification, action: () => Promise<void>) => {
-    if(actionLock.current)return;
-    actionLock.current=true; setActing(true);
-    setUndoItem(item);
-    setItems((prev) => prev.filter((i) => i.id !== item.id));
-    try {
-      await action();
-    } catch (e) {
-      setUndoItem(null);
-      setItems((prev) => [item, ...prev]);
-      setError(toUserMessage(e, "Couldn't update that pull request."));
-    } finally { actionLock.current=false; setActing(false); }
+  const {isDemo,user}=useAuth();
+  const [filter,setFilter]=useState<NotificationFilter>(initialFilter),[prefError,setPrefError]=useState(false),[prefSaving,setPrefSaving]=useState(false),[prefMessage,setPrefMessage]=useState("");
+  const preferenceQueue=useRef(Promise.resolve()),view=useRef(0),currentFilter=useRef(filter);currentFilter.current=filter;
+  const {items:sourceItems,setItems,loading:isLoading,busy:isRefreshing,error,setError,refresh:fetchItems,revalidate,more,hasMore,refreshAfterMs}=usePagedList(`inbox:${user?.id}:${filter}`,cursor=>api.getNotificationPage(filter,cursor));
+  type Hidden={revision:string;until?:number};
+  const [hidden,setHidden]=useState<Record<string,Hidden>>({}),[wakeAt,setWakeAt]=useState<number|null>(null);
+  const [undoItem,setUndoItem]=useState<{item?:Notification;receipt:InboxReceipt;itemId:string}|null>(null),[acting,setActing]=useState(false);
+  const actionLock=useRef(false),undoGeneration=useRef(0),retryActions=useRef(new Map<string,{key:string;operationId:string}>()),undoRetry=useRef<{expected:string;id:string}|null>(null);
+  useEffect(()=>{const version=view.current,generation=undoGeneration.current;api.getInboxUndo().then(saved=>{if(version===view.current&&generation===undoGeneration.current&&saved)setUndoItem(saved);},()=>{});},[]);
+  const items=sourceItems.filter(item=>{const removed=hidden[item.id];return !removed||Date.parse(item.updatedAt)>Date.parse(removed.revision)||(removed.until!==undefined&&removed.until<=Date.now());}).sort((a,b)=>Date.parse(b.updatedAt)-Date.parse(a.updatedAt)||(a.id<b.id?-1:a.id>b.id?1:0));
+  const persist=(next:NotificationFilter)=>{
+    if(isDemo)return;setPrefSaving(true);setPrefMessage("");const version=view.current;
+    preferenceQueue.current=preferenceQueue.current.catch(()=>{}).then(async()=>{if(version!==view.current)return;try{await api.setInboxPreference(next);if(version===view.current){setPrefError(false);setPrefMessage("Filter saved for next time.");}}catch{if(version===view.current)setPrefError(true);}finally{if(version===view.current)setPrefSaving(false);}});
+  };
+  const selectFilter=(next:NotificationFilter)=>{if(next===filter)return;view.current++;undoGeneration.current++;actionLock.current=false;setActing(false);setUndoItem(null);setFilter(next);persist(next);};
+  const listRef=useRef<FlatList<Notification>>(null),scrollOffset=useRef(0),listActive=useRef(false);
+  const focused=useRef(false);
+  useFocusEffect(useCallback(()=>{
+    let active=true;listActive.current=true;
+    // A hidden web list can keep its offset while its virtual window resets.
+    // Re-emit the restored scroll so Back renders the rows at that offset.
+    const restore=requestAnimationFrame(()=>{listRef.current?.recordInteraction();listRef.current?.scrollToOffset({offset:scrollOffset.current,animated:false});const node:unknown=listRef.current?.getScrollableNode();if(Platform.OS==='web'&&typeof HTMLElement!=='undefined'&&node instanceof HTMLElement)node.dispatchEvent(new Event('scroll'));});
+    if(focused.current){api.invalidateInbox();void revalidate();}focused.current=true;
+    const refresh=()=>{if(active&&AppState.currentState==='active'){api.invalidateInbox();void revalidate();}};
+    const interval=setInterval(refresh,60000),state=AppState.addEventListener('change',value=>{if(value==='active')refresh();});
+    return()=>{active=false;listActive.current=false;cancelAnimationFrame(restore);clearInterval(interval);state.remove();};
+  },[revalidate]));
+  useEffect(()=>{const wait=Math.min(refreshAfterMs??Infinity,wakeAt===null?Infinity:Math.max(0,wakeAt-Date.now()));if(!Number.isFinite(wait))return;const timer=setTimeout(()=>{setWakeAt(null);if(AppState.currentState==='active'){api.invalidateInbox();void revalidate();}},Math.min(2147483647,Math.max(250,wait)));return()=>clearTimeout(timer);},[refreshAfterMs,wakeAt,revalidate]);
+  useEffect(()=>()=>{view.current++;},[]);
+  const onRefresh=()=>{api.invalidateInbox();void fetchItems();};
+  const applyAction=async(item:Notification,action:'done'|'snooze')=>{
+    if(isDemo||actionLock.current)return;actionLock.current=true;setActing(true);setError(null);const version=view.current;const key=JSON.stringify([action,item.updatedAt,item.stateToken??null]);const prior=retryActions.current.get(item.id);const operationId=prior?.key===key?prior.operationId:Crypto.randomUUID();retryActions.current.set(item.id,{key,operationId});undoGeneration.current++;
+    setHidden(old=>({...old,[item.id]:{revision:item.updatedAt}}));setUndoItem(null);
+    try{
+      const receipt=await api.mutateInboxItem(item.id,{operationId,expectedOperationId:item.stateToken??null,action,observedUpdatedAt:item.updatedAt,...(action==='snooze'?{durationMinutes:1440}:{})});
+      if(version!==view.current)return;
+      setItems(old=>old.map(row=>row.id===item.id?{...row,stateToken:receipt.operationId}:row));
+      const until=receipt.snoozedUntil?Date.now()+Math.max(0,Date.parse(receipt.snoozedUntil)-Date.parse(receipt.updatedAt)):null;
+      if(until!==null)setWakeAt(until);
+      setHidden(old=>({...old,[item.id]:{revision:item.updatedAt,...(until!==null?{until}:{})}}));retryActions.current.delete(item.id);setUndoItem({item,itemId:item.id,receipt});
+    }catch(error){if(version===view.current){setHidden(old=>{const next={...old};delete next[item.id];return next;});setError(toUserMessage(error,"Couldn't update this item. Try again."));if(error instanceof ApiClientError&&error.code==='state_conflict'){api.invalidateInbox();void revalidate();}}}
+    finally{if(version===view.current){actionLock.current=false;setActing(false);}}
+  };
+  const handleDone=(item:Notification)=>applyAction(item,'done'),handleSnooze=(item:Notification)=>applyAction(item,'snooze');
+  const handleUndo=async()=>{
+    if(!undoItem||actionLock.current||isDemo)return;actionLock.current=true;setActing(true);setError(null);const version=view.current;const {item,itemId,receipt}=undoItem;undoGeneration.current++;
+    const operationId=undoRetry.current?.expected===receipt.operationId?undoRetry.current.id:Crypto.randomUUID();undoRetry.current={expected:receipt.operationId,id:operationId};
+    try{
+      const restored=await api.mutateInboxItem(itemId,{operationId,expectedOperationId:receipt.operationId,action:'restore',observedUpdatedAt:item?.updatedAt??receipt.updatedAt});
+      if(version!==view.current)return;
+      setHidden(old=>{const next={...old};delete next[itemId];return next;});
+      if(item)setItems(old=>old.some(row=>row.id===itemId)?old.map(row=>row.id===itemId?{...row,stateToken:restored.operationId}:row):[...old,{...item,stateToken:restored.operationId}]);
+      else{api.invalidateInbox();void revalidate();}
+      undoRetry.current=null;setUndoItem(null);
+    }catch(error){if(version===view.current){setError(toUserMessage(error,"Couldn't undo this change. Try Undo again."));if(error instanceof ApiClientError&&error.code==='state_conflict'){setUndoItem(null);api.invalidateInbox();void revalidate();}}}
+    finally{if(version===view.current){actionLock.current=false;setActing(false);}}
   };
 
-  const handleDone = (item: Notification) => applyAction(item, () => api.markNotificationDone(item.id,item.updatedAt));
-
-  const handleSnooze = (item: Notification) =>
-    applyAction(item, () => api.snoozeNotification(item.id, new Date(Date.now() + 86400000).toISOString()));
-
-  const handleUndo = async () => {
-    if (!undoItem || actionLock.current) return;
-    actionLock.current=true; setActing(true);
-    const item = undoItem;
-    setUndoItem(null);
-    setItems((prev) => [item, ...prev]);
-    try {
-      await api.restoreNotification(item.id);
-    } catch (e) {
-      setItems((prev) => prev.filter((i) => i.id !== item.id));
-      setError(toUserMessage(e, "Couldn't undo that."));
-    } finally {actionLock.current=false; setActing(false);}
-  };
+  const tabNodes=useRef(new Map<string,HTMLElement>()),chooseTab=useRef(selectFilter);chooseTab.current=selectFilter;
+  useEffect(()=>{
+    if(Platform.OS!=='web')return;
+    const tabs:NotificationFilter[]=['all','review','mentions','mine'];const cleanup:(()=>void)[]=[];
+    for(const [index,tab] of tabs.entries()){
+      const node=tabNodes.current.get(tab);if(!node)continue;
+      const key=(event:KeyboardEvent)=>{let next=index;if(event.key==='ArrowRight')next=(index+1)%4;else if(event.key==='ArrowLeft')next=(index+3)%4;else if(event.key==='Home')next=0;else if(event.key==='End')next=3;else return;event.preventDefault();const value=tabs[next];if(value){chooseTab.current(value);tabNodes.current.get(value)?.focus();}};
+      node.addEventListener('keydown',key);cleanup.push(()=>node.removeEventListener('keydown',key));
+    }
+    return()=>{for(const remove of cleanup)remove();};
+  },[]);
 
   const navigateToPr = (item: Notification) => {
     const parts = item.repo.split("/");
@@ -101,6 +144,7 @@ export default function InboxScreen() {
         }
       />
 
+      <Button title="Refresh Inbox" variant="ghost" loading={isRefreshing&&!isLoading} onPress={onRefresh}/>
       <ReadoutControls label="Inbox overview" sentences={inboxNarration(items)}/>
 
       {/* Segmented Filter Control */}
@@ -115,7 +159,9 @@ export default function InboxScreen() {
           return (
             <TouchableOpacity
               key={tab}
-              onPress={() => setFilter(tab)}
+              ref={node=>{if(Platform.OS==='web'&&typeof HTMLElement!=='undefined'&&node instanceof HTMLElement){node.tabIndex=isSelected?0:-1;tabNodes.current.set(tab,node);}}}
+              aria-selected={isSelected}
+              onPress={() => selectFilter(tab)}
               style={[
                 styles.filterTab,
                 {
@@ -143,18 +189,22 @@ export default function InboxScreen() {
         })}
       </View>
 
+      {(prefSaving||prefMessage)&&<Text accessibilityLiveRegion="polite" style={[typography.caption,{color:colors.textSecondary,paddingHorizontal:16}]}>{prefSaving?"Saving filter…":prefMessage}</Text>}
+      {prefError&&<View style={{padding:12}}><Text style={[typography.body,{color:colors.textSecondary}]} accessibilityRole="alert">This filter applies here, but could not be saved for next time.</Text><Button title="Retry saving filter" variant="ghost" onPress={()=>persist(filter)}/></View>}
+      {acting&&<Text accessibilityLiveRegion="polite" style={[typography.body,{color:colors.textSecondary,padding:12}]}>Saving Inbox change…</Text>}
+      {error&&sourceItems.length>0&&<View style={{padding:12}}><Text accessibilityRole="alert" style={[typography.body,{color:colors.riskHigh}]}>{error}</Text><Button title="Refresh Inbox" variant="ghost" onPress={onRefresh}/></View>}
       {/* Undo Toast */}
       {undoItem && (
         <View
           style={[styles.undoToast, { backgroundColor: colors.surfaceElevated, borderColor: colors.border }]}
           accessibilityLiveRegion="polite"
         >
-          <Text style={[typography.footnote, { color: colors.text }]}>Moved out of your inbox</Text>
+          <Text style={[typography.footnote, { color: colors.text }]}>Inbox change saved</Text>
           <TouchableOpacity
             disabled={acting} onPress={handleUndo}
             style={styles.undoBtn}
             accessibilityRole="button"
-            accessibilityLabel={`Undo moving ${undoItem.title}`}
+            accessibilityLabel={undoItem.item?`Undo moving ${undoItem.item.title}`:"Undo last Inbox change"}
           >
             <Text style={[typography.footnote, { color: colors.brandLight, fontWeight: "700" }]}>Undo</Text>
           </TouchableOpacity>
@@ -164,24 +214,26 @@ export default function InboxScreen() {
       {isLoading ? (
         <LoadingState
           title="Loading your inbox..."
-          message="Fetching pull requests, status checks, and AI summaries."
+          message="Fetching accessible pull requests and your Inbox state."
         />
-      ) : error && items.length===0 ? (
+      ) : error && sourceItems.length===0 ? (
         <ErrorState
           title="Could not load your inbox"
           message={error}
-          onRetry={fetchItems}
+          onRetry={hasMore?more:fetchItems}
         />
       ) : items.length === 0 ? (
-        <EmptyState
+        <View style={{flex:1}}><EmptyState
           icon="checkmark-done-outline"
-          title="Inbox Zero"
-          message="You're all caught up! No pull requests need your attention in this view."
-          actionTitle="Refresh Inbox"
-          onAction={fetchItems}
-        />
+          title={hasMore?"More results are available":"Inbox Zero"}
+          message={hasMore?"No visible items on this page. Load more to continue checking your queue.":"No pull requests need your attention in this view."}
+          actionTitle={hasMore?"Load more pull requests":"Refresh Inbox"}
+          onAction={hasMore?more:onRefresh}
+        /></View>
       ) : (
         <FlatList
+          ref={listRef}
+          onScroll={event=>{if(listActive.current)scrollOffset.current=event.nativeEvent.contentOffset.y;}} scrollEventThrottle={16}
           key={isDesktop?'desktop':'phone'} numColumns={isDesktop?2:1} columnWrapperStyle={isDesktop?{gap:16}:undefined}
           data={items} keyExtractor={item=>item.id} initialNumToRender={8} maxToRenderPerBatch={8} windowSize={5}
           contentContainerStyle={{padding:isDesktop?24:spacing.base,paddingBottom:80}}
@@ -269,7 +321,7 @@ export default function InboxScreen() {
 
                   <View style={styles.quickActions}>
                     <TouchableOpacity
-                      disabled={acting} onPress={() => handleSnooze(item)}
+                      disabled={acting||isDemo} onPress={() => handleSnooze(item)}
                       style={[styles.actionBtn, { borderColor: colors.border },{borderRadius:radius.md}]}
                       accessibilityRole="button"
                       accessibilityLabel={`Snooze ${item.title}`}
@@ -277,7 +329,7 @@ export default function InboxScreen() {
                       <Text style={[typography.caption, { color: colors.textSecondary, fontWeight: "600" }]}>Snooze</Text>
                     </TouchableOpacity>
                     <TouchableOpacity
-                      disabled={acting} onPress={() => handleDone(item)}
+                      disabled={acting||isDemo} onPress={() => handleDone(item)}
                       style={[styles.actionBtn, { borderColor: colors.border, backgroundColor: colors.surfaceInteractive },{borderRadius:radius.md}]}
                       accessibilityRole="button"
                       accessibilityLabel={`Mark ${item.title} as done`}
