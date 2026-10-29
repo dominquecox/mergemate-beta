@@ -154,6 +154,7 @@ export class HttpApiClient implements ApiClient {
   private actions = new RequestCache();
 
   invalidateSession():void{++this.sessionGeneration;this.clearCache();setInMemoryCsrfToken(null);this.csrfLoading=null;}
+  invalidateInbox():void {this.reads.invalidate('inbox:');}
   invalidateCache(): void { this.featureFlags.clear(); this.reads.invalidate(); }
   clearCache(): void { this.featureFlags.clear(); this.reads.clear(); this.actions.clear(); this.settingsCache = null; this.repoPrivacy.clear(); }
   private repoPrivacy = new Map<string, boolean>();

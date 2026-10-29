@@ -63,14 +63,14 @@ function InboxWorkspace({initialFilter}:{initialFilter:NotificationFilter}) {
     // A hidden web list can keep its offset while its virtual window resets.
     // Re-emit the restored scroll so Back renders the rows at that offset.
     const restore=requestAnimationFrame(()=>{listRef.current?.recordInteraction();listRef.current?.scrollToOffset({offset:scrollOffset.current,animated:false});const node:unknown=listRef.current?.getScrollableNode();if(Platform.OS==='web'&&typeof HTMLElement!=='undefined'&&node instanceof HTMLElement)node.dispatchEvent(new Event('scroll'));});
-    if(focused.current){api.invalidateCache();void revalidate();}focused.current=true;
-    const refresh=()=>{if(active&&AppState.currentState==='active'){api.invalidateCache();void revalidate();}};
+    if(focused.current){api.invalidateInbox();void revalidate();}focused.current=true;
+    const refresh=()=>{if(active&&AppState.currentState==='active'){api.invalidateInbox();void revalidate();}};
     const interval=setInterval(refresh,60000),state=AppState.addEventListener('change',value=>{if(value==='active')refresh();});
     return()=>{active=false;listActive.current=false;cancelAnimationFrame(restore);clearInterval(interval);state.remove();};
   },[revalidate]));
-  useEffect(()=>{const wait=Math.min(refreshAfterMs??Infinity,wakeAt===null?Infinity:Math.max(0,wakeAt-Date.now()));if(!Number.isFinite(wait))return;const timer=setTimeout(()=>{setWakeAt(null);if(AppState.currentState==='active'){api.invalidateCache();void revalidate();}},Math.min(2147483647,Math.max(250,wait)));return()=>clearTimeout(timer);},[refreshAfterMs,wakeAt,revalidate]);
+  useEffect(()=>{const wait=Math.min(refreshAfterMs??Infinity,wakeAt===null?Infinity:Math.max(0,wakeAt-Date.now()));if(!Number.isFinite(wait))return;const timer=setTimeout(()=>{setWakeAt(null);if(AppState.currentState==='active'){api.invalidateInbox();void revalidate();}},Math.min(2147483647,Math.max(250,wait)));return()=>clearTimeout(timer);},[refreshAfterMs,wakeAt,revalidate]);
   useEffect(()=>()=>{view.current++;},[]);
-  const onRefresh=()=>{api.invalidateCache();void fetchItems();};
+  const onRefresh=()=>{api.invalidateInbox();void fetchItems();};
   const applyAction=async(item:Notification,action:'done'|'snooze')=>{
     if(isDemo||actionLock.current)return;actionLock.current=true;setActing(true);setError(null);const version=view.current;const key=JSON.stringify([action,item.updatedAt,item.stateToken??null]);const prior=retryActions.current.get(item.id);const operationId=prior?.key===key?prior.operationId:Crypto.randomUUID();retryActions.current.set(item.id,{key,operationId});undoGeneration.current++;
     setHidden(old=>({...old,[item.id]:{revision:item.updatedAt}}));setUndoItem(null);
@@ -81,7 +81,7 @@ function InboxWorkspace({initialFilter}:{initialFilter:NotificationFilter}) {
       const until=receipt.snoozedUntil?Date.now()+Math.max(0,Date.parse(receipt.snoozedUntil)-Date.parse(receipt.updatedAt)):null;
       if(until!==null)setWakeAt(until);
       setHidden(old=>({...old,[item.id]:{revision:item.updatedAt,...(until!==null?{until}:{})}}));retryActions.current.delete(item.id);setUndoItem({item,itemId:item.id,receipt});
-    }catch(error){if(version===view.current){setHidden(old=>{const next={...old};delete next[item.id];return next;});setError(toUserMessage(error,"Couldn't update this item. Try again."));if(error instanceof ApiClientError&&error.code==='state_conflict'){api.invalidateCache();void revalidate();}}}
+    }catch(error){if(version===view.current){setHidden(old=>{const next={...old};delete next[item.id];return next;});setError(toUserMessage(error,"Couldn't update this item. Try again."));if(error instanceof ApiClientError&&error.code==='state_conflict'){api.invalidateInbox();void revalidate();}}}
     finally{if(version===view.current){actionLock.current=false;setActing(false);}}
   };
   const handleDone=(item:Notification)=>applyAction(item,'done'),handleSnooze=(item:Notification)=>applyAction(item,'snooze');
@@ -93,9 +93,9 @@ function InboxWorkspace({initialFilter}:{initialFilter:NotificationFilter}) {
       if(version!==view.current)return;
       setHidden(old=>{const next={...old};delete next[itemId];return next;});
       if(item)setItems(old=>old.some(row=>row.id===itemId)?old.map(row=>row.id===itemId?{...row,stateToken:restored.operationId}:row):[...old,{...item,stateToken:restored.operationId}]);
-      else{api.invalidateCache();void revalidate();}
+      else{api.invalidateInbox();void revalidate();}
       undoRetry.current=null;setUndoItem(null);
-    }catch(error){if(version===view.current){setError(toUserMessage(error,"Couldn't undo this change. Try Undo again."));if(error instanceof ApiClientError&&error.code==='state_conflict'){setUndoItem(null);api.invalidateCache();void revalidate();}}}
+    }catch(error){if(version===view.current){setError(toUserMessage(error,"Couldn't undo this change. Try Undo again."));if(error instanceof ApiClientError&&error.code==='state_conflict'){setUndoItem(null);api.invalidateInbox();void revalidate();}}}
     finally{if(version===view.current){actionLock.current=false;setActing(false);}}
   };
 

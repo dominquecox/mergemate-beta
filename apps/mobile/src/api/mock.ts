@@ -23,6 +23,7 @@ import {
 
 export class MockApiClient implements ApiClient {
   async getFeatureFlags(){return disabledFeatureFlags();}
+  invalidateInbox():void {}
   invalidateCache(): void {  }
   clearCache(): void {}
   invalidateSession():void{}

@@ -26,6 +26,7 @@ import {
 export interface ApiClient {
   isMock: boolean;
   invalidateCache(): void;
+  invalidateInbox():void;
   clearCache(): void;
   invalidateSession(): void;
   getNotificationPage(filter?: NotificationFilter, cursor?: string | null, search?: string): Promise<{items: Notification[]; nextCursor: string | null;serverTime?:string;refreshAt?:string|null}>;
