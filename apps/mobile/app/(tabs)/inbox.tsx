@@ -45,16 +45,17 @@ function InboxWorkspace({initialFilter}:{initialFilter:NotificationFilter}) {
   const [filter,setFilter]=useState<NotificationFilter>(initialFilter),[prefError,setPrefError]=useState(false);
   const preferenceQueue=useRef(Promise.resolve()),view=useRef(0),currentFilter=useRef(filter);currentFilter.current=filter;
   const {items:sourceItems,setItems,loading:isLoading,busy:isRefreshing,error,setError,refresh:fetchItems,revalidate,more,hasMore,refreshAfterMs}=usePagedList(`inbox:${user?.id}:${filter}`,cursor=>api.getNotificationPage(filter,cursor));
-  type Hidden={revision:string;until?:string};
-  const [hidden,setHidden]=useState<Record<string,Hidden>>({});
-  const [undoItem,setUndoItem]=useState<{item:Notification;receipt:InboxReceipt}|null>(null),[acting,setActing]=useState(false);
-  const actionLock=useRef(false);
-  const items=sourceItems.filter(item=>{const removed=hidden[item.id];return !removed||Date.parse(item.updatedAt)>Date.parse(removed.revision)||(removed.until!==undefined&&Date.parse(removed.until)<=Date.now());});
+  type Hidden={revision:string;until?:number};
+  const [hidden,setHidden]=useState<Record<string,Hidden>>({}),[wakeAt,setWakeAt]=useState<number|null>(null);
+  const [undoItem,setUndoItem]=useState<{item?:Notification;receipt:InboxReceipt;itemId:string}|null>(null),[acting,setActing]=useState(false);
+  const actionLock=useRef(false),undoGeneration=useRef(0),retryActions=useRef(new Map<string,{key:string;operationId:string}>()),undoRetry=useRef<{expected:string;id:string}|null>(null);
+  useEffect(()=>{const version=view.current,generation=undoGeneration.current;api.getInboxUndo().then(saved=>{if(version===view.current&&generation===undoGeneration.current&&saved)setUndoItem(saved);},()=>{});},[]);
+  const items=sourceItems.filter(item=>{const removed=hidden[item.id];return !removed||Date.parse(item.updatedAt)>Date.parse(removed.revision)||(removed.until!==undefined&&removed.until<=Date.now());}).sort((a,b)=>Date.parse(b.updatedAt)-Date.parse(a.updatedAt)||(a.id<b.id?-1:a.id>b.id?1:0));
   const persist=(next:NotificationFilter)=>{
     if(isDemo)return;const version=view.current;
     preferenceQueue.current=preferenceQueue.current.catch(()=>{}).then(async()=>{if(version!==view.current)return;try{await api.setInboxPreference(next);if(version===view.current)setPrefError(false);}catch{if(version===view.current)setPrefError(true);}});
   };
-  const selectFilter=(next:NotificationFilter)=>{if(next===filter)return;view.current++;actionLock.current=false;setActing(false);setUndoItem(null);setFilter(next);persist(next);};
+  const selectFilter=(next:NotificationFilter)=>{if(next===filter)return;view.current++;undoGeneration.current++;actionLock.current=false;setActing(false);setUndoItem(null);setFilter(next);persist(next);};
   const focused=useRef(false);
   useFocusEffect(useCallback(()=>{
     let active=true;
@@ -63,27 +64,33 @@ function InboxWorkspace({initialFilter}:{initialFilter:NotificationFilter}) {
     const interval=setInterval(refresh,60000),state=AppState.addEventListener('change',value=>{if(value==='active')refresh();});
     return()=>{active=false;clearInterval(interval);state.remove();};
   },[revalidate]));
-  useEffect(()=>{if(refreshAfterMs===null)return;const timer=setTimeout(()=>{api.invalidateCache();void revalidate();},Math.min(2147483647,Math.max(250,refreshAfterMs)));return()=>clearTimeout(timer);},[refreshAfterMs,revalidate]);
+  useEffect(()=>{const wait=Math.min(refreshAfterMs??Infinity,wakeAt===null?Infinity:Math.max(0,wakeAt-Date.now()));if(!Number.isFinite(wait))return;const timer=setTimeout(()=>{setWakeAt(null);if(AppState.currentState==='active'){api.invalidateCache();void revalidate();}},Math.min(2147483647,Math.max(250,wait)));return()=>clearTimeout(timer);},[refreshAfterMs,wakeAt,revalidate]);
   useEffect(()=>()=>{view.current++;},[]);
   const onRefresh=()=>{api.invalidateCache();void fetchItems();};
   const applyAction=async(item:Notification,action:'done'|'snooze')=>{
-    if(isDemo||actionLock.current)return;actionLock.current=true;setActing(true);setError(null);const version=view.current;const operationId=Crypto.randomUUID();
+    if(isDemo||actionLock.current)return;actionLock.current=true;setActing(true);setError(null);const version=view.current;const key=JSON.stringify([action,item.updatedAt,item.stateToken??null]);const prior=retryActions.current.get(item.id);const operationId=prior?.key===key?prior.operationId:Crypto.randomUUID();retryActions.current.set(item.id,{key,operationId});undoGeneration.current++;
     setHidden(old=>({...old,[item.id]:{revision:item.updatedAt}}));setUndoItem(null);
     try{
       const receipt=await api.mutateInboxItem(item.id,{operationId,expectedOperationId:item.stateToken??null,action,observedUpdatedAt:item.updatedAt,...(action==='snooze'?{durationMinutes:1440}:{})});
       if(version!==view.current)return;
       setItems(old=>old.map(row=>row.id===item.id?{...row,stateToken:receipt.operationId}:row));
-      setHidden(old=>({...old,[item.id]:{revision:item.updatedAt,...(receipt.snoozedUntil?{until:receipt.snoozedUntil}:{})}}));setUndoItem({item,receipt});
+      const until=receipt.snoozedUntil?Date.now()+Math.max(0,Date.parse(receipt.snoozedUntil)-Date.parse(receipt.updatedAt)):null;
+      if(until!==null)setWakeAt(until);
+      setHidden(old=>({...old,[item.id]:{revision:item.updatedAt,...(until!==null?{until}:{})}}));retryActions.current.delete(item.id);setUndoItem({item,itemId:item.id,receipt});
     }catch(error){if(version===view.current){setHidden(old=>{const next={...old};delete next[item.id];return next;});setError(toUserMessage(error,"Couldn't update this item. Try again."));if(error instanceof ApiClientError&&error.code==='state_conflict'){api.invalidateCache();void revalidate();}}}
     finally{if(version===view.current){actionLock.current=false;setActing(false);}}
   };
   const handleDone=(item:Notification)=>applyAction(item,'done'),handleSnooze=(item:Notification)=>applyAction(item,'snooze');
   const handleUndo=async()=>{
-    if(!undoItem||actionLock.current||isDemo)return;actionLock.current=true;setActing(true);setError(null);const version=view.current;const {item,receipt}=undoItem;
+    if(!undoItem||actionLock.current||isDemo)return;actionLock.current=true;setActing(true);setError(null);const version=view.current;const {item,itemId,receipt}=undoItem;undoGeneration.current++;
+    const operationId=undoRetry.current?.expected===receipt.operationId?undoRetry.current.id:Crypto.randomUUID();undoRetry.current={expected:receipt.operationId,id:operationId};
     try{
-      const restored=await api.mutateInboxItem(item.id,{operationId:Crypto.randomUUID(),expectedOperationId:receipt.operationId,action:'restore',observedUpdatedAt:item.updatedAt});
+      const restored=await api.mutateInboxItem(itemId,{operationId,expectedOperationId:receipt.operationId,action:'restore',observedUpdatedAt:item?.updatedAt??receipt.updatedAt});
       if(version!==view.current)return;
-      setHidden(old=>{const next={...old};delete next[item.id];return next;});setItems(old=>old.some(row=>row.id===item.id)?old.map(row=>row.id===item.id?{...row,stateToken:restored.operationId}:row):[...old,{...item,stateToken:restored.operationId}].sort((a,b)=>Date.parse(b.updatedAt)-Date.parse(a.updatedAt)||(a.id<b.id?-1:1)));setUndoItem(null);
+      setHidden(old=>{const next={...old};delete next[itemId];return next;});
+      if(item)setItems(old=>old.some(row=>row.id===itemId)?old.map(row=>row.id===itemId?{...row,stateToken:restored.operationId}:row):[...old,{...item,stateToken:restored.operationId}]);
+      else{api.invalidateCache();void revalidate();}
+      undoRetry.current=null;setUndoItem(null);
     }catch(error){if(version===view.current){setError(toUserMessage(error,"Couldn't undo this change. Try Undo again."));if(error instanceof ApiClientError&&error.code==='state_conflict'){setUndoItem(null);api.invalidateCache();void revalidate();}}}
     finally{if(version===view.current){actionLock.current=false;setActing(false);}}
   };
@@ -178,7 +185,7 @@ function InboxWorkspace({initialFilter}:{initialFilter:NotificationFilter}) {
             disabled={acting} onPress={handleUndo}
             style={styles.undoBtn}
             accessibilityRole="button"
-            accessibilityLabel={`Undo moving ${undoItem.item.title}`}
+            accessibilityLabel={undoItem.item?`Undo moving ${undoItem.item.title}`:"Undo last Inbox change"}
           >
             <Text style={[typography.footnote, { color: colors.brandLight, fontWeight: "700" }]}>Undo</Text>
           </TouchableOpacity>
@@ -190,7 +197,7 @@ function InboxWorkspace({initialFilter}:{initialFilter:NotificationFilter}) {
           title="Loading your inbox..."
           message="Fetching accessible pull requests and your Inbox state."
         />
-      ) : error && items.length===0 ? (
+      ) : error && sourceItems.length===0 ? (
         <ErrorState
           title="Could not load your inbox"
           message={error}

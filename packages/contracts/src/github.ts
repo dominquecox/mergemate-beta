@@ -166,3 +166,6 @@ export const InboxMutation=z.object({operationId:z.uuid(),expectedOperationId:z.
 export type InboxMutation=z.infer<typeof InboxMutation>;
 export const InboxReceipt=z.object({operationId:z.uuid(),doneAt:IsoDateTime.nullable(),snoozedUntil:IsoDateTime.nullable(),updatedAt:IsoDateTime});
 export type InboxReceipt=z.infer<typeof InboxReceipt>;
+
+export const InboxUndo=z.object({itemId:z.string(),receipt:InboxReceipt}).nullable();
+export type InboxUndo=z.infer<typeof InboxUndo>;

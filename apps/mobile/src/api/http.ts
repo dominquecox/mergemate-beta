@@ -3,7 +3,7 @@ import {notifySessionChange,hasPendingLogout,setPendingLogout} from "../auth/ses
 import { z } from "zod";
 import { RequestCache } from "./request-cache";
 import {
-  InboxPreference,InboxMutation,InboxReceipt,
+  InboxPreference,InboxMutation,InboxReceipt,InboxUndo,
   AuthCallbackResponse,
   AuthStartResponse,
   BillingLink,
@@ -523,6 +523,7 @@ export class HttpApiClient implements ApiClient {
   // Notifications
   // ---------------------------------------------------------------------------------------------
 
+  getInboxUndo(){return this.request({path:"/inbox/undo",schema:InboxUndo});}
   getInboxPreference(){return this.request({path:'/inbox/preference',schema:InboxPreference});}
   async setInboxPreference(filter:NotificationFilter){return this.request({method:'PUT',path:'/inbox/preference',body:{filter},schema:InboxPreference});}
   async mutateInboxItem(id:string,input:import('@mergemate/contracts').InboxMutation){

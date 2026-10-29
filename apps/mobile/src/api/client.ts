@@ -55,6 +55,7 @@ export interface ApiClient {
   toggleWatchRepo(id: string, watching: boolean): Promise<Repo>;
   getOrgInstallations(): Promise<InstallationList>;
 
+  getInboxUndo():Promise<import("@mergemate/contracts").InboxUndo>;
   getInboxPreference():Promise<{filter:NotificationFilter}>;
   setInboxPreference(filter:NotificationFilter):Promise<{filter:NotificationFilter}>;
   mutateInboxItem(id:string,input:InboxMutation):Promise<InboxReceipt>;

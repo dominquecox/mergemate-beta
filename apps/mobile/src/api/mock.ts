@@ -39,6 +39,7 @@ export class MockApiClient implements ApiClient {
     return {items: all.slice(start,start+25), nextCursor: start+25 < all.length ? String(start+25) : null};
   }
 
+  async getInboxUndo(){return null;}
   async getInboxPreference(){return {filter:'all' as const};}
   async setInboxPreference(filter:NotificationFilter){return {filter};}
   async mutateInboxItem():Promise<import('@mergemate/contracts').InboxReceipt>{throw new ApiClientError('forbidden','Inbox changes are unavailable in demo mode.');}

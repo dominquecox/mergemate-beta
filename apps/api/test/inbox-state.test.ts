@@ -21,6 +21,11 @@ describe('conditional Inbox operations',()=>{
   expect((await mutate(done)).status).toBe(409);expect((await list()).items).toHaveLength(1);
   const again=input('done',restored.operationId);await mutate(again);search('2026-10-27T11:00:00Z');expect((await list()).items).toHaveLength(1);
  });
+ it('recovers the last conditional Undo after a client reload and keeps it absent after restore',async()=>{
+  const {call,mutate,session}=await setup();const done=InboxReceipt.parse(await(await mutate(input('done'))).json());
+  expect(await(await call('/v1/inbox/undo',{headers:session.headers})).json()).toEqual({itemId:id,receipt:done});
+  await mutate(input('restore',done.operationId));expect(await(await call('/v1/inbox/undo',{headers:session.headers})).json()).toBeNull();
+ });
  it('does not let a late Undo overwrite a newer device action',async()=>{
   const {mutate,list}=await setup();const first=InboxReceipt.parse(await(await mutate(input('done'))).json());const snoozed=InboxReceipt.parse(await(await mutate(input('snooze',first.operationId))).json());
   expect((await mutate(input('restore',first.operationId))).status).toBe(409);expect((await list()).items).toEqual([]);

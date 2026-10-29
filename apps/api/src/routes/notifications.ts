@@ -270,3 +270,12 @@ notifications.post('/notifications/:id/state',async c=>{
  if(!current||current.operation_id!==input.operationId)throw new ApiError('state_conflict','This item changed on another device. Refresh the inbox.');
  return c.json(receipt(current));
 });
+
+notifications.get('/inbox/undo',async c=>{
+ if(c.get('session').demo)return c.json(null);
+ const uid=userId(c),now=c.get('deps').now().toISOString();
+ const row=await requireBinding(c.env,'DB').prepare('SELECT item_id,operation_id,done_at,snoozed_until,updated_at FROM notification_state WHERE user_id=? AND operation_id IS NOT NULL AND (done_at IS NOT NULL OR snoozed_until>?) ORDER BY updated_at DESC,item_id LIMIT 1').bind(uid,now).first<StateRow&{item_id:string}>();
+ if(!row)return c.json(null);
+ try{await checkItemAccess(c,uid,row.item_id);}catch(error){if(error instanceof ApiError&&(error.code==='not_found'||error.code==='forbidden'))return c.json(null);throw error;}
+ return c.json({itemId:row.item_id,receipt:receipt(row)});
+});
