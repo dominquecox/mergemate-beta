@@ -1327,7 +1327,7 @@ export const transcribeVoiceNote = async (args: {
       contentType,
       fileName: `note.${extension}`,
       ...(audioSeconds === undefined ? {} : {audioSeconds}),
-      signal:args.signal,
+      ...(args.signal?{signal:args.signal}:{}),
     });
     const result: VoiceNoteResult = { text, requestId };
     return result;

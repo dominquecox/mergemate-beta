@@ -37,8 +37,8 @@ notes.post("/notes",async c=>{
  await db.prepare(`INSERT OR IGNORE INTO private_notes(user_id,id,context_key,context_json,text,created_at)
  SELECT ?1,?2,?3,?4,?5,?6 WHERE (SELECT COUNT(*) FROM private_notes WHERE user_id=?1 AND context_key=?3)<100`).bind(userId,input.id,key,JSON.stringify(input.context),input.text,now).run();
  const row=await db.prepare("SELECT id,context_json,text,created_at FROM private_notes WHERE user_id=? AND id=?").bind(userId,input.id).first<Row>();
- if(!row)throw new ApiError("conflict","This workspace has 100 notes. Remove a note before saving another.");
- if(row.text!==input.text || noteContextKey(NoteContext.parse(JSON.parse(row.context_json)))!==key)throw new ApiError("conflict","That note was already saved with different content.");
+ if(!row)throw new ApiError("validation_failed","This workspace has 100 notes. Remove a note before saving another.");
+ if(row.text!==input.text || noteContextKey(NoteContext.parse(JSON.parse(row.context_json)))!==key)throw new ApiError("validation_failed","That note was already saved with different content.");
  return c.json(present(row));
 });
 notes.delete("/notes/:id",async c=>{
