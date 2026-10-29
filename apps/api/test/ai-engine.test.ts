@@ -803,7 +803,7 @@ describe("misc engine helpers", () => {
     expect(secondsToMidnight()).toBeGreaterThan(0);
   });
 
-  it("leaves highlight unavailable without storage", async () => {
+  it("leaves highlight unavailable without mandatory image preprocessing", async () => {
     await expect(
       analyzeHighlight({
         db: testDb(),
@@ -812,7 +812,6 @@ describe("misc engine helpers", () => {
         env: {},
         session: user,
         image: new Uint8Array([1, 2, 3]),
-        contentType: "image/png",
         note: "",
         requestId: "r1",
       }),

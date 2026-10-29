@@ -79,7 +79,7 @@ export interface ApiClient {
   removePrivateNote(id:string,context:NoteContext):Promise<void>;
 
   // Highlight
-  analyzeHighlight(imageUri: string, note?: string, mimeType?: string): Promise<HighlightResult>;
+  analyzeHighlight(imageUri: string, note?: string, mimeType?: string,signal?:AbortSignal): Promise<HighlightResult>;
 
   // Settings
   getSettings(): Promise<UserSettings>;

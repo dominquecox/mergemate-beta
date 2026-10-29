@@ -666,14 +666,14 @@ export class HttpApiClient implements ApiClient {
   }
   async removePrivateNote(id:string,context:NoteContext){await this.request({method:'DELETE',path:`/notes/${enc(id)}?context=${enc(JSON.stringify(context))}`});}
 
-  async analyzeHighlight(imageUri: string, note?: string, mimeType?: string): Promise<HighlightResult> {
+  async analyzeHighlight(imageUri: string, note?: string, mimeType?: string,signal?:AbortSignal): Promise<HighlightResult> {
     const form = new FormData();
     const type = mimeType ?? "image/jpeg";
     if (this.web) {
       // On the web the picked image is a blob or data URL the browser can read back.
       let blob: Blob;
       try {
-        blob = await (await this.fetchImpl(imageUri)).blob();
+        blob = await (await this.fetchImpl(imageUri,{...(signal?{signal}:{})})).blob();
       } catch {
         throw new ApiClientError("validation_failed", "We couldn't read that image. Pick it again.");
       }
@@ -691,6 +691,7 @@ export class HttpApiClient implements ApiClient {
       form,
       schema: HighlightResultSchema,
       timeoutMs: AI_TIMEOUT_MS,
+      ...(signal?{signal}:{}),
     });
     return mapHighlight(res);
   }

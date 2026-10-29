@@ -33,6 +33,7 @@ export interface ImageInput {
 }
 
 export interface CompletionRequest {
+  signal?:AbortSignal;
   system: string;
   prompt: string;
   maxOutputTokens: number;
