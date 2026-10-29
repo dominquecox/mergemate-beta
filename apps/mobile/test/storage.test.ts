@@ -89,3 +89,14 @@ describe("StorageService", () => {
   });
 
 });
+
+describe('account-owned local erasure',()=>{
+ it('removes account preferences and recent searches while preserving device theme and separately managed credentials',async()=>{
+  Object.defineProperty(Platform,'OS',{configurable:true,writable:true,value:'ios'});
+  for(const key of ['mergemate_ai_consent','mergemate_recent_searches','mergemate_demo_session','mergemate_device_id','mergemate_push_enabled','mergemate.webPushUser'])mockSecureStore.set(key,'fixture-private');
+  mockSecureStore.set('mergemate_theme','dark');mockSecureStore.set('mergemate_session_token','separately-managed-fixture');await StorageService.clearAccountData();expect([...mockSecureStore.keys()].sort()).toEqual(['mergemate_session_token','mergemate_theme']);
+ });
+ it('reports a secure device cleanup failure after trying every account key',async()=>{
+  Object.defineProperty(Platform,'OS',{configurable:true,writable:true,value:'ios'});vi.mocked(SecureStore.deleteItemAsync).mockRejectedValueOnce(new Error('Device unavailable'));await expect(StorageService.clearAccountData()).rejects.toMatchObject({code:'secure_storage_unavailable'});expect(await StorageService.getLocalCleanupPending()).toBe(true);await StorageService.clearAccountData();expect(await StorageService.getLocalCleanupPending()).toBe(false);
+ });
+});

@@ -154,6 +154,6 @@ describe('cancel before deletion',()=>{
     ctx.net.on('GET','https://api.stripe.com/v1/subscriptions',{data:[subscription()],has_more:false}).on('DELETE','https://api.stripe.com/v1/subscriptions/sub_testbilling',()=>json({error:'unavailable'},500));
     expect((await appFor(ctx)('/v1/account',{method:'DELETE',headers:s.headers})).status).toBe(502);
     expect(ctx.db.rows('SELECT id FROM users')).toHaveLength(1);expect(ctx.net.calls.some(c=>c.method==='DELETE'&&c.url.includes('/applications/'))).toBe(false);
-    expect((await appFor(ctx)('/v1/billing/checkout',post({priceKey:'pro_monthly'},s.headers))).status).toBe(429);
+    const blocked=await appFor(ctx)('/v1/billing/checkout',post({priceKey:'pro_monthly'},s.headers));expect(blocked.status).toBe(403);expect(await blocked.json()).toMatchObject({error:{code:'forbidden'}});expect(await (await appFor(ctx)('/v1/me',{headers:s.headers})).json()).toMatchObject({deletionPending:true});
   });
 });

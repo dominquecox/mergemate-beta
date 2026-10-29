@@ -1,3 +1,4 @@
+import {dropWebPush} from "../push/web";
 import { Platform } from "react-native";
 import { StorageService } from "../storage";
 import { getTurnstileToken } from "../auth/turnstile";
@@ -19,6 +20,7 @@ export const api: ApiClient = createApiClient(apiMode, {
     clear: () => StorageService.clearSessionToken(),
   },
   getTurnstileToken,
+  onAccountDeleted:async()=>{const results=await Promise.allSettled([StorageService.clearAccountData(),Platform.OS==='web'?dropWebPush():Promise.resolve()]);if(results.some(r=>r.status==='rejected'))throw new Error('Local account cleanup incomplete');},
 });
 
 export * from "./client";

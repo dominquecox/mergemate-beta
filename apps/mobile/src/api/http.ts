@@ -85,6 +85,7 @@ export interface HttpApiClientOptions {
   /** `web` uses the cookie and CSRF token; `native` uses the bearer token. */
   platform: "web" | "native";
   nativePlatform?: "ios" | "android";
+  onAccountDeleted?:()=>Promise<void>;
   tokenStore: TokenStore;
   fetch?: typeof fetch;
   timeoutMs?: number;
@@ -138,6 +139,7 @@ export class HttpApiClient implements ApiClient {
   private readonly baseUrl: string;
   private readonly web: boolean;
   private readonly nativePlatform: "ios" | "android";
+  private readonly onAccountDeleted?:()=>Promise<void>;
   private sessionGeneration=0;
   private sessionOperations=Promise.resolve();
   private readonly store: TokenStore;
@@ -161,6 +163,7 @@ export class HttpApiClient implements ApiClient {
     this.baseUrl = options.baseUrl.replace(/\/+$/, "");
     this.web = options.platform === "web";
     this.nativePlatform=options.nativePlatform??"ios";
+    this.onAccountDeleted=options.onAccountDeleted;
     this.store = options.tokenStore;
     // Bound so it can be called detached from the client, as browsers require.
     this.fetchImpl = options.fetch ?? ((input, init) => fetch(input, init));
@@ -469,8 +472,13 @@ export class HttpApiClient implements ApiClient {
   deleteAccount():Promise<void>{
     const generation=++this.sessionGeneration;this.clearCache();
     return this.mutateSession(async()=>{
-      await this.request({method:"DELETE",path:"/account",sessionMutation:true,sessionGeneration:generation});
-      await this.store.clear();setInMemoryCsrfToken(null);this.csrfLoading=null;this.clearCache();notifySessionChange("signed-out");
+      if(generation!==this.sessionGeneration)throw new ApiClientError('unauthorized',messageForCode('unauthorized'));
+      // Once delivered for this identity, finish its cleanup before a queued new sign-in can adopt credentials.
+      const response=await this.exchange({method:"DELETE",path:"/account",sessionMutation:true,sessionGeneration:generation,allowStaleSession:true});
+      if(response.status!==204)throw new ApiClientError('parse_failed',messageForCode('parse_failed'),{status:response.status});
+      const cleanup=await Promise.allSettled([this.store.clear(),this.onAccountDeleted?.()]);
+      setInMemoryCsrfToken(null);this.csrfLoading=null;this.clearCache();notifySessionChange("signed-out");
+      if(cleanup.some(result=>result.status==='rejected'))throw new ApiClientError('local_cleanup_incomplete',messageForCode('local_cleanup_incomplete'),{status:204});
     });
   }
 

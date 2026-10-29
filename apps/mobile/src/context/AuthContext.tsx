@@ -1,12 +1,12 @@
 import {cancelReadout} from "../readout/active";
 import {hideSessionForPageCache,revealSessionAfterCheck} from "../auth/page-session";
-import {onSessionChange,hasPendingLogout} from "../auth/session-events";
+import {onSessionChange,hasPendingLogout,notifySessionChange,type SessionChange} from "../auth/session-events";
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from "react";
 import { Linking, Platform } from "react-native";
 import { User, Session } from "../types";
 import { StorageService } from "../storage";
 import { api } from "../api";
-import { ApiClientError, toUserMessage } from "../api/errors";
+import { ApiClientError, toUserMessage, messageForCode } from "../api/errors";
 import { createPkcePair } from "../auth/pkce";
 import { validGitHubAuthorizeUrl } from "../navigation/links";
 import { refreshPushRegistration } from "../push/registration";
@@ -28,6 +28,8 @@ interface AuthContextType {
   signOut: () => Promise<void>;
   deleteAccount: () => Promise<void>;
   clearError: () => void;
+  localCleanupPending:boolean;
+  retryLocalCleanup:()=>Promise<void>;
   setError: (message: string | null) => void;
 }
 
@@ -50,6 +52,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [isDemo, setIsDemo] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [localCleanupPending,setLocalCleanupPending]=useState(false);
+  const cleanupBusy=useRef(false);
   const [error, setError] = useState<string | null>(null);
 
   const signedInRef = useRef(false);
@@ -67,6 +71,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const version=authVersion.current;
     if(rotate && version!==0)return;
     try {
+      if(await StorageService.getLocalCleanupPending()){setLocalCleanupPending(true);setError(messageForCode('local_cleanup_incomplete'));return;}
       if(isWeb && hasPendingLogout())return;
       // Web: the HttpOnly cookie is the session, so ask the API who is signed in.
       // Native: only a stored token can be a session.
@@ -78,7 +83,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setUser(me);
         setSession({ expiresAt: new Date(Date.now() + SESSION_FALLBACK_MS).toISOString(), ...(demo ? { demo: true as const } : {}) });
         setIsDemo(demo);
-        if (!api.isMock && !demo && rotate) {
+        if (!api.isMock && !demo && !me.deletionPending && rotate) {
           // Rotate the token on each launch, and keep push registered for a device that turned it on.
           api
             .refreshSession()
@@ -107,10 +112,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [initAuth]);
 
   useEffect(()=>{
-    const changed=(kind:"signed-in"|"signed-out")=>{
+    const changed=(kind:SessionChange)=>{
       cancelReadout();
-      ++authVersion.current;api.invalidateSession();setIsLoading(kind==='signed-in');setUser(null);setSession(null);setIsDemo(false);
-      if(kind==='signed-in')void initAuth(false);
+      ++authVersion.current;api.invalidateSession();setIsLoading(kind!=='signed-out');setUser(null);setSession(null);setIsDemo(false);
+      if(kind!=='signed-out')void initAuth(false);
     };
     const unsubscribe=onSessionChange(changed);
     const restored=(event:PageTransitionEvent)=>{if(event.persisted)changed('signed-in');};
@@ -144,9 +149,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await StorageService.setDemoFlag(api.isMock?demo:false);
     if(version!==authVersion.current)return false;
     setSession(res.session);setUser(res.user);setIsDemo(demo);
-    if(!demo && !api.isMock && !isWeb)refreshPushRegistration(api).catch(()=>undefined);
-    if(!api.isMock && isWeb)(demo?dropWebPush():refreshWebPush(api,res.user.id)).catch(()=>undefined);
+    if(!demo && !res.user.deletionPending && !api.isMock && !isWeb)refreshPushRegistration(api).catch(()=>undefined);
+    if(!api.isMock && isWeb)(demo || res.user.deletionPending?dropWebPush():refreshWebPush(api,res.user.id)).catch(()=>undefined);
     return true;
+  };
+
+  const requireCleanLocalData=async()=>{
+    if(localCleanupPending || await StorageService.getLocalCleanupPending()){setLocalCleanupPending(true);throw new ApiClientError('local_cleanup_incomplete',messageForCode('local_cleanup_incomplete'));}
+  };
+
+  const retryLocalCleanup=async()=>{
+    if(cleanupBusy.current)return;cleanupBusy.current=true;
+    try{await StorageService.clearSessionToken();await StorageService.clearAccountData();if(isWeb)await dropWebPush();setLocalCleanupPending(false);setError(null);}
+    catch{setLocalCleanupPending(true);setError(messageForCode('local_cleanup_incomplete'));}
+    finally{cleanupBusy.current=false;}
   };
 
   const signInWithGithub = async (_platform: "ios" | "android" | "web"): Promise<SignInResult> => {
@@ -154,6 +170,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setIsLoading(true);
     setError(null);
     try {
+      await requireCleanLocalData();
       const platform = isWeb ? "web" : Platform.OS==="android" ? "android" : "ios";
       if (api.isMock) {
         await api.startGithubAuth(platform, "mock");
@@ -182,6 +199,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setIsLoading(true);
     setError(null);
     try {
+      await requireCleanLocalData();
       const pending = await StorageService.takePendingSignIn(Date.now(),state);
       if(version!==authVersion.current)return false;
       if (!pending || pending.state !== state) {
@@ -202,6 +220,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setIsLoading(true);
     setError(null);
     try {
+      await requireCleanLocalData();
       return await establish(await api.startDemoSession(),true,version);
     } catch (e) {
       if(version===authVersion.current)setError(toUserMessage(e, "Couldn't start the demo. Try again."));
@@ -236,7 +255,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // Throws when the API refuses, so the person is told and nothing is cleared.
       await api.deleteAccount();
     } catch (e) {
-      if(version===authVersion.current)setIsLoading(false);
+      if(e instanceof ApiClientError && e.code==='local_cleanup_incomplete'){
+        if(version===authVersion.current)setLocalCleanupPending(true);
+        await clearLocalSession(version);
+        if(version===authVersion.current){setError(e.message);setIsLoading(false);}
+        throw e;
+      }
+      if(version===authVersion.current){
+        api.invalidateCache();const me=await api.getMe().catch(()=>null);
+        if(version===authVersion.current && me?.deletionPending){setUser(me);notifySessionChange('deletion-pending');}
+        if(version===authVersion.current)setIsLoading(false);
+      }
       throw e;
     }
     await clearLocalSession(version);
@@ -259,6 +288,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         signOut,
         deleteAccount,
         clearError,
+        localCleanupPending,
+        retryLocalCleanup,
         setError,
       }}
     >

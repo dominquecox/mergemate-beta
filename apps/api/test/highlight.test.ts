@@ -1,5 +1,6 @@
+import {claimDeletion} from "../src/lib/account-deletion";
 import { ErrorBody, HighlightResult } from "@mergemate/contracts";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { storesFor } from "../src/routes/ai-engine";
 import { demoHeaders } from "./demo-session";
 import { fakeAi, fakeDataset, testContext as baseContext, validModelEnv } from "./helpers";
@@ -185,6 +186,17 @@ const ANSWER = JSON.stringify({
 });
 
 describe("highlight analysis", () => {
+  it("deletes an upload even if storage accepts it but its put response fails",async()=>{
+    const {bucket,fake}=fakeR2();const ai=fakeAi();const ctx=testContext({...validModelEnv(),AI:ai,HIGHLIGHT_UPLOADS:bucket});const {headers}=await signIn(ctx);const call=appFor(ctx);await grant(call,headers);
+    const put=bucket.put.bind(bucket);vi.spyOn(bucket,'put').mockImplementation(async(key,value,options)=>{await put(key,value,options);throw new Error('Ambiguous storage response');});
+    expect((await call('/v1/highlight',{method:'POST',headers,body:imageForm(pngFile(pngBytes()))})).status).toBe(500);expect(fake.store.size).toBe(0);expect(fake.deletes).toHaveLength(1);expect(ai.runs).toHaveLength(0);
+  });
+  it("cleans a late upload and refuses model work after account deletion starts",async()=>{
+    const {bucket,fake}=fakeR2();const ai=fakeAi();const ctx=testContext({...validModelEnv(),AI:ai,HIGHLIGHT_UPLOADS:bucket});const {headers,userId}=await signIn(ctx);const call=appFor(ctx);await grant(call,headers);
+    const put=bucket.put.bind(bucket);vi.spyOn(bucket,'put').mockImplementation(async(key,value,options)=>{const uploaded=await put(key,value,options);await claimDeletion(ctx.env.DB,userId,ctx.time.now());return uploaded;});
+    expect((await call('/v1/highlight',{method:'POST',headers,body:imageForm(pngFile(pngBytes()))})).status).toBe(403);expect(fake.store.size).toBe(0);expect(fake.deletes).toHaveLength(1);expect(ai.runs).toHaveLength(0);
+  });
+
   it("analyzes a real upload under a user-scoped random key, then deletes it", async () => {
     const { bucket, fake } = fakeR2();
     const ai = fakeAi(async () => ({ response: ANSWER, usage: { prompt_tokens: 10, completion_tokens: 5 } }));

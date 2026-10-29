@@ -8,7 +8,8 @@ export type ClientErrorCode =
   | "parse_failed"
   | "bot_check_unavailable"
   | "not_configured"
-  | "secure_storage_unavailable";
+  | "secure_storage_unavailable"
+  | "local_cleanup_incomplete";
 
 export interface ClientErrorDetails {
   status?: number;
@@ -68,6 +69,7 @@ const FIXED_COPY: Record<ClientErrorCode, string> = {
   timeout: "That took too long. Try again.",
   parse_failed: "MergeMate sent back something unexpected. Try again, or update the app.",
   bot_check_unavailable: "The quick security check couldn't load. Try again, or use the web app.",
+  local_cleanup_incomplete: "Your account was deleted. Clear this browser’s site data or this device’s app data to finish removing local information.",
   secure_storage_unavailable: "Secure storage is unavailable. Unlock your device and try again.",
   not_configured: "This build isn't connected to MergeMate's servers yet.",
 };
