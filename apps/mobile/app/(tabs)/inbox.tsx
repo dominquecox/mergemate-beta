@@ -56,13 +56,17 @@ function InboxWorkspace({initialFilter}:{initialFilter:NotificationFilter}) {
     preferenceQueue.current=preferenceQueue.current.catch(()=>{}).then(async()=>{if(version!==view.current)return;try{await api.setInboxPreference(next);if(version===view.current){setPrefError(false);setPrefMessage("Filter saved for next time.");}}catch{if(version===view.current)setPrefError(true);}finally{if(version===view.current)setPrefSaving(false);}});
   };
   const selectFilter=(next:NotificationFilter)=>{if(next===filter)return;view.current++;undoGeneration.current++;actionLock.current=false;setActing(false);setUndoItem(null);setFilter(next);persist(next);};
+  const listRef=useRef<FlatList<Notification>>(null),scrollOffset=useRef(0),listActive=useRef(false);
   const focused=useRef(false);
   useFocusEffect(useCallback(()=>{
-    let active=true;
+    let active=true;listActive.current=true;
+    // A hidden web list can keep its offset while its virtual window resets.
+    // Re-emit the restored scroll so Back renders the rows at that offset.
+    const restore=requestAnimationFrame(()=>{listRef.current?.recordInteraction();listRef.current?.scrollToOffset({offset:scrollOffset.current,animated:false});const node:unknown=listRef.current?.getScrollableNode();if(Platform.OS==='web'&&typeof HTMLElement!=='undefined'&&node instanceof HTMLElement)node.dispatchEvent(new Event('scroll'));});
     if(focused.current){api.invalidateCache();void revalidate();}focused.current=true;
     const refresh=()=>{if(active&&AppState.currentState==='active'){api.invalidateCache();void revalidate();}};
     const interval=setInterval(refresh,60000),state=AppState.addEventListener('change',value=>{if(value==='active')refresh();});
-    return()=>{active=false;clearInterval(interval);state.remove();};
+    return()=>{active=false;listActive.current=false;cancelAnimationFrame(restore);clearInterval(interval);state.remove();};
   },[revalidate]));
   useEffect(()=>{const wait=Math.min(refreshAfterMs??Infinity,wakeAt===null?Infinity:Math.max(0,wakeAt-Date.now()));if(!Number.isFinite(wait))return;const timer=setTimeout(()=>{setWakeAt(null);if(AppState.currentState==='active'){api.invalidateCache();void revalidate();}},Math.min(2147483647,Math.max(250,wait)));return()=>clearTimeout(timer);},[refreshAfterMs,wakeAt,revalidate]);
   useEffect(()=>()=>{view.current++;},[]);
@@ -228,6 +232,8 @@ function InboxWorkspace({initialFilter}:{initialFilter:NotificationFilter}) {
         /></View>
       ) : (
         <FlatList
+          ref={listRef}
+          onScroll={event=>{if(listActive.current)scrollOffset.current=event.nativeEvent.contentOffset.y;}} scrollEventThrottle={16}
           key={isDesktop?'desktop':'phone'} numColumns={isDesktop?2:1} columnWrapperStyle={isDesktop?{gap:16}:undefined}
           data={items} keyExtractor={item=>item.id} initialNumToRender={8} maxToRenderPerBatch={8} windowSize={5}
           contentContainerStyle={{padding:isDesktop?24:spacing.base,paddingBottom:80}}

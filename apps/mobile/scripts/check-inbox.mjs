@@ -10,12 +10,12 @@ await new Promise(r=>server.listen(0,'127.0.0.1',r));const base=`http://127.0.0.
 const rows=Array.from({length:120},(_,i)=>({id:Buffer.from(`fixture/repo#${i+1}`).toString('base64url'),kind:['review','mention','mine'][i%3],repo:'fixture/repo',number:i+1,title:`Review item ${i+1}`,author:'fixture',status:'open',updatedAt:new Date(Date.parse('2026-10-27T12:00:00Z')-i*60000).toISOString(),read:false}));
 try{
  browser=await chromium.launch({headless:true,channel:'chrome'});
- for(const width of [393,1440])for(const mode of ['main','initial-error','cursor-empty','demo']){
+ for(const width of [393,1440])for(const mode of ['main','initial-error','cursor-empty','empty','demo']){
   const context=await browser.newContext({viewport:{width,height:1050},serviceWorkers:'block'});let owner='account-a',serverNow=Date.now(),initialFailure=mode==='initial-error',writeFailure=mode==='main',undoFailure=mode==='main',holdNext=false,releaseHeld;
   const states=new Map(),preferences=new Map([['account-a','all']]);let stateCalls=0,aiCalls=0;const bodies=[];
   await context.addInitScript(()=>{const original=Date.now;window.__inboxOffset=0;Date.now=()=>original()+window.__inboxOffset;});
   const page=await context.newPage();page.setDefaultTimeout(20000);const errors=[];page.on('pageerror',e=>errors.push(e.message));
-  const ownRows=()=>owner==='account-a'?rows:[{...rows[0],id:'other-item',title:'Other account item',number:999}];
+  const ownRows=()=>mode==='empty'?[]:owner==='account-a'?rows:[{...rows[0],id:'other-item',title:'Other account item',number:999}];
   const allVisible=filter=>ownRows().filter(row=>{const state=states.get(`${owner}:${row.id}`);return (filter==='all'||row.kind===({review:'review',mentions:'mention',mine:'mine'})[filter])&&(!state?.doneAt||Date.parse(row.updatedAt)>Date.parse(state.doneAt))&&(!state?.snoozedUntil||Date.parse(state.snoozedUntil)<=serverNow);}).map(row=>({...row,stateToken:states.get(`${owner}:${row.id}`)?.operationId??null}));
   await context.route('**/*',async route=>{
    const req=route.request(),url=new URL(req.url());if(url.origin===base||url.protocol==='data:')return route.continue();if(url.origin!=='https://api-dev.mergemate.dev')return route.abort();
@@ -51,13 +51,14 @@ try{
   });
   await page.goto(base+'/inbox');await page.getByRole('heading',{name:'Inbox',exact:true}).waitFor();
   const open=number=>page.getByRole('button',{name:new RegExp(`^Open pull request #${number}:`)}),done=number=>page.getByRole('button',{name:`Mark Review item ${number} as done`,exact:true});
-  if(mode==='initial-error'){await page.getByText('Could not load your inbox',{exact:true}).waitFor();await page.screenshot({path:`${proof}/error-${width}.png`,fullPage:true});await page.getByRole('button',{name:/^Try again$/i}).click();await open(1).waitFor();}
+  if(mode==='empty'){await page.getByText('Inbox Zero',{exact:true}).waitFor();assert.equal(await page.getByRole('button',{name:/^Open pull request/}).count(),0);}
+  else if(mode==='initial-error'){await page.getByText('Could not load your inbox',{exact:true}).waitFor();await page.screenshot({path:`${proof}/error-${width}.png`,fullPage:true});await page.getByRole('button',{name:/^Try again$/i}).click();await open(1).waitFor();}
   else if(mode==='cursor-empty'){await page.getByText('More results are available',{exact:true}).waitFor();await page.getByRole('button',{name:'Load more pull requests',exact:true}).click();await open(11).waitFor();}
   else if(mode==='demo'){await open(1).waitFor();assert(await done(1).isDisabled());assert.equal(stateCalls,0);}
   else{
-   await open(1).waitFor();assert.equal(aiCalls,0);
+   await open(1).waitFor();assert.equal(aiCalls,0);const allTab=page.getByRole('tab',{name:'All pull requests',exact:true});await allTab.focus();await allTab.press('ArrowRight');await page.getByRole('tab',{name:'Needs review pull requests',selected:true}).waitFor();assert(await page.getByRole('tab',{name:'Needs review pull requests'}).evaluate(el=>el===document.activeElement));await page.keyboard.press('End');await page.getByRole('tab',{name:'Mine pull requests',selected:true}).waitFor();await page.keyboard.press('Home');await page.getByRole('tab',{name:'All pull requests',selected:true}).waitFor();await open(1).waitFor();
    for(const [name,first] of [['Needs review',1],['Mentions',2],['Mine',3],['All',1]]){await page.getByRole('tab',{name:`${name} pull requests`,exact:true}).click();await open(first).waitFor();}
-   const saved=page.waitForResponse(response=>response.url().endsWith('/v1/inbox/preference')&&response.request().method()==='PUT');await page.getByRole('tab',{name:'Mentions pull requests',exact:true}).click();await saved;assert.equal(preferences.get(owner),'mentions');await open(2).waitFor();await page.reload();try{await page.getByRole('tab',{name:'Mentions pull requests',exact:true,selected:true}).waitFor();}catch(error){console.log('reload preference',preferences.get(owner),await page.getByRole('tab').evaluateAll(elements=>elements.map(element=>element.outerHTML)),await page.locator('body').innerText());await page.screenshot({path:`${proof}/debug-${width}.png`,fullPage:true});throw error;}await open(2).waitFor();await page.getByRole('tab',{name:'All pull requests',exact:true}).click();await open(1).waitFor();
+   const saved=page.waitForResponse(response=>response.url().endsWith('/v1/inbox/preference')&&response.request().method()==='PUT');await page.getByRole('tab',{name:'Mentions pull requests',exact:true}).click();await saved;assert.equal(preferences.get(owner),'mentions');await open(2).waitFor();await page.reload();await page.getByRole('tab',{name:'Mentions pull requests',exact:true,selected:true}).waitFor();await open(2).waitFor();await page.getByRole('tab',{name:'All pull requests',exact:true}).click();await open(1).waitFor();
    await done(1).evaluate(el=>{el.click();el.click();});await page.getByRole('alert').waitFor();await open(1).waitFor();assert.equal(stateCalls,1);
    await done(1).click();await page.getByRole('button',{name:'Undo moving Review item 1',exact:true}).waitFor();assert.equal(bodies[0].operationId,bodies[1].operationId);assert.equal(await open(1).count(),0);await page.screenshot({path:`${proof}/done-${width}.png`,fullPage:true});
    const undo=page.getByRole('button',{name:'Undo moving Review item 1',exact:true});await undo.click();await page.getByRole('alert').waitFor();assert.equal(await open(1).count(),0);await undo.click();await open(1).waitFor();assert.equal(bodies[2].operationId,bodies[3].operationId);
@@ -69,5 +70,5 @@ try{
   }
   assert.deepEqual(errors,[]);assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));await page.screenshot({path:`${proof}/${mode}-${width}.png`,fullPage:true});await context.close();
  }
- console.log('PASS Inbox browser:8 phone/desktop scenarios, filters and reload preference, optimistic failure/dedup, conditional Undo/retry/reload, snooze expiry, cursor-empty recovery, long-list PR/Back, account switch and demo. External API/GitHub responses mocked.');
+ console.log('PASS Inbox browser:10 phone/desktop scenarios, keyboard filters and reload preference, optimistic failure/dedup, conditional Undo/retry/reload, snooze expiry, empty and cursor-empty recovery, long-list PR/Back, account switch and demo. External API/GitHub responses mocked.');
 }finally{await browser?.close();await new Promise(r=>server.close(r));}
