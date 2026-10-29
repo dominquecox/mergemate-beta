@@ -41,6 +41,7 @@ export default function HighlightScreen() {
     return()=>{off();app.remove();if(Platform.OS==='web')document.removeEventListener('visibilitychange',hidden);clear();};
   },[clear]);
   useEffect(()=>{if(!flags.highlight || !aiConsentGranted){clear();setImage(null);setResult(null);setIsAnalyzing(false);}},[flags.highlight,aiConsentGranted,clear]);
+  const [previewWidth,setPreviewWidth]=useState(300);
   const [note, setNote] = useState("");
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [result, setResult] = useState<HighlightResult | null>(null);
@@ -104,10 +105,10 @@ export default function HighlightScreen() {
           >
             {image ? (
               <>
-                <View style={{width:"100%",aspectRatio:image.width/image.height,position:"relative"}}>
+                <View style={{width:"100%",alignItems:"center"}} onLayout={event=>setPreviewWidth(Math.max(1,event.nativeEvent.layout.width))}><View style={{width:Math.min(previewWidth,520*image.width/image.height),height:Math.min(previewWidth*image.height/image.width,520),position:"relative"}}>
                   <Image source={{uri:image.uri}} style={{width:"100%",height:"100%"}} resizeMode="contain" accessibilityLabel="Selected screenshot"/>
                   {result?.regions.map((region,index)=><View key={region.id} pointerEvents="none" style={{position:"absolute",left:`${region.x/10}%`,top:`${region.y/10}%`,width:`${region.width/10}%`,height:`${region.height/10}%`,borderWidth:2,borderColor:colors.brandLight}}><Text style={{color:colors.text,backgroundColor:colors.surface}}>{index+1}</Text></View>)}
-                </View>
+                </View></View>
                 <Text style={[typography.caption, { color: colors.textMuted, marginTop: 8 }]}>
                   {image.width} × {image.height} px · Tap to choose another
                 </Text>
@@ -199,7 +200,7 @@ export default function HighlightScreen() {
                   ]}
                 >
                   <View style={styles.regionHeader}>
-                    <Text style={[typography.headline, { color: colors.text }]}>{index+1}. {reg.label}</Text>
+                    <Text style={[typography.headline, { color: colors.text,flexShrink:1,maxWidth:"100%" }]}>{index+1}. {reg.label}</Text>
                     <Text style={[typography.caption, { color: colors.brandLight }]}>
                       {Math.round(reg.x / 10)}% from left · {Math.round(reg.y / 10)}% from top
                     </Text>
