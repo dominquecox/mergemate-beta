@@ -35,7 +35,7 @@ async function seedOwned(ctx:TestContext,userId:string){
   ['INSERT INTO consent_grants VALUES(?,?,?,?)',[userId,1,'1',stamp]],
   ['INSERT INTO user_settings VALUES(?,?,?)',[userId,'{}',stamp]],
   ['INSERT INTO user_meta_keys VALUES(?,?,?,?)',[userId,'1','encrypted-fixture',stamp]],
-  ['INSERT INTO ai_results_cache VALUES(?,?,?,?)',[userId+':cache',userId,'{}',stamp]],
+  ['INSERT INTO ai_results_cache VALUES(?,?,?,?,(SELECT revision FROM ai_policy WHERE user_id=?))',[userId+':cache',userId,'{}',stamp,userId]],
   ['INSERT INTO ai_inflight VALUES(?,?,?)',[userId+':inflight',userId,'2099-01-01T00:00:00Z']],
   ['INSERT INTO push_tokens VALUES(?,?,?,?,?)',[userId,'device','ExponentPushToken['+userId+']',session,stamp]],
   ['INSERT INTO push_receipts VALUES(?,?,?,?,?,?)',[userId+':ticket',userId,'device','fixture-hash',stamp,stamp]],
