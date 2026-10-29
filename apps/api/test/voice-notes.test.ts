@@ -301,6 +301,11 @@ describe("readWavInfo", () => {
     expect(info?.durationSeconds).toBeCloseTo(1, 5);
   });
 
+  it("rejects forged data lengths, trailing content and inconsistent byte rates",()=>{
+    const claimed=wavBytes({dataSize:64,claimedDataSize:32000});expect(readWavInfo(claimed)).toBeNull();
+    const mismatched=wavBytes();new DataView(mismatched.buffer).setUint32(28,1,true);expect(readWavInfo(mismatched)).toBeNull();
+    const trailing=new Uint8Array(wavBytes().length+8);trailing.set(wavBytes());new DataView(trailing.buffer).setUint32(4,trailing.length-8,true);expect(readWavInfo(trailing)).toBeNull();
+  });
   it("returns null for non-PCM or truncated audio", async () => {
     expect(readWavInfo(wavBytes({ pcm: false }))).toBeNull();
     expect(readWavInfo(wavBytes().slice(0, 20))).toBeNull();

@@ -74,6 +74,7 @@ export function buildCsp(apiOrigin: string): string {
     "img-src 'self' data: https://avatars.githubusercontent.com",
     "style-src 'self' 'unsafe-inline'",
     "font-src 'self' data:",
+    "media-src 'self' blob:",
     "base-uri 'none'",
     "form-action 'self'",
     "frame-ancestors 'none'",

@@ -6,17 +6,22 @@ import {dirname,extname,resolve,sep} from 'node:path';
 import {fileURLToPath} from 'node:url';
 const root=resolve(dirname(fileURLToPath(import.meta.url)),'../dist');
 const proof='/private/tmp/mergemate-voice-notes';await mkdir(proof,{recursive:true});
-const server=createServer(async(req,res)=>{try{let file=resolve(root,'.'+new URL(req.url,'http://localhost').pathname);if(!file.startsWith(root+sep)&&file!==root){res.writeHead(404).end();return;}let body;try{body=await readFile(file);}catch{file=resolve(root,'index.html');body=await readFile(file);}res.writeHead(200,{'content-type':{'.js':'application/javascript','.css':'text/css','.png':'image/png','.ttf':'font/ttf','.ico':'image/x-icon'}[extname(file)]??'text/html'}).end(body);}catch{res.writeHead(500).end();}});
+const server=createServer(async(req,res)=>{try{let file=resolve(root,'.'+new URL(req.url,'http://localhost').pathname);if(!file.startsWith(root+sep)&&file!==root){res.writeHead(404).end();return;}let body;try{body=await readFile(file);}catch{file=resolve(root,'index.html');body=await readFile(file);}res.writeHead(200,{'permissions-policy':'camera=(), microphone=(self), geolocation=()', 'content-security-policy':`default-src 'self';script-src 'self';connect-src 'self' https://api-dev.mergemate.dev;img-src 'self' data: https://avatars.githubusercontent.com;style-src 'self' 'unsafe-inline';font-src 'self' data:;media-src 'self' blob:;base-uri 'none';form-action 'self';frame-ancestors 'none'`,'content-type':{'.js':'application/javascript','.css':'text/css','.png':'image/png','.ttf':'font/ttf','.ico':'image/x-icon'}[extname(file)]??'text/html'}).end(body);}catch{res.writeHead(500).end();}});
 await new Promise(r=>server.listen(0,'127.0.0.1',r));const base=`http://127.0.0.1:${server.address().port}`;let browser;
 try{
- browser=await chromium.launch({headless:true,channel:'chrome',args:['--use-fake-device-for-media-stream','--use-fake-ui-for-media-stream','--mute-audio','--use-file-for-fake-audio-capture=/private/tmp/j006-fixture-mic.wav']});
+ browser=await chromium.launch({headless:true,channel:'chrome',args:['--mute-audio']});
  for(const width of [393,1440])for(const mode of ['on','off','no-consent','denied']){
   const context=await browser.newContext({viewport:{width,height:1050},serviceWorkers:'block'});let transcriptCalls=0,saveCalls=0,failProvider=true,failSave=true,notes=[];
   await context.addInitScript(denied=>{
    window.__voiceTracks=[];window.__voiceRequested=false;
    const Original=window.AudioContext;window.AudioContext=class extends Original{constructor(...args){super(...args);window.__voiceAudio=this;}};
-   const original=navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
-   navigator.mediaDevices.getUserMedia=async constraints=>{window.__voiceRequested=true;if(denied)throw new DOMException('Microphone access denied','NotAllowedError');const stream=await original(constraints);window.__voiceTracks.push(...stream.getTracks());return stream;};
+   navigator.mediaDevices.getUserMedia=async constraints=>{
+    window.__voiceRequested=true;if(denied)throw new DOMException('Microphone access denied','NotAllowedError');
+    // An oscillator-backed microphone fixture exercises actual Chrome PCM processing,
+    // without requesting this Mac's microphone or altering its system permissions.
+    const source=new Original({sampleRate:48000});await source.resume();const oscillator=source.createOscillator(),destination=source.createMediaStreamDestination();oscillator.frequency.value=440;oscillator.connect(destination);oscillator.start();
+    const stream=destination.stream;for(const track of stream.getTracks()){const stop=track.stop.bind(track);track.stop=()=>{stop();oscillator.stop();void source.close();};}window.__voiceTracks.push(...stream.getTracks());return stream;
+   };
   },mode==='denied');
   await context.grantPermissions(['microphone'],{origin:base});
   const page=await context.newPage();page.setDefaultTimeout(20000);const errors=[];page.on('pageerror',e=>errors.push(e.message));
@@ -51,7 +56,7 @@ try{
    await page.getByRole('button',{name:'Resume recording',exact:true}).click();await page.getByRole('button',{name:'Stop recording',exact:true}).click();await page.getByRole('button',{name:'Play recording',exact:true}).click();await page.getByRole('button',{name:'Stop playback',exact:true}).click();
    assert(await page.evaluate(()=>window.__voiceTracks.every(track=>track.readyState==='ended')));
    await page.getByRole('button',{name:'Transcribe recording',exact:true}).click();await page.getByText(/Could not transcribe this recording/).waitFor();assert.equal(saveCalls,0);await page.screenshot({path:`${proof}/transcription-error-${width}.png`,fullPage:true});
-   await page.getByRole('button',{name:'Transcribe recording',exact:true}).click();await page.getByRole('textbox',{name:'Private note text'}).fill('Reviewed and edited private note');assert.equal(saveCalls,0);
+   await page.getByRole('button',{name:'Transcribe recording',exact:true}).click();await page.waitForFunction(()=>document.querySelector('textarea[aria-label="Private note text"]')?.value==='Transcript to review before saving');await page.getByRole('textbox',{name:'Private note text'}).fill('Reviewed and edited private note');assert.equal(saveCalls,0);
    await page.getByRole('button',{name:'Save private note',exact:true}).click();await page.getByText(/Could not save this note/).waitFor();assert.equal(await page.getByRole('textbox',{name:'Private note text'}).inputValue(),'Reviewed and edited private note');
    await page.getByRole('button',{name:'Save private note',exact:true}).click();await page.getByText('Reviewed and edited private note',{exact:true}).waitFor();assert.equal(notes.length,1);assert.deepEqual(notes[0].context,{kind:'pr',repo:'fixture/repo',number:7});await page.screenshot({path:`${proof}/note-saved-${width}.png`,fullPage:true});
    await page.reload();await page.getByRole('button',{name:'Add Note',exact:true}).click();await page.getByText('Reviewed and edited private note',{exact:true}).waitFor();
@@ -60,5 +65,5 @@ try{
   }
   assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));assert.deepEqual(errors,[]);await page.screenshot({path:`${proof}/${mode}-${width}.png`,fullPage:true});await context.close();
  }
- console.log('PASS voice-notes browser: 8 phone/desktop scenarios; real Chrome fixture PCM microphone, pause/resume/playback/cleanup, provider and save failure/retry, edited confirmation, reopen, flag/consent/permission gates. External API/provider replies mocked.');
+ console.log('PASS voice-notes browser: 8 phone/desktop scenarios; real Chrome Web Audio processing with oscillator microphone fixture, pause/resume/playback/cleanup, provider and save failure/retry, edited confirmation, reopen, flag/consent/permission gates. External API/provider replies mocked.');
 }finally{await browser?.close();await new Promise(r=>server.close(r));}

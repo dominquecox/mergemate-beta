@@ -11,12 +11,12 @@ import {Text} from './Text';
 
 type Phase='idle'|'starting'|'recording'|'paused'|'ready'|'stopping'|'transcribing';
 /** Unsaved audio and transcript live only in this screen's memory. */
-export function VoiceNoteRecorder({onTranscript}:{onTranscript:(text:string)=>void}){
+export function VoiceNoteRecorder({onTranscript,onBusyChange}:{onTranscript:(text:string)=>void;onBusyChange:(busy:boolean)=>void}){
  const {colors,typography}=useTheme();
  const [seconds,setSeconds]=useState(0);
  const [phase,setPhase]=useState<Phase>('idle'),[error,setError]=useState<string|null>(null);
  const capture=useRef<VoiceCapture|null>(null),preview=useRef<VoicePreview|null>(null),bytes=useRef<Uint8Array|null>(null),controller=useRef<AbortController|null>(null),generation=useRef(0);
- const phaseRef=useRef<Phase>('idle');const set=(value:Phase)=>{phaseRef.current=value;setPhase(value);};
+ const phaseRef=useRef<Phase>('idle');const set=(value:Phase)=>{phaseRef.current=value;onBusyChange(value!=='idle');setPhase(value);};
  const dispose=useCallback(async()=>{
   generation.current++;controller.current?.abort();controller.current=null;
   const active=capture.current,playback=preview.current;capture.current=null;preview.current=null;bytes.current?.fill(0);bytes.current=null;
@@ -24,6 +24,7 @@ export function VoiceNoteRecorder({onTranscript}:{onTranscript:(text:string)=>vo
   if(outcomes.some(result=>result.status==='rejected'))throw new Error('Audio cleanup failed. Close the app and clear its local data before recording again.');
  },[]);
  const cancel=useCallback(async()=>{try{await dispose();set('idle');}catch{set('idle');setError('Audio cleanup failed. Close the app and clear its local data before recording again.');}},[dispose]);
+ useEffect(()=>()=>onBusyChange(false),[onBusyChange]);
  useFocusEffect(useCallback(()=>()=>{void dispose().catch(()=>{});},[dispose]));
  useEffect(()=>{
   const stop=()=>{void cancel();};

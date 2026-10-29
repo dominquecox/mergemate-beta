@@ -1232,6 +1232,7 @@ export const readWavInfo = (bytes: Uint8Array): WavInfo | null => {
       const size = view.getUint32(offset + 4, true);
       if(offset+8+size>bytes.length)return null;
       if (id === "fmt " && size >= 16) {
+        if(info!==null)return null;
         pcm = view.getUint16(offset + 8, true) === 1;
         if(view.getUint32(offset+16,true)!==view.getUint32(offset+12,true)*view.getUint16(offset+10,true)*view.getUint16(offset+22,true)/8 || view.getUint16(offset+20,true)!==view.getUint16(offset+10,true)*view.getUint16(offset+22,true)/8)return null;
         info = {
@@ -1240,6 +1241,7 @@ export const readWavInfo = (bytes: Uint8Array): WavInfo | null => {
           bitsPerSample: view.getUint16(offset + 22, true),
         };
       } else if (id === "data") {
+        if(offset+8+size!==bytes.length)return null;
         dataSize = size;
         break;
       }

@@ -15,7 +15,7 @@ export async function startVoiceCapture(onLimit:()=>void,onProgress?:(seconds:nu
    const full=recording.add(event.inputBuffer.getChannelData(0),event.inputBuffer.sampleRate,1);onProgress?.(recording.seconds);if(full){limited=true;onLimit();}
   };
   source.connect(processor);processor.connect(context.destination);
-  const close=async()=>{if(closed)return;closed=true;processor.onaudioprocess=null;processor.disconnect();source.disconnect();for(const track of stream.getTracks())track.stop();await context?.close();};
+  const close=async()=>{if(closed)return;closed=true;processor.onaudioprocess=null;let failed=false;for(const cleanup of [()=>processor.disconnect(),()=>source.disconnect(),...stream.getTracks().map(track=>()=>track.stop())])try{cleanup();}catch{failed=true;}try{await context?.close();}catch{failed=true;}if(failed)throw new Error('Audio cleanup failed. Close this tab before recording again.');};
   return {pause(){recording.paused=true;},resume(){recording.paused=false;},async stop(){await close();try{return recording.wav();}finally{recording.clear();}},async dispose(){await close();recording.clear();}};
  }catch(error){for(const track of stream.getTracks())track.stop();await context?.close().catch(()=>{});throw error;}
 }
