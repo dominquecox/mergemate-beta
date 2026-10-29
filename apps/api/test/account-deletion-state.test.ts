@@ -21,7 +21,7 @@ describe('account deletion fencing',()=>{
  });
  it('still charges blocked private calls while permitting rate-limited deletion recovery',async()=>{
   const ctx=testContext(),s=await signIn(ctx);await claimDeletion(ctx.env.DB,s.userId,ctx.time.now());ctx.env.SESSION_RATE_LIMITER=fakeLimiter(1);const call=appFor(ctx);
-  expect((await call('/v1/settings',{headers:s.headers})).status).toBe(403);expect((await call('/v1/settings',{headers:s.headers})).status).toBe(429);expect((await call('/v1/me',{headers:s.headers})).status).toBe(200);
+  expect((await call('/v1/settings',{headers:s.headers})).status).toBe(403);expect((await call('/v1/settings',{headers:s.headers})).status).toBe(429);await ctx.db.prepare("UPDATE users SET status='suspended' WHERE id=?").bind(s.userId).run();expect((await call('/v1/me',{headers:s.headers})).status).toBe(200);
  });
  it('retains pending jobs and only expires completed tombstones after seven days',async()=>{
   const ctx=testContext(),s=await signIn(ctx);await claimDeletion(ctx.env.DB,s.userId,ctx.time.now());await purgeDeletionTombstones(ctx.env.DB,new Date(ctx.time.now().getTime()+8*24*60*60_000));expect(await deletionPending(ctx.env.DB,s.userId)).toBe(true);

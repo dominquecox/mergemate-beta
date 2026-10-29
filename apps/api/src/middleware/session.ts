@@ -100,7 +100,7 @@ export const authenticate = (): MiddlewareHandler<AppEnv> => async (c, next) => 
   ) {
     throw new ApiError("forbidden", "Not available in the demo.");
   }
-  if (!logoutCapability && !accountRemoval && !session.demo && session.userStatus !== "active") {
+  if (!logoutCapability && !accountRemoval && !(session.deletionPending && deletionRecovery) && !session.demo && session.userStatus !== "active") {
     throw new ApiError("forbidden", "This account is suspended.");
   }
 
