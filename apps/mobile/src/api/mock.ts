@@ -39,6 +39,10 @@ export class MockApiClient implements ApiClient {
     return {items: all.slice(start,start+25), nextCursor: start+25 < all.length ? String(start+25) : null};
   }
 
+  async transcribeVoice():Promise<string>{throw new ApiClientError('forbidden','Recording is unavailable in demo mode.');}
+  async getPrivateNotes():Promise<import('@mergemate/contracts').PrivateNote[]>{return [];}
+  async savePrivateNote():Promise<import('@mergemate/contracts').PrivateNote>{throw new ApiClientError('forbidden','Private notes are unavailable in demo mode.');}
+  async removePrivateNote():Promise<void>{throw new ApiClientError('forbidden','Private notes are unavailable in demo mode.');}
   public isMock = true;
 
   private user: User = {

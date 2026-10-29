@@ -3,6 +3,7 @@ import {notifySessionChange,hasPendingLogout,setPendingLogout} from "../auth/ses
 import { z } from "zod";
 import { RequestCache } from "./request-cache";
 import {
+  PrivateNotes,PrivateNote,VoiceNoteResult,SavePrivateNote,type NoteContext,
   AuthCallbackResponse,
   AuthStartResponse,
   BillingLink,
@@ -94,11 +95,13 @@ export interface HttpApiClientOptions {
 }
 
 interface RequestOptions<T> {
+  signal?:AbortSignal;
   credentials?: "omit";
   method?: "GET" | "POST" | "PUT" | "DELETE";
   path: string;
   body?: unknown;
   form?: FormData;
+  audio?:ArrayBuffer;
   /** Parse the JSON body with this schema. Leave out for empty (204) answers. */
   schema?: z.ZodType<T>;
   /** Public endpoints skip the session. Default true. */
@@ -228,7 +231,7 @@ export class HttpApiClient implements ApiClient {
       if(authed && !opts.allowStaleSession && generation!==this.sessionGeneration)throw new ApiClientError("unauthorized",messageForCode("unauthorized"));
       const headers: Record<string, string> = { accept: "application/json" };
       let body: BodyInit | undefined;
-      if (opts.form) {
+      if(opts.audio){headers["content-type"]="audio/wav";body=opts.audio;}else if (opts.form) {
         body = opts.form;
       } else if (opts.body !== undefined) {
         headers["content-type"] = "application/json";
@@ -260,6 +263,7 @@ export class HttpApiClient implements ApiClient {
         headers,
         body,
         // Web: the browser sends the HttpOnly session cookie. Native never uses cookies.
+        ...(opts.signal?{signal:opts.signal}:{}),
         credentials: opts.credentials ?? (this.web ? "include" : "omit"),
       }, opts.timeoutMs);};
       const res=authed && !opts.sessionMutation && !opts.isRefresh ? await this.withCookieLock("shared",deliver) : await deliver();
@@ -301,15 +305,20 @@ export class HttpApiClient implements ApiClient {
   private async fetchWithTimeout(url: string, init: RequestInit, timeoutMs?: number): Promise<Response> {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs ?? this.timeoutMs);
+    // React Native's installed abort-controller has no AbortSignal.any().
+    const cancel=()=>controller.abort();
+    if(init.signal?.aborted)cancel();else init.signal?.addEventListener('abort',cancel,{once:true});
     try {
       return await this.fetchImpl(url, { ...init, signal: controller.signal });
     } catch (e) {
+      if(init.signal?.aborted)throw new ApiClientError("cancelled",messageForCode("cancelled"));
       if (controller.signal.aborted) {
         throw new ApiClientError("timeout", messageForCode("timeout"));
       }
       throw new ApiClientError("network", messageForCode("network"));
     } finally {
       clearTimeout(timer);
+      init.signal?.removeEventListener('abort',cancel);
     }
   }
 
@@ -646,6 +655,16 @@ export class HttpApiClient implements ApiClient {
   // ---------------------------------------------------------------------------------------------
   // Highlight
   // ---------------------------------------------------------------------------------------------
+
+  async transcribeVoice(bytes:Uint8Array,signal?:AbortSignal):Promise<string>{
+    return (await this.request({method:'POST',path:'/voice-notes',audio:new Uint8Array(bytes).buffer,schema:VoiceNoteResult,timeoutMs:AI_TIMEOUT_MS,...(signal?{signal}:{})})).text;
+  }
+  async getPrivateNotes(context:NoteContext){return (await this.request({path:`/notes?context=${enc(JSON.stringify(context))}`,schema:PrivateNotes})).items;}
+  async savePrivateNote(input:import('@mergemate/contracts').SavePrivateNote){
+    const body=SavePrivateNote.parse(input);
+    return this.actions.run(`note:${body.id}`,()=>this.request({method:'POST',path:'/notes',body,schema:PrivateNote}));
+  }
+  async removePrivateNote(id:string,context:NoteContext){await this.request({method:'DELETE',path:`/notes/${enc(id)}?context=${enc(JSON.stringify(context))}`});}
 
   async analyzeHighlight(imageUri: string, note?: string, mimeType?: string): Promise<HighlightResult> {
     const form = new FormData();

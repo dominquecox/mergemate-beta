@@ -1,7 +1,7 @@
 import { ApiError } from "../errors";
 
 /** Bound bytes actually read, regardless of absent or misleading Content-Length. */
-export async function readBoundedBody(request: Request, maxBytes: number): Promise<ArrayBuffer> {
+export async function readBoundedBody(request: Pick<Request,"headers"|"body">, maxBytes: number): Promise<ArrayBuffer> {
   const tooLarge = () => new ApiError("payload_too_large", "Payload is too large.");
   if (Number(request.headers.get("content-length") ?? 0) > maxBytes) {
     await request.body?.cancel().catch(() => {});

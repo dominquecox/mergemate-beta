@@ -1,3 +1,4 @@
+import {PrivateNotes} from "../src/components/PrivateNotes";
 import {useFeatureFlags} from "../src/hooks/useFeatureFlags";
 import { Section } from "../src/components/ScreenDesign";
 import React, { useState } from "react";
@@ -221,6 +222,7 @@ export default function HighlightScreen() {
             onAction={pickFromLibrary}
           />
         )}
+        <PrivateNotes context={{kind:"highlight"}}/>
       </ScrollView>
     </KeyboardAvoidingView>
   );

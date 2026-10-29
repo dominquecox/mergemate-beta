@@ -57,7 +57,7 @@ const STATIC_HEADERS: Record<string, string> = {
   "Strict-Transport-Security": HSTS,
   "X-Content-Type-Options": "nosniff",
   "Referrer-Policy": "strict-origin-when-cross-origin",
-  "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
+  "Permissions-Policy": "camera=(), microphone=(self), geolocation=()",
 };
 
 /**
@@ -74,6 +74,7 @@ export function buildCsp(apiOrigin: string): string {
     "img-src 'self' data: https://avatars.githubusercontent.com",
     "style-src 'self' 'unsafe-inline'",
     "font-src 'self' data:",
+    "media-src 'self' blob:",
     "base-uri 'none'",
     "form-action 'self'",
     "frame-ancestors 'none'",

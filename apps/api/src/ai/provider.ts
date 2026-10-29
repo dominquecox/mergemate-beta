@@ -1,3 +1,4 @@
+import {readBoundedBody} from "../lib/bounded-body";
 import { recordAiCall, type AiOutcome } from "./metrics";
 import type { AiBinding, Env } from "../env";
 import { ApiError, ConfigError } from "../errors";
@@ -235,6 +236,7 @@ export const transcribeWithMeta = async (args: {
   contentType: string;
   fileName: string;
   audioSeconds?: number;
+  signal?:AbortSignal;
 }): Promise<{ text: string }> => {
   const { env, fetchImpl, audio, contentType, fileName } = args;
   const apiKey = requireApiKey(env);
@@ -246,13 +248,14 @@ export const transcribeWithMeta = async (args: {
   let outcome:AiOutcome="upstream_error";
   try {
     for (let attempt = 0; attempt < 2; attempt += 1) {
+      if(args.signal?.aborted)throw transcribeUnavailable();
       let res: Response;
       try {
         res = await fetchImpl(`${baseUrl}/asr/transcribe`, {
           method: "POST",
           headers: { authorization: `Bearer ${apiKey}` },
           body: form,
-          signal: AbortSignal.timeout(TRANSCRIBE_TIMEOUT_MS),
+          signal: args.signal ? AbortSignal.any([args.signal,AbortSignal.timeout(TRANSCRIBE_TIMEOUT_MS)]) : AbortSignal.timeout(TRANSCRIBE_TIMEOUT_MS),
           // Workers reject redirect: "error"; "manual" returns a 3xx as-is and it is refused below.
           redirect: "manual",
         });
@@ -270,12 +273,12 @@ export const transcribeWithMeta = async (args: {
       if (res.status >= 400) {outcome="invalid_output";throw transcribeRejected();}
       let data: unknown;
       try {
-        data = (await res.json()) as unknown;
+        data = JSON.parse(new TextDecoder().decode(await readBoundedBody(res,64*1024))) as unknown;
       } catch {
         throw transcribeUnavailable();
       }
       const text = (data as { text?: unknown })?.text;
-      if (typeof text !== "string" || !text.trim()) {outcome="invalid_output";throw transcribeRejected();}
+      if (typeof text !== "string" || !text.trim() || text.length>8000) {outcome="invalid_output";throw transcribeRejected();}
       outcome="ok";
       return { text: text.trim() };
     }

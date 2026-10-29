@@ -194,11 +194,11 @@ describe("voice-notes transcription", () => {
     expect(metrics.points[0]?.doubles?.slice(3)).toEqual([1.55,1,1]);
     const encoded=JSON.stringify(metrics.points);for(const marker of [transcript,'PRIVATE_FILENAME',userId,TEST_API_KEY,'RIFF'])expect(encoded).not.toContain(marker);
   });
-  it('records unknown duration explicitly and never invents seconds for compressed formats',async()=>{
+  it('rejects compressed formats whose duration cannot be verified before provider processing',async()=>{
     const metrics=fakeDataset();const ctx=testContext({...validModelEnv(),AI_METRICS:metrics});flagOn(ctx);
     ctx.net.on('POST','https://api.meta.ai/v1/asr/transcribe',()=>json({text:'fixture'}));const call=appFor(ctx);const {headers}=await signIn(ctx,'ios');await grant(call,headers);
-    expect((await call('/v1/voice-notes',{method:'POST',headers,body:audioForm(audioFile(m4aBytes()))})).status).toBe(200);
-    expect(metrics.points[0]?.doubles?.slice(3)).toEqual([0,0,0]);
+    expect((await call('/v1/voice-notes',{method:'POST',headers,body:audioForm(audioFile(m4aBytes()))})).status).toBe(422);
+    expect(metrics.points).toHaveLength(0);
   });
   it('records one failure including retry latency, but no metric for validation before an upstream call',async()=>{
     const metrics=fakeDataset();const ctx=testContext({...validModelEnv(),AI_METRICS:metrics});flagOn(ctx);
@@ -232,7 +232,7 @@ describe("voice-notes transcription", () => {
     expect(res.headers.get("Cache-Control")).toBe("no-store");
   });
 
-  it("forwards m4a, aac and webm by magic bytes", async () => {
+  it("rejects unverified m4a, aac and webm signatures", async () => {
     for (const bytes of [m4aBytes(), aacBytes(), webmBytes()]) {
       const ctx = successContext("noted");
       const call = appFor(ctx);
@@ -243,7 +243,7 @@ describe("voice-notes transcription", () => {
         headers,
         body: audioForm(audioFile(bytes, "note.audio")),
       });
-      expect(res.status).toBe(200);
+      expect(res.status).toBe(422);
     }
   });
 
@@ -301,6 +301,11 @@ describe("readWavInfo", () => {
     expect(info?.durationSeconds).toBeCloseTo(1, 5);
   });
 
+  it("rejects forged data lengths, trailing content and inconsistent byte rates",()=>{
+    const claimed=wavBytes({dataSize:64,claimedDataSize:32000});expect(readWavInfo(claimed)).toBeNull();
+    const mismatched=wavBytes();new DataView(mismatched.buffer).setUint32(28,1,true);expect(readWavInfo(mismatched)).toBeNull();
+    const trailing=new Uint8Array(wavBytes().length+8);trailing.set(wavBytes());new DataView(trailing.buffer).setUint32(4,trailing.length-8,true);expect(readWavInfo(trailing)).toBeNull();
+  });
   it("returns null for non-PCM or truncated audio", async () => {
     expect(readWavInfo(wavBytes({ pcm: false }))).toBeNull();
     expect(readWavInfo(wavBytes().slice(0, 20))).toBeNull();
@@ -309,6 +314,13 @@ describe("readWavInfo", () => {
 });
 
 describe("transcribeWithMeta", () => {
+  it("bounds provider output before JSON parsing",async()=>{
+    await expect(transcribeWithMeta({env:validModelEnv(),fetchImpl:async()=>new Response("x".repeat(65537)),audio:wavBytes(),contentType:"audio/wav",fileName:"note.wav"})).rejects.toMatchObject({code:"upstream_unavailable"});
+  });
+  it("makes no provider call after request cancellation",async()=>{
+    const abort=new AbortController();abort.abort();let calls=0;
+    await expect(transcribeWithMeta({env:validModelEnv(),fetchImpl:async()=>{calls++;return json({text:"fixture"});},audio:wavBytes(),contentType:"audio/wav",fileName:"note.wav",signal:abort.signal})).rejects.toMatchObject({code:"upstream_unavailable"});expect(calls).toBe(0);
+  });
   it("refuses a redirect instead of following it", async () => {
     const fetchImpl = (async () => new Response(null, { status: 302, headers: { location: "https://elsewhere.example" } })) as typeof fetch;
     await expect(

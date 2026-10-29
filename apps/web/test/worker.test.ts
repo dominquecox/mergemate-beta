@@ -39,7 +39,8 @@ function expectSecurityHeaders(res: Response, apiOrigin = "https://api-dev.merge
   expect(res.headers.get("Strict-Transport-Security")).toBe("max-age=31536000; includeSubDomains");
   expect(res.headers.get("X-Content-Type-Options")).toBe("nosniff");
   expect(res.headers.get("Referrer-Policy")).toBe("strict-origin-when-cross-origin");
-  expect(res.headers.get("Permissions-Policy")).toBe("camera=(), microphone=(), geolocation=()");
+  expect(res.headers.get("Content-Security-Policy")).toContain("media-src 'self' blob:");
+  expect(res.headers.get("Permissions-Policy")).toBe("camera=(), microphone=(self), geolocation=()");
   expect(res.headers.get("Content-Security-Policy")).toBe(buildCsp(apiOrigin));
 }
 

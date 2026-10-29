@@ -1215,6 +1215,7 @@ export const readWavInfo = (bytes: Uint8Array): WavInfo | null => {
   try {
     if (detectVoiceAudioType(bytes) !== "wav" || bytes.length < 44) return null;
     const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+    if(view.getUint32(4,true)+8!==bytes.length)return null;
     let offset = 12;
     let pcm = false;
     let info: Omit<WavInfo, "durationSeconds"> | null = null;
@@ -1222,20 +1223,24 @@ export const readWavInfo = (bytes: Uint8Array): WavInfo | null => {
     while (offset + 8 <= bytes.length) {
       const id = String.fromCharCode(bytes[offset] ?? 0, bytes[offset + 1] ?? 0, bytes[offset + 2] ?? 0, bytes[offset + 3] ?? 0);
       const size = view.getUint32(offset + 4, true);
+      if(offset+8+size>bytes.length)return null;
       if (id === "fmt " && size >= 16) {
+        if(info!==null)return null;
         pcm = view.getUint16(offset + 8, true) === 1;
+        if(view.getUint32(offset+16,true)!==view.getUint32(offset+12,true)*view.getUint16(offset+10,true)*view.getUint16(offset+22,true)/8 || view.getUint16(offset+20,true)!==view.getUint16(offset+10,true)*view.getUint16(offset+22,true)/8)return null;
         info = {
           sampleRate: view.getUint32(offset + 12, true),
           channels: view.getUint16(offset + 10, true),
           bitsPerSample: view.getUint16(offset + 22, true),
         };
       } else if (id === "data") {
+        if(offset+8+size!==bytes.length)return null;
         dataSize = size;
         break;
       }
       offset += 8 + size + (size % 2);
     }
-    if (!pcm || !info || dataSize === null) return null;
+    if (!pcm || !info || dataSize === null || dataSize===0 || dataSize%2!==0) return null;
     const byteRate = (info.sampleRate * info.channels * info.bitsPerSample) / 8;
     if (!Number.isFinite(byteRate) || byteRate <= 0) return null;
     return { ...info, durationSeconds: dataSize / byteRate };
@@ -1288,11 +1293,13 @@ export const transcribeVoiceNote = async (args: {
   audio: Uint8Array;
   audioType: VoiceAudioType;
   requestId: string;
+  signal?:AbortSignal;
 }): Promise<VoiceNoteRunResult> => {
   const { db, fetchImpl, limits, env, session, audio, audioType, requestId } = args;
   const stores = storesFor(db);
   const userId = userKey(session);
   const { limit } = await gateVoiceAction(stores, limits, session, env);
+  if(audioType!=="wav")throw new ApiError("validation_failed","Send a WAV recording from MergeMate. Compressed audio cannot be safely duration-checked here.");
   let audioSeconds:number|undefined;
   if (audioType === "wav") {
     const info = readWavInfo(audio);
@@ -1315,6 +1322,7 @@ export const transcribeVoiceNote = async (args: {
       contentType,
       fileName: `note.${extension}`,
       ...(audioSeconds === undefined ? {} : {audioSeconds}),
+      ...(args.signal?{signal:args.signal}:{}),
     });
     const result: VoiceNoteResult = { text, requestId };
     return result;

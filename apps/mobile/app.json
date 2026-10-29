@@ -85,6 +85,14 @@
           "photosPermission": "MergeMate reads the screenshot you choose to explain it. It is not stored.",
           "cameraPermission": "MergeMate uses the camera only when you take a photo to explain."
         }
+      ],
+      [
+        "expo-audio",
+        {
+          "microphonePermission": "MergeMate uses your microphone only when you record a private voice note.",
+          "enableBackgroundRecording": false,
+          "enableBackgroundPlayback": false
+        }
       ]
     ],
     "experiments": {
