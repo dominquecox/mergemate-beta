@@ -300,11 +300,13 @@ export class HttpApiClient implements ApiClient {
   private async fetchWithTimeout(url: string, init: RequestInit, timeoutMs?: number): Promise<Response> {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs ?? this.timeoutMs);
+    // React Native's installed abort-controller has no AbortSignal.any().
     const cancel=()=>controller.abort();
     if(init.signal?.aborted)cancel();else init.signal?.addEventListener('abort',cancel,{once:true});
     try {
       return await this.fetchImpl(url, { ...init, signal: controller.signal });
     } catch (e) {
+      if(init.signal?.aborted)throw new ApiClientError("cancelled",messageForCode("cancelled"));
       if (controller.signal.aborted) {
         throw new ApiClientError("timeout", messageForCode("timeout"));
       }
