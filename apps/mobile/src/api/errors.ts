@@ -3,6 +3,7 @@ import type { ErrorCode } from "@mergemate/contracts";
 /** API error codes plus the failures that happen before or after the API answers. */
 export type ClientErrorCode =
   | ErrorCode
+  | "cancelled"
   | "network"
   | "timeout"
   | "parse_failed"
@@ -51,6 +52,7 @@ export function formatWait(seconds: number): string {
 }
 
 const FIXED_COPY: Record<ClientErrorCode, string> = {
+  cancelled: "Request cancelled.",
   unauthorized: "Your session has ended. Sign in again to continue.",
   forbidden: "That isn't available for this account.",
   csrf_invalid: "Your session needs a quick refresh. Try again.",

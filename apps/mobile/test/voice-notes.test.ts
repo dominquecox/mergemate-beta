@@ -1,4 +1,4 @@
-import {describe,it,expect} from 'vitest';
+import {describe,it,expect,vi} from 'vitest';
 import {PcmRecording,VOICE_RATE} from '../src/voice/pcm';
 import {makeClient,jsonResponse,NOW} from './helpers';
 const context={kind:'highlight'} as const;
@@ -21,7 +21,11 @@ describe.each(['web','native'] as const)('voice and private notes over %s transp
  it('uploads actual WAV bytes with credentials and no multipart native Blob assumption',async()=>{
   const controller=new AbortController();const {client,calls}=makeClient(req=>req.path==='/auth/csrf'?jsonResponse({csrfToken:'fixture-csrf'}):jsonResponse({text:'provider transcript',requestId:'fixture'}),{platform,token:'fixture-session'});
   expect(await client.transcribeVoice(new Uint8Array([82,73,70,70]),controller.signal)).toBe('provider transcript');const call=calls.at(-1);expect(call?.headers['content-type']).toBe('audio/wav');expect(call?.rawBody).toBeInstanceOf(ArrayBuffer);expect(Array.from(new Uint8Array(call?.rawBody instanceof ArrayBuffer?call.rawBody:new ArrayBuffer(0)))).toEqual([82,73,70,70]);
-  controller.abort();expect(call?.signal?.aborted).toBe(true);expect(call?.credentials).toBe(platform==='web'?'include':'omit');
+  expect(call?.signal).toBeDefined();expect(call?.credentials).toBe(platform==='web'?'include':'omit');
+ });
+ it('cancels an in-flight upload without relying on the unavailable native AbortSignal.any',async()=>{
+  const controller=new AbortController();const {client,calls}=makeClient(req=>req.path==='/auth/csrf'?jsonResponse({csrfToken:'fixture-csrf'}):new Promise<Response>((_resolve,reject)=>{req.signal?.addEventListener('abort',()=>reject(new DOMException('Cancelled','AbortError')));}),{platform,token:'fixture-session'});
+  const pending=client.transcribeVoice(new Uint8Array([82,73,70,70]),controller.signal);const rejected=expect(pending).rejects.toMatchObject({code:'cancelled'});await vi.waitFor(()=>expect(calls.some(call=>call.path==='/voice-notes')).toBe(true));controller.abort();await rejected;expect(calls.at(-1)?.signal?.aborted).toBe(true);
  });
  it('confirms only edited text, preserves idempotency key and loads its exact private context',async()=>{
   const {client,calls}=makeClient(req=>req.path==='/auth/csrf'?jsonResponse({csrfToken:'fixture-csrf'}):req.path.startsWith('/notes?')?jsonResponse({items:[note]}):jsonResponse(note),{platform,token:'fixture-session'});

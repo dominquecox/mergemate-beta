@@ -10,11 +10,11 @@ No recording or transcript is automatically saved. Server audio stays in bounded
 
 Capture normalizes hardware input to16kHz mono16-bit PCM WAV, capped at120 seconds (3,840,044 bytes). The server verifies actual RIFF/chunk/data lengths, PCM encoding, channels/rate, byte rate/block alignment and duration, with a5MiB request cap. Provider response bodies are bounded to64KiB before JSON parsing. M4A/AAC/WebM signatures previously forwarded with unknown duration are now rejected. Both production recorder adapters produce validated WAV. Meta's existing transport/model is unchanged. One successful transcription reserves one existing AI action; provider failure releases it. Save/reopen does not call a model. Metrics exclude audio, transcript, filenames, note content and identity.
 
-SDK58-compatible expo-audio supplies native PCM and expo-file-system supplies temporary playback. App config explains microphone permission and disables background recording/playback. Web delivery permits only same-origin microphone access and local blob audio playback; camera/geolocation retain their prior denial.
+Client cancellation uses the installed React Native abort-controller API, without assuming AbortSignal.any exists on native. SDK58-compatible expo-audio supplies native PCM and expo-file-system supplies temporary playback. App config explains microphone permission and disables background recording/playback. Web delivery permits only same-origin microphone access and local blob audio playback; camera/geolocation retain their prior denial.
 
 ## Reproducible verification
 
-Starting development6c13ab19e5eb037fb53c9199afd94d3f6870b004:842 workspace tests/type/lint passed. Final source:865 tests (API520/mobile300/web23/contracts22), typecheck/lint; site18 checks. No tests skipped/deleted or configurations weakened. Existing compressed-format regression tests now assert refusal instead of accepting signature-only fixtures.
+Starting development6c13ab19e5eb037fb53c9199afd94d3f6870b004:842 workspace tests/type/lint passed. Final source:867 tests (API520/mobile302/web23/contracts22), typecheck/lint; site18 checks. No tests skipped/deleted or configurations weakened. Existing compressed-format regression tests now assert refusal instead of accepting signature-only fixtures.
 
 ```sh
 npm ci --ignore-scripts
