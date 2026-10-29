@@ -26,6 +26,12 @@ describe('conditional Inbox operations',()=>{
   expect(await(await call('/v1/inbox/undo',{headers:session.headers})).json()).toEqual({itemId:id,receipt:done});
   await mutate(input('restore',done.operationId));expect(await(await call('/v1/inbox/undo',{headers:session.headers})).json()).toBeNull();
  });
+ it('keeps the actual last Undo for same-time items and does not move it on replay',async()=>{
+  const {ctx,session,call,mutate}=await setup();ctx.net.on('GET','https://api.github.com/repos/acme/api/pulls/8',()=>json({}));
+  const one=input('done');await mutate(one);const two=input('done');const otherId=notificationId('acme/api',8);await call(`/v1/notifications/${otherId}/state`,post(two,session.headers));await mutate(one);
+  expect(await(await call('/v1/inbox/undo',{headers:session.headers})).json()).toMatchObject({itemId:otherId,receipt:{operationId:two.operationId}});
+  await call(`/v1/notifications/${otherId}/state`,post(input('restore',two.operationId),session.headers));expect(await(await call('/v1/inbox/undo',{headers:session.headers})).json()).toBeNull();
+ });
  it('does not let a late Undo overwrite a newer device action',async()=>{
   const {mutate,list}=await setup();const first=InboxReceipt.parse(await(await mutate(input('done'))).json());const snoozed=InboxReceipt.parse(await(await mutate(input('snooze',first.operationId))).json());
   expect((await mutate(input('restore',first.operationId))).status).toBe(409);expect((await list()).items).toEqual([]);
