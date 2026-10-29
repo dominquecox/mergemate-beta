@@ -137,7 +137,7 @@ describe("CSP", () => {
     expect(directive("frame-ancestors")).toBe("frame-ancestors 'none'");
     expect(directive("base-uri")).toBe("base-uri 'none'");
     expect(directive("form-action")).toBe("form-action 'self'");
-    expect(directive("img-src")).toBe("img-src 'self' data: https://avatars.githubusercontent.com");
+    expect(directive("img-src")).toBe("img-src 'self' data: blob: https://avatars.githubusercontent.com");
     expect(directive("style-src")).toBe("style-src 'self' 'unsafe-inline'");
     expect(directive("font-src")).toBe("font-src 'self' data:");
     expect(csp).not.toContain("*");
@@ -149,7 +149,7 @@ describe("CSP", () => {
     ["http://localhost:8787"],
   ])("limits connect-src to self and %s", async (origin) => {
     const res = await get("/", env(origin));
-    expect(res.headers.get("Content-Security-Policy")).toContain(`connect-src 'self' ${origin} https://cloudflareinsights.com;`);
+    expect(res.headers.get("Content-Security-Policy")).toContain(`connect-src 'self' blob: ${origin} https://cloudflareinsights.com;`);
     expectSecurityHeaders(res, origin);
   });
 

@@ -41,7 +41,7 @@ export function inspectImage(bytes:Uint8Array):ImageShape{
  }else if(text(bytes,0,4)==='RIFF'&&text(bytes,8,4)==='WEBP'){
   if(v.getUint32(4,true)+8!==bytes.length)throw bad();let at=12,width=0,height=0,images=0,chunks=0,canvasWidth=0,canvasHeight=0;
   while(at+8<=bytes.length){if(++chunks>4096)throw bad();const kind=text(bytes,at,4),size=v.getUint32(at+4,true),data=at+8,next=data+size+(size%2);if(next>bytes.length)throw bad();
-   if(kind==='VP8X'){if(size!==10 || ((bytes[data]??0)&2))throw bad();canvasWidth=1+(bytes[data+4]??0)+((bytes[data+5]??0)<<8)+((bytes[data+6]??0)<<16);canvasHeight=1+(bytes[data+7]??0)+((bytes[data+8]??0)<<8)+((bytes[data+9]??0)<<16);}
+   if(kind==='VP8X'){if(canvasWidth!==0 || size!==10 || ((bytes[data]??0)&2))throw bad();canvasWidth=1+(bytes[data+4]??0)+((bytes[data+5]??0)<<8)+((bytes[data+6]??0)<<16);canvasHeight=1+(bytes[data+7]??0)+((bytes[data+8]??0)<<8)+((bytes[data+9]??0)<<16);}
    else if(kind==='VP8 '){if(size<10||text(bytes,data+3,3)!=='\x9d\x01\x2a'||((bytes[data]??0)&1))throw bad();width=v.getUint16(data+6,true)&16383;height=v.getUint16(data+8,true)&16383;images++;}
    else if(kind==='VP8L'){if(size<5||bytes[data]!==47||((bytes[data+4]??0)&224))throw bad();const bits=v.getUint32(data+1,true);width=(bits&16383)+1;height=((bits>>>14)&16383)+1;images++;}
    else if(!['ALPH','ICCP','EXIF','XMP '].includes(kind))throw bad();

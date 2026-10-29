@@ -93,7 +93,7 @@ export default function HighlightScreen() {
             Meta AI Vision Analysis
           </Text>
           <Text style={[typography.body, { color: colors.textSecondary, marginTop: 4 }]}>
-            Capture or upload a PR screenshot or UI diff. Get an explanation and suggested areas to inspect. Region boxes are AI estimates, not segmentation or a measured accessibility audit.
+            Capture or upload a PR screenshot or UI diff. Get an explanation and suggested areas to inspect. Boxes are approximate AI suggestions, not precise measurements.
           </Text>
 
           <TouchableOpacity
@@ -279,5 +279,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
+    flexWrap:"wrap",
+    gap:8,
   },
 });
