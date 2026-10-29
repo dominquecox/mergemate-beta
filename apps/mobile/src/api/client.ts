@@ -74,7 +74,7 @@ export interface ApiClient {
   setTriageChoice(prRef: string, lane: TriageLane): Promise<void>;
 
   // Highlight
-  analyzeHighlight(imageUri: string, note?: string, mimeType?: string): Promise<HighlightResult>;
+  analyzeHighlight(imageUri: string, note?: string, mimeType?: string,signal?:AbortSignal): Promise<HighlightResult>;
 
   // Settings
   getSettings(): Promise<UserSettings>;

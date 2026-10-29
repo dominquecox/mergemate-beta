@@ -1,3 +1,4 @@
+import {readBoundedBody} from "../lib/bounded-body";
 import {normalizeHighlight} from "../images/normalize";
 import {
   HighlightResult,
@@ -556,7 +557,8 @@ export const createFetchTransport = (fetchImpl: typeof fetch = fetch): ModelTran
       store: false,
     });
     const deadline = Date.now() + UPSTREAM_DEADLINE_MS;
-    const signal = AbortSignal.timeout(UPSTREAM_DEADLINE_MS);
+    const timeoutSignal = AbortSignal.timeout(UPSTREAM_DEADLINE_MS);
+    const signal=request.signal?AbortSignal.any([request.signal,timeoutSignal]):timeoutSignal;
     for (let attempt = 0; attempt < 2; attempt += 1) {
       const res = await fetchImpl(`${config.baseUrl}/responses`, {
         method: "POST",
@@ -576,7 +578,7 @@ export const createFetchTransport = (fetchImpl: typeof fetch = fetch): ModelTran
         }
         throw new UpstreamStatusError(res.status);
       }
-      const data = (await res.json()) as ResponsesApiResponse;
+      const data = (request.image ? JSON.parse(new TextDecoder().decode(await readBoundedBody(res,256*1024))) : await res.json()) as ResponsesApiResponse;
       const text = responsesOutputText(data);
       if (!text.trim()) throw new Error(`empty upstream reply (status ${data.status ?? "unknown"})`);
       const { input_tokens: inputTokens, output_tokens: outputTokens } = data.usage ?? {};
@@ -1105,6 +1107,7 @@ export const analyzeHighlight = async (args: {
   contentType: HighlightContentType;
   note: string;
   requestId: string;
+  signal?:AbortSignal;
 }): Promise<HighlightRunResult> => {
   const { db, transport, ai, limits, env, session, image, note, requestId } = args;
   if(!env.IMAGES)throw new ApiError("upstream_unavailable","Screenshot processing is unavailable. Try again later.");
@@ -1124,6 +1127,7 @@ export const analyzeHighlight = async (args: {
           prompt: buildHighlightPrompt(note),
           maxOutputTokens: HIGHLIGHT_MAX_TOKENS,
           image: { dataUrl },
+          ...(args.signal?{signal:args.signal}:{}),
         },
         ModelHighlight,
       );

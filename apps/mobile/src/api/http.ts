@@ -93,6 +93,7 @@ export interface HttpApiClientOptions {
 }
 
 interface RequestOptions<T> {
+  signal?:AbortSignal;
   credentials?: "omit";
   method?: "GET" | "POST" | "PUT" | "DELETE";
   path: string;
@@ -257,6 +258,7 @@ export class HttpApiClient implements ApiClient {
         headers,
         body,
         // Web: the browser sends the HttpOnly session cookie. Native never uses cookies.
+        ...(opts.signal?{signal:opts.signal}:{}),
         credentials: opts.credentials ?? (this.web ? "include" : "omit"),
       }, opts.timeoutMs);};
       const res=authed && !opts.sessionMutation && !opts.isRefresh ? await this.withCookieLock("shared",deliver) : await deliver();
@@ -298,6 +300,8 @@ export class HttpApiClient implements ApiClient {
   private async fetchWithTimeout(url: string, init: RequestInit, timeoutMs?: number): Promise<Response> {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs ?? this.timeoutMs);
+    const cancel=()=>controller.abort();
+    if(init.signal?.aborted)cancel();else init.signal?.addEventListener('abort',cancel,{once:true});
     try {
       return await this.fetchImpl(url, { ...init, signal: controller.signal });
     } catch (e) {
@@ -307,6 +311,7 @@ export class HttpApiClient implements ApiClient {
       throw new ApiClientError("network", messageForCode("network"));
     } finally {
       clearTimeout(timer);
+      init.signal?.removeEventListener('abort',cancel);
     }
   }
 
@@ -639,14 +644,14 @@ export class HttpApiClient implements ApiClient {
   // Highlight
   // ---------------------------------------------------------------------------------------------
 
-  async analyzeHighlight(imageUri: string, note?: string, mimeType?: string): Promise<HighlightResult> {
+  async analyzeHighlight(imageUri: string, note?: string, mimeType?: string,signal?:AbortSignal): Promise<HighlightResult> {
     const form = new FormData();
     const type = mimeType ?? "image/jpeg";
     if (this.web) {
       // On the web the picked image is a blob or data URL the browser can read back.
       let blob: Blob;
       try {
-        blob = await (await this.fetchImpl(imageUri)).blob();
+        blob = await (await this.fetchImpl(imageUri,{...(signal?{signal}:{})})).blob();
       } catch {
         throw new ApiClientError("validation_failed", "We couldn't read that image. Pick it again.");
       }
@@ -664,6 +669,7 @@ export class HttpApiClient implements ApiClient {
       form,
       schema: HighlightResultSchema,
       timeoutMs: AI_TIMEOUT_MS,
+      ...(signal?{signal}:{}),
     });
     return mapHighlight(res);
   }

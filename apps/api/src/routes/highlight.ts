@@ -79,6 +79,7 @@ export const createHighlightRouter = (deps: HighlightRouterDeps = {}) => {
       contentType,
       note: typeof note === "string" ? note : "",
       requestId: c.get("requestId"),
+      signal:c.req.raw.signal,
     });
     return c.json(result.body, 200, actionHeaders(result));
   });
