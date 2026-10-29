@@ -8,7 +8,7 @@ export async function normalizeHighlight(images:ImagesBinding|undefined,bytes:Ui
  const shape=inspectImage(bytes);
  try{
   const info=await images.info(stream(bytes));
-  if(!('width' in info)||info.width!==shape.width||info.height!==shape.height)throw new ApiError('validation_failed','That image could not be decoded safely.');
+  if(!('width' in info)||info.format!==shape.type||info.width!==shape.width||info.height!==shape.height)throw new ApiError('validation_failed','That image could not be decoded safely.');
   const result=await images.input(stream(bytes)).transform({width:2048,height:2048,fit:'scale-down'}).output({format:'image/png',anim:false});
   const response=result.response();
   if(!response.ok||result.contentType()!=='image/png')throw new Error('Invalid normalized output');

@@ -1,3 +1,4 @@
+import {imagePng,fixtureImages} from "./image-fixtures";
 import { ErrorBody, HighlightResult } from "@mergemate/contracts";
 import { describe, expect, it } from "vitest";
 import { storesFor } from "../src/routes/ai-engine";
@@ -6,16 +7,11 @@ import { fakeAi, fakeDataset, testContext as baseContext, validModelEnv } from "
 import { appFor, signIn } from "./sign-in";
 
 // Explicitly opt in for the feature-on cases; missing flags stay off elsewhere.
-const testContext: typeof baseContext = (...args) => { const ctx=baseContext(...args);ctx.kv.set('flags:v1',JSON.stringify({highlight:true}));return ctx; };
+const testContext: typeof baseContext = (...args) => { const ctx=baseContext(...args);if(ctx.env.HIGHLIGHT_UPLOADS&&!ctx.env.IMAGES)ctx.env.IMAGES=fixtureImages();ctx.kv.set('flags:v1',JSON.stringify({highlight:true}));return ctx; };
 
 const pngFile = (bytes: Uint8Array, name = "shot.png") => new File([bytes], name, { type: "image/png" });
 
-const pngBytes = (): Uint8Array => {
-  const header = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
-  const bytes = new Uint8Array(64);
-  bytes.set(header);
-  return bytes;
-};
+const pngBytes=imagePng;
 
 const imageForm = (file: File, note?: string) => {
   const form = new FormData();
@@ -160,24 +156,7 @@ const fakeR2 = () => {
   return { bucket: bucket as unknown as R2Bucket, fake };
 };
 
-const fakeImages = (output: Uint8Array, seen: { transform?: unknown; format?: unknown }) =>
-  ({
-    input: () => ({
-      transform: (options: unknown) => {
-        seen.transform = options;
-        return {
-          output: async (out: { format: unknown }) => {
-            seen.format = out.format;
-            return {
-              response: () => new Response(output),
-              contentType: () => "image/png",
-              image: () => new Blob([output]).stream(),
-            };
-          },
-        };
-      },
-    }),
-  }) as unknown as ImagesBinding;
+const fakeImages=fixtureImages;
 
 const ANSWER = JSON.stringify({
   explanation: "The checkout button stands out.",
@@ -185,7 +164,7 @@ const ANSWER = JSON.stringify({
 });
 
 describe("highlight analysis", () => {
-  it("analyzes a real upload under a user-scoped random key, then deletes it", async () => {
+  it("analyzes the upload in memory and never writes an R2 object", async () => {
     const { bucket, fake } = fakeR2();
     const ai = fakeAi(async () => ({ response: ANSWER, usage: { prompt_tokens: 10, completion_tokens: 5 } }));
     const metrics = fakeDataset();
@@ -211,11 +190,11 @@ describe("highlight analysis", () => {
     expect(res.headers.get("x-actions-limit")).toBe("30");
     expect(res.headers.get("x-actions-remaining")).toBe("29");
     expect(fake.store.size).toBe(0);
-    expect(fake.puts).toHaveLength(1);
-    expect(fake.puts[0]?.key.startsWith(`${userId}/`)).toBe(true);
-    expect(fake.puts[0]?.key).toMatch(/\/[0-9a-f-]{36}$/);
-    expect(fake.puts[0]?.contentType).toBe("image/png");
-    expect(fake.deletes).toEqual([[fake.puts[0]?.key]]);
+    expect(fake.puts).toHaveLength(0);
+    expect(userId).toBeTruthy();
+
+
+    expect(fake.deletes).toEqual([]);
 
     expect(ai.runs).toHaveLength(1);
     const inputs = ai.runs[0]?.inputs as { messages: { role: string; content: unknown }[] };
@@ -229,7 +208,7 @@ describe("highlight analysis", () => {
     expect(metrics.points[0]?.blobs?.[0]).toBe("highlight");
   });
 
-  it("releases the reservation and deletes the upload when analysis fails", async () => {
+  it("releases the reservation without persisting an image when analysis fails", async () => {
     const { bucket, fake } = fakeR2();
     const ctx = testContext({
       ...validModelEnv(),
@@ -248,13 +227,13 @@ describe("highlight analysis", () => {
     });
     expect(res.status).toBe(502);
     expect(fake.store.size).toBe(0);
-    expect(fake.puts).toHaveLength(1);
-    expect(fake.deletes).toHaveLength(1);
+    expect(fake.puts).toHaveLength(0);
+    expect(fake.deletes).toHaveLength(0);
     const check = await storesFor(ctx.db as unknown as D1Database).usage.check(userId, 30);
     expect(check.remaining).toBe(30);
   });
 
-  it("deletes the upload when the answer is unusable", async () => {
+  it("never persists an upload when the answer is unusable", async () => {
     const { bucket, fake } = fakeR2();
     const ctx = testContext({
       ...validModelEnv(),
@@ -271,12 +250,12 @@ describe("highlight analysis", () => {
     });
     expect(res.status).toBe(502);
     expect(fake.store.size).toBe(0);
-    expect(fake.deletes).toHaveLength(1);
+    expect(fake.deletes).toHaveLength(0);
   });
 
   it("resizes uploads through Image Transformations when configured", async () => {
     const { bucket, fake } = fakeR2();
-    const transformed = new Uint8Array([9, 9, 9]);
+    const transformed = imagePng();
     const seen: { transform?: unknown; format?: unknown } = {};
     const ai = fakeAi(async () => ({ response: ANSWER }));
     const ctx = testContext({
@@ -296,8 +275,8 @@ describe("highlight analysis", () => {
     expect(res.status).toBe(200);
     expect(seen.transform).toEqual({ width: 2048, height: 2048, fit: "scale-down" });
     expect(seen.format).toBe("image/png");
-    expect(fake.puts).toHaveLength(1);
-    expect(fake.puts[0]?.value).toEqual(transformed);
+    expect(fake.puts).toHaveLength(0);
+
     expect(fake.store.size).toBe(0);
     expect(ai.runs).toHaveLength(1);
     const inputs = ai.runs[0]?.inputs as { messages: { role: string; content: unknown }[] };
@@ -306,6 +285,21 @@ describe("highlight analysis", () => {
     expect(parts[1]?.image_url?.url).toBe(expected);
   });
 
+  it("requires no storage binding, enforces quota before transformation and records no content",async()=>{
+    const ai=fakeAi(async()=>({response:ANSWER})),metrics=fakeDataset(),seen:{transform?:unknown}={};
+    const ctx=testContext({...validModelEnv(),AI:ai,AI_METRICS:metrics,IMAGES:fixtureImages(imagePng(),seen),AI_DAILY_ACTIONS_FREE:"1"});const call=appFor(ctx);const {headers,userId}=await signIn(ctx);await grant(call,headers);
+    const send=()=>call('/v1/highlight',{method:'POST',headers,body:imageForm(pngFile(imagePng(1,1,'PRIVATE_EXIF_MARKER'),'PRIVATE_NAME.png'),'PRIVATE_NOTE_MARKER')});
+    expect((await send()).status).toBe(200);expect(ai.runs).toHaveLength(1);seen.transform=undefined;expect((await send()).status).toBe(429);expect(seen.transform).toBeUndefined();
+    const encoded=JSON.stringify(metrics.points);for(const marker of [userId,'PRIVATE_NOTE_MARKER','PRIVATE_NAME','PRIVATE_EXIF_MARKER'])expect(encoded).not.toContain(marker);
+  });
+  it("fails closed before any model call when decoding fails",async()=>{
+    const ai=fakeAi(async()=>({response:ANSWER})),images=fixtureImages();images.info=async()=>{throw {code:9412};};const ctx=testContext({...validModelEnv(),AI:ai,IMAGES:images});const call=appFor(ctx);const {headers}=await signIn(ctx);await grant(call,headers);
+    expect((await call('/v1/highlight',{method:'POST',headers,body:imageForm(pngFile(pngBytes()))})).status).toBe(422);expect(ai.runs).toHaveLength(0);
+  });
+  it("rejects malformed model boxes and keeps no image",async()=>{
+    const ai=fakeAi(async()=>({response:JSON.stringify({explanation:'fixture',regions:[{xMin:999,yMin:0,xMax:1,yMax:1,label:'invalid'}]})}));const ctx=testContext({...validModelEnv(),AI:ai,IMAGES:fixtureImages()});const call=appFor(ctx);const {headers}=await signIn(ctx);await grant(call,headers);
+    expect((await call('/v1/highlight',{method:'POST',headers,body:imageForm(pngFile(pngBytes()))})).status).toBe(502);
+  });
   it("purges uploads on account deletion", async () => {
     const { bucket, fake } = fakeR2();
     const ctx = testContext({ HIGHLIGHT_UPLOADS: bucket });

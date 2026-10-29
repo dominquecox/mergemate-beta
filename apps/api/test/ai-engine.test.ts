@@ -803,7 +803,7 @@ describe("misc engine helpers", () => {
     expect(secondsToMidnight()).toBeGreaterThan(0);
   });
 
-  it("leaves highlight unavailable without storage", async () => {
+  it("leaves highlight unavailable without mandatory image preprocessing", async () => {
     await expect(
       analyzeHighlight({
         db: testDb(),

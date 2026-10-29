@@ -98,7 +98,7 @@ export const HighlightRegion = z
     yMin: z.number().int().min(0).max(1000),
     xMax: z.number().int().min(0).max(1000),
     yMax: z.number().int().min(0).max(1000),
-    label: z.string().min(1).max(120),
+    label: z.string().trim().min(1).max(120),
   })
   .refine((box) => box.xMax > box.xMin && box.yMax > box.yMin, { message: "empty box" });
 export type HighlightRegion = z.infer<typeof HighlightRegion>;
