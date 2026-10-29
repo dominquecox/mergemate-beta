@@ -2,10 +2,9 @@ import {AudioModule,requestRecordingPermissionsAsync,setAudioModeAsync,createAud
 import {File,Directory,Paths} from 'expo-file-system';
 import * as Crypto from 'expo-crypto';
 import {PcmRecording,type VoiceCapture,type VoicePreview} from './pcm';
-let oldFilesCleared=false;
 let captureLease=Promise.resolve();
 let captureUnavailable=false;
-function clearAbandonedPreviewFiles(){if(oldFilesCleared)return;for(const item of new Directory(Paths.cache).list())if(item instanceof File && /^voice-[0-9a-f-]+\.wav$/.test(item.name))item.delete();oldFilesCleared=true;}
+function clearAbandonedPreviewFiles(){for(const item of new Directory(Paths.cache).list())if(item instanceof File && /^voice-[0-9a-f-]+\.wav$/.test(item.name))item.delete();}
 /** SDK58 PCM stream; no audio is written to disk while recording. */
 export async function startVoiceCapture(onLimit:()=>void,onProgress?:(seconds:number)=>void,signal?:AbortSignal):Promise<VoiceCapture>{
  // A cancelled permission prompt cannot reset the audio mode of a newer capture.
