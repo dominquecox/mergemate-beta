@@ -1,3 +1,4 @@
+import {readBoundedBody} from "../lib/bounded-body";
 import { recordAiCall, type AiOutcome } from "./metrics";
 import type { AiBinding, Env } from "../env";
 import { ApiError, ConfigError } from "../errors";
@@ -272,7 +273,7 @@ export const transcribeWithMeta = async (args: {
       if (res.status >= 400) {outcome="invalid_output";throw transcribeRejected();}
       let data: unknown;
       try {
-        data = (await res.json()) as unknown;
+        data = JSON.parse(new TextDecoder().decode(await readBoundedBody(res,64*1024))) as unknown;
       } catch {
         throw transcribeUnavailable();
       }

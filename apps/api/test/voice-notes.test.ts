@@ -314,6 +314,13 @@ describe("readWavInfo", () => {
 });
 
 describe("transcribeWithMeta", () => {
+  it("bounds provider output before JSON parsing",async()=>{
+    await expect(transcribeWithMeta({env:validModelEnv(),fetchImpl:async()=>new Response("x".repeat(65537)),audio:wavBytes(),contentType:"audio/wav",fileName:"note.wav"})).rejects.toMatchObject({code:"upstream_unavailable"});
+  });
+  it("makes no provider call after request cancellation",async()=>{
+    const abort=new AbortController();abort.abort();let calls=0;
+    await expect(transcribeWithMeta({env:validModelEnv(),fetchImpl:async()=>{calls++;return json({text:"fixture"});},audio:wavBytes(),contentType:"audio/wav",fileName:"note.wav",signal:abort.signal})).rejects.toMatchObject({code:"upstream_unavailable"});expect(calls).toBe(0);
+  });
   it("refuses a redirect instead of following it", async () => {
     const fetchImpl = (async () => new Response(null, { status: 302, headers: { location: "https://elsewhere.example" } })) as typeof fetch;
     await expect(
