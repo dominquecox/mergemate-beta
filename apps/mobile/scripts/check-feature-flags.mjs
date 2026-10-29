@@ -34,7 +34,9 @@ try{
       if(request.method()==='OPTIONS')return route.fulfill({status:204,headers});
       const path=url.pathname.replace('/v1','');
       if(path==='/flags'){flagsCalls++;assert.equal(request.headers().authorization,undefined);assert.equal(request.headers().cookie,undefined);return reply(mode==='unavailable'?503:200,mode==='on'?{highlight:true,voice_readout:false,voice_notes:false}:mode==='malformed'?{highlight:'true'}:mode==='unavailable'?{error:{code:'upstream_unavailable',message:'Unavailable',requestId:'fixture'}}:{highlight:false});}
-      if(path==='/me')return reply(200,{id:'fixture-user',login:'fixture',name:'Fixture',avatarUrl:base+'/favicon.ico',demo:false});
+      if(path==='/inbox/preference')return reply(200,{filter:'all'});
+   if(path==='/inbox/undo')return reply(200,null);
+   if(path==='/me')return reply(200,{id:'fixture-user',login:'fixture',name:'Fixture',avatarUrl:base+'/favicon.ico',demo:false});
       if(path==='/auth/refresh')return reply(200,{session:{expiresAt:'2099-01-01T00:00:00.000Z'}});
       if(path==='/notifications')return reply(200,{items:[],nextCursor:null});
       if(path==='/consent')return reply(200,{ai:{granted:false,version:null,at:null}});

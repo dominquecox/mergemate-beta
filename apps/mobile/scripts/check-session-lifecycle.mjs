@@ -45,6 +45,8 @@ try{
    if(path==='/auth/logout'){if(offlineLogout)return route.abort('internetdisconnected');signedIn=false;return reply(204,null);}
    if(path==='/flags')return reply(200,{voice_readout:true,voice_notes:false,highlight:false});
    if(!signedIn)return fail(401,'unauthorized');
+   if(path==='/inbox/preference')return reply(200,{filter:'all'});
+   if(path==='/inbox/undo')return reply(200,null);
    if(path==='/me')return reply(200,user());
    if(path==='/auth/csrf')return reply(200,{csrfToken:'fixture-csrf'});
    if(path==='/auth/refresh'){activeRefresh++;maxRefresh=Math.max(maxRefresh,activeRefresh);await new Promise(resolve=>setTimeout(resolve,refreshDelay));activeRefresh--;return reply(200,{session:{expiresAt:'2099-01-01T00:00:00.000Z',csrfToken:'fixture-csrf'}});}

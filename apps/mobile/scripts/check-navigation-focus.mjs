@@ -29,7 +29,9 @@ try{
       const request=route.request(),url=new URL(request.url());if(url.origin===base||url.protocol==='data:')return route.continue();if(url.origin!=='https://api-dev.mergemate.dev')return route.abort();
       const headers={'content-type':'application/json','access-control-allow-origin':base,'access-control-allow-credentials':'true','access-control-allow-headers':'content-type,x-csrf-token','access-control-allow-methods':'GET,POST,PUT,DELETE,OPTIONS'};
       const reply=(status,body)=>route.fulfill({status,headers,body:JSON.stringify(body)});if(request.method()==='OPTIONS')return route.fulfill({status:204,headers});const path=url.pathname.replace('/v1','');
-      if(path==='/me')return reply(signedIn?200:401,signedIn?{id:'fixture-user',login:'fixture',name:'Fixture',avatarUrl:base+'/favicon.ico',demo:false}:{error:{code:'unauthorized',message:'Sign in.',requestId:'fixture'}});
+      if(path==='/inbox/preference')return reply(200,{filter:'all'});
+   if(path==='/inbox/undo')return reply(200,null);
+   if(path==='/me')return reply(signedIn?200:401,signedIn?{id:'fixture-user',login:'fixture',name:'Fixture',avatarUrl:base+'/favicon.ico',demo:false}:{error:{code:'unauthorized',message:'Sign in.',requestId:'fixture'}});
       if(path==='/auth/refresh')return reply(200,{session:{expiresAt:'2099-01-01T00:00:00.000Z'}});
       if(path==='/me/installations')return reply(200,{items:[],installUrl:'https://github.com/apps/mergemate/installations/new'});
       if(path==='/repos')return reply(200,{items:[{id:'fixture-repo',fullName:'fixture/repo',private:true,watching:watched}],nextCursor:null});

@@ -7,7 +7,7 @@ import {useFeatureFlags} from "../../src/hooks/useFeatureFlags";
 import {ReadoutControls} from "../../src/components/ReadoutControls";
 import {inboxNarration} from "../../src/readout/text";
 import React, { useState, useRef,useEffect,useCallback } from "react";
-import {AppState, View, FlatList, RefreshControl, TouchableOpacity, Pressable, StyleSheet } from "react-native";
+import {AppState,Platform, View, FlatList, RefreshControl, TouchableOpacity, Pressable, StyleSheet } from "react-native";
 import { androidRipple } from "../../src/platform/android";
 import { Text } from "../../src/components/Text";
 import { useRouter,useFocusEffect } from "expo-router";
@@ -95,6 +95,18 @@ function InboxWorkspace({initialFilter}:{initialFilter:NotificationFilter}) {
     finally{if(version===view.current){actionLock.current=false;setActing(false);}}
   };
 
+  const tabNodes=useRef(new Map<string,HTMLElement>()),chooseTab=useRef(selectFilter);chooseTab.current=selectFilter;
+  useEffect(()=>{
+    if(Platform.OS!=='web')return;
+    const tabs:NotificationFilter[]=['all','review','mentions','mine'];const cleanup:(()=>void)[]=[];
+    for(const [index,tab] of tabs.entries()){
+      const node=tabNodes.current.get(tab);if(!node)continue;
+      const key=(event:KeyboardEvent)=>{let next=index;if(event.key==='ArrowRight')next=(index+1)%4;else if(event.key==='ArrowLeft')next=(index+3)%4;else if(event.key==='Home')next=0;else if(event.key==='End')next=3;else return;event.preventDefault();const value=tabs[next];if(value){chooseTab.current(value);tabNodes.current.get(value)?.focus();}};
+      node.addEventListener('keydown',key);cleanup.push(()=>node.removeEventListener('keydown',key));
+    }
+    return()=>{for(const remove of cleanup)remove();};
+  },[]);
+
   const navigateToPr = (item: Notification) => {
     const parts = item.repo.split("/");
     const owner = parts[0] || "owner";
@@ -143,6 +155,8 @@ function InboxWorkspace({initialFilter}:{initialFilter:NotificationFilter}) {
           return (
             <TouchableOpacity
               key={tab}
+              ref={node=>{if(Platform.OS==='web'&&typeof HTMLElement!=='undefined'&&node instanceof HTMLElement){node.tabIndex=isSelected?0:-1;tabNodes.current.set(tab,node);}}}
+              aria-selected={isSelected}
               onPress={() => selectFilter(tab)}
               style={[
                 styles.filterTab,
