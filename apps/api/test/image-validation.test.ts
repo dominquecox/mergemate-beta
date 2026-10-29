@@ -10,6 +10,10 @@ describe('private screenshot preprocessing',()=>{
   const clean=await normalizeHighlight(fixtureImages(imagePng()),bytes);expect(new TextDecoder().decode(clean)).not.toContain('PRIVATE_EXIF_FIXTURE');
  });
  it('accepts complete PNG and removes metadata from re-encoded pixels',async()=>{const original=imagePng(1,1,'GPS_PRIVATE_FIXTURE'),clean=await normalizeHighlight(fixtureImages(imagePng(1,1,'EXIF_PRIVATE_FIXTURE')),original);expect(inspectImage(clean)).toEqual({type:'image/png',width:1,height:1});expect(new TextDecoder().decode(clean)).not.toMatch(/GPS_PRIVATE|EXIF_PRIVATE|tEXt/);});
+ it('accepts a decoder-confirmed orientation swap without forwarding metadata',async()=>{
+  const bytes=new Uint8Array(readFileSync(join(import.meta.dirname,'fixtures/highlight/metadata.jpg'))),images=fixtureImages();images.info=async()=>({format:'image/jpeg',fileSize:bytes.length,width:16,height:32});
+  expect(inspectImage(await normalizeHighlight(images,bytes)).type).toBe('image/png');
+ });
  it('rejects truncation, CRC corruption, trailing polyglot bytes and animations',()=>{
   const bytes=imagePng();const corrupt=bytes.slice();corrupt[20]=(corrupt[20]??0)^1;
   const trailing=new Uint8Array(bytes.length+8);trailing.set(bytes);trailing.set(new TextEncoder().encode('<script>'),bytes.length);
