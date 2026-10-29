@@ -3,6 +3,7 @@ import type {InboxMutation,InboxReceipt} from "@mergemate/contracts";
 import type {PrSearchFilters,PrSearchPage} from '@mergemate/contracts';
 export type WorkspacePage<T>={items:T[];nextCursor:string|null;capped?:boolean;headSha?:string};
 export type WorkspaceRead={headSha?:string;signal?:AbortSignal};
+import type { AiPreferenceUpdate, AiPreferences } from "@mergemate/contracts";
 import {
   User,
   Session,
@@ -54,6 +55,9 @@ export interface ApiClient {
   // AI Consent
   getConsent(): Promise<{ ai: { granted: boolean; version: string } }>;
   setConsent(granted: boolean): Promise<void>;
+  /** Canonical account-owned AI choices: processing consent, the independent summaries preference and a revision. */
+  getAiPreferences(): Promise<AiPreferences>;
+  updateAiPreferences(update: AiPreferenceUpdate): Promise<AiPreferences>;
 
   // Repos & Orgs
   getRepos(): Promise<Repo[]>;

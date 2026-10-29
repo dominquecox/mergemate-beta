@@ -13,6 +13,8 @@ import {
   BillingLink,
   BillingPlan as BillingPlanSchema,
   ConsentState,
+  AiPreferences,
+  type AiPreferenceUpdate,
   CsrfResponse,
   DemoResponse,
   ErrorBody,
@@ -513,6 +515,14 @@ export class HttpApiClient implements ApiClient {
       body: { ai: { granted, version: AI_CONSENT_VERSION } },
       schema: ConsentState,
     });
+  }
+
+  async getAiPreferences() {
+    return this.request({ path: "/consent/preferences", schema: AiPreferences });
+  }
+
+  async updateAiPreferences(update: AiPreferenceUpdate) {
+    return this.request({ method: "PUT", path: "/consent/preferences", body: update, schema: AiPreferences });
   }
 
   // ---------------------------------------------------------------------------------------------

@@ -58,6 +58,7 @@ const FIXED_COPY: Record<ClientErrorCode, string> = {
   unauthorized: "Your session has ended. Sign in again to continue.",
   forbidden: "That isn't available for this account.",
   csrf_invalid: "Your session needs a quick refresh. Try again.",
+  consent_changed:"Your AI choices changed elsewhere. Review them and try again.",
   consent_required: "Turn on AI to use this. You choose what gets sent.",
   sso_required: "Your organization requires single sign-on. Authorize MergeMate on GitHub, then try again.",
   payload_too_large: "That file is too large.",

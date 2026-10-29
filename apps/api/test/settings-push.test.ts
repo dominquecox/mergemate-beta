@@ -28,7 +28,8 @@ describe('settings', () => {
     const value = settings({ aiSummaries: false, notifications: { review: false, mention: true, mine: false }, quietHours: { start: '22:00', end: '07:00', timeZone: 'America/Indiana/Indianapolis' } });
     expect((await call('/v1/settings', { ...post(value, a.headers), method: 'PUT' })).status).toBe(200);
     const aRead = await call('/v1/settings', { headers: a.headers });
-    expect(await aRead.json()).toEqual(value); expect(aRead.headers.get('cache-control')).toBe('no-store');
+    // AI summaries and risk is an AI choice and is not changed by a settings save.
+    expect(await aRead.json()).toEqual({ ...value, aiSummaries: true }); expect(aRead.headers.get('cache-control')).toBe('no-store');
     const b = await signIn(ctx, 'ios', { ...ghUser, id: 4243, login: 'another-user' });
     expect(await (await call('/v1/settings', { headers: b.headers })).json()).toEqual(defaultSettings());
   });

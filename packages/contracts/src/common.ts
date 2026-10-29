@@ -7,6 +7,7 @@ export const ErrorCode = z.enum([
   /** A cookie session sent a write without a valid CSRF token. Fetch /v1/auth/csrf and retry once. */
   "csrf_invalid",
   "consent_required",
+  "consent_changed",
   "sso_required",
   "payload_too_large",
   "not_found",

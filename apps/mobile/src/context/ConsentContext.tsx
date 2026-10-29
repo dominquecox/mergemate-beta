@@ -1,93 +1,95 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
-import { StorageService } from "../storage";
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useSyncExternalStore } from "react";
+import { AppState, Platform } from "react-native";
 import { api } from "../api";
 import { useAuth } from "./AuthContext";
-import { AI_CONSENT_VERSION } from "../config/consent";
-import { toUserMessage } from "../api/errors";
+import { AiChoices, isAiConsentCurrent, needsConsentReview, type AiChoicePending } from "../consent/aiChoices";
 
 interface ConsentContextType {
+  /** True only when this account agreed to the consent text this build shows. */
   aiConsentGranted: boolean;
+  /** The person agreed to an older consent text and has to read and agree again. */
+  needsReview: boolean;
+  /** The separate "AI summaries and risk" preference. Meaningful only while consent is granted. */
+  aiSummaries: boolean;
   isLoading: boolean;
-  /** Why the last grant or revoke did not go through, in plain words. */
+  /** False until the server's answer for this account arrived (always true in the demo). */
+  loaded: boolean;
+  /** The change being saved right now. */
+  pending: AiChoicePending | null;
+  /** Why the last read or change did not go through, in plain words. */
   error: string | null;
-  /** Resolve to true when the choice was saved. */
+  /** Resolve to true only when the server confirmed the choice. */
   grantConsent: () => Promise<boolean>;
   revokeConsent: () => Promise<boolean>;
+  setAiSummaries: (enabled: boolean) => Promise<boolean>;
+  refreshConsent: () => Promise<boolean>;
 }
 
 const ConsentContext = createContext<ConsentContextType | null>(null);
 
+const DEMO_MESSAGE = "The sample-data demo shows saved examples, so there is nothing to change here.";
+
 export function ConsentProvider({ children }: { children: React.ReactNode }) {
   const { user, isDemo } = useAuth();
   const userId = user?.id ?? null;
-  const [aiConsentGranted, setAiConsentGranted] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  const checkConsent = useCallback(async () => {
-    setIsLoading(true);
-    try {
-      if (!userId) {
-        setAiConsentGranted(false);
-      } else if (isDemo) {
-        // The demo shows pre-generated results on sample data, so there is nothing to consent to.
-        setAiConsentGranted(true);
-      } else if (api.isMock) {
-        const localConsent = await StorageService.getAiConsent();
-        if (localConsent) {
-          setAiConsentGranted(true);
-        } else {
-          const remote = await api.getConsent();
-          setAiConsentGranted(remote.ai.granted);
-        }
-      } else {
-        // The API is the record of consent. A grant for another consent version does not count.
-        const remote = await api.getConsent();
-        setAiConsentGranted(remote.ai.granted && remote.ai.version === AI_CONSENT_VERSION);
-      }
-    } catch {
-      setAiConsentGranted(false);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [userId, isDemo]);
+  // One controller per account: a different account never sees, or receives answers meant for, the last one.
+  const choices = useMemo(() => new AiChoices(api), [userId, isDemo]);
+  const live = userId !== null && !isDemo;
+  const state = useSyncExternalStore(choices.subscribe, choices.getState, choices.getState);
 
   useEffect(() => {
-    checkConsent();
-  }, [checkConsent]);
+    if (live) void choices.refresh();
+    return () => choices.reset();
+  }, [choices, live]);
 
-  const update = async (granted: boolean): Promise<boolean> => {
-    if (isDemo) return false;
-    setError(null);
-    try {
-      await api.setConsent(granted);
-      if (api.isMock) await StorageService.setAiConsent(granted);
-      setAiConsentGranted(granted);
-      return true;
-    } catch (e) {
-      // Consent stays as it was.
-      setError(toUserMessage(e, "Couldn't save your choice. Try again."));
-      return false;
+  // Another tab or device may have changed the choices: read them again whenever the app comes to the foreground.
+  useEffect(() => {
+    if (!live) return;
+    const foreground = () => void choices.refresh();
+    const sub = AppState.addEventListener("change", (s) => {
+      if (s === "active") foreground();
+    });
+    const visible = () => {
+      if (document.visibilityState === "visible") foreground();
+    };
+    const web = Platform.OS === "web" && typeof document !== "undefined";
+    if (web) {
+      document.addEventListener("visibilitychange", visible);
+      window.addEventListener("focus", foreground);
     }
+    return () => {
+      sub.remove();
+      if (web) {
+        document.removeEventListener("visibilitychange", visible);
+        window.removeEventListener("focus", foreground);
+      }
+    };
+  }, [choices, live]);
+
+  const grantConsent = useCallback(async () => (live ? choices.grant() : false), [choices, live]);
+  const revokeConsent = useCallback(async () => (live ? choices.revoke() : false), [choices, live]);
+  const setAiSummaries = useCallback(async (enabled: boolean) => (live ? choices.setSummaries(enabled) : false), [choices, live]);
+  const refreshConsent = useCallback(async () => (live ? choices.refresh() : false), [choices, live]);
+
+  const value: ConsentContextType = {
+    // The demo shows pre-generated results on sample data, so there is nothing to consent to.
+    aiConsentGranted: isDemo && userId !== null ? true : live && isAiConsentCurrent(state.prefs),
+    needsReview: live && needsConsentReview(state.prefs),
+    aiSummaries: isDemo ? true : live && (state.prefs?.aiSummaries ?? false),
+    isLoading: live && state.loading,
+    loaded: !live || state.prefs !== null,
+    pending: state.pending,
+    error: isDemo && userId !== null ? null : state.error,
+    grantConsent,
+    revokeConsent,
+    setAiSummaries,
+    refreshConsent,
   };
 
-  const grantConsent = () => update(true);
-  const revokeConsent = () => update(false);
-
-  return (
-    <ConsentContext.Provider
-      value={{
-        aiConsentGranted,
-        isLoading,
-        error,
-        grantConsent,
-        revokeConsent,
-      }}
-    >
-      {children}
-    </ConsentContext.Provider>
-  );
+  return <ConsentContext.Provider value={value}>{children}</ConsentContext.Provider>;
 }
+
+export { DEMO_MESSAGE };
 
 export function useConsent() {
   const context = useContext(ConsentContext);

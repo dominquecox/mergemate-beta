@@ -39,12 +39,12 @@ export default function PrDetailScreen(){
 function PrWorkspace({owner,repo,number}:{owner:string;repo:string;number:string}){
   const { colors, typography, spacing, radius } = useTheme();
   const {isDesktop}=useLayout();
-  const { aiConsentGranted } = useConsent();
+  const { aiConsentGranted, aiSummaries } = useConsent();
   const router = useRouter();
 
   const [assessmentOpen,setAssessmentOpen]=useState(false);
   const [expandedFiles,setExpandedFiles]=useState<string[]>([]);
-  const {detail,isLoading,isRefreshing,error,loadPr,loadPage,pageBusy,pageError,capped,fileCursor,commentCursor,checkCursor,retryAi,aiRetrying}=usePrWorkspace(owner,repo,Number(number),aiConsentGranted);
+  const {detail,isLoading,isRefreshing,error,loadPr,loadPage,pageBusy,pageError,capped,fileCursor,commentCursor,checkCursor,retryAi,aiRetrying}=usePrWorkspace(owner,repo,Number(number),aiConsentGranted&&aiSummaries);
   const [fileWrap,setFileWrap]=useState<Record<string,boolean>>({}),[collapsedThreads,setCollapsedThreads]=useState<string[]>([]),[linkError,setLinkError]=useState<string|null>(null);
   const scroll=useRef<React.ComponentRef<typeof ScrollView>>(null),scrollOffset=useRef(0);
   useEffect(()=>{setExpandedFiles([]);setCollapsedThreads([]);},[detail?.headSha]);

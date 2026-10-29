@@ -30,7 +30,7 @@ export default function SettingsScreen() {
   const {isDesktop}=useLayout();
   const { colors, typography, spacing, radius, themeMode, setThemeMode } = useTheme();
   const { user, signOut, isDemo } = useAuth();
-  const { aiConsentGranted, grantConsent, revokeConsent, error: consentError } = useConsent();
+  const { aiConsentGranted, needsReview, aiSummaries, pending: consentPending, revokeConsent, setAiSummaries, refreshConsent, error: consentError } = useConsent();
 
   const saveLock=useRef(false);
   const preferenceLock=useRef(false);
@@ -80,7 +80,8 @@ export default function SettingsScreen() {
 
   useEffect(() => {
     loadSettingsData();
-  }, [loadSettingsData]);
+    void refreshConsent();
+  }, [loadSettingsData, refreshConsent]);
 
   /** Saves a change to the API. The switch moves at once and snaps back, with the reason, if it is refused. */
   const saveSettings = async (patch: Partial<UserSettings>): Promise<boolean> => {
@@ -99,13 +100,16 @@ export default function SettingsScreen() {
     } finally{saveLock.current=false;setSaving(false);}
   };
 
-  const toggleAi = async (val: boolean) => {
+  /** Turning AI on needs the disclosure first, so it opens the consent screen. Turning it off saves at once. */
+  const toggleAiProcessing = async (val: boolean) => {
     setNotice(null);
-    if (val) {
-      if (await grantConsent()) await saveSettings({ aiSummaries: true });
-    } else if (await saveSettings({ aiSummaries: false })) {
-      await revokeConsent();
-    }
+    if (val) router.push("/(auth)/consent");
+    else await revokeConsent();
+  };
+
+  const toggleAiSummaries = async (val: boolean) => {
+    setNotice(null);
+    await setAiSummaries(val);
   };
 
   const toggleQuietHours = async (on: boolean) => {
@@ -229,7 +233,8 @@ export default function SettingsScreen() {
             {Platform.OS==='web' && !isDemo && <BrowserNotificationsRow onNotice={setNotice}/>}
           </SettingsGroup>
           <SettingsGroup title="Intelligence & privacy">
-            <SettingsRow first label="AI Summaries & Risk Scoring" detail="Send filtered patch diffs to Meta AI models" icon="sparkles-outline" trailing={<Switch value={aiConsentGranted && (settings?.aiSummaries ?? true)} onValueChange={value=>runPreference(()=>toggleAi(value))} disabled={isDemo || !settings || saving || preferenceBusy} accessibilityLabel="AI summaries and risk scoring" trackColor={{false:colors.surfaceSecondary,true:colors.brand}} thumbColor="#FFFFFF"/>}/>
+            <SettingsRow first label="AI processing" detail={needsReview ? "The consent text changed. Review it to keep using AI." : "Let MergeMate send PR text, screenshots and voice notes you choose to an AI model"} icon="sparkles-outline" trailing={<Switch value={aiConsentGranted} onValueChange={value=>runPreference(()=>toggleAiProcessing(value))} disabled={isDemo || preferenceBusy || consentPending!==null} accessibilityLabel="AI processing" trackColor={{false:colors.surfaceSecondary,true:colors.brand}} thumbColor="#FFFFFF"/>}/>
+            <SettingsRow label="AI summaries and risk" detail="Analyze PRs when you open them or load your inbox" icon="analytics-outline" trailing={<Switch value={aiConsentGranted && aiSummaries} onValueChange={value=>runPreference(()=>toggleAiSummaries(value))} disabled={isDemo || !aiConsentGranted || preferenceBusy || consentPending!==null} accessibilityLabel="AI summaries and risk" trackColor={{false:colors.surfaceSecondary,true:colors.brand}} thumbColor="#FFFFFF"/>}/>
             <SettingsRow label="What is sent to AI" detail="Review your consent and privacy choices" icon="shield-checkmark-outline" onPress={()=>router.push('/(auth)/consent')}/>
           </SettingsGroup>
           {metaKey && !isDemo && <SettingsGroup title="Your Meta key">

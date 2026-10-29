@@ -16,9 +16,14 @@ export const settings = new Hono<AppEnv>()
   .put('/settings', async (c) => {
     const session = c.get('session');
     if (session.demo || !session.userId) throw new ApiError('forbidden', 'Not available in the demo.');
-    const value = await parseBody(c, Settings);
-    await requireBinding(c.env, 'DB').prepare(
-      'INSERT INTO user_settings(user_id,settings,updated_at) VALUES(?,?,?) ON CONFLICT(user_id) DO UPDATE SET settings=excluded.settings,updated_at=excluded.updated_at',
+    const submitted = await parseBody(c, Settings);
+    const db = requireBinding(c.env, 'DB');
+    // AI summaries and risk is an AI choice: it changes only through /consent/preferences, which fences pending AI work.
+    // A full-object save from a stale screen must never flip it back.
+    const stored = (await getSettings(c.env, session.userId)).aiSummaries;
+    const value = { ...submitted, aiSummaries: stored };
+    await db.prepare(
+      "INSERT INTO user_settings(user_id,settings,updated_at) VALUES(?1,?2,?3) ON CONFLICT(user_id) DO UPDATE SET settings=json_set(excluded.settings,'$.aiSummaries',json(CASE WHEN json_extract(user_settings.settings,'$.aiSummaries') IN (0,false) THEN 'false' ELSE 'true' END)),updated_at=excluded.updated_at",
     ).bind(session.userId, JSON.stringify(value), c.get('deps').now().toISOString()).run();
-    return c.json(value);
+    return c.json(await getSettings(c.env, session.userId));
   });

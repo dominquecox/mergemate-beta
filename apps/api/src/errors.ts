@@ -8,6 +8,7 @@ export const ERROR_STATUS: Record<ErrorCode, ContentfulStatusCode> = {
   forbidden: 403,
   csrf_invalid: 403,
   consent_required: 403,
+  consent_changed:409,
   sso_required: 403,
   payload_too_large: 413,
   not_found: 404,
