@@ -40,6 +40,10 @@ export class AiChoices {
   private listeners = new Set<() => void>();
   private generation = 0;
   private busy = false;
+  /** Bumped when a write starts and when it finishes: a read begun before either describes a state that may be gone. */
+  private epoch = 0;
+  private readSeq = 0;
+  private appliedSeq = 0;
 
   constructor(private readonly api: AiChoicesApi) {}
 
@@ -60,6 +64,7 @@ export class AiChoices {
   /** Forget everything and ignore answers to requests already sent: used on sign-out and account switch. */
   reset(): void {
     this.generation += 1;
+    this.epoch += 1;
     this.busy = false;
     this.state = EMPTY_AI_CHOICES;
     for (const listener of [...this.listeners]) listener();
@@ -71,15 +76,20 @@ export class AiChoices {
    */
   async refresh(keepMessage = false): Promise<boolean> {
     const generation = this.generation;
+    const epoch = this.epoch;
+    const seq = ++this.readSeq;
+    // A read is current only if no write started or finished since it began and no newer read already landed.
+    const stale = () => generation !== this.generation || epoch !== this.epoch || seq < this.appliedSeq || this.busy;
     try {
       const prefs = await this.api.getAiPreferences();
       if (generation !== this.generation) return false;
-      // A change in flight will return a newer answer; do not let this older read replace it.
-      if (this.busy) return true;
+      if (stale()) return true;
+      this.appliedSeq = seq;
       this.set({ loading: false, prefs, ...(keepMessage ? {} : { error: null }) });
       return true;
     } catch (e) {
       if (generation !== this.generation) return false;
+      if (stale()) return false;
       this.set({ loading: false, error: toUserMessage(e, "Couldn't load your AI choices. Try again.") });
       return false;
     }
@@ -89,16 +99,19 @@ export class AiChoices {
     if (this.busy) return false;
     const generation = this.generation;
     this.busy = true;
+    this.epoch += 1;
     this.set({ pending: kind, error: null });
     try {
       const prefs = await this.api.updateAiPreferences(update);
       if (generation !== this.generation) return false;
       this.busy = false;
+      this.epoch += 1;
       this.set({ pending: null, prefs, error: null });
       return true;
     } catch (e) {
       if (generation !== this.generation) return false;
       this.busy = false;
+      this.epoch += 1;
       this.set({ pending: null, error: toUserMessage(e, "Couldn't save your choice. Try again.") });
       // The choices changed somewhere else: show the server's state, keep the message.
       if (e instanceof ApiClientError && e.code === "consent_changed") await this.refresh(true);

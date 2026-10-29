@@ -178,6 +178,52 @@ describe("AI choices store", () => {
     expect(choices.getState().prefs).toMatchObject({ revision: "r2", ai: { granted: true } });
   });
 
+  it("an older read that lands after a successful revoke cannot bring AI back", async () => {
+    const s = scripted();
+    const choices = new AiChoices(s.api);
+    s.reads.push(ok(prefs({ granted: true, revision: "r1" })));
+    await choices.refresh();
+    const late = deferred<AiPreferences>();
+    s.reads.push(() => late.promise);
+    const delayed = choices.refresh();
+    s.writes.push(ok(prefs({ granted: false, aiSummaries: false, revision: "r2" })));
+    expect(await choices.revoke()).toBe(true);
+    late.resolve(prefs({ granted: true, revision: "r1" }));
+    await delayed;
+    expect(choices.getState().prefs).toMatchObject({ revision: "r2", ai: { granted: false } });
+  });
+
+  it("two overlapping reads that resolve in reverse order keep the newer answer", async () => {
+    const s = scripted();
+    const choices = new AiChoices(s.api);
+    s.reads.push(ok(prefs({ granted: true, revision: "r1" })));
+    await choices.refresh();
+    const old = deferred<AiPreferences>();
+    s.reads.push(() => old.promise);
+    const first = choices.refresh();
+    s.reads.push(ok(prefs({ granted: false, revision: "r2" })));
+    await choices.refresh();
+    old.resolve(prefs({ granted: true, revision: "r1" }));
+    await first;
+    expect(choices.getState().prefs).toMatchObject({ revision: "r2", ai: { granted: false } });
+  });
+
+  it("a stale read failure does not replace newer state with an error", async () => {
+    const s = scripted();
+    const choices = new AiChoices(s.api);
+    s.reads.push(ok(prefs({ revision: "r1" })));
+    await choices.refresh();
+    const old = deferred<AiPreferences>();
+    s.reads.push(() => old.promise);
+    const first = choices.refresh();
+    s.reads.push(ok(prefs({ revision: "r2" })));
+    await choices.refresh();
+    old.reject(new Error("late"));
+    await first;
+    expect(choices.getState().error).toBeNull();
+    expect(choices.getState().prefs?.revision).toBe("r2");
+  });
+
   it("a failed foreground read keeps the last confirmed state and shows the problem", async () => {
     const s = scripted();
     const choices = new AiChoices(s.api);
