@@ -89,6 +89,17 @@ describe('complete account deletion',()=>{
   expect((await appFor(ctx)('/v1/account',{method:'DELETE',headers:s.headers})).status).toBe(500);expect(ctx.db.rows('SELECT * FROM ai_usage_daily WHERE scope=?',s.userId)).toHaveLength(1);
   ctx.db.sqlite.exec('DROP TRIGGER fixture_fail_delete');expect((await appFor(ctx)('/v1/account',{method:'DELETE',headers:s.headers})).status).toBe(204);expect(revokeCount(ctx)).toBe(1);
  });
+ it('keeps unauthenticated and CSRF-failing requests from starting deletion',async()=>{
+  const ctx=testContext();expect((await appFor(ctx)('/v1/account',{method:'DELETE'})).status).toBe(401);const session=await signIn(ctx,'web');grants(ctx);
+  expect((await appFor(ctx)('/v1/account',{method:'DELETE',headers:session.headers})).status).toBe(403);expect(ctx.db.rows('SELECT * FROM account_deletions')).toEqual([]);expect(revokeCount(ctx)).toBe(0);
+  const success=await appFor(ctx)('/v1/account',{method:'DELETE',headers:{...session.headers,'x-csrf-token':session.csrf??''}});expect(success.status).toBe(204);expect(success.headers.get('set-cookie')).toContain('Max-Age=0');
+ });
+ it('supports reauthorization to finish a deletion with missing GitHub credentials',async()=>{
+  const ctx=testContext(),first=await signIn(ctx);await ctx.db.prepare('DELETE FROM github_tokens WHERE user_id=?').bind(first.userId).run();
+  expect((await appFor(ctx)('/v1/account',{method:'DELETE',headers:first.headers})).status).toBe(502);expect(ctx.db.rows('SELECT id FROM users')).toHaveLength(1);
+  const recovered=await signIn(ctx);expect(recovered.userId).toBe(first.userId);expect(recovered.body.user).toMatchObject({deletionPending:true});expect((await appFor(ctx)('/v1/auth/refresh',{method:'POST',headers:recovered.headers})).status).toBe(403);grants(ctx);
+  expect((await appFor(ctx)('/v1/account',{method:'DELETE',headers:recovered.headers})).status).toBe(204);expect((await appFor(ctx)('/v1/me',{headers:first.headers})).status).toBe(401);
+ });
  it('permits deletion for a suspended owner with an existing session and an exhausted session quota',async()=>{
   const ctx=testContext(),s=await signIn(ctx);grants(ctx);ctx.env.SESSION_RATE_LIMITER=fakeLimiter(0);await ctx.db.prepare("UPDATE users SET status='suspended' WHERE id=?").bind(s.userId).run();expect((await appFor(ctx)('/v1/account',{method:'DELETE',headers:s.headers})).status).toBe(204);
  });
