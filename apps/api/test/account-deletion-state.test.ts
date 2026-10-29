@@ -13,6 +13,13 @@ describe('account deletion fencing',()=>{
   await releaseDeletion(ctx.env.DB,s.userId,first);expect(ctx.db.rows('SELECT lease_token FROM account_deletions')).toEqual([{lease_token:second}]);
   await releaseDeletion(ctx.env.DB,s.userId,second);await expect(claimDeletion(ctx.env.DB,s.userId,ctx.time.now())).resolves.toBeTypeOf('string');
  });
+ it('recovers an expired deletion-owned billing lock without stealing unrelated operations',async()=>{
+  const ctx=testContext(),s=await signIn(ctx);const old=await claimDeletion(ctx.env.DB,s.userId,ctx.time.now());
+  await ctx.db.prepare('INSERT INTO billing_accounts(user_id,operation_token,updated_at)VALUES(?,?,?)').bind(s.userId,`deletion:${old}`,ctx.time.now().toISOString()).run();
+  await expect(claimDeletion(ctx.env.DB,s.userId,ctx.time.now())).rejects.toMatchObject({code:'rate_limited'});expect(ctx.db.rows('SELECT operation_token FROM billing_accounts')).toEqual([{operation_token:`deletion:${old}`}]);
+  ctx.time.advance(10*60_000+1);const newer=await claimDeletion(ctx.env.DB,s.userId,ctx.time.now());expect(ctx.db.rows('SELECT operation_token FROM billing_accounts')).toEqual([{operation_token:null}]);
+  await ctx.db.prepare("UPDATE billing_accounts SET operation_token='unrelated-checkout'").run();await releaseDeletion(ctx.env.DB,s.userId,newer);await claimDeletion(ctx.env.DB,s.userId,ctx.time.now());expect(ctx.db.rows('SELECT operation_token FROM billing_accounts')).toEqual([{operation_token:'unrelated-checkout'}]);
+ });
  it('blocks late user budget/cache writes without disturbing global budgets',async()=>{
   const ctx=testContext(),s=await signIn(ctx);await claimDeletion(ctx.env.DB,s.userId,ctx.time.now());const usage=createDbUsageStore(ctx.env.DB);
   for(const scope of [s.userId,`${s.userId}:triage`,`${s.userId}:metakey`])expect(await usage.reserve(scope,10)).toBeNull();

@@ -6,6 +6,7 @@ CREATE TABLE account_deletions (
   lease_token TEXT,
   lease_until TEXT,
   grant_token_hash TEXT,
+  billing_owner_token TEXT,
   started_at TEXT NOT NULL,
   completed_at TEXT
 );
