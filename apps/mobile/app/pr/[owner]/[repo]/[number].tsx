@@ -88,6 +88,7 @@ function PrWorkspace({owner,repo,number}:{owner:string;repo:string;number:string
     <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={[styles.root, { backgroundColor: colors.background }]}>
       <Header
         title="PR Review Detail"
+        onBack={()=>{if(router.canGoBack())router.back();else router.replace("/(tabs)/inbox");}}
         showBack
         rightAction={
           <TouchableOpacity

@@ -8,6 +8,7 @@ import { Icon } from './Icon';
 
 interface HeaderProps {
   title?: string;
+  onBack?:()=>void;
   showBack?: boolean;
   showLogo?: boolean;
   rightAction?: React.ReactNode;
@@ -15,13 +16,13 @@ interface HeaderProps {
 }
 
 /** One compact title/action row, with an optional pinned progress track. */
-export function Header({title,showBack=false,showLogo=false,rightAction,footer}:HeaderProps) {
+export function Header({title,onBack,showBack=false,showLogo=false,rightAction,footer}:HeaderProps) {
   const router=useRouter();
   const heading=useScreenHeading();
   const {colors,typography,isDark}=useTheme();
   return <View style={{backgroundColor:colors.background,borderBottomWidth:1,borderBottomColor:colors.border}}>
     <View style={styles.row}>
-      {showBack && <TouchableOpacity accessibilityRole="button" accessibilityLabel="Go back" onPress={()=>router.back()} style={styles.back}><Icon name="chevron-back" size={22} color={colors.textSecondary}/></TouchableOpacity>}
+      {showBack && <TouchableOpacity accessibilityRole="button" accessibilityLabel="Go back" onPress={onBack??(()=>router.back())} style={styles.back}><Icon name="chevron-back" size={22} color={colors.textSecondary}/></TouchableOpacity>}
       {showLogo ? <Image source={isDark?require('../../assets/logo-dark.png'):require('../../assets/logo-light.png')} style={{width:142,height:34}} resizeMode="contain" accessibilityLabel="MergeMate"/> : <Text ref={heading} accessibilityRole="header" numberOfLines={2} style={[typography.headline,{color:colors.text,flex:1}]}>{title}</Text>}
       {rightAction && <View style={styles.actions}>{rightAction}</View>}
     </View>
