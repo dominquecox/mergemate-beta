@@ -73,7 +73,7 @@ function PrWorkspace({owner,repo,number}:{owner:string;repo:string;number:string
     }
   };
 
-  const openLink=async(value:string|undefined)=>{const url=githubUrl(value);if(!url){setLinkError('This GitHub link is unavailable.');return;}try{await Linking.openURL(url);}catch{setLinkError('Could not open GitHub. Try again.');}};
+  const openLink=async(value:string|undefined)=>{setLinkError(null);const url=githubUrl(value);if(!url){setLinkError('This GitHub link is unavailable.');return;}try{await Linking.openURL(url);}catch{setLinkError('Could not open GitHub. Try again.');}};
   const openInGitHub=()=>void openLink(detail?.htmlUrl);
 
   const addLocalNote = () => {
