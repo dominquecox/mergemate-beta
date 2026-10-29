@@ -51,6 +51,7 @@ export function formatWait(seconds: number): string {
 }
 
 const FIXED_COPY: Record<ClientErrorCode, string> = {
+  state_conflict:"This item changed on another device. Refresh your inbox and try again.",
   unauthorized: "Your session has ended. Sign in again to continue.",
   forbidden: "That isn't available for this account.",
   csrf_invalid: "Your session needs a quick refresh. Try again.",
