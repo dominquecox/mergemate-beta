@@ -11,6 +11,7 @@ export const ErrorCode = z.enum([
   "payload_too_large",
   "not_found",
   "validation_failed",
+  "pr_changed",
   "rate_limited",
   "rate_limit_unavailable",
   "upstream_unavailable",
