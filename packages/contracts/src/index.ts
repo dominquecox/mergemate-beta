@@ -9,3 +9,5 @@ export * from './settings';
 export * from './push';
 export * from './meta-key';
 export * from './flags';
+
+export * from "./search";
