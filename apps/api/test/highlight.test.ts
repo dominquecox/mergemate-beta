@@ -1,7 +1,7 @@
 import {claimDeletion} from "../src/lib/account-deletion";
 import {imagePng,fixtureImages} from "./image-fixtures";
 import { ErrorBody, HighlightResult } from "@mergemate/contracts";
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import { storesFor } from "../src/routes/ai-engine";
 import { demoHeaders } from "./demo-session";
 import { fakeAi, fakeDataset, testContext as baseContext, validModelEnv } from "./helpers";

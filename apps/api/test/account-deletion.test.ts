@@ -27,7 +27,8 @@ async function seedOwned(ctx:TestContext,userId:string){
  const statements:[string,unknown[]][]=[
   ['INSERT INTO billing_accounts(user_id,updated_at)VALUES(?,?)',[userId,stamp]],
   ['INSERT INTO repo_watch VALUES(?,?,?,?,?)',[userId,'repo','fixture/repo',1,stamp]],
-  ['INSERT INTO notification_state VALUES(?,?,?,?,?)',[userId,'item',null,null,stamp]],
+  ['INSERT INTO notification_state VALUES(?,?,?,?,?,?)',[userId,'item',null,null,stamp,'operation']],
+  ['INSERT INTO private_notes VALUES(?,?,?,?,?,?)',[userId,'note','pr:o/r#1','{"kind":"pr"}','private text',stamp]],
   ['INSERT INTO triage_choices VALUES(?,?,?,?)',[userId,'item','fyi',stamp]],
   ['INSERT INTO user_repo_access VALUES(?,?)',[userId,'fixture/repo']],
   ['INSERT INTO user_access_checks VALUES(?,?)',[userId,stamp]],
