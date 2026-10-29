@@ -13,35 +13,38 @@ import {Text} from './Text';
 import {VoiceNoteRecorder} from './VoiceNoteRecorder';
 
 export function PrivateNotes({context}:{context:NoteContext}){
- const {user,isDemo}=useAuth();
- if(!user || isDemo)return <Text>Private notes and recording are unavailable in demo mode.</Text>;
+ const {user,isDemo}=useAuth();const {colors,typography}=useTheme();
+ if(!user || isDemo)return <Text style={[typography.body,{color:colors.textSecondary}]}>Private notes and recording are unavailable in demo mode.</Text>;
  return <NotesWorkspace key={`${user.id}:${noteContextKey(context)}`} context={context}/>;
 }
 function NotesWorkspace({context}:{context:NoteContext}){
  const {colors,typography}=useTheme(),flags=useFeatureFlags();const {aiConsentGranted}=useConsent();
  const [items,setItems]=useState<PrivateNote[]>([]),[text,setText]=useState(''),[loading,setLoading]=useState(true),[busy,setBusy]=useState(false),[error,setError]=useState<string|null>(null),[loaded,setLoaded]=useState(false),[active,setActive]=useState(true),[uncertain,setUncertain]=useState(false),[recording,setRecording]=useState(false);
+ const [notice,setNotice]=useState('');const noteInput=useRef<React.ComponentRef<typeof TextInput>|null>(null),focusTranscript=useRef(false);
+ useEffect(()=>{if(!recording&&focusTranscript.current){focusTranscript.current=false;noteInput.current?.focus();}},[recording]);
  const id=useRef(Crypto.randomUUID()),generation=useRef(0),lock=useRef(false);
  useEffect(()=>onSessionChange(()=>{generation.current++;setActive(false);setText('');setItems([]);}),[]);
  const load=async()=>{const version=generation.current;setLoading(true);setError(null);try{const notes=await api.getPrivateNotes(context);if(version===generation.current){setItems(notes);setLoaded(true);}}catch{if(version===generation.current)setError('Could not load private notes. Try again.');}finally{if(version===generation.current)setLoading(false);}};
  useEffect(()=>{void load();return()=>{generation.current++;};},[]);
  const save=async()=>{
   if(lock.current||recording||!active||!text.trim())return;lock.current=true;setBusy(true);setError(null);const version=generation.current;
-  try{const note=await api.savePrivateNote({id:id.current,context,text:text.trim()});if(version!==generation.current)return;setItems(old=>[...old.filter(item=>item.id!==note.id),note]);setText('');id.current=Crypto.randomUUID();setUncertain(false);}
+  try{const note=await api.savePrivateNote({id:id.current,context,text:text.trim()});if(version!==generation.current)return;setItems(old=>[...old.filter(item=>item.id!==note.id),note]);setText('');id.current=Crypto.randomUUID();setUncertain(false);setNotice('Private note saved.');}
   catch{if(version===generation.current){setUncertain(true);setError('Could not save this note. Your text is still here. Retry saving before editing it.');}}
   finally{lock.current=false;if(version===generation.current)setBusy(false);}
  };
  const remove=async(note:PrivateNote)=>{if(lock.current)return;lock.current=true;setBusy(true);const version=generation.current;try{await api.removePrivateNote(note.id,context);if(version===generation.current)setItems(old=>old.filter(item=>item.id!==note.id));}catch{if(version===generation.current)setError('Could not remove this note. Try again.');}finally{lock.current=false;if(version===generation.current)setBusy(false);}};
- if(!active)return <Text>Account changed. Reopen this workspace to load its private notes.</Text>;
+ if(!active)return <Text style={[typography.body,{color:colors.textSecondary}]}>Account changed. Reopen this workspace to load its private notes.</Text>;
  return <View style={{gap:12,padding:16,borderWidth:1,borderColor:colors.border,borderRadius:12,marginVertical:16}}>
   <Text accessibilityRole="header" style={[typography.headline,{color:colors.text}]}>Private notes</Text>
   <Text style={[typography.body,{color:colors.textSecondary}]}>Only you can read these notes. They are never posted to GitHub.{context.kind==='highlight'?' Saved in your Highlight workspace; screenshots are not retained.':''}</Text>
-  {loading && <Text accessibilityLiveRegion="polite">Loading private notes…</Text>}
+  {loading && <Text style={[typography.body,{color:colors.textSecondary}]} accessibilityLiveRegion="polite">Loading private notes…</Text>}
   {error && <Text accessibilityRole="alert" style={{color:colors.riskHigh}}>{error}</Text>}
   {!loaded && !loading && <Button title="Retry loading notes" onPress={load}/>}
-  {loaded && items.length===0 && <Text>No private notes saved here yet.</Text>}
+  {loaded && items.length===0 && <Text style={[typography.body,{color:colors.textSecondary}]}>No private notes saved here yet.</Text>}
   {items.map((note,index)=><View key={note.id} style={{gap:6,paddingVertical:8,borderBottomWidth:1,borderColor:colors.border}}><Text selectable style={[typography.body,{color:colors.text}]}>{note.text}</Text><Button title={`Remove note ${index+1}`} variant="ghost" disabled={busy} onPress={()=>remove(note)}/></View>)}
-  {flags.voice_notes && aiConsentGranted && !busy && !uncertain && <VoiceNoteRecorder onBusyChange={setRecording} onTranscript={value=>{setText(value);id.current=Crypto.randomUUID();}}/>}
-  <TextInput multiline value={text} onChangeText={setText} maxLength={8000} editable={!busy&&!uncertain&&!recording} accessibilityLabel="Private note text" placeholder="Write a note or review your transcript before saving…" placeholderTextColor={colors.textMuted} style={{minHeight:100,padding:12,color:colors.text,borderColor:colors.border,borderWidth:1,borderRadius:8}}/>
+  {flags.voice_notes && aiConsentGranted && !busy && !uncertain && <VoiceNoteRecorder onBusyChange={setRecording} onTranscript={value=>{focusTranscript.current=true;setText(value);setNotice('Transcript ready. Review and edit the text, then choose Save private note.');id.current=Crypto.randomUUID();}}/>}
+  {!!notice && <Text accessibilityLiveRegion="polite" style={[typography.body,{color:colors.textSecondary}]}>{notice}</Text>}
+  <TextInput ref={noteInput} multiline value={text} onChangeText={setText} maxLength={8000} editable={!busy&&!uncertain&&!recording} accessibilityLabel="Private note text" placeholder="Write a note or review your transcript before saving…" placeholderTextColor={colors.textMuted} style={{minHeight:100,padding:12,color:colors.text,borderColor:colors.border,borderWidth:1,borderRadius:8}}/>
   <Button title="Save private note" onPress={save} loading={busy} disabled={recording||!loaded||!text.trim()||items.length>=100}/>
   {!!text && <Button title="Discard draft note" variant="ghost" disabled={busy||recording} onPress={()=>{setText('');setUncertain(false);id.current=Crypto.randomUUID();}}/>}
  </View>;
