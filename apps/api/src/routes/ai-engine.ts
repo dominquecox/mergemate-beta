@@ -1087,9 +1087,6 @@ export interface HighlightRunResult {
   remaining: number;
 }
 
-/** Screenshot types the highlight pipeline accepts, detected from magic bytes. */
-export type HighlightContentType = "image/jpeg" | "image/png" | "image/webp";
-
 /**
  * Full highlight pipeline for signed-in users. Demo uploads are rejected upstream and never
  * reach here. The upload is decoded/re-encoded in memory and analyzed through the existing vision route.
@@ -1104,7 +1101,6 @@ export const analyzeHighlight = async (args: {
   env: Env;
   session: SessionRecord;
   image: Uint8Array;
-  contentType: HighlightContentType;
   note: string;
   requestId: string;
   signal?:AbortSignal;

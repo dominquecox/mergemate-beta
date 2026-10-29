@@ -27,7 +27,7 @@ const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 export default function HighlightScreen() {
   const { colors, typography, spacing, radius } = useTheme();
 
-  const flags=useFeatureFlags();const {aiConsentGranted}=useConsent(),{isDemo}=useAuth();const router=useRouter();
+  const flags=useFeatureFlags();const {aiConsentGranted}=useConsent(),{isDemo,user}=useAuth();const router=useRouter();
   const sequence=useRef(0),pending=useRef<AbortController|null>(null),selected=useRef<ImagePicker.ImagePickerAsset|null>(null),lock=useRef(false);
   const [flagBlocked,setFlagBlocked]=useState(false);
   const abort=()=>{sequence.current++;pending.current?.abort();pending.current=null;lock.current=false;};
@@ -40,6 +40,7 @@ export default function HighlightScreen() {
     if(Platform.OS==='web')document.addEventListener('visibilitychange',hidden);
     return()=>{off();app.remove();if(Platform.OS==='web')document.removeEventListener('visibilitychange',hidden);clear();};
   },[clear]);
+  useEffect(()=>{clear();setImage(null);setResult(null);setIsAnalyzing(false);setNote("");},[user?.id,clear]);
   useEffect(()=>{if(!flags.highlight || !aiConsentGranted){clear();setImage(null);setResult(null);setIsAnalyzing(false);}},[flags.highlight,aiConsentGranted,clear]);
   const [previewWidth,setPreviewWidth]=useState(300);
   const [note, setNote] = useState("");
@@ -205,11 +206,7 @@ export default function HighlightScreen() {
                       {Math.round(reg.x / 10)}% from left · {Math.round(reg.y / 10)}% from top
                     </Text>
                   </View>
-                  {reg.comment !== "" && (
-                    <Text style={[typography.footnote, { color: colors.textSecondary, marginTop: 4 }]}>
-                      {reg.comment}
-                    </Text>
-                  )}
+
                 </View>
               ))}
 
@@ -266,10 +263,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 10,
     borderWidth: 1,
-  },
-  preview: {
-    width: "100%",
-    height: 260,
   },
   regionCard: {
     padding: 12,

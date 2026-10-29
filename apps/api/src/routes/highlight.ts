@@ -66,7 +66,7 @@ export const createHighlightRouter = (deps: HighlightRouterDeps = {}) => {
     if (bytes.byteLength > IMAGE_MAX_BYTES) {
       throw new ApiError("payload_too_large", "That image is too large.");
     }
-    const {type:contentType}=inspectImage(bytes);
+    inspectImage(bytes);
     const requestDeps = c.get("deps");
     const result = await analyzeHighlight({
       db: requireBinding(c.env, "DB"),
@@ -76,7 +76,6 @@ export const createHighlightRouter = (deps: HighlightRouterDeps = {}) => {
       env: c.env,
       session,
       image: bytes,
-      contentType,
       note: typeof note === "string" ? note : "",
       requestId: c.get("requestId"),
       signal:c.req.raw.signal,

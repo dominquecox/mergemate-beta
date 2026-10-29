@@ -812,7 +812,6 @@ describe("misc engine helpers", () => {
         env: {},
         session: user,
         image: new Uint8Array([1, 2, 3]),
-        contentType: "image/png",
         note: "",
         requestId: "r1",
       }),
