@@ -1136,8 +1136,8 @@ export const analyzeHighlight = async (args: {
   const { limit, model, limits: effectiveLimits } = await gateAction(stores, limits, session, env, "highlight");
   const key = `${userId}/${crypto.randomUUID()}`;
   const clean = await scrubForModel(env.IMAGES, image, contentType);
-  await uploads.put(key, clean, { httpMetadata: { contentType } });
   try {
+    await uploads.put(key, clean, { httpMetadata: { contentType } });
     if(await db.prepare('SELECT 1 AS present FROM account_deletions WHERE user_id=?').bind(userId).first())throw new ApiError('forbidden','Account deletion is pending.');
     const dataUrl = `data:${contentType};base64,${toBase64(clean)}`;
     const provider = createModelProvider(model.env, "highlight", { transport, ai });
