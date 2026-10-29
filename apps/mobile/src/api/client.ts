@@ -1,5 +1,6 @@
 import type {NoteContext,PrivateNote,SavePrivateNote,FeatureFlags} from "@mergemate/contracts";
 import type {InboxMutation,InboxReceipt} from "@mergemate/contracts";
+import type {PrSearchFilters,PrSearchPage} from '@mergemate/contracts';
 import {
   User,
   Session,
@@ -30,6 +31,7 @@ export interface ApiClient {
   clearCache(): void;
   invalidateSession(): void;
   getNotificationPage(filter?: NotificationFilter, cursor?: string | null, search?: string): Promise<{items: Notification[]; nextCursor: string | null;serverTime?:string;refreshAt?:string|null}>;
+  searchPrs(filters:PrSearchFilters,cursor?:string|null,signal?:AbortSignal):Promise<PrSearchPage>;
   getRepoPage(cursor?: string | null): Promise<{items: Repo[]; nextCursor: string | null}>;
   getFeatureFlags(refresh?:boolean): Promise<FeatureFlags>;
   health(): Promise<{ ok: boolean; version: string }>;

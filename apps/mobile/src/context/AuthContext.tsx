@@ -49,6 +49,7 @@ async function openAuthorizeUrl(url: string): Promise<void> {
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
+  useEffect(()=>{StorageService.setRecentSearchAccount(user?.id??null);},[user?.id]);
   const [session, setSession] = useState<Session | null>(null);
   const [isDemo, setIsDemo] = useState(false);
   const [isLoading, setIsLoading] = useState(true);

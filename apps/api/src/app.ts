@@ -1,3 +1,4 @@
+import {searchPrs} from './routes/search';
 import { Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import type { AppEnv, Deps } from "./env";
@@ -75,6 +76,7 @@ export const createApp = (deps: Deps = defaultDeps) => {
   app.route("/v1", github);
   app.route("/v1", notifications);
   app.route("/v1", notes);
+  app.route("/v1", searchPrs);
   app.route("/v1", telemetry);
   app.route("/v1", activity);
   app.route("/v1", publicContent);

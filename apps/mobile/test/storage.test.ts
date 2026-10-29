@@ -18,6 +18,7 @@ import { Platform } from "react-native";
 describe("StorageService", () => {
   beforeEach(async () => {
     mockSecureStore.clear();
+    StorageService.setRecentSearchAccount(null);
     await StorageService.clearSessionToken();
   });
 
@@ -59,6 +60,7 @@ describe("StorageService", () => {
   });
 
   it("stores and deduplicates recent search terms", async () => {
+    StorageService.setRecentSearchAccount("fixture-a");
     await StorageService.addRecentSearch("stripe auth");
     await StorageService.addRecentSearch("schema migration");
     await StorageService.addRecentSearch("stripe auth");
@@ -67,6 +69,15 @@ describe("StorageService", () => {
     expect(searches[0]).toBe("stripe auth");
     expect(searches[1]).toBe("schema migration");
     expect(searches.length).toBe(2);
+  });
+  it("isolates private session recents and ignores late writes from the old account",async()=>{
+    StorageService.setRecentSearchAccount('account-a');await StorageService.addRecentSearch('private-repository','account-a');expect(await StorageService.getRecentSearches('account-a')).toEqual(['private-repository']);
+    StorageService.setRecentSearchAccount('account-b');await StorageService.addRecentSearch('late-private-a','account-a');expect(await StorageService.getRecentSearches('account-b')).toEqual([]);expect(await StorageService.getRecentSearches('account-a')).toEqual([]);
+    await StorageService.addRecentSearch('b-only','account-b');StorageService.setRecentSearchAccount(null);StorageService.setRecentSearchAccount('account-b');expect(await StorageService.getRecentSearches('account-b')).toEqual([]);
+  });
+  it("bounds recents and clears legacy shared search storage without persisting query text",async()=>{
+    mockSecureStore.set('mergemate_recent_searches',JSON.stringify(['old-private']));StorageService.setRecentSearchAccount('account-c');await Promise.resolve();expect(mockSecureStore.has('mergemate_recent_searches')).toBe(false);
+    for(let n=0;n<8;n++)await StorageService.addRecentSearch('query '+n,'account-c');expect(await StorageService.getRecentSearches('account-c')).toHaveLength(5);expect([...mockSecureStore.values()].some(value=>value.includes('query '))).toBe(false);await StorageService.clearRecentSearches('account-c');expect(await StorageService.getRecentSearches('account-c')).toEqual([]);
   });
   it("fails closed rather than keeping native session credentials outside secure storage",async()=>{
     Platform.OS="ios";

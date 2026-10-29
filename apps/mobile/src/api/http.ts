@@ -1,3 +1,4 @@
+import {PrSearchFilters,PrSearchPage} from '@mergemate/contracts';
 import {FeatureFlagCache} from "./feature-flags";
 import {notifySessionChange,hasPendingLogout,setPendingLogout} from "../auth/session-events";
 import { z } from "zod";
@@ -186,7 +187,7 @@ export class HttpApiClient implements ApiClient {
 
   private request<T = void>(opts: RequestOptions<T>): Promise<T> {
     opts={...opts,sessionGeneration:opts.sessionGeneration??this.sessionGeneration};
-    if ((opts.method ?? 'GET') === 'GET') {
+    if ((opts.method ?? 'GET') === 'GET' && !opts.signal) {
       return this.reads.run(`get:${opts.auth !== false}:${!!opts.probe}:${!!opts.sessionMutation}:${opts.path}`, () => this.readRequest(opts));
     }
     return this.readRequest(opts).then(value=>{
@@ -267,7 +268,7 @@ export class HttpApiClient implements ApiClient {
         // Web: the browser sends the HttpOnly session cookie. Native never uses cookies.
         ...(opts.signal?{signal:opts.signal}:{}),
         credentials: opts.credentials ?? (this.web ? "include" : "omit"),
-      }, opts.timeoutMs);};
+      }, opts.timeoutMs,opts.signal);};
       const res=authed && !opts.sessionMutation && !opts.isRefresh ? await this.withCookieLock("shared",deliver) : await deliver();
 
       if(authed && !opts.allowStaleSession && generation!==this.sessionGeneration)throw new ApiClientError("unauthorized",messageForCode("unauthorized"));
@@ -304,23 +305,24 @@ export class HttpApiClient implements ApiClient {
     }
   }
 
-  private async fetchWithTimeout(url: string, init: RequestInit, timeoutMs?: number): Promise<Response> {
+  private async fetchWithTimeout(url: string, init: RequestInit, timeoutMs?: number,signal?:AbortSignal): Promise<Response> {
     const controller = new AbortController();
+    const caller = init.signal ?? signal ?? undefined;
     const timer = setTimeout(() => controller.abort(), timeoutMs ?? this.timeoutMs);
     // React Native's installed abort-controller has no AbortSignal.any().
     const cancel=()=>controller.abort();
-    if(init.signal?.aborted)cancel();else init.signal?.addEventListener('abort',cancel,{once:true});
+    if(caller?.aborted)cancel();else caller?.addEventListener('abort',cancel,{once:true});
     try {
       return await this.fetchImpl(url, { ...init, signal: controller.signal });
     } catch (e) {
-      if(init.signal?.aborted)throw new ApiClientError("cancelled",messageForCode("cancelled"));
+      if(caller?.aborted)throw new ApiClientError("cancelled",messageForCode("cancelled"));
       if (controller.signal.aborted) {
         throw new ApiClientError("timeout", messageForCode("timeout"));
       }
       throw new ApiClientError("network", messageForCode("network"));
     } finally {
       clearTimeout(timer);
-      init.signal?.removeEventListener('abort',cancel);
+      caller?.removeEventListener('abort',cancel);
     }
   }
 
@@ -548,6 +550,11 @@ export class HttpApiClient implements ApiClient {
     const body=InboxMutation.parse(input);
     const receipt=await this.actions.run(`inbox-operation:${id}:${body.operationId}`,()=>this.request({method:'POST',path:`/notifications/${enc(id)}/state`,body,schema:InboxReceipt}));
     this.reads.invalidate('inbox:');return receipt;
+  }
+
+  async searchPrs(filters:PrSearchFilters,cursor?:string|null,signal?:AbortSignal){
+    const parsed=PrSearchFilters.parse(filters),params=new URLSearchParams();for(const [key,value] of Object.entries(parsed))if(value)params.set(key,value);if(cursor)params.set('cursor',cursor);
+    return this.request({path:'/search/prs?'+params.toString(),schema:PrSearchPage,signal});
   }
 
   getNotificationPage(filter: NotificationFilter = 'all', cursor?: string | null, search = ''): Promise<{items: Notification[]; nextCursor: string | null;serverTime?:string;refreshAt?:string|null}> {

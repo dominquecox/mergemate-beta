@@ -36,6 +36,7 @@ try{
       if(path==='/me/installations')return reply(200,{items:[],installUrl:'https://github.com/apps/mergemate/installations/new'});
       if(path==='/repos')return reply(200,{items:[{id:'fixture-repo',fullName:'fixture/repo',private:true,watching:watched}],nextCursor:null});
       if(path==='/repos/fixture-repo/watch'){watchWrites++;watched=request.postDataJSON().watching;return reply(200,{id:'fixture-repo',fullName:'fixture/repo',watching:watched});}
+      if(path==='/search/prs')return reply(200,{items:[],nextCursor:null,candidates:0,incomplete:false,capped:false});
       if(path==='/notifications')return reply(200,{items:[],nextCursor:null});
       if(path==='/auth/csrf')return reply(200,{csrfToken:'local-fixture-csrf'});
       if(path==='/settings'){if(request.method()==='PUT'){settingsWrites++;preferences=request.postDataJSON();await new Promise(resolve=>setTimeout(resolve,100));}return reply(200,preferences);}

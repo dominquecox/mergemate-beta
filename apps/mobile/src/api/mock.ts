@@ -1,3 +1,4 @@
+import type {PrSearchFilters,PrSearchPage} from '@mergemate/contracts';
 import {disabledFeatureFlags} from "./feature-flags";
 import { ApiClientError } from "./errors";
 import { AI_CONSENT_VERSION } from "../config/consent";
@@ -22,6 +23,7 @@ import {
 } from "../types";
 
 export class MockApiClient implements ApiClient {
+  async searchPrs(_filters:PrSearchFilters,_cursor?:string|null,_signal?:AbortSignal):Promise<PrSearchPage>{throw new ApiClientError('not_configured','Search needs a configured API.');}
   async getFeatureFlags(){return disabledFeatureFlags();}
   invalidateInbox():void {}
   invalidateCache(): void {  }
