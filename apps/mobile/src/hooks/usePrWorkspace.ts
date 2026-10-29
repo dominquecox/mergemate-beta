@@ -26,7 +26,7 @@ export function usePrWorkspace(owner:string,repo:string,number:number,consent:bo
  },[owner,repo,number]);
  const loadPr=useCallback(async(resetChecks=true)=>{
   metaController.current?.abort();const abort=control();metaController.current=abort;if(!value.current)setLoading(true);setRefreshing(true);setError(null);
-  try{const fresh=await api.getPrMetadata(owner,repo,number,abort.signal);if(!active.current||abort.signal.aborted)return;const previous=value.current,changed=previous?.headSha!==fresh.headSha;
+  try{const fresh=await api.getPrMetadata(owner,repo,number,abort.signal,true);if(!active.current||abort.signal.aborted)return;const previous=value.current,changed=previous?.headSha!==fresh.headSha;
    if(changed||!previous){for(const key of ['files','comments','checks'] as const){versions.current[key]++;locks.current[key]=false;pageControllers.current[key]?.abort();}next.current={files:'1',comments:'review:1',checks:fresh.checkCursor??'checks:1'};setPageBusy({...idle});setPageError({...noErrors});setCapped({...idle});}
    else if(resetChecks){versions.current.checks++;locks.current.checks=false;pageControllers.current.checks?.abort();next.current={...next.current,checks:'checks:1'};setPageError(old=>({...old,checks:null}));setCapped(old=>({...old,checks:false}));}
    const merged=previous&&!changed?{...fresh,files:previous.files,comments:previous.comments,checks:resetChecks?[]:previous.checks,summary:previous.summary,risk:previous.risk,secretWarning:previous.secretWarning,aiNotice:previous.aiNotice}:fresh;value.current=merged;setDetail(merged);setCursors(next.current);

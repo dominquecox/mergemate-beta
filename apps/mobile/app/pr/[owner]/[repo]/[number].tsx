@@ -123,7 +123,7 @@ function PrWorkspace({owner,repo,number}:{owner:string;repo:string;number:string
         />
       ) : (
         <>
-          <ScrollView ref={scroll} onScroll={event=>{scrollOffset.current=event.nativeEvent.contentOffset.y;}} scrollEventThrottle={16} contentContainerStyle={{ padding:isDesktop?24:spacing.base, paddingBottom:120 }}>
+          <ScrollView testID="pr-workspace-scroll" ref={scroll} onScroll={event=>{scrollOffset.current=event.nativeEvent.contentOffset.y;}} scrollEventThrottle={16} contentContainerStyle={{ padding:isDesktop?24:spacing.base, paddingBottom:120 }}>
             <ReadoutControls label="Pull request summary" sentences={narrationSentences([...(detail.summary?[detail.summary.whatChanged,detail.summary.whyItMatters,...detail.summary.suggestedFocus]:[]),...(detail.risk?[`Risk level: ${detail.risk.level}.`,...detail.risk.reasons]:[])])}/>
 
             <Button title="Refresh workspace" variant="ghost" loading={isRefreshing} onPress={()=>void loadPr()}/>
@@ -318,7 +318,7 @@ function PrWorkspace({owner,repo,number}:{owner:string;repo:string;number:string
               ) : (
                 <View style={{ marginTop: spacing.xs }}>
                   {detail.files.map((file) => (
-                    <View key={file.filename} style={{marginTop:12,backgroundColor:colors.surfaceElevated,borderRadius:8,overflow:"hidden"}}>
+                    <View testID={`workspace-file-${file.filename}`} key={file.filename} style={{marginTop:12,backgroundColor:colors.surfaceElevated,borderRadius:8,overflow:"hidden"}}>
                       <TouchableOpacity accessibilityRole="button" accessibilityLabel={`Toggle diff for ${file.filename}`} accessibilityState={{expanded:expandedFiles.includes(file.filename)}} aria-expanded={expandedFiles.includes(file.filename)} onPress={()=>setExpandedFiles(prev=>prev.includes(file.filename)?prev.filter(name=>name!==file.filename):[...prev,file.filename])} style={{flexDirection:"row",alignItems:"center",padding:12,gap:8,minHeight:48}}><Icon name={expandedFiles.includes(file.filename)?"chevron-down":"chevron-forward"} size={16} color={colors.textSecondary}/><Text style={[typography.code,{color:colors.text,flex:1}]}>{file.filename} · {file.status}</Text><Text style={[typography.code,{color:colors.riskLow,fontSize:11}]}>+{file.additions}</Text><Text style={[typography.code,{color:colors.riskHigh,fontSize:11}]}>-{file.deletions}</Text></TouchableOpacity>
                       {file.previousPath&&<Text style={{color:colors.textSecondary,paddingHorizontal:12}}>Previously: {file.previousPath}</Text>}
                       {expandedFiles.includes(file.filename)&&file.patchState==='partial'&&<Text accessibilityRole="alert" style={{color:colors.textSecondary,padding:12}}>Partial patch: this is not the complete diff. Open this PR in GitHub for the full file.</Text>}

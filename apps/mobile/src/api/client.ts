@@ -66,7 +66,7 @@ export interface ApiClient {
   getPrFilePage(owner: string, repo: string, number: number, cursor?:string|null,options?:WorkspaceRead):Promise<WorkspacePage<import('../types').PrFile>>;
   getPrCommentPage(owner: string, repo: string, number: number, cursor?:string|null,options?:WorkspaceRead):Promise<WorkspacePage<import('../types').PrComment>>;
   getPrCheckPage(owner:string,repo:string,number:number,cursor?:string|null,options?:WorkspaceRead):Promise<WorkspacePage<import('../types').PrCheck>>;
-  getPrMetadata(owner: string, repo: string, number: number,signal?:AbortSignal): Promise<PrDetail>;
+  getPrMetadata(owner: string, repo: string, number: number,signal?:AbortSignal,workspace?:boolean): Promise<PrDetail>;
   getPrDetail(owner: string, repo: string, number: number,signal?:AbortSignal): Promise<PrDetail>;
   getPrSummary(owner: string, repo: string, number: number,signal?:AbortSignal): Promise<PrSummary>;
   getPrRisk(owner: string, repo: string, number: number,signal?:AbortSignal): Promise<PrRisk>;

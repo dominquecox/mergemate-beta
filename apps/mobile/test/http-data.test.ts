@@ -83,7 +83,7 @@ describe("pull request detail", () => {
     expect(d.secretWarning).toMatchObject({ file: "config/stripe.ts", line: 4, rule: "stripe-key" });
     expect(d.secretWarning?.maskedSnippet).toContain("value hidden");
     expect(d.secretWarning?.maskedSnippet).toContain("+1 more");
-    expect(d.files.map((f) => f.status)).toEqual(["added", "modified"]);
+    expect(d.files.map((f) => f.status)).toEqual(["added", "renamed"]);
     expect(d.checks.map((c) => c.conclusion)).toEqual(["success", "pending", "failure"]);
     expect(d.comments).toHaveLength(1);
     expect(d.comments[0]?.author).toBe("reviewer");

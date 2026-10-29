@@ -565,8 +565,8 @@ export class HttpApiClient implements ApiClient {
     const page=await this.request({path:this.workspacePagePath(owner,repo,number,'checks',cursor,options),signal:options?.signal,schema:z.object({items:z.array(PrCheckSchema),nextCursor:z.string().nullable(),headSha:z.string().optional(),capped:z.boolean().optional()})});return {...page,items:page.items.map(mapCheck)};
   }
 
-  async getPrMetadata(owner: string, repo: string, number: number,signal?:AbortSignal): Promise<PrDetail> {
-    return mapPrDetail(await this.request({ path: `${prPath(owner, repo, number)}?lazy=1&workspace=1`,signal, schema: PrDetailSchema }));
+  async getPrMetadata(owner: string, repo: string, number: number,signal?:AbortSignal,workspace=false): Promise<PrDetail> {
+    return mapPrDetail(await this.request({ path: `${prPath(owner, repo, number)}?lazy=1${workspace?'&workspace=1':''}`,signal, schema: PrDetailSchema }));
   }
 
   async getPrDetail(owner: string, repo: string, number: number,signal?:AbortSignal): Promise<PrDetail> {

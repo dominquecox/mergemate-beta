@@ -176,10 +176,10 @@ describe("GET /v1/prs/:owner/:repo/:number", () => {
     expect(pr.files[0]).toMatchObject({ path: "src/cache.ts", patch: "@@ +1 @@" });
     expect(pr.files[1]?.patch).toBeUndefined();
     expect(pr.checks).toEqual([
-      { name: "build", state: "success", url: "https://github.com/acme/api/runs/1" },
-      { name: "test", state: "failure" },
-      { name: "lint", state: "in_progress" },
-      { name: "deploy/preview", state: "queued" },
+      { id:"run:build:0",name: "build", state: "success", url: "https://github.com/acme/api/runs/1" },
+      { id:"run:test:1",name: "test", state: "failure" },
+      { id:"run:lint:2",name: "lint", state: "in_progress" },
+      { id:"status:deploy/preview",name: "deploy/preview", state: "queued" },
     ]);
     expect(pr.threads.map((t) => [t.id, t.path, t.comments.length])).toEqual([
       ["conversation", null, 1],
