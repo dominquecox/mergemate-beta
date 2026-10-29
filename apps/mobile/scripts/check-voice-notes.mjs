@@ -9,14 +9,16 @@ const proof='/private/tmp/mergemate-voice-notes';await mkdir(proof,{recursive:tr
 const server=createServer(async(req,res)=>{try{let file=resolve(root,'.'+new URL(req.url,'http://localhost').pathname);if(!file.startsWith(root+sep)&&file!==root){res.writeHead(404).end();return;}let body;try{body=await readFile(file);}catch{file=resolve(root,'index.html');body=await readFile(file);}res.writeHead(200,{'content-type':{'.js':'application/javascript','.css':'text/css','.png':'image/png','.ttf':'font/ttf','.ico':'image/x-icon'}[extname(file)]??'text/html'}).end(body);}catch{res.writeHead(500).end();}});
 await new Promise(r=>server.listen(0,'127.0.0.1',r));const base=`http://127.0.0.1:${server.address().port}`;let browser;
 try{
- browser=await chromium.launch({headless:true,channel:'chrome',args:['--use-fake-device-for-media-stream','--use-fake-ui-for-media-stream','--mute-audio']});
+ browser=await chromium.launch({headless:true,channel:'chrome',args:['--use-fake-device-for-media-stream','--use-fake-ui-for-media-stream','--mute-audio','--use-file-for-fake-audio-capture=/private/tmp/j006-fixture-mic.wav']});
  for(const width of [393,1440])for(const mode of ['on','off','no-consent','denied']){
   const context=await browser.newContext({viewport:{width,height:1050},serviceWorkers:'block'});let transcriptCalls=0,saveCalls=0,failProvider=true,failSave=true,notes=[];
   await context.addInitScript(denied=>{
-   window.__voiceTracks=[];
+   window.__voiceTracks=[];window.__voiceRequested=false;
+   const Original=window.AudioContext;window.AudioContext=class extends Original{constructor(...args){super(...args);window.__voiceAudio=this;}};
    const original=navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
-   navigator.mediaDevices.getUserMedia=async constraints=>{if(denied)throw new DOMException('Microphone access denied','NotAllowedError');const stream=await original(constraints);window.__voiceTracks.push(...stream.getTracks());return stream;};
+   navigator.mediaDevices.getUserMedia=async constraints=>{window.__voiceRequested=true;if(denied)throw new DOMException('Microphone access denied','NotAllowedError');const stream=await original(constraints);window.__voiceTracks.push(...stream.getTracks());return stream;};
   },mode==='denied');
+  await context.grantPermissions(['microphone'],{origin:base});
   const page=await context.newPage();page.setDefaultTimeout(20000);const errors=[];page.on('pageerror',e=>errors.push(e.message));
   await context.route('**/*',async route=>{
    const request=route.request(),url=new URL(request.url());if(url.origin===base || ['blob:','data:'].includes(url.protocol))return route.continue();if(url.origin!=='https://api-dev.mergemate.dev')return route.abort();
@@ -45,7 +47,7 @@ try{
   if(mode==='off'||mode==='no-consent'){assert.equal(await record.count(),0);assert.equal(transcriptCalls,0);}
   else if(mode==='denied'){await record.click();await page.getByRole('alert').filter({hasText:/Microphone access denied/}).waitFor();assert.equal(transcriptCalls,0);}
   else{
-   await record.click();await page.getByText(/Recording 0:01/).waitFor();await page.getByRole('button',{name:'Pause recording',exact:true}).click();await page.getByText('Recording paused.',{exact:true}).waitFor();await page.screenshot({path:`${proof}/recording-paused-${width}.png`,fullPage:true});
+   await record.click();try{await page.getByText(/Recording 0:01/).waitFor();}catch(error){await page.screenshot({path:`${proof}/debug-${mode}-${width}.png`,fullPage:true});console.log('recording fixture state',await page.locator('body').innerText(),await page.evaluate(()=>({requested:window.__voiceRequested,tracks:window.__voiceTracks.length,audio:window.__voiceAudio?.state,activation:navigator.userActivation.hasBeenActive})));throw error;}await page.getByRole('button',{name:'Pause recording',exact:true}).click();await page.getByText('Recording paused.',{exact:true}).waitFor();await page.screenshot({path:`${proof}/recording-paused-${width}.png`,fullPage:true});
    await page.getByRole('button',{name:'Resume recording',exact:true}).click();await page.getByRole('button',{name:'Stop recording',exact:true}).click();await page.getByRole('button',{name:'Play recording',exact:true}).click();await page.getByRole('button',{name:'Stop playback',exact:true}).click();
    assert(await page.evaluate(()=>window.__voiceTracks.every(track=>track.readyState==='ended')));
    await page.getByRole('button',{name:'Transcribe recording',exact:true}).click();await page.getByText(/Could not transcribe this recording/).waitFor();assert.equal(saveCalls,0);await page.screenshot({path:`${proof}/transcription-error-${width}.png`,fullPage:true});

@@ -41,12 +41,12 @@ export function VoiceNoteRecorder({onTranscript}:{onTranscript:(text:string)=>vo
  };
  const stopRef=useRef(stop);stopRef.current=stop;
  const start=async()=>{
-  if(phaseRef.current!=='idle')return;set('starting');setSeconds(0);setError(null);const version=++generation.current;
+  if(phaseRef.current!=='idle')return;set('starting');setSeconds(0);setError(null);const version=++generation.current;const abort=new AbortController();controller.current=abort;
   try{
    const [flags,consent]=await Promise.all([api.getFeatureFlags(true),api.getConsent()]);
    if(version!==generation.current)return;
    if(!flags.voice_notes || !consent.ai.granted || consent.ai.version!=='1')throw new Error('Voice notes are unavailable. Check AI consent in Settings.');
-   const active=await startVoiceCapture(()=>{void stopRef.current();},value=>{if(version===generation.current)setSeconds(Math.floor(value));});
+   const active=await startVoiceCapture(()=>{void stopRef.current();},value=>{if(version===generation.current)setSeconds(Math.floor(value));},abort.signal);
    if(version!==generation.current){await active.dispose();return;}capture.current=active;set('recording');
   }catch(error){if(version===generation.current){set('idle');setError(error instanceof Error ? error.message : 'Microphone unavailable. Type a private note instead.');}}
  };

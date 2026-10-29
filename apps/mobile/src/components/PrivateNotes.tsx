@@ -19,15 +19,15 @@ export function PrivateNotes({context}:{context:NoteContext}){
 }
 function NotesWorkspace({context}:{context:NoteContext}){
  const {colors,typography}=useTheme(),flags=useFeatureFlags();const {aiConsentGranted}=useConsent();
- const [items,setItems]=useState<PrivateNote[]>([]),[text,setText]=useState(''),[loading,setLoading]=useState(true),[busy,setBusy]=useState(false),[error,setError]=useState<string|null>(null),[loaded,setLoaded]=useState(false),[active,setActive]=useState(true);
+ const [items,setItems]=useState<PrivateNote[]>([]),[text,setText]=useState(''),[loading,setLoading]=useState(true),[busy,setBusy]=useState(false),[error,setError]=useState<string|null>(null),[loaded,setLoaded]=useState(false),[active,setActive]=useState(true),[uncertain,setUncertain]=useState(false);
  const id=useRef(Crypto.randomUUID()),generation=useRef(0),lock=useRef(false);
  useEffect(()=>onSessionChange(()=>{generation.current++;setActive(false);setText('');setItems([]);}),[]);
  const load=async()=>{const version=generation.current;setLoading(true);setError(null);try{const notes=await api.getPrivateNotes(context);if(version===generation.current){setItems(notes);setLoaded(true);}}catch{if(version===generation.current)setError('Could not load private notes. Try again.');}finally{if(version===generation.current)setLoading(false);}};
  useEffect(()=>{void load();return()=>{generation.current++;};},[]);
  const save=async()=>{
   if(lock.current||!active||!text.trim())return;lock.current=true;setBusy(true);setError(null);const version=generation.current;
-  try{const note=await api.savePrivateNote({id:id.current,context,text:text.trim()});if(version!==generation.current)return;setItems(old=>[...old.filter(item=>item.id!==note.id),note]);setText('');id.current=Crypto.randomUUID();}
-  catch{if(version===generation.current)setError('Could not save this note. Your text is still here. Retry saving before editing it.');}
+  try{const note=await api.savePrivateNote({id:id.current,context,text:text.trim()});if(version!==generation.current)return;setItems(old=>[...old.filter(item=>item.id!==note.id),note]);setText('');id.current=Crypto.randomUUID();setUncertain(false);}
+  catch{if(version===generation.current){setUncertain(true);setError('Could not save this note. Your text is still here. Retry saving before editing it.');}}
   finally{lock.current=false;if(version===generation.current)setBusy(false);}
  };
  const remove=async(note:PrivateNote)=>{if(lock.current)return;lock.current=true;setBusy(true);const version=generation.current;try{await api.removePrivateNote(note.id,context);if(version===generation.current)setItems(old=>old.filter(item=>item.id!==note.id));}catch{if(version===generation.current)setError('Could not remove this note. Try again.');}finally{lock.current=false;if(version===generation.current)setBusy(false);}};
@@ -41,8 +41,8 @@ function NotesWorkspace({context}:{context:NoteContext}){
   {loaded && items.length===0 && <Text>No private notes saved here yet.</Text>}
   {items.map((note,index)=><View key={note.id} style={{gap:6,paddingVertical:8,borderBottomWidth:1,borderColor:colors.border}}><Text selectable style={[typography.body,{color:colors.text}]}>{note.text}</Text><Button title={`Remove note ${index+1}`} variant="ghost" disabled={busy} onPress={()=>remove(note)}/></View>)}
   {flags.voice_notes && aiConsentGranted && !busy && <VoiceNoteRecorder onTranscript={value=>{setText(value);id.current=Crypto.randomUUID();}}/>}
-  <TextInput multiline value={text} onChangeText={setText} maxLength={8000} editable={!busy} accessibilityLabel="Private note text" placeholder="Write a note or review your transcript before saving…" placeholderTextColor={colors.textMuted} style={{minHeight:100,padding:12,color:colors.text,borderColor:colors.border,borderWidth:1,borderRadius:8}}/>
+  <TextInput multiline value={text} onChangeText={setText} maxLength={8000} editable={!busy&&!uncertain} accessibilityLabel="Private note text" placeholder="Write a note or review your transcript before saving…" placeholderTextColor={colors.textMuted} style={{minHeight:100,padding:12,color:colors.text,borderColor:colors.border,borderWidth:1,borderRadius:8}}/>
   <Button title="Save private note" onPress={save} loading={busy} disabled={!loaded||!text.trim()||items.length>=100}/>
-  {!!text && <Button title="Discard draft note" variant="ghost" disabled={busy} onPress={()=>{setText('');id.current=Crypto.randomUUID();}}/>}
+  {!!text && <Button title="Discard draft note" variant="ghost" disabled={busy} onPress={()=>{setText('');setUncertain(false);id.current=Crypto.randomUUID();}}/>}
  </View>;
 }

@@ -90,7 +90,8 @@
         "expo-audio",
         {
           "microphonePermission": "MergeMate uses your microphone only when you record a private voice note.",
-          "enableBackgroundRecording": false
+          "enableBackgroundRecording": false,
+          "enableBackgroundPlayback": false
         }
       ]
     ],

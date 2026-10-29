@@ -57,7 +57,7 @@ const STATIC_HEADERS: Record<string, string> = {
   "Strict-Transport-Security": HSTS,
   "X-Content-Type-Options": "nosniff",
   "Referrer-Policy": "strict-origin-when-cross-origin",
-  "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
+  "Permissions-Policy": "camera=(), microphone=(self), geolocation=()",
 };
 
 /**
