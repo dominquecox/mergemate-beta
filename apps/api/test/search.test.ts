@@ -2,6 +2,7 @@ import {describe,it,expect} from 'vitest';
 import {PrSearchFilters,PrSearchPage} from '@mergemate/contracts';
 import {testContext,json,fakeAi,type RecordedCall} from './helpers';
 import {appFor,signIn} from './sign-in';
+import {getSettings} from '../src/lib/settings';
 import {githubSearchQuery} from '../src/routes/search';
 const sha='a'.repeat(40),otherSha='b'.repeat(40);
 const hit=(n:number,date='2026-10-27T10:00:00Z',repo='acme/api',author='fixture')=>({number:n,title:`Fix item ${n}`,state:'open',draft:false,user:{login:author},updated_at:date,repository_url:'https://api.github.com/repos/'+repo,pull_request:{merged_at:null}});
@@ -23,17 +24,20 @@ describe('authorized PR search',()=>{
   const first=await page('?risk=high');expect(first.items).toEqual([]);expect(first.nextCursor).not.toBeNull();const second=await page('?risk=high&cursor='+encodeURIComponent(first.nextCursor??''));expect(second.items.map(r=>r.number)).toEqual([3]);expect(second.items[0]?.risk).toBe('high');expect(models.runs).toHaveLength(0);
  });
  it('labels missing, invalid and old-commit saved risk as unassessed without models',async()=>{
-  const {ctx,session,page,cache,models}=await setup();await cache(1,'low',session.userId,otherSha);ctx.net.on('GET','https://api.github.com/repos/acme/api/pulls/',()=>json({head:{sha}}));expect((await page('?risk=unassessed')).items).toHaveLength(2);expect(models.runs).toHaveLength(0);
+  const {ctx,session,page,cache,models}=await setup();await cache(1,'low',session.userId,otherSha);await cache(2);await ctx.db.prepare('UPDATE ai_results_cache SET body=? WHERE key=?').bind('invalid-json',`${session.userId}:risk:acme/api#2@${sha}`).run();ctx.net.on('GET','https://api.github.com/repos/acme/api/pulls/',()=>json({head:{sha}}));expect((await page('?risk=unassessed')).items).toHaveLength(2);expect(models.runs).toHaveLength(0);
  });
  it('checks current access, isolates cached results and preserves consent/settings gates',async()=>{
   const {ctx,page,cache,search,session}=await setup();await cache(1);ctx.net.on('GET','https://api.github.com/repos/acme/api/pulls/',()=>json({message:'Not found'},404));expect((await page('?risk=high')).items).toEqual([]);
-  const other=await signIn(ctx,'ios',{id:777,login:'other',name:null,avatar_url:'https://avatars.githubusercontent.com/u/777'});expect((await search('?risk=high',other.headers)).status).toBe(403);
+  const other=await signIn(ctx,'ios',{id:777,login:'other',name:null,avatar_url:'https://avatars.githubusercontent.com/u/777'});expect((await search('?risk=high',other.headers)).status).toBe(403);await ctx.db.prepare('INSERT INTO consent_grants(user_id,granted,version,at) VALUES(?,1,?,?)').bind(other.userId,'1',ctx.time.now().toISOString()).run();ctx.net.on('GET','https://api.github.com/repos/acme/api/pulls/',()=>json({head:{sha}}));expect(PrSearchPage.parse(await(await search('?risk=high',other.headers)).json()).items).toEqual([]);
   await ctx.db.prepare('UPDATE consent_grants SET granted=0 WHERE user_id=?').bind(session.userId).run();expect((await search('?risk=high')).status).toBe(403);
-  expect((await search('?risk=all')).status).toBe(200);expect((await search('',{})).status).toBe(401);
+  const settings=await getSettings(ctx.env,session.userId);await ctx.db.prepare('INSERT INTO user_settings(user_id,settings,updated_at) VALUES(?,?,?)').bind(session.userId,JSON.stringify({...settings,aiSummaries:false}),ctx.time.now().toISOString()).run();expect((await search('?risk=unassessed')).status).toBe(403);expect((await search('?risk=all')).status).toBe(200);expect((await search('',{})).status).toBe(401);
  });
  it('bounds risk work to20 candidates and surfaces incomplete/capped upstream search',async()=>{
   const {ctx,page}=await setup();ctx.net.on('GET','https://api.github.com/search/issues?',()=>json({total_count:1200,incomplete_results:true,items:Array.from({length:25},(_,i)=>hit(i+1))}));ctx.net.on('GET','https://api.github.com/repos/acme/api/pulls/',()=>json({head:{sha}}));const result=await page('?risk=unassessed');expect(result).toMatchObject({candidates:20,incomplete:true,capped:true});expect(ctx.net.calls.filter(c=>c.url.includes('/pulls/'))).toHaveLength(20);expect(ctx.net.calls.filter(c=>c.url.includes('/search/issues?'))).toHaveLength(1);
   const decoded=JSON.parse(Buffer.from(result.nextCursor??'','base64url').toString());decoded.page=50;expect((await page('?risk=unassessed&cursor='+Buffer.from(JSON.stringify(decoded)).toString('base64url'))).nextCursor).toBeNull();
+ });
+ it('propagates incoming cancellation to both bounded GitHub attempts',async()=>{
+  const {ctx,call,session}=await setup(),cancel=new AbortController(),signals:boolean[]=[];cancel.abort();ctx.deps.fetch=async(input,init)=>{signals.push(init?.signal?.aborted===true);throw new Error('fixture cancelled');};const response=await call('/v1/search/prs',{headers:session.headers,signal:cancel.signal});expect(response.status).toBe(502);expect(signals).toEqual([true,true]);
  });
  it('scopes cursors to user and filters, deduplicates latest revisions and orders ties',async()=>{
   const {ctx,page,search}=await setup();ctx.net.on('GET','https://api.github.com/search/issues?',()=>json({total_count:40,items:[hit(2),hit(1),hit(2,'2026-10-27T11:00:00Z'),hit(3)]}));const result=await page();expect(result.items[0]?.number).toBe(2);expect(result.items.slice(1).map(r=>r.id)).toEqual(result.items.slice(1).map(r=>r.id).sort());const cursor=encodeURIComponent(result.nextCursor??'');expect((await search('?author=other&cursor='+cursor)).status).toBe(422);const other=await signIn(ctx,'ios',{id:888,login:'other',name:null,avatar_url:'https://avatars.githubusercontent.com/u/888'});expect((await search('?cursor='+cursor,other.headers)).status).toBe(422);expect((await search('?cursor=not-a-cursor')).status).toBe(422);
