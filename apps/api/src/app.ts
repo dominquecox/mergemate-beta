@@ -22,6 +22,7 @@ import { github } from "./routes/github";
 import { health } from "./routes/health";
 import { createHighlightRouter } from "./routes/highlight";
 import { createVoiceNotesRouter } from "./routes/voice-notes";
+import {notes} from "./routes/notes";
 import { notifications } from "./routes/notifications";
 import { publicContent } from "./routes/public";
 import { telemetry } from "./routes/telemetry";
@@ -73,6 +74,7 @@ export const createApp = (deps: Deps = defaultDeps) => {
   app.route("/v1", billingWebhooks);
   app.route("/v1", github);
   app.route("/v1", notifications);
+  app.route("/v1", notes);
   app.route("/v1", telemetry);
   app.route("/v1", activity);
   app.route("/v1", publicContent);

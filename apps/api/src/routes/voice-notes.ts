@@ -32,6 +32,7 @@ export const createVoiceNotesRouter = () => {
       throw new ApiError("validation_failed", "Send one audio field with the recording.");
     }
     // The recording is held in memory only and never stored.
+    if(audio.size>VOICE_NOTE_MAX_BYTES)throw new ApiError("payload_too_large","That recording is too large.");
     const bytes = new Uint8Array(await audio.arrayBuffer());
     if (bytes.byteLength > VOICE_NOTE_MAX_BYTES) {
       throw new ApiError("payload_too_large", "That recording is too large.");
@@ -50,6 +51,7 @@ export const createVoiceNotesRouter = () => {
       audio: bytes,
       audioType,
       requestId: c.get("requestId"),
+      signal:c.req.raw.signal,
     });
     return c.json(result.body, 200, actionHeaders(result));
   });
