@@ -1,3 +1,4 @@
+import {AccessibleSwitch} from './AccessibleSwitch';
 import React, { useState,useMemo } from "react";
 import { View, ScrollView, TouchableOpacity, StyleSheet } from "react-native";
 import { Text } from "./Text";
@@ -32,16 +33,7 @@ export function DiffView({patch,wrap:controlledWrap,onWrapChange}:{patch:string;
   );
   return (
     <View style={{ borderTopWidth: 1, borderTopColor: colors.border }}>
-      <TouchableOpacity
-        accessibilityRole="switch"
-        accessibilityState={{ checked: wrap }}
-        accessibilityLabel="Wrap long lines"
-        aria-checked={wrap}
-        onPress={() => setWrap(!wrap)}
-        style={styles.toggle}
-      >
-        <Text style={[typography.caption, { color: colors.brandLight, fontWeight: "600" }]}>{wrap ? "Wrap: on" : "Wrap: off"}</Text>
-      </TouchableOpacity>
+      <View style={[styles.toggle,{flexDirection:'row',alignItems:'center',gap:8}]}><Text style={[typography.caption,{color:colors.brandLight,fontWeight:'600'}]}>{wrap?'Wrap: on':'Wrap: off'}</Text><AccessibleSwitch value={wrap} onValueChange={setWrap} accessibilityLabel="Wrap long lines"/></View>
       {wrap ? rows : <ScrollView horizontal>{rows}</ScrollView>}
       {lines.length>visible&&<View style={{padding:12}}><Text style={{color:colors.textSecondary}}>Showing {visible} of {lines.length} diff lines.</Text>{visible<2000?<TouchableOpacity accessibilityRole="button" accessibilityLabel="Show more diff lines" style={{minHeight:44,justifyContent:'center'}} onPress={()=>setVisible(value=>Math.min(2000,value+400))}><Text style={{color:colors.brandLight}}>Show more diff lines</Text></TouchableOpacity>:<Text style={{color:colors.textSecondary}}>Open this PR in GitHub to read the remaining lines.</Text>}</View>}
     </View>

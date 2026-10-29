@@ -41,6 +41,7 @@ try{
    if(path==='/auth/refresh')return reply(200,{session:{expiresAt:'2099-01-01T00:00:00.000Z',csrfToken:'fixture-csrf'}});
    if(path==='/auth/csrf')return reply(200,{csrfToken:'fixture-csrf'});
    if(path==='/notifications')return reply(200,{items:[],nextCursor:null});
+   if(path.endsWith('/pages/checks'))return reply(200,{items:[],nextCursor:null,headSha:'abc123',capped:false});
    if(path==='/consent')return reply(200,{ai:{granted:true,version:'1',at:'2026-10-28T12:00:00.000Z'}});
    if(path==='/prs/fixture/repo/7')return reply(200,{repo:'fixture/repo',number:7,title:'A safe review',body:'Existing review body.',author:'fixture',status:'open',baseBranch:'main',headBranch:'feature',headSha:'abc123',additions:3,deletions:1,changedFiles:1,files:[],checks:[],threads:[],createdAt:'2026-10-28T10:00:00.000Z',updatedAt:'2026-10-28T12:00:00.000Z',htmlUrl:'https://github.com/fixture/repo/pull/7'});
    if(path.endsWith('/summary')){aiCalls++;return reply(200,{whatChanged:'The review screen is clearer. ghp_fixture_secret_should_never_be_spoken',whyItMatters:'It is easier to scan.',suggestedFocus:['Check the loading state.'],coverage:{analyzedFiles:1,skippedFiles:0,truncatedFiles:0}});}
