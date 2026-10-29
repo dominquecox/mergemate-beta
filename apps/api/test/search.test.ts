@@ -1,6 +1,6 @@
 import {describe,it,expect} from 'vitest';
 import {PrSearchFilters,PrSearchPage} from '@mergemate/contracts';
-import {testContext,json,fakeAi} from './helpers';
+import {testContext,json,fakeAi,type RecordedCall} from './helpers';
 import {appFor,signIn} from './sign-in';
 import {githubSearchQuery} from '../src/routes/search';
 const sha='a'.repeat(40),otherSha='b'.repeat(40);
@@ -19,7 +19,7 @@ describe('authorized PR search',()=>{
  });
  it('continues a risk-filtered empty page and only uses owned current-commit assessments',async()=>{
   const {ctx,session,page,cache,models}=await setup();await cache(1,'high',session.userId,otherSha);await cache(3);
-  ctx.net.on('GET','https://api.github.com/repos/acme/api/pulls/',()=>json({head:{sha}}));ctx.net.on('GET','https://api.github.com/search/issues?',request=>json({total_count:40,items:request.url.endsWith('page=1')?[hit(1),hit(2)]:[hit(3),hit(4)]}));
+  ctx.net.on('GET','https://api.github.com/repos/acme/api/pulls/',()=>json({head:{sha}}));ctx.net.on('GET','https://api.github.com/search/issues?',(request:RecordedCall)=>json({total_count:40,items:request.url.endsWith('page=1')?[hit(1),hit(2)]:[hit(3),hit(4)]}));
   const first=await page('?risk=high');expect(first.items).toEqual([]);expect(first.nextCursor).not.toBeNull();const second=await page('?risk=high&cursor='+encodeURIComponent(first.nextCursor??''));expect(second.items.map(r=>r.number)).toEqual([3]);expect(second.items[0]?.risk).toBe('high');expect(models.runs).toHaveLength(0);
  });
  it('labels missing, invalid and old-commit saved risk as unassessed without models',async()=>{

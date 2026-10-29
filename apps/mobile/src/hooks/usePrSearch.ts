@@ -2,7 +2,7 @@ import {useCallback,useEffect,useRef,useState} from 'react';
 import {PrSearchFilters,type PrSearchPage,type PrSearchItem} from '@mergemate/contracts';
 import {api} from '../api';
 import {toUserMessage} from '../api/errors';
-export function mergeSearchRows(rows:PrSearchItem[]){const byId=new Map<string,PrSearchItem>();for(const row of rows){const old=byId.get(row.id);if(!old||Date.parse(old.updatedAt)<=Date.parse(row.updatedAt))byId.set(row.id,row);}return [...byId.values()].sort((a,b)=>Date.parse(b.updatedAt)-Date.parse(a.updatedAt)||(a.id<b.id?-1:a.id>b.id?1:0));}
+import {mergeSearchRows} from '../search/rows';
 export function usePrSearch(filters:PrSearchFilters){
  const key=JSON.stringify(filters),current=useRef(filters);current.current=filters;
  const generation=useRef(0),controller=useRef<AbortController|null>(null),pending=useRef(false),cursor=useRef<string|null>(null);

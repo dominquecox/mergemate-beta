@@ -525,7 +525,7 @@ export class HttpApiClient implements ApiClient {
   // Notifications
   // ---------------------------------------------------------------------------------------------
 
-  searchPrs(filters:PrSearchFilters,cursor?:string|null,signal?:AbortSignal){
+  async searchPrs(filters:PrSearchFilters,cursor?:string|null,signal?:AbortSignal){
     const parsed=PrSearchFilters.parse(filters),params=new URLSearchParams();for(const [key,value] of Object.entries(parsed))if(value)params.set(key,value);if(cursor)params.set('cursor',cursor);
     return this.request({path:'/search/prs?'+params.toString(),schema:PrSearchPage,signal});
   }

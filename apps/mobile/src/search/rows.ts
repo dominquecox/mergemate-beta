@@ -1,0 +1,2 @@
+import type {PrSearchItem} from '@mergemate/contracts';
+export function mergeSearchRows(rows:PrSearchItem[]){const byId=new Map<string,PrSearchItem>();for(const row of rows){const old=byId.get(row.id);if(!old||Date.parse(old.updatedAt)<=Date.parse(row.updatedAt))byId.set(row.id,row);}return [...byId.values()].sort((a,b)=>Date.parse(b.updatedAt)-Date.parse(a.updatedAt)||(a.id<b.id?-1:a.id>b.id?1:0));}
