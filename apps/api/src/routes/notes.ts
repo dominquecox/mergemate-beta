@@ -12,8 +12,8 @@ async function access(c:Context<AppEnv>,context:NoteContext){
  if(session.demo || !session.userId)throw new ApiError("forbidden","Private notes are unavailable in demo mode.");
  if(context.kind==="pr"){
   const token=await getAccessToken(c.env,session.userId,c.get("deps").now());
-  const [owner,repo]=context.repo.split("/");
-  await githubGet(c.get("deps"),token,`/repos/${encodeURIComponent(owner!)}/${encodeURIComponent(repo!)}/pulls/${context.number}`);
+  const [owner="",repo=""]=context.repo.split("/");
+  await githubGet(c.get("deps"),token,`/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/pulls/${context.number}`);
  }
  return session.userId;
 }

@@ -247,6 +247,7 @@ export const transcribeWithMeta = async (args: {
   let outcome:AiOutcome="upstream_error";
   try {
     for (let attempt = 0; attempt < 2; attempt += 1) {
+      if(args.signal?.aborted)throw transcribeUnavailable();
       let res: Response;
       try {
         res = await fetchImpl(`${baseUrl}/asr/transcribe`, {

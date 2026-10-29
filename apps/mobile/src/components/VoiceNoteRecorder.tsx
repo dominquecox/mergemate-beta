@@ -35,8 +35,8 @@ export function VoiceNoteRecorder({onTranscript}:{onTranscript:(text:string)=>vo
  const stop=async()=>{
   if(!capture.current || !['recording','paused'].includes(phaseRef.current))return;
   set('stopping');const version=generation.current,active=capture.current;capture.current=null;
-  try{const data=await active.stop();if(version!==generation.current){data.fill(0);return;}bytes.current=data;preview.current=await createVoicePreview(data);if(version!==generation.current){await preview.current.dispose();preview.current=null;data.fill(0);return;}set('ready');}
-  catch{if(version===generation.current){set('idle');setError('Could not finish the recording. Try again or type a note.');}}
+  try{const data=await active.stop();if(version!==generation.current){data.fill(0);return;}const playback=await createVoicePreview(data);if(version!==generation.current){await playback.dispose();data.fill(0);return;}bytes.current=data;preview.current=playback;set('ready');}
+  catch{if(version===generation.current){await dispose().catch(()=>{});set('idle');setError('Could not finish the recording. Try again or type a note.');}}
  };
  const stopRef=useRef(stop);stopRef.current=stop;
  const start=async()=>{

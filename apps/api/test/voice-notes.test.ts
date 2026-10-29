@@ -194,11 +194,11 @@ describe("voice-notes transcription", () => {
     expect(metrics.points[0]?.doubles?.slice(3)).toEqual([1.55,1,1]);
     const encoded=JSON.stringify(metrics.points);for(const marker of [transcript,'PRIVATE_FILENAME',userId,TEST_API_KEY,'RIFF'])expect(encoded).not.toContain(marker);
   });
-  it('records unknown duration explicitly and never invents seconds for compressed formats',async()=>{
+  it('rejects compressed formats whose duration cannot be verified before provider processing',async()=>{
     const metrics=fakeDataset();const ctx=testContext({...validModelEnv(),AI_METRICS:metrics});flagOn(ctx);
     ctx.net.on('POST','https://api.meta.ai/v1/asr/transcribe',()=>json({text:'fixture'}));const call=appFor(ctx);const {headers}=await signIn(ctx,'ios');await grant(call,headers);
-    expect((await call('/v1/voice-notes',{method:'POST',headers,body:audioForm(audioFile(m4aBytes()))})).status).toBe(200);
-    expect(metrics.points[0]?.doubles?.slice(3)).toEqual([0,0,0]);
+    expect((await call('/v1/voice-notes',{method:'POST',headers,body:audioForm(audioFile(m4aBytes()))})).status).toBe(422);
+    expect(metrics.points).toHaveLength(0);
   });
   it('records one failure including retry latency, but no metric for validation before an upstream call',async()=>{
     const metrics=fakeDataset();const ctx=testContext({...validModelEnv(),AI_METRICS:metrics});flagOn(ctx);
@@ -232,7 +232,7 @@ describe("voice-notes transcription", () => {
     expect(res.headers.get("Cache-Control")).toBe("no-store");
   });
 
-  it("forwards m4a, aac and webm by magic bytes", async () => {
+  it("rejects unverified m4a, aac and webm signatures", async () => {
     for (const bytes of [m4aBytes(), aacBytes(), webmBytes()]) {
       const ctx = successContext("noted");
       const call = appFor(ctx);
@@ -243,7 +243,7 @@ describe("voice-notes transcription", () => {
         headers,
         body: audioForm(audioFile(bytes, "note.audio")),
       });
-      expect(res.status).toBe(200);
+      expect(res.status).toBe(422);
     }
   });
 

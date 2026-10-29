@@ -1,5 +1,5 @@
 import {z} from "zod";
-const RepoName=z.string().regex(/^[A-Za-z0-9_.-]{1,100}\/[A-Za-z0-9_.-]{1,100}$/).transform(s=>s.toLowerCase());
+const RepoName=z.string().regex(/^[A-Za-z0-9_.-]{1,100}\/[A-Za-z0-9_.-]{1,100}$/).refine(s=>s.split("/").every(part=>part!=="." && part!=="..")).transform(s=>s.toLowerCase());
 export const NoteContext=z.discriminatedUnion("kind",[
  z.object({kind:z.literal("pr"),repo:RepoName,number:z.number().int().min(1).max(2147483647)}).strict(),
  z.object({kind:z.literal("highlight")}).strict(),
