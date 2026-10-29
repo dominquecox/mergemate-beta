@@ -54,7 +54,7 @@ export function mapCheck(check: ContractPrDetail["checks"][number], index: numbe
 function mapFileStatus(status: string): PrFile["status"] {
   if (status === "added") return "added";
   if (status === "removed") return "removed";
-  return ["modified","renamed","copied","changed"].includes(status)?status as PrFile["status"]:"unknown";
+  switch(status){case "modified":case "renamed":case "copied":case "changed":return status;default:return "unknown";}
 }
 
 export function mapFile(file: ContractPrFile): PrFile {

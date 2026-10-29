@@ -30,6 +30,8 @@ const userToken = (c: Context<AppEnv>) => {
   return getAccessToken(c.env, userId, c.get("deps").now());
 };
 
+function workspaceDeps(c:Context<AppEnv>):Deps{const deps=c.get('deps'),deadline=AbortSignal.timeout(20_000);return {...deps,fetch:(input,init)=>deps.fetch(input,{...init,signal:AbortSignal.any([deadline,c.req.raw.signal,...(init?.signal?[init.signal]:[])])})};}
+
 interface GhInstallation {
   id: number;
   account: { login: string; type: string } | null;
@@ -357,7 +359,7 @@ export const github = new Hono<AppEnv>()
     const sources=section==='files'?['files']:section==='checks'?['runs','status']:modern?['review','conversation','reviews']:['review','conversation'];
     if(!sources.includes(source)||!Number.isInteger(page)||page<1||page>120)throw new ApiError('validation_failed','Invalid workspace cursor.');
     if(c.get('session').demo){const detail=DEMO_PRS.find(pr=>pr.repo===`${owner}/${repo}`&&pr.number===Number(number));if(!detail)throw new ApiError('not_found','Pull request not found.');return c.json({items:section==='files'?detail.files:section==='checks'?detail.checks:detail.threads,nextCursor:null,headSha:detail.headSha,capped:false});}
-    const token=await userToken(c),deps=c.get('deps'),base=`/repos/${owner}/${repo}`,limit=25;
+    const token=await userToken(c),deps=workspaceDeps(c),base=`/repos/${owner}/${repo}`,limit=25;
     // Revalidate PR access and revision for every source, including issue comments.
     const pull=await githubGet<GhPull>(deps,token,`${base}/pulls/${number}`);
     const bound=await sha256Hex(JSON.stringify([c.get('session').userId,owner,repo,number,section]));
@@ -390,5 +392,5 @@ export const github = new Hono<AppEnv>()
 
     // The user's own token: GitHub enforces their access to this repository.
     const token = await userToken(c);
-    return c.json(await fetchPrDetail(c.get("deps"), token, owner, repo, Number(number), c.req.query("lazy") === "1"));
+    return c.json(await fetchPrDetail(workspaceDeps(c), token, owner, repo, Number(number), c.req.query("lazy") === "1"));
   });
