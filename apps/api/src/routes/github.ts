@@ -1,3 +1,4 @@
+import {readBoundedBody} from '../lib/bounded-body';
 import {
   type CheckState,
   type Installation,
@@ -30,7 +31,10 @@ const userToken = (c: Context<AppEnv>) => {
   return getAccessToken(c.env, userId, c.get("deps").now());
 };
 
-function workspaceDeps(c:Context<AppEnv>):Deps{const deps=c.get('deps'),deadline=AbortSignal.timeout(20_000);return {...deps,fetch:(input,init)=>deps.fetch(input,{...init,signal:AbortSignal.any([deadline,c.req.raw.signal,...(init?.signal?[init.signal]:[])])})};}
+function workspaceDeps(c:Context<AppEnv>):Deps{
+ const deps=c.get('deps'),deadline=AbortSignal.timeout(20_000);
+ return {...deps,fetch:async(input,init)=>{const response=await deps.fetch(input,{...init,signal:AbortSignal.any([deadline,c.req.raw.signal,...(init?.signal?[init.signal]:[])])});const body=await readBoundedBody(response,4*1024*1024);return new Response(body,{status:response.status,headers:response.headers});}};
+}
 
 interface GhInstallation {
   id: number;
