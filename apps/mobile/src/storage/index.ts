@@ -53,6 +53,17 @@ function isPendingSignIn(value: unknown): value is PendingSignIn {
 }
 
 export const StorageService = {
+  /** Erase account-owned local data; the caller serializes credentials separately. Theme stays device-owned. */
+  async clearAccountData():Promise<void>{
+    let failed=false;
+    for(const key of [AI_CONSENT_KEY,RECENT_SEARCHES_KEY,DEMO_FLAG_KEY,DEVICE_ID_KEY,PUSH_ENABLED_KEY,'mergemate.webPushUser']){
+      memoryStorage.delete(key);
+      try{if(Platform.OS==='web'){if(typeof window!=='undefined')window.localStorage.removeItem(key);}else await SecureStore.deleteItemAsync(key);}
+      catch{failed=true;}
+    }
+    if(failed)throw storageUnavailable();
+  },
+
   async getThemeMode(): Promise<"dark" | "light" | "system"> {
     try {
       const value = Platform.OS === "web" ? getWebStorage()?.getItem("mergemate_theme") : await SecureStore.getItemAsync("mergemate_theme");

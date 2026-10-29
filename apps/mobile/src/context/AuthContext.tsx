@@ -236,6 +236,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // Throws when the API refuses, so the person is told and nothing is cleared.
       await api.deleteAccount();
     } catch (e) {
+      if(e instanceof ApiClientError && e.code==='local_cleanup_incomplete'){
+        await clearLocalSession(version);
+        if(version===authVersion.current){setError(e.message);setIsLoading(false);}
+        throw e;
+      }
       if(version===authVersion.current){
         api.invalidateCache();const me=await api.getMe().catch(()=>null);
         if(version===authVersion.current && me?.deletionPending){setUser(me);notifySessionChange('deletion-pending');}
