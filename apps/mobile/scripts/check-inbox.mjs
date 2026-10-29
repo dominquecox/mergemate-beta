@@ -26,7 +26,7 @@ try{
    if(path==='/me')return reply(200,{id:owner,login:owner,name:owner==='account-a'?'Account A':'Account B',avatarUrl:base+'/favicon.ico',demo:mode==='demo'});
    if(path==='/auth/refresh')return reply(200,{session:{expiresAt:'2099-01-01T00:00:00.000Z',csrfToken:'fixture-csrf',demo:mode==='demo'}});
    if(path==='/auth/csrf')return reply(200,{csrfToken:'fixture-csrf'});
-   if(path==='/consent')return reply(200,{ai:{granted:true,version:'1'}});
+   if(path==='/consent/preferences')return reply(200,{ai:{granted:true,version:'1',currentVersion:'1'},aiSummaries:true,revision:'fixture'});if(path==='/consent')return reply(200,{ai:{granted:true,version:'1'}});
    if(path==='/push/web-key')return reply(200,{publicKey:null});
    if(path==='/inbox/preference'){if(req.method()==='PUT')preferences.set(owner,req.postDataJSON().filter);return reply(200,{filter:preferences.get(owner)??'all'});}
    if(path==='/inbox/undo'){const candidates=[...states].filter(([key,value])=>key.startsWith(owner+':')&&(value.doneAt||(value.snoozedUntil&&Date.parse(value.snoozedUntil)>serverNow))).sort((a,b)=>b[1].updatedAt.localeCompare(a[1].updatedAt));return reply(200,candidates.length?{itemId:candidates[0][0].slice(owner.length+1),receipt:candidates[0][1]}:null);}

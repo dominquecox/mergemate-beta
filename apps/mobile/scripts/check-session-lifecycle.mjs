@@ -54,7 +54,7 @@ try{
    if(path==='/notifications')return reply(200,{items:[{id:'fixture-notification',kind:'review',repo:`fixture-${current}/repo`,number:7,title:`Private review for ${current}`,author:'fixture',status:'open',updatedAt:'2026-10-28T12:00:00.000Z',read:false}],nextCursor:null});
    if(path==='/settings')return reply(200,{notifications:{review:true,mention:true,mine:false},quietHours:null,aiSummaries:false});
    if(path==='/billing/plan')return reply(200,{plan:'free',status:'active',renewsAt:null,cancelAt:null});
-   if(path==='/consent')return reply(200,{ai:{granted:false,version:null,at:null}});
+   if(path==='/consent/preferences')return reply(200,{ai:{granted:false,version:'1',currentVersion:'1'},aiSummaries:true,revision:'fixture'});if(path==='/consent')return reply(200,{ai:{granted:false,version:null,at:null}});
    return fail(404,'not_found');
   });
   const page=await context.newPage();page.setDefaultTimeout(15000);page.on('pageerror',error=>errors.push(error.message));

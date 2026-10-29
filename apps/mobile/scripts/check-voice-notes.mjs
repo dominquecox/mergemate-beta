@@ -33,9 +33,10 @@ try{
    if(path==='/me')return reply(200,{id:'voice-fixture',login:'fixture',name:'Fixture',avatarUrl:base+'/favicon.ico',demo:false});
    if(path==='/auth/refresh')return reply(200,{session:{expiresAt:'2099-01-01T00:00:00.000Z',csrfToken:'fixture-csrf'}});
    if(path==='/auth/csrf')return reply(200,{csrfToken:'fixture-csrf'});
-   if(path==='/consent')return reply(200,{ai:{granted:mode!=='no-consent',version:'1',at:'2026-10-29T00:00:00.000Z'}});
+   if(path==='/consent/preferences')return reply(200,{ai:{granted:mode!=='no-consent',version:'1',currentVersion:'1'},aiSummaries:true,revision:'fixture'});if(path==='/consent')return reply(200,{ai:{granted:mode!=='no-consent',version:'1',at:'2026-10-29T00:00:00.000Z'}});
    if(path==='/push/web-key')return reply(200,{publicKey:null});
    if(path==='/notifications')return reply(200,{items:[],nextCursor:null});
+   if(path.includes('/pages/'))return reply(200,{items:[],nextCursor:null,headSha:'abc123',capped:false});
    if(path==='/prs/fixture/repo/7')return reply(200,{repo:'fixture/repo',number:7,title:'Voice fixture review',body:'Existing review body.',author:'fixture',status:'open',baseBranch:'main',headBranch:'feature',headSha:'abc123',additions:3,deletions:1,changedFiles:1,files:[],checks:[],threads:[],createdAt:'2026-10-28T10:00:00.000Z',updatedAt:'2026-10-28T12:00:00.000Z',htmlUrl:'https://github.com/fixture/repo/pull/7'});
    if(path.endsWith('/summary') || path.endsWith('/risk'))return reply(503,{error:{code:'upstream_unavailable',message:'Fixture AI disabled',requestId:'fixture'}});
    if(path==='/notes' && request.method()==='GET'){const scope=JSON.parse(url.searchParams.get('context'));return reply(200,{items:notes.filter(note=>JSON.stringify(note.context)===JSON.stringify(scope))});}

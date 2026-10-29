@@ -20,7 +20,7 @@ try{
    if(path==='/me')return reply(route,200,{id:userId,login:'fixture',name:'Fixture',avatarUrl:base+'/favicon.ico',demo:mode==='demo'});
    if(path==='/auth/refresh')return reply(route,200,{session:{expiresAt:'2099-01-01T00:00:00.000Z',csrfToken:'fixture-csrf',demo:mode==='demo'}});
    if(path==='/auth/csrf')return reply(route,200,{csrfToken:'fixture-csrf'});
-   if(path==='/consent')return reply(route,200,{ai:{granted:mode!=='consent-off',version:'1',at:'2026-10-29T00:00:00.000Z'}});
+   if(path==='/consent/preferences')return reply(route,200,{ai:{granted:mode!=='consent-off',version:'1',currentVersion:'1'},aiSummaries:true,revision:'fixture'});if(path==='/consent')return reply(route,200,{ai:{granted:mode!=='consent-off',version:'1',at:'2026-10-29T00:00:00.000Z'}});
    if(path==='/push/web-key')return reply(route,200,{publicKey:null});
    if(path==='/notifications')return reply(route,200,{items:[],nextCursor:null});
    if(path==='/highlight'){

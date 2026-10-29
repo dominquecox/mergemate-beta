@@ -39,7 +39,7 @@ try{
    if(path==='/me')return reply(200,{id:'fixture-user',login:'fixture',name:'Fixture',avatarUrl:base+'/favicon.ico',demo:false});
       if(path==='/auth/refresh')return reply(200,{session:{expiresAt:'2099-01-01T00:00:00.000Z'}});
       if(path==='/notifications')return reply(200,{items:[],nextCursor:null});
-      if(path==='/consent')return reply(200,{ai:{granted:false,version:null,at:null}});
+      if(path==='/consent/preferences')return reply(200,{ai:{granted:true,version:'1',currentVersion:'1'},aiSummaries:true,revision:'fixture'});if(path==='/consent')return reply(200,{ai:{granted:false,version:null,at:null}});
       if(path==='/highlight'){analysisCalls++;return reply(503,{});}
       return reply(404,{error:{code:'not_found',message:'Unavailable',requestId:'fixture'}});
     });
