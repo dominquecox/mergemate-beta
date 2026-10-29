@@ -38,7 +38,7 @@ try{
    if(path==='/notifications')return reply(200,{items:[],nextCursor:null});
    if(path==='/prs/fixture/repo/7')return reply(200,{repo:'fixture/repo',number:7,title:'Voice fixture review',body:'Existing review body.',author:'fixture',status:'open',baseBranch:'main',headBranch:'feature',headSha:'abc123',additions:3,deletions:1,changedFiles:1,files:[],checks:[],threads:[],createdAt:'2026-10-28T10:00:00.000Z',updatedAt:'2026-10-28T12:00:00.000Z',htmlUrl:'https://github.com/fixture/repo/pull/7'});
    if(path.endsWith('/summary') || path.endsWith('/risk'))return reply(503,{error:{code:'upstream_unavailable',message:'Fixture AI disabled',requestId:'fixture'}});
-   if(path==='/notes' && request.method()==='GET')return reply(200,{items:notes});
+   if(path==='/notes' && request.method()==='GET'){const scope=JSON.parse(url.searchParams.get('context'));return reply(200,{items:notes.filter(note=>JSON.stringify(note.context)===JSON.stringify(scope))});}
    if(path==='/notes' && request.method()==='POST'){saveCalls++;if(failSave){failSave=false;return reply(503,{error:{code:'upstream_unavailable',message:'Fixture save failure',requestId:'fixture'}});}const input=request.postDataJSON();const note={...input,createdAt:'2026-10-29T00:00:00.000Z'};notes=[...notes.filter(old=>old.id!==note.id),note];return reply(200,note);}
    if(path.startsWith('/notes/') && request.method()==='DELETE'){notes=notes.filter(item=>item.id!==path.split('/').at(-1));return route.fulfill({status:204,headers});}
    if(path==='/voice-notes'){
@@ -62,6 +62,10 @@ try{
    await page.reload();await page.getByRole('button',{name:'Add Note',exact:true}).click();await page.getByText('Reviewed and edited private note',{exact:true}).waitFor();
    await record.click();await page.getByText(/Recording 0:01/).waitFor();await page.getByRole('button',{name:'Cancel recording',exact:true}).click();await record.waitFor();assert.equal(transcriptCalls,2);assert(await page.evaluate(()=>window.__voiceTracks.every(track=>track.readyState==='ended')));
    await record.click();await page.getByText(/Recording 0:01/).waitFor();await page.evaluate(()=>{Object.defineProperty(document,'visibilityState',{configurable:true,get:()=> 'hidden'});document.dispatchEvent(new Event('visibilitychange'));});await record.waitFor();assert(await page.evaluate(()=>window.__voiceTracks.every(track=>track.readyState==='ended')));assert.equal(transcriptCalls,2);
+   await page.goto(base+'/highlight');await page.getByText('No private notes saved here yet.').waitFor();assert.equal(await page.getByText('Reviewed and edited private note',{exact:true}).count(),0);
+   await record.click();await page.getByText(/Recording 0:01/).waitFor();await page.getByRole('button',{name:'Stop recording',exact:true}).click();await page.getByRole('button',{name:'Transcribe recording',exact:true}).click();await page.waitForFunction(()=>document.querySelector('textarea[aria-label="Private note text"]')?.value==='Transcript to review before saving');await page.getByRole('textbox',{name:'Private note text'}).fill('Highlight review note');await page.getByRole('button',{name:'Save private note',exact:true}).click();await page.getByRole('button',{name:'Remove note 1',exact:true}).waitFor();assert.equal(notes.length,2);assert.deepEqual(notes[1].context,{kind:'highlight'});await page.screenshot({path:`${proof}/highlight-saved-${width}.png`,fullPage:true});
+   await page.reload();await page.getByText('Highlight review note',{exact:true}).waitFor();assert.equal(await page.getByText('Reviewed and edited private note',{exact:true}).count(),0);
+
   }
   assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));assert.deepEqual(errors,[]);await page.screenshot({path:`${proof}/${mode}-${width}.png`,fullPage:true});await context.close();
  }
