@@ -5,7 +5,7 @@ import { Text } from "../../src/components/Text";
 import { useRouter } from "expo-router";
 import { useTheme } from "../../src/context/ThemeContext";
 import { useAuth } from "../../src/context/AuthContext";
-import { toUserMessage } from "../../src/api/errors";
+import { ApiClientError, toUserMessage } from "../../src/api/errors";
 import { Header } from "../../src/components/Header";
 import { Button } from "../../src/components/Button";
 import { EmptyState } from "../../src/components/EmptyState";
@@ -28,7 +28,7 @@ export default function DeleteAccountScreen() {
       await deleteAccount();
       router.replace("/(auth)/sign-in");
     } catch (e) {
-      setError(`${toUserMessage(e, "Failed to delete account.")} If it keeps failing, contact support@mergemate.dev.`);
+      setError(`${e instanceof ApiClientError && e.code==='upstream_unavailable'?"A required deletion step could not finish. Retry, or sign in again with GitHub if access needs renewing.":toUserMessage(e, "Failed to delete account.")} If it keeps failing, contact support@mergemate.dev.`);
       setIsDeleting(false);
     } finally {submitting.current=false;}
   };

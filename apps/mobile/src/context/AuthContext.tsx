@@ -6,7 +6,7 @@ import { Linking, Platform } from "react-native";
 import { User, Session } from "../types";
 import { StorageService } from "../storage";
 import { api } from "../api";
-import { ApiClientError, toUserMessage } from "../api/errors";
+import { ApiClientError, toUserMessage, messageForCode } from "../api/errors";
 import { createPkcePair } from "../auth/pkce";
 import { validGitHubAuthorizeUrl } from "../navigation/links";
 import { refreshPushRegistration } from "../push/registration";
@@ -28,6 +28,8 @@ interface AuthContextType {
   signOut: () => Promise<void>;
   deleteAccount: () => Promise<void>;
   clearError: () => void;
+  localCleanupPending:boolean;
+  retryLocalCleanup:()=>Promise<void>;
   setError: (message: string | null) => void;
 }
 
@@ -50,6 +52,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [isDemo, setIsDemo] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [localCleanupPending,setLocalCleanupPending]=useState(false);
+  const cleanupBusy=useRef(false);
   const [error, setError] = useState<string | null>(null);
 
   const signedInRef = useRef(false);
@@ -67,6 +71,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const version=authVersion.current;
     if(rotate && version!==0)return;
     try {
+      if(await StorageService.getLocalCleanupPending()){setLocalCleanupPending(true);setError(messageForCode('local_cleanup_incomplete'));return;}
       if(isWeb && hasPendingLogout())return;
       // Web: the HttpOnly cookie is the session, so ask the API who is signed in.
       // Native: only a stored token can be a session.
@@ -149,11 +154,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return true;
   };
 
+  const requireCleanLocalData=async()=>{
+    if(localCleanupPending || await StorageService.getLocalCleanupPending()){setLocalCleanupPending(true);throw new ApiClientError('local_cleanup_incomplete',messageForCode('local_cleanup_incomplete'));}
+  };
+
+  const retryLocalCleanup=async()=>{
+    if(cleanupBusy.current)return;cleanupBusy.current=true;
+    try{await StorageService.clearSessionToken();await StorageService.clearAccountData();if(isWeb)await dropWebPush();setLocalCleanupPending(false);setError(null);}
+    catch{setLocalCleanupPending(true);setError(messageForCode('local_cleanup_incomplete'));}
+    finally{cleanupBusy.current=false;}
+  };
+
   const signInWithGithub = async (_platform: "ios" | "android" | "web"): Promise<SignInResult> => {
     const version=++authVersion.current;let redirected=false;
     setIsLoading(true);
     setError(null);
     try {
+      await requireCleanLocalData();
       const platform = isWeb ? "web" : Platform.OS==="android" ? "android" : "ios";
       if (api.isMock) {
         await api.startGithubAuth(platform, "mock");
@@ -182,6 +199,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setIsLoading(true);
     setError(null);
     try {
+      await requireCleanLocalData();
       const pending = await StorageService.takePendingSignIn(Date.now(),state);
       if(version!==authVersion.current)return false;
       if (!pending || pending.state !== state) {
@@ -202,6 +220,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setIsLoading(true);
     setError(null);
     try {
+      await requireCleanLocalData();
       return await establish(await api.startDemoSession(),true,version);
     } catch (e) {
       if(version===authVersion.current)setError(toUserMessage(e, "Couldn't start the demo. Try again."));
@@ -237,6 +256,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       await api.deleteAccount();
     } catch (e) {
       if(e instanceof ApiClientError && e.code==='local_cleanup_incomplete'){
+        if(version===authVersion.current)setLocalCleanupPending(true);
         await clearLocalSession(version);
         if(version===authVersion.current){setError(e.message);setIsLoading(false);}
         throw e;
@@ -268,6 +288,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         signOut,
         deleteAccount,
         clearError,
+        localCleanupPending,
+        retryLocalCleanup,
         setError,
       }}
     >

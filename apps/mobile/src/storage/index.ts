@@ -2,6 +2,7 @@ import {ApiClientError,messageForCode} from "../api/errors";
 import * as SecureStore from "expo-secure-store";
 import { Platform } from "react-native";
 
+const LOCAL_CLEANUP_PENDING_KEY = "mergemate_local_cleanup_pending";
 const SESSION_TOKEN_KEY = "mergemate_session_token";
 const AI_CONSENT_KEY = "mergemate_ai_consent";
 const RECENT_SEARCHES_KEY = "mergemate_recent_searches";
@@ -61,7 +62,14 @@ export const StorageService = {
       try{if(Platform.OS==='web'){if(typeof window!=='undefined')window.localStorage.removeItem(key);}else await SecureStore.deleteItemAsync(key);}
       catch{failed=true;}
     }
-    if(failed)throw storageUnavailable();
+    if(!failed){try{if(Platform.OS==='web'){if(typeof window!=='undefined')window.localStorage.removeItem(LOCAL_CLEANUP_PENDING_KEY);}else await SecureStore.deleteItemAsync(LOCAL_CLEANUP_PENDING_KEY);memoryStorage.delete(LOCAL_CLEANUP_PENDING_KEY);}catch{failed=true;}}
+    if(failed){memoryStorage.set(LOCAL_CLEANUP_PENDING_KEY,'1');try{if(Platform.OS==='web'){if(typeof window!=='undefined')window.localStorage.setItem(LOCAL_CLEANUP_PENDING_KEY,'1');}else await SecureStore.setItemAsync(LOCAL_CLEANUP_PENDING_KEY,'1');}catch{/* Inaccessible storage retains the in-memory fence; manual device/site erasure remains available. */}throw storageUnavailable();}
+  },
+
+  async getLocalCleanupPending():Promise<boolean>{
+    if(memoryStorage.get(LOCAL_CLEANUP_PENDING_KEY)==='1')return true;
+    if(Platform.OS==='web')return getWebStorage()?.getItem(LOCAL_CLEANUP_PENDING_KEY)==='1';
+    try{return await SecureStore.getItemAsync(LOCAL_CLEANUP_PENDING_KEY)==='1';}catch{throw storageUnavailable();}
   },
 
   async getThemeMode(): Promise<"dark" | "light" | "system"> {
