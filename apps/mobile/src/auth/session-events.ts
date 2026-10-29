@@ -1,8 +1,8 @@
-export type SessionChange='signed-in'|'signed-out';
+export type SessionChange='signed-in'|'signed-out'|'deletion-pending';
 const listeners=new Set<(kind:SessionChange)=>void>();let channel:BroadcastChannel|undefined;
 function connection(){
   if(typeof window==='undefined' || typeof window.BroadcastChannel!=='function')return;
-  if(!channel){channel=new window.BroadcastChannel('mergemate-session-v1');channel.onmessage=event=>{const value:unknown=event.data;if(value && typeof value==='object' && 'v' in value && value.v===1 && 'kind' in value && (value.kind==='signed-in'||value.kind==='signed-out'))for(const listener of listeners)listener(value.kind);};}
+  if(!channel){channel=new window.BroadcastChannel('mergemate-session-v1');channel.onmessage=event=>{const value:unknown=event.data;if(value && typeof value==='object' && 'v' in value && value.v===1 && 'kind' in value && (value.kind==='signed-in'||value.kind==='signed-out'||value.kind==='deletion-pending'))for(const listener of listeners)listener(value.kind);};}
   return channel;
 }
 /** Same-origin notification only; no token, user identifier or private data crosses tabs. */

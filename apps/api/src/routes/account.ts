@@ -4,14 +4,15 @@ import type { AppEnv } from "../env";
 import { ApiError } from "../errors";
 import { GITHUB_API } from "../lib/github";
 import { cancelBillingBeforeDelete } from "../lib/stripe-billing";
-import { getAccessToken } from "../lib/github-tokens";
+import { getDeletionTokenSnapshot } from "../lib/github-tokens";
 import { clearedSessionCookie } from "../lib/sessions";
-import { aiUserDeletion } from "./ai-engine";
+import {sha256Hex} from "../lib/crypto";
+import {claimDeletion,releaseDeletion} from "../lib/account-deletion";
 import { deleteUserUploads } from "./highlight";
 
 /**
  * Revokes the user's grant for this GitHub App (an app-level call authenticated with the
- * client credentials, not a write to any repository). A grant that is already gone counts as revoked.
+ * client credentials, not a write to any repository). Only a confirmed204 is success; an ambiguous response must be retried or reauthorized.
  */
 const revokeGrant = async (
   fetcher: typeof fetch,
@@ -36,7 +37,7 @@ const revokeGrant = async (
   } catch {
     throw new ApiError("upstream_unavailable", "Could not reach GitHub to revoke access. Try again.");
   }
-  if (res.status === 204 || res.status === 404 || res.status === 422) return;
+  if (res.status === 204) return;
   throw new ApiError("upstream_unavailable", "Could not revoke GitHub access. Try again.");
 };
 
@@ -47,38 +48,45 @@ export const account = new Hono<AppEnv>().delete("/account", async (c) => {
   const db = requireBinding(c.env, "DB");
   const deps = c.get("deps");
 
-  await cancelBillingBeforeDelete(c.env,deps,userId);
-
-  let accessToken: string | null = null;
+  const lease=await claimDeletion(db,userId,deps.now());
+  // External work is bounded below the ten-minute lease; every final write is fenced too.
+  const deadline=Date.now()+55_000;
+  const boundedFetch:typeof fetch=(input,init)=>{
+    const remaining=deadline-Date.now();if(remaining<=0)return Promise.reject(new Error("Deletion request deadline"));
+    const timeout=AbortSignal.timeout(remaining);
+    return deps.fetch(input,{...init,signal:init?.signal?AbortSignal.any([init.signal,timeout]):timeout});
+  };
   try {
-    accessToken = await getAccessToken(c.env, userId, deps.now());
-  } catch (err) {
-    // No usable token means GitHub no longer holds a grant we can reach; anything else is retried.
-    if (!(err instanceof ApiError && err.code === "unauthorized")) throw err;
-  }
-  if (accessToken) {
-    await revokeGrant(
-      deps.fetch,
-      requireVar(c.env, "GITHUB_APP_CLIENT_ID"),
-      requireVar(c.env, "GITHUB_APP_CLIENT_SECRET"),
-      accessToken,
-    );
-  }
-
-  // Uploads are purged before the rows: the keys are user-scoped, so a retry after a
-  // partial delete finds only what is left, and a failed purge keeps the account for retry.
-  await deleteUserUploads(c.env, userId);
-  await db.batch([
-    db.prepare("DELETE FROM notification_state WHERE user_id = ?").bind(userId),
-    db.prepare("DELETE FROM triage_choices WHERE user_id = ?").bind(userId),
-    db.prepare("DELETE FROM repo_watch WHERE user_id = ?").bind(userId),
-    db.prepare("DELETE FROM user_repo_access WHERE user_id = ?").bind(userId),
-    db.prepare("DELETE FROM user_access_checks WHERE user_id = ?").bind(userId),
-    db.prepare("DELETE FROM github_tokens WHERE user_id = ?").bind(userId),
-    db.prepare("DELETE FROM sessions WHERE user_id = ?").bind(userId),
-    ...aiUserDeletion(db, userId),
-    db.prepare("DELETE FROM users WHERE id = ?").bind(userId),
-  ]);
-  if (session.transport === "cookie") c.header("set-cookie", clearedSessionCookie());
-  return c.body(null, 204);
+    await cancelBillingBeforeDelete(c.env,{...deps,fetch:boundedFetch},userId);
+    const progress=await db.prepare('SELECT grant_token_hash FROM account_deletions WHERE user_id=? AND lease_token=?').bind(userId,lease).first<{grant_token_hash:string|null}>();
+    if(!progress)throw new ApiError("rate_limited","Another deletion attempt took over. Try again.",{"retry-after":"2"});
+    let snapshot=await db.prepare('SELECT access_token FROM github_tokens WHERE user_id=?').bind(userId).first<{access_token:string}>();
+    let confirmed=Boolean(progress.grant_token_hash && (!snapshot || await sha256Hex(snapshot.access_token)===progress.grant_token_hash));
+    if(!confirmed){
+      let grant:Awaited<ReturnType<typeof getDeletionTokenSnapshot>>;
+      try{grant=await getDeletionTokenSnapshot(c.env,userId,deps.now());}
+      catch(error){if(error instanceof ApiError && error.code==='unauthorized')throw new ApiError('upstream_unavailable','Sign in with GitHub again to finish account deletion.');throw error;}
+      await revokeGrant(boundedFetch,requireVar(c.env,"GITHUB_APP_CLIENT_ID"),requireVar(c.env,"GITHUB_APP_CLIENT_SECRET"),grant.token);
+      const saved=await db.prepare('UPDATE account_deletions SET grant_token_hash=? WHERE user_id=? AND lease_token=?')
+        .bind(await sha256Hex(grant.encryptedAccess),userId,lease).run();
+      if(saved.meta.changes!==1)throw new ApiError('rate_limited','Another deletion attempt took over. Try again.',{'retry-after':'2'});
+      snapshot={access_token:grant.encryptedAccess};confirmed=true;
+    }
+    if(!confirmed)throw new ApiError('upstream_unavailable','GitHub revocation could not be confirmed.');
+    await deleteUserUploads(c.env,userId);
+    // A new OAuth grant during cleanup must be revoked by a new retry, never silently deleted.
+    const guard=`EXISTS(SELECT 1 FROM account_deletions WHERE user_id=?1 AND lease_token=?2 AND state='pending')
+      AND ((?3 IS NULL AND NOT EXISTS(SELECT 1 FROM github_tokens WHERE user_id=?1)) OR EXISTS(SELECT 1 FROM github_tokens WHERE user_id=?1 AND access_token=?3))`;
+    const captured=snapshot?.access_token??null;
+    const result=await db.batch([
+      db.prepare(`DELETE FROM ai_usage_daily WHERE scope IN (?1,?1||':triage',?1||':metakey') AND ${guard}`).bind(userId,lease,captured),
+      // Foreign keys atomically cascade all user-owned tables, including BYOK and spent sessions.
+      db.prepare(`DELETE FROM users WHERE id=?1 AND ${guard}`).bind(userId,lease,captured),
+      db.prepare("UPDATE account_deletions SET state='completed',completed_at=?,grant_token_hash=NULL,lease_token=NULL,lease_until=NULL WHERE user_id=? AND lease_token=? AND NOT EXISTS(SELECT 1 FROM users WHERE id=?)")
+        .bind(deps.now().toISOString(),userId,lease,userId),
+    ]);
+    if(result[1]?.meta.changes!==1)throw new ApiError('upstream_unavailable','Account access changed during deletion. Try again to finish.');
+    if(session.transport==='cookie')c.header('set-cookie',clearedSessionCookie());
+    return c.body(null,204);
+  } finally {await releaseDeletion(db,userId,lease);}
 });

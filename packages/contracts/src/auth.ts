@@ -6,6 +6,7 @@ export const User = z.object({
   login: z.string(),
   name: z.string().nullable(),
   avatarUrl: z.url(),
+  deletionPending:z.boolean().optional(),
 });
 export type User = z.infer<typeof User>;
 

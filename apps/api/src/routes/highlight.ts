@@ -69,6 +69,7 @@ export const deleteUserUploads = async (env: AppEnv["Bindings"], userId: string)
       await uploads.delete(page.objects.map((object) => object.key));
     }
     if (!page.truncated) return;
+    if(!page.cursor || page.cursor===cursor)throw new ApiError("upstream_unavailable","Upload cleanup could not finish. Try deleting your account again.");
     cursor = page.cursor;
   }
 };

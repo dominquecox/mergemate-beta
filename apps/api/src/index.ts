@@ -1,3 +1,4 @@
+import {purgeDeletionTombstones} from "./lib/account-deletion";
 import {purgeExpiredSessions} from './lib/sessions';
 import { createApp } from './app';
 import type { Env } from './env';
@@ -13,7 +14,7 @@ export default {
   fetch: app.fetch,
   queue: (batch: MessageBatch<unknown>, env: Env) => handleQueue(batch, env),
   scheduled: async (_event: ScheduledController, env: Env) => {
-    if(env.DB)await purgeExpiredSessions(env.DB,new Date());
+    if(env.DB){await purgeExpiredSessions(env.DB,new Date());await purgeDeletionTombstones(env.DB,new Date());}
     await checkPushReceipts(env, { fetch: (input, init) => fetch(input, init), now: () => new Date() });
   },
 } satisfies ExportedHandler<Env>;

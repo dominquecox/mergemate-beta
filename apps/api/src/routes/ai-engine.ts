@@ -166,14 +166,6 @@ export const createDbCache = (db: D1Database): ResultCache => ({
 export const cacheKey = (userId: string, prRef: string, headSha: string, kind: string): string =>
   `${userId}:${kind}:${prRef}@${headSha}`;
 
-/** Statements that delete every AI row for a user. Runs inside account deletion. */
-export const aiUserDeletion = (db: D1Database, userId: string) => [
-  db.prepare("DELETE FROM consent_grants WHERE user_id = ?").bind(userId),
-  db.prepare("DELETE FROM ai_usage_daily WHERE scope IN (?, ?, ?)").bind(userId, `${userId}:triage`, `${userId}:metakey`),
-  db.prepare("DELETE FROM ai_results_cache WHERE user_id = ?").bind(userId),
-  db.prepare("DELETE FROM ai_inflight WHERE user_id = ?").bind(userId),
-];
-
 /** How long a claim on identical work holds before another request may take over (longer than one model call). */
 const INFLIGHT_TTL_MS = 90_000;
 /** How long an identical request waits for the first one's result; below the app's 60 s request timeout. */
@@ -1146,6 +1138,7 @@ export const analyzeHighlight = async (args: {
   const clean = await scrubForModel(env.IMAGES, image, contentType);
   await uploads.put(key, clean, { httpMetadata: { contentType } });
   try {
+    if(await db.prepare('SELECT 1 AS present FROM account_deletions WHERE user_id=?').bind(userId).first())throw new ApiError('forbidden','Account deletion is pending.');
     const dataUrl = `data:${contentType};base64,${toBase64(clean)}`;
     const provider = createModelProvider(model.env, "highlight", { transport, ai });
     const { value: body, remaining: left } = await withReservation(stores, effectiveLimits, userId, limit, async () => {

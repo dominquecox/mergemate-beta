@@ -77,8 +77,12 @@ export const authenticate = (): MiddlewareHandler<AppEnv> => async (c, next) => 
     throw unauthorized();
   }
 
+  const accountRemoval=path==='/v1/account' && c.req.method==='DELETE';
+  const deletionRecovery=accountRemoval || (path==='/v1/me' && c.req.method==='GET') || logoutCapability;
+  if(session.deletionPending && !deletionRecovery)throw new ApiError('forbidden','Account deletion is pending. Finish deleting your account or sign out.');
+
   // Revocation must remain possible when a stolen session exhausts its own budget.
-  if(logoutCapability)await limitIp(c);
+  if(logoutCapability || accountRemoval)await limitIp(c);
   else await limit(c, {scope:"session",key:session.familyId??session.tokenHash});
 
   const write = !SAFE_METHODS.has(c.req.method);
@@ -96,7 +100,7 @@ export const authenticate = (): MiddlewareHandler<AppEnv> => async (c, next) => 
   ) {
     throw new ApiError("forbidden", "Not available in the demo.");
   }
-  if (!logoutCapability && !session.demo && session.userStatus !== "active") {
+  if (!logoutCapability && !accountRemoval && !session.demo && session.userStatus !== "active") {
     throw new ApiError("forbidden", "This account is suspended.");
   }
 

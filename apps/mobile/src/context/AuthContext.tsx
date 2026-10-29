@@ -1,6 +1,6 @@
 import {cancelReadout} from "../readout/active";
 import {hideSessionForPageCache,revealSessionAfterCheck} from "../auth/page-session";
-import {onSessionChange,hasPendingLogout} from "../auth/session-events";
+import {onSessionChange,hasPendingLogout,notifySessionChange,type SessionChange} from "../auth/session-events";
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from "react";
 import { Linking, Platform } from "react-native";
 import { User, Session } from "../types";
@@ -78,7 +78,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setUser(me);
         setSession({ expiresAt: new Date(Date.now() + SESSION_FALLBACK_MS).toISOString(), ...(demo ? { demo: true as const } : {}) });
         setIsDemo(demo);
-        if (!api.isMock && !demo && rotate) {
+        if (!api.isMock && !demo && !me.deletionPending && rotate) {
           // Rotate the token on each launch, and keep push registered for a device that turned it on.
           api
             .refreshSession()
@@ -107,10 +107,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [initAuth]);
 
   useEffect(()=>{
-    const changed=(kind:"signed-in"|"signed-out")=>{
+    const changed=(kind:SessionChange)=>{
       cancelReadout();
-      ++authVersion.current;api.invalidateSession();setIsLoading(kind==='signed-in');setUser(null);setSession(null);setIsDemo(false);
-      if(kind==='signed-in')void initAuth(false);
+      ++authVersion.current;api.invalidateSession();setIsLoading(kind!=='signed-out');setUser(null);setSession(null);setIsDemo(false);
+      if(kind!=='signed-out')void initAuth(false);
     };
     const unsubscribe=onSessionChange(changed);
     const restored=(event:PageTransitionEvent)=>{if(event.persisted)changed('signed-in');};
@@ -144,8 +144,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await StorageService.setDemoFlag(api.isMock?demo:false);
     if(version!==authVersion.current)return false;
     setSession(res.session);setUser(res.user);setIsDemo(demo);
-    if(!demo && !api.isMock && !isWeb)refreshPushRegistration(api).catch(()=>undefined);
-    if(!api.isMock && isWeb)(demo?dropWebPush():refreshWebPush(api,res.user.id)).catch(()=>undefined);
+    if(!demo && !res.user.deletionPending && !api.isMock && !isWeb)refreshPushRegistration(api).catch(()=>undefined);
+    if(!api.isMock && isWeb)(demo || res.user.deletionPending?dropWebPush():refreshWebPush(api,res.user.id)).catch(()=>undefined);
     return true;
   };
 
@@ -236,7 +236,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // Throws when the API refuses, so the person is told and nothing is cleared.
       await api.deleteAccount();
     } catch (e) {
-      if(version===authVersion.current)setIsLoading(false);
+      if(version===authVersion.current){
+        api.invalidateCache();const me=await api.getMe().catch(()=>null);
+        if(version===authVersion.current && me?.deletionPending){setUser(me);notifySessionChange('deletion-pending');}
+        if(version===authVersion.current)setIsLoading(false);
+      }
       throw e;
     }
     await clearLocalSession(version);
