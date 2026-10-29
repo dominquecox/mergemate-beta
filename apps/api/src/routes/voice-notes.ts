@@ -1,3 +1,4 @@
+import {readBoundedBody} from "../lib/bounded-body";
 import { Hono } from "hono";
 import {
   VOICE_NOTE_MAX_BYTES,
@@ -26,14 +27,16 @@ export const createVoiceNotesRouter = () => {
       throw new ApiError("not_found", "Voice notes are not available.");
     }
     await requireConsent(createDbConsentStore(requireBinding(c.env, "DB")), userKey(session));
-    const form = await c.req.parseBody().catch(() => null);
-    const audio = form?.["audio"];
-    if (!(audio instanceof File)) {
-      throw new ApiError("validation_failed", "Send one audio field with the recording.");
+    let bytes:Uint8Array;
+    if(c.req.header("content-type")?.split(";")[0]?.trim()==="audio/wav"){
+      bytes=new Uint8Array(await readBoundedBody(c.req.raw,VOICE_NOTE_MAX_BYTES));
+    }else{
+      const form = await c.req.parseBody().catch(() => null);
+      const audio = form?.["audio"];
+      if (!(audio instanceof File))throw new ApiError("validation_failed", "Send one audio field with the recording.");
+      if(audio.size>VOICE_NOTE_MAX_BYTES)throw new ApiError("payload_too_large","That recording is too large.");
+      bytes=new Uint8Array(await audio.arrayBuffer());
     }
-    // The recording is held in memory only and never stored.
-    if(audio.size>VOICE_NOTE_MAX_BYTES)throw new ApiError("payload_too_large","That recording is too large.");
-    const bytes = new Uint8Array(await audio.arrayBuffer());
     if (bytes.byteLength > VOICE_NOTE_MAX_BYTES) {
       throw new ApiError("payload_too_large", "That recording is too large.");
     }

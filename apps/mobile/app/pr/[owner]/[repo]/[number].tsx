@@ -1,3 +1,4 @@
+import {PrivateNotes} from "../../../../src/components/PrivateNotes";
 import {ReadoutControls} from "../../../../src/components/ReadoutControls";
 import {narrationSentences} from "../../../../src/readout/text";
 import { Avatar } from "../../../../src/components/Avatar";
@@ -46,9 +47,7 @@ export default function PrDetailScreen() {
   const [detail, setDetail] = useState<PrDetail | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [notes, setNotes] = useState<string[]>([]);
   const [showNoteInput, setShowNoteInput] = useState(false);
-  const [newNote, setNewNote] = useState("");
   const insets = useSafeAreaInsets();
   const bottomInset = Platform.OS === "web" ? 0 : insets.bottom;
 
@@ -158,13 +157,6 @@ export default function PrDetailScreen() {
     }
   };
 
-  const addLocalNote = () => {
-    if (newNote.trim()) {
-      setNotes((prev) => [...prev, newNote.trim()]);
-      setNewNote("");
-      setShowNoteInput(false);
-    }
-  };
 
   return (
     <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={[styles.root, { backgroundColor: colors.background }]}>
@@ -412,62 +404,7 @@ export default function PrDetailScreen() {
               {pageError.comments && <Text accessibilityRole="alert" style={[typography.footnote,{color:colors.riskHigh,paddingTop:12}]}>{pageError.comments}</Text>}
             </View>
 
-            {/* Inline Note Editor */}
-            {showNoteInput && (
-              <View style={[styles.card, { backgroundColor: colors.surfaceElevated, borderColor: colors.border, borderRadius: radius.lg, marginTop: spacing.sm }]}>
-                <Text style={[typography.headline, { color: colors.text }]} accessibilityRole="header">
-                  Add Private Note
-                </Text>
-                <TextInput
-                  value={newNote}
-                  onChangeText={setNewNote}
-                  placeholder="Write a personal review note..."
-                  placeholderTextColor={colors.textMuted}
-                  accessibilityLabel="Personal review note"
-                  style={[
-                    styles.noteInput,
-                    {
-                      backgroundColor: colors.surface,
-                      borderColor: colors.border,
-                      color: colors.text,
-                      borderRadius: radius.md,
-                      marginTop: spacing.xs,
-                    },
-                  ]}
-                />
-                <View style={styles.noteActions}>
-                  <Button
-                    title="Cancel"
-                    onPress={() => {
-                      setShowNoteInput(false);
-                      setNewNote("");
-                    }}
-                    variant="secondary"
-                    style={{ flex: 1 }}
-                  />
-                  <Button
-                    title="Save Note"
-                    onPress={addLocalNote}
-                    variant="primary"
-                    style={{ flex: 1 }}
-                  />
-                </View>
-              </View>
-            )}
-
-            {/* Local Notes */}
-            {notes.length > 0 && (
-              <View style={[styles.card, { backgroundColor: colors.surfaceElevated, borderColor: colors.border, borderRadius: radius.lg, marginTop: spacing.sm }]}>
-                <Text style={[typography.headline, { color: colors.text }]} accessibilityRole="header">
-                  My Notes ({notes.length})
-                </Text>
-                {notes.map((note, idx) => (
-                  <Text key={idx} style={[typography.body, { color: colors.textSecondary, marginTop: 4 }]}>
-                    • {note}
-                  </Text>
-                ))}
-              </View>
-            )}
+            {showNoteInput && <PrivateNotes context={{kind:'pr',repo:`${owner}/${repo}`,number:Number(number)}}/>}
           </ScrollView>
 
           {/* Bottom Bar: Open in GitHub and Add note. STRICTLY NO MERGE, APPROVE, OR COMMENT CONTROLS ON GITHUB (US-12) */}

@@ -1,4 +1,4 @@
-import type {FeatureFlags} from "@mergemate/contracts";
+import type {NoteContext,PrivateNote,SavePrivateNote,FeatureFlags} from "@mergemate/contracts";
 import {
   User,
   Session,
@@ -72,6 +72,11 @@ export interface ApiClient {
   getTriageQueue(): Promise<TriageItem[]>;
   undoTriageChoice(prRef: string): Promise<void>;
   setTriageChoice(prRef: string, lane: TriageLane): Promise<void>;
+
+  transcribeVoice(bytes:Uint8Array,signal?:AbortSignal):Promise<string>;
+  getPrivateNotes(context:NoteContext):Promise<PrivateNote[]>;
+  savePrivateNote(input:SavePrivateNote):Promise<PrivateNote>;
+  removePrivateNote(id:string,context:NoteContext):Promise<void>;
 
   // Highlight
   analyzeHighlight(imageUri: string, note?: string, mimeType?: string): Promise<HighlightResult>;
