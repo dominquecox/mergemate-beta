@@ -1,3 +1,5 @@
+import {requireBinding} from '../config';
+import {captureAiPolicy,type AiPolicyFence} from '../lib/ai-policy';
 import {
   HighlightResult,
   ModelHighlight,
@@ -139,28 +141,11 @@ export interface ResultCache {
 }
 
 /** D1-backed result cache. Keys carry the user id so users never share cached results. */
-export const createDbCache = (db: D1Database): ResultCache => ({
-  async get<T>(key: string): Promise<T | undefined> {
-    const row = await db
-      .prepare("SELECT body FROM ai_results_cache WHERE key = ?")
-      .bind(key)
-      .first<{ body: string }>();
-    if (!row) return undefined;
-    try {
-      return JSON.parse(row.body) as T;
-    } catch {
-      return undefined;
-    }
-  },
-  async set(key, userId, value) {
-    await db
-      .prepare(
-        `INSERT INTO ai_results_cache (key, user_id, body, created_at) VALUES (?, ?, ?, ?)
-         ON CONFLICT (key) DO UPDATE SET body = excluded.body, created_at = excluded.created_at`,
-      )
-      .bind(key, userId, JSON.stringify(value), new Date().toISOString())
-      .run();
-  },
+export const createDbCache=(db:D1Database,policy?:()=>AiPolicyFence|undefined):ResultCache=>({
+ async get<T>(key:string){const fence=policy?.();await fence?.assertCurrent();const row=await db.prepare(`SELECT c.body FROM ai_results_cache c JOIN ai_policy p ON p.user_id=c.user_id AND p.revision=c.policy_revision WHERE c.key=?${fence?' AND c.user_id=? AND c.policy_revision=?':''}`).bind(key,...(fence?[fence.userId,fence.revision]:[])).first<{body:string}>();await fence?.assertCurrent();if(!row)return undefined;try{return JSON.parse(row.body) as T;}catch{return undefined;}},
+ async set(key,userId,value){const fence=policy?.();if(fence&&fence.userId!==userId)throw new ApiError('forbidden','AI result does not belong to this account.');await fence?.assertCurrent();const revision=fence?.revision??(await db.prepare('SELECT revision FROM ai_policy WHERE user_id=?').bind(userId).first<{revision:string}>())?.revision;if(!revision)throw new ApiError('consent_required','AI choices are unavailable.');
+  const result=await db.prepare(`INSERT INTO ai_results_cache(key,user_id,body,created_at,policy_revision) SELECT ?1,?2,?3,?4,?5 WHERE EXISTS(SELECT 1 FROM ai_policy WHERE user_id=?2 AND revision=?5) ON CONFLICT(key) DO UPDATE SET body=excluded.body,created_at=excluded.created_at,policy_revision=excluded.policy_revision WHERE EXISTS(SELECT 1 FROM ai_policy WHERE user_id=?2 AND revision=?5)`).bind(key,userId,JSON.stringify(value),new Date().toISOString(),revision).run();if((result.meta.changes??0)===0)throw new ApiError('consent_changed','AI choices changed before the result could be saved.');await fence?.assertCurrent();
+ }
 });
 
 export const cacheKey = (userId: string, prRef: string, headSha: string, kind: string): string =>
@@ -202,13 +187,13 @@ const sleep = (ms: number) => new Promise<void>((done) => setTimeout(done, ms));
  * Waits for the request that holds `key` to store its result. Undefined when that request ended without one
  * (it failed), so the caller may claim the work itself.
  */
-const waitForResult = async <T>(deps: AiDeps, cache: ResultCache, key: string): Promise<T | undefined> => {
+const waitForResult = async <T>(deps: AiDeps, cache: ResultCache, key: string,workKey=key): Promise<T | undefined> => {
   const wait = deps.sleep ?? sleep;
   for (let waited = 0; waited < INFLIGHT_WAIT_MS; waited += INFLIGHT_POLL_MS) {
     await wait(INFLIGHT_POLL_MS);
     const done = await cache.get<T>(key);
     if (done) return done;
-    const holder = await deps.db.prepare("SELECT 1 AS held FROM ai_inflight WHERE key = ?").bind(key).first();
+    const holder = await deps.db.prepare("SELECT 1 AS held FROM ai_inflight WHERE key = ?").bind(workKey).first();
     if (!holder) return undefined;
   }
   throw new ApiError("upstream_unavailable", "This summary is still being prepared. Try again in a moment.");
@@ -719,18 +704,18 @@ export interface AiDeps {
 }
 
 export interface AiStores {
+  db?:D1Database;
+  policy?:AiPolicyFence;
   consent: ConsentStore;
   usage: UsageStore;
   globalBudget: UsageStore;
   cache: ResultCache;
 }
 
-export const storesFor = (db: D1Database): AiStores => ({
-  consent: createDbConsentStore(db),
-  usage: createDbUsageStore(db),
-  globalBudget: createDbUsageStore(db),
-  cache: createDbCache(db),
-});
+export const storesFor=(db:D1Database):AiStores=>{
+ const stores:AiStores={db,consent:createDbConsentStore(db),usage:createDbUsageStore(db),globalBudget:createDbUsageStore(db),cache:createDbCache(db)};
+ stores.cache=createDbCache(db,()=>stores.policy);return stores;
+};
 
 export interface AiRunResult {
   body: PrSummary | PrRisk;
@@ -757,6 +742,7 @@ const gateAction = async (
 ): Promise<{ limit: number; remaining: number; model: Awaited<ReturnType<typeof userModelContext>>; limits: AiActionLimits }> => {
   const key = userKey(session);
   await requireConsent(stores.consent, key);
+  stores.policy=await captureAiPolicy(stores.db??requireBinding(env,"DB"),key,task==="summary"||task==="risk");
   const plan = (await getBillingPlan(env, key)).plan;
   const userCheck = await stores.usage.check(key, plan === "pro" ? limits.pro : limits.free);
   if (userCheck.limited) throw limitError(USER_LIMIT_MESSAGE);
@@ -780,6 +766,7 @@ export const withReservation = async <T>(
   userLimit: number,
   work: () => Promise<T>,
 ): Promise<{ value: T; remaining: number }> => {
+  await stores.policy?.assertCurrent();
   const held: UsageReservation[] = [];
   const giveBack = async (): Promise<void> => {
     try {
@@ -821,7 +808,9 @@ export const runModelTask = async <T>(
   task: AiTask,
   request: CompletionRequest,
   schema: AnswerSchema<T>,
+  policy?:AiPolicyFence,
 ): Promise<T> => {
+  await policy?.assertCurrent();
   const started = Date.now();
   const meter = (outcome: AiOutcome, usage?: { inputTokens: number; outputTokens: number }) =>
     recordAiCall(env.AI_METRICS, {
@@ -836,6 +825,7 @@ export const runModelTask = async <T>(
   let reply;
   try {
     reply = await provider.complete(request);
+    await policy?.assertCurrent();
   } catch (error) {
     meter("upstream_error");
     if (error instanceof ApiError) throw error;
@@ -904,20 +894,21 @@ export const summarizePr = async (
   if (!data) throw new ApiError("upstream_unavailable", "PR data is unavailable right now. Try again later.");
   const refStr = prRefString(ref);
   const key = cacheKey(userId, refStr, data.headSha, "summary");
+  const workKey=key+':'+stores.policy?.revision;
   const hit = await stores.cache.get<PrSummary>(key);
   if (hit) return { body: hit, limit, remaining };
   // Identical work already running for this user (a double tap, two tabs): wait for its result, charge nothing.
-  if (!(await claimWork(deps.db, key, userId))) {
-    const shared = await waitForResult<PrSummary>(deps, stores.cache, key);
+  if (!(await claimWork(deps.db,workKey,userId))) {
+    const shared = await waitForResult<PrSummary>(deps,stores.cache,key,workKey);
     if (shared) return { body: shared, limit, remaining };
-    if (!(await claimWork(deps.db, key, userId))) {
+    if (!(await claimWork(deps.db,workKey,userId))) {
       throw new ApiError("upstream_unavailable", "This summary is still being prepared. Try again in a moment.");
     }
   }
   try {
     return await generateSummary(deps, stores, env, { key, userId, limit, model, limits }, data);
   } finally {
-    await releaseWork(deps.db, key).catch(() => undefined);
+    await releaseWork(deps.db,workKey).catch(() => undefined);
   }
 };
 
@@ -944,7 +935,7 @@ const generateSummary = async (
         maxOutputTokens: SUMMARY_MAX_TOKENS,
         jsonSchema: SUMMARY_JSON_SCHEMA,
       },
-      ModelSummary,
+      ModelSummary,stores.policy,
     );
     const result: PrSummary = { ...answer, coverage };
     await stores.cache.set(key, userId, result);
@@ -1043,7 +1034,7 @@ export const assessPrRisk = async (
           maxOutputTokens: RISK_MAX_TOKENS,
           jsonSchema: RISK_JSON_SCHEMA,
         },
-        ModelRisk,
+        ModelRisk,stores.policy,
       );
       const { deterministic, rest } = ruleRisk(prData, coverage);
       const reasons = [...deterministic.reasons, ...answer.reasons].filter(
@@ -1159,7 +1150,7 @@ export const analyzeHighlight = async (args: {
           maxOutputTokens: HIGHLIGHT_MAX_TOKENS,
           image: { dataUrl },
         },
-        ModelHighlight,
+        ModelHighlight,stores.policy,
       );
       const result: HighlightResult = { insight: answer.explanation, regions: answer.regions, requestId };
       return result;
@@ -1264,6 +1255,7 @@ const gateVoiceAction = async (
 ): Promise<{ limit: number; remaining: number }> => {
   const key = userKey(session);
   await requireConsent(stores.consent, key);
+  stores.policy=await captureAiPolicy(stores.db??requireBinding(env,"DB"),key);
   const plan = (await getBillingPlan(env, key)).plan;
   const userCheck = await stores.usage.check(key, plan === "pro" ? limits.pro : limits.free);
   if (userCheck.limited) throw limitError(USER_LIMIT_MESSAGE);
@@ -1315,6 +1307,7 @@ export const transcribeVoiceNote = async (args: {
   }
   const { contentType, extension } = VOICE_CONTENT_TYPES[audioType];
   const { value: body, remaining: left } = await withReservation(stores, limits, userId, limit, async () => {
+    await stores.policy?.assertCurrent();
     const { text } = await transcribeWithMeta({
       env,
       fetchImpl,
@@ -1323,6 +1316,7 @@ export const transcribeVoiceNote = async (args: {
       fileName: `note.${extension}`,
       ...(audioSeconds === undefined ? {} : {audioSeconds}),
     });
+    await stores.policy?.assertCurrent();
     const result: VoiceNoteResult = { text, requestId };
     return result;
   });

@@ -6,6 +6,7 @@ CREATE TABLE ai_policy (
 );
 INSERT INTO ai_policy(user_id,revision) SELECT id,lower(hex(randomblob(16))) FROM users;
 ALTER TABLE ai_results_cache ADD COLUMN policy_revision TEXT;
+UPDATE ai_results_cache SET policy_revision=(SELECT revision FROM ai_policy WHERE ai_policy.user_id=ai_results_cache.user_id);
 CREATE TRIGGER ai_policy_user AFTER INSERT ON users BEGIN
  INSERT INTO ai_policy(user_id,revision) VALUES(NEW.id,lower(hex(randomblob(16))));
 END;

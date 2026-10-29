@@ -1,3 +1,4 @@
+import {captureAiPolicy} from '../lib/ai-policy';
 import { ModelTriage, PrRef, TriageQueue } from "@mergemate/contracts";
 import type { Notification, TriageItem, TriageLane } from "@mergemate/contracts";
 import { requireBinding } from "../config";
@@ -240,7 +241,7 @@ export const buildTriageQueue = async (input: TriageQueueInput): Promise<TriageI
   ).filter((c): c is Candidate => c !== null);
 
   const stores = storesFor(requireBinding(env, "DB"));
-  if (await aiAllowed(env, stores, userId)) await scoreWithModel(input, stores, candidates);
+  if(await aiAllowed(env,stores,userId)){try{stores.policy=await captureAiPolicy(requireBinding(env,'DB'),userId,true);await scoreWithModel(input,stores,candidates);await stores.policy.assertCurrent();}catch{for(const candidate of candidates)candidate.ai=null;}}
 
   return TriageQueue.parse(
     candidates.map(({ item, prRef, rules, ai }): TriageItem => {
@@ -318,15 +319,15 @@ const scoreWithModel = async (input: TriageQueueInput, stores: AiStores, candida
               maxOutputTokens: TRIAGE_MAX_TOKENS,
               jsonSchema: TRIAGE_JSON_SCHEMA,
             },
-            ModelTriage,
+            ModelTriage,stores.policy,
           );
           // A failed cache write must not lose a paid answer or give the action back.
-          await stores.cache.set(keyOf(c), userId, answer).catch(() => undefined);
+          await stores.cache.set(keyOf(c),userId,answer).catch(error=>{if(error instanceof ApiError&&['consent_required','consent_changed','forbidden'].includes(error.code))throw error;});
           return answer;
         });
-        c.ai = value;
+        await stores.policy?.assertCurrent();c.ai = value;
       } catch (error) {
-        if (error instanceof ApiError && error.code === "rate_limited") stopped = true;
+        if (error instanceof ApiError && ["rate_limited","consent_required","consent_changed","forbidden"].includes(error.code)) stopped = true;
         else if (++failures >= MAX_AI_FAILURES) stopped = true;
       }
     }
