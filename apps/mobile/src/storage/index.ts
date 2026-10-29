@@ -12,6 +12,7 @@ const PUSH_ENABLED_KEY = "mergemate_push_enabled";
 
 // Fallback in-memory map for environments where neither SecureStore nor localStorage is accessible
 const memoryStorage = new Map<string, string>();
+let recentAccount:string|null=null,recentSearches:string[]=[];
 let pendingOperations=Promise.resolve();
 function pendingOperation<T>(operation:()=>Promise<T>):Promise<T>{const result=pendingOperations.then(operation,operation);pendingOperations=result.then(()=>undefined,()=>undefined);return result;}
 const storageUnavailable=()=>new ApiClientError("secure_storage_unavailable",messageForCode("secure_storage_unavailable"));
@@ -141,40 +142,19 @@ export const StorageService = {
     }
   },
 
-  async getRecentSearches(): Promise<string[]> {
-    try {
-      let raw: string | null = null;
-      if (Platform.OS === "web") {
-        const storage = getWebStorage();
-        raw = storage ? storage.getItem(RECENT_SEARCHES_KEY) : memoryStorage.get(RECENT_SEARCHES_KEY) || null;
-      } else {
-        raw = await SecureStore.getItemAsync(RECENT_SEARCHES_KEY);
-      }
-      if (raw) {
-        return JSON.parse(raw);
-      }
-    } catch {
-      // ignore
-    }
-    return [];
+  /** Private query text is session-memory only, never written to browser or native storage. */
+  setRecentSearchAccount(account:string|null):void {
+    if(recentAccount!==account){recentAccount=account;recentSearches=[];}
+    memoryStorage.delete(RECENT_SEARCHES_KEY);
+    try{getWebStorage()?.removeItem(RECENT_SEARCHES_KEY);}catch{/* Never read legacy shared history. */}
+    void SecureStore.deleteItemAsync(RECENT_SEARCHES_KEY).catch(()=>undefined);
   },
-
-  async addRecentSearch(query: string): Promise<void> {
-    try {
-      const existing = await this.getRecentSearches();
-      const updated = [query, ...existing.filter((q) => q.toLowerCase() !== query.toLowerCase())].slice(0, 5);
-      const val = JSON.stringify(updated);
-      if (Platform.OS === "web") {
-        const storage = getWebStorage();
-        if (storage) storage.setItem(RECENT_SEARCHES_KEY, val);
-        else memoryStorage.set(RECENT_SEARCHES_KEY, val);
-      } else {
-        await SecureStore.setItemAsync(RECENT_SEARCHES_KEY, val);
-      }
-    } catch {
-      // ignore
-    }
+  async getRecentSearches(account=recentAccount):Promise<string[]>{return account!==null&&account===recentAccount?[...recentSearches]:[];},
+  async addRecentSearch(query:string,account=recentAccount):Promise<void>{
+    const value=query.trim();if(account===null||account!==recentAccount||!value||value.length>120)return;
+    recentSearches=[value,...recentSearches.filter(item=>item.toLowerCase()!==value.toLowerCase())].slice(0,5);
   },
+  async clearRecentSearches(account=recentAccount):Promise<void>{if(account===recentAccount)recentSearches=[];},
 
   /**
    * Sign-in in progress. Web keeps it in sessionStorage (this tab only, gone when it closes); native keeps

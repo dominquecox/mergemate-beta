@@ -18,6 +18,7 @@ import { Platform } from "react-native";
 describe("StorageService", () => {
   beforeEach(async () => {
     mockSecureStore.clear();
+    StorageService.setRecentSearchAccount(null);
     await StorageService.clearSessionToken();
   });
 
@@ -59,6 +60,7 @@ describe("StorageService", () => {
   });
 
   it("stores and deduplicates recent search terms", async () => {
+    StorageService.setRecentSearchAccount("fixture-a");
     await StorageService.addRecentSearch("stripe auth");
     await StorageService.addRecentSearch("schema migration");
     await StorageService.addRecentSearch("stripe auth");
