@@ -1,11 +1,16 @@
+import * as Crypto from "expo-crypto";
+import type {InboxReceipt} from "@mergemate/contracts";
+import {useAuth} from "../../src/context/AuthContext";
+import {ApiClientError} from "../../src/api/errors";
+import {Button} from "../../src/components/Button";
 import {useFeatureFlags} from "../../src/hooks/useFeatureFlags";
 import {ReadoutControls} from "../../src/components/ReadoutControls";
 import {inboxNarration} from "../../src/readout/text";
-import React, { useState, useRef } from "react";
-import { View, FlatList, RefreshControl, TouchableOpacity, Pressable, StyleSheet } from "react-native";
+import React, { useState, useRef,useEffect,useCallback } from "react";
+import {AppState, View, FlatList, RefreshControl, TouchableOpacity, Pressable, StyleSheet } from "react-native";
 import { androidRipple } from "../../src/platform/android";
 import { Text } from "../../src/components/Text";
-import { useRouter } from "expo-router";
+import { useRouter,useFocusEffect } from "expo-router";
 import { useTheme } from "../../src/context/ThemeContext";
 import { api } from "../../src/api";
 import { toUserMessage } from "../../src/api/errors";
@@ -21,51 +26,66 @@ import { useLayout } from "../../src/layout/useLayout";
 
 import { usePagedList } from "../../src/hooks/usePagedList";
 
-export default function InboxScreen() {
+export default function InboxScreen(){const {user}=useAuth();return user?<InboxBootstrap key={user.id}/>:<LoadingState title="Loading your inbox..." message="Checking your account."/>;}
+function InboxBootstrap(){
+ const [initial,setInitial]=useState<NotificationFilter|null>(null),[error,setError]=useState(false);const mounted=useRef(true);
+ const load=async()=>{setError(false);try{const saved=await api.getInboxPreference();if(mounted.current)setInitial(saved.filter);}catch{if(mounted.current)setError(true);}};
+ useEffect(()=>{void load();return()=>{mounted.current=false;};},[]);
+ if(initial!==null)return <InboxWorkspace initialFilter={initial}/>;
+ if(error)return <View style={{flex:1}}><Header title="Inbox"/><ErrorState title="Could not load your Inbox preference" message="Retry, or use All temporarily without changing your saved filter." onRetry={load}/><Button title="Use All temporarily" variant="secondary" onPress={()=>setInitial('all')}/></View>;
+ return <LoadingState title="Loading your inbox..." message="Restoring your saved filter."/>;
+}
+function InboxWorkspace({initialFilter}:{initialFilter:NotificationFilter}) {
   const router = useRouter();
   const flags=useFeatureFlags();
   const { colors, typography, spacing, radius } = useTheme();
   const { isDesktop } = useLayout();
 
-  const [filter, setFilter] = useState<NotificationFilter>("all");
-  const {items,setItems,loading:isLoading,busy:isRefreshing,error,setError,refresh:fetchItems,more,hasMore} = usePagedList(`inbox:${filter}`, cursor=>api.getNotificationPage(filter,cursor));
-  const [undoItem, setUndoItem] = useState<Notification | null>(null);
-  const actionLock = useRef(false);
-  const [acting,setActing] = useState(false);
-  const onRefresh = () => { api.invalidateCache(); void fetchItems(); };
-
-  // The card leaves the list at once; if the API refuses, it comes back and the reason is shown.
-  const applyAction = async (item: Notification, action: () => Promise<void>) => {
-    if(actionLock.current)return;
-    actionLock.current=true; setActing(true);
-    setUndoItem(item);
-    setItems((prev) => prev.filter((i) => i.id !== item.id));
-    try {
-      await action();
-    } catch (e) {
-      setUndoItem(null);
-      setItems((prev) => [item, ...prev]);
-      setError(toUserMessage(e, "Couldn't update that pull request."));
-    } finally { actionLock.current=false; setActing(false); }
+  const {isDemo,user}=useAuth();
+  const [filter,setFilter]=useState<NotificationFilter>(initialFilter),[prefError,setPrefError]=useState(false);
+  const preferenceQueue=useRef(Promise.resolve()),view=useRef(0),currentFilter=useRef(filter);currentFilter.current=filter;
+  const {items:sourceItems,setItems,loading:isLoading,busy:isRefreshing,error,setError,refresh:fetchItems,revalidate,more,hasMore,refreshAfterMs}=usePagedList(`inbox:${user?.id}:${filter}`,cursor=>api.getNotificationPage(filter,cursor));
+  type Hidden={revision:string;until?:string};
+  const [hidden,setHidden]=useState<Record<string,Hidden>>({});
+  const [undoItem,setUndoItem]=useState<{item:Notification;receipt:InboxReceipt}|null>(null),[acting,setActing]=useState(false);
+  const actionLock=useRef(false);
+  const items=sourceItems.filter(item=>{const removed=hidden[item.id];return !removed||Date.parse(item.updatedAt)>Date.parse(removed.revision)||(removed.until!==undefined&&Date.parse(removed.until)<=Date.now());});
+  const persist=(next:NotificationFilter)=>{
+    if(isDemo)return;const version=view.current;
+    preferenceQueue.current=preferenceQueue.current.catch(()=>{}).then(async()=>{if(version!==view.current)return;try{await api.setInboxPreference(next);if(version===view.current)setPrefError(false);}catch{if(version===view.current)setPrefError(true);}});
   };
-
-  const handleDone = (item: Notification) => applyAction(item, () => api.markNotificationDone(item.id,item.updatedAt));
-
-  const handleSnooze = (item: Notification) =>
-    applyAction(item, () => api.snoozeNotification(item.id, new Date(Date.now() + 86400000).toISOString()));
-
-  const handleUndo = async () => {
-    if (!undoItem || actionLock.current) return;
-    actionLock.current=true; setActing(true);
-    const item = undoItem;
-    setUndoItem(null);
-    setItems((prev) => [item, ...prev]);
-    try {
-      await api.restoreNotification(item.id);
-    } catch (e) {
-      setItems((prev) => prev.filter((i) => i.id !== item.id));
-      setError(toUserMessage(e, "Couldn't undo that."));
-    } finally {actionLock.current=false; setActing(false);}
+  const selectFilter=(next:NotificationFilter)=>{if(next===filter)return;view.current++;actionLock.current=false;setActing(false);setUndoItem(null);setFilter(next);persist(next);};
+  const focused=useRef(false);
+  useFocusEffect(useCallback(()=>{
+    let active=true;
+    if(focused.current){api.invalidateCache();void revalidate();}focused.current=true;
+    const refresh=()=>{if(active&&AppState.currentState==='active'){api.invalidateCache();void revalidate();}};
+    const interval=setInterval(refresh,60000),state=AppState.addEventListener('change',value=>{if(value==='active')refresh();});
+    return()=>{active=false;clearInterval(interval);state.remove();};
+  },[revalidate]));
+  useEffect(()=>{if(refreshAfterMs===null)return;const timer=setTimeout(()=>{api.invalidateCache();void revalidate();},Math.min(2147483647,Math.max(250,refreshAfterMs)));return()=>clearTimeout(timer);},[refreshAfterMs,revalidate]);
+  useEffect(()=>()=>{view.current++;},[]);
+  const onRefresh=()=>{api.invalidateCache();void fetchItems();};
+  const applyAction=async(item:Notification,action:'done'|'snooze')=>{
+    if(isDemo||actionLock.current)return;actionLock.current=true;setActing(true);setError(null);const version=view.current;const operationId=Crypto.randomUUID();
+    setHidden(old=>({...old,[item.id]:{revision:item.updatedAt}}));setUndoItem(null);
+    try{
+      const receipt=await api.mutateInboxItem(item.id,{operationId,expectedOperationId:item.stateToken??null,action,observedUpdatedAt:item.updatedAt,...(action==='snooze'?{durationMinutes:1440}:{})});
+      if(version!==view.current)return;
+      setItems(old=>old.map(row=>row.id===item.id?{...row,stateToken:receipt.operationId}:row));
+      setHidden(old=>({...old,[item.id]:{revision:item.updatedAt,...(receipt.snoozedUntil?{until:receipt.snoozedUntil}:{})}}));setUndoItem({item,receipt});
+    }catch(error){if(version===view.current){setHidden(old=>{const next={...old};delete next[item.id];return next;});setError(toUserMessage(error,"Couldn't update this item. Try again."));if(error instanceof ApiClientError&&error.code==='state_conflict'){api.invalidateCache();void revalidate();}}}
+    finally{if(version===view.current){actionLock.current=false;setActing(false);}}
+  };
+  const handleDone=(item:Notification)=>applyAction(item,'done'),handleSnooze=(item:Notification)=>applyAction(item,'snooze');
+  const handleUndo=async()=>{
+    if(!undoItem||actionLock.current||isDemo)return;actionLock.current=true;setActing(true);setError(null);const version=view.current;const {item,receipt}=undoItem;
+    try{
+      const restored=await api.mutateInboxItem(item.id,{operationId:Crypto.randomUUID(),expectedOperationId:receipt.operationId,action:'restore',observedUpdatedAt:item.updatedAt});
+      if(version!==view.current)return;
+      setHidden(old=>{const next={...old};delete next[item.id];return next;});setItems(old=>old.some(row=>row.id===item.id)?old.map(row=>row.id===item.id?{...row,stateToken:restored.operationId}:row):[...old,{...item,stateToken:restored.operationId}].sort((a,b)=>Date.parse(b.updatedAt)-Date.parse(a.updatedAt)||(a.id<b.id?-1:1)));setUndoItem(null);
+    }catch(error){if(version===view.current){setError(toUserMessage(error,"Couldn't undo this change. Try Undo again."));if(error instanceof ApiClientError&&error.code==='state_conflict'){setUndoItem(null);api.invalidateCache();void revalidate();}}}
+    finally{if(version===view.current){actionLock.current=false;setActing(false);}}
   };
 
   const navigateToPr = (item: Notification) => {
@@ -101,6 +121,7 @@ export default function InboxScreen() {
         }
       />
 
+      <Button title="Refresh Inbox" variant="ghost" loading={isRefreshing&&!isLoading} onPress={onRefresh}/>
       <ReadoutControls label="Inbox overview" sentences={inboxNarration(items)}/>
 
       {/* Segmented Filter Control */}
@@ -115,7 +136,7 @@ export default function InboxScreen() {
           return (
             <TouchableOpacity
               key={tab}
-              onPress={() => setFilter(tab)}
+              onPress={() => selectFilter(tab)}
               style={[
                 styles.filterTab,
                 {
@@ -143,6 +164,9 @@ export default function InboxScreen() {
         })}
       </View>
 
+      {prefError&&<View style={{padding:12}}><Text style={[typography.body,{color:colors.textSecondary}]} accessibilityRole="alert">This filter applies here, but could not be saved for next time.</Text><Button title="Retry saving filter" variant="ghost" onPress={()=>persist(filter)}/></View>}
+      {acting&&<Text accessibilityLiveRegion="polite" style={[typography.body,{color:colors.textSecondary,padding:12}]}>Saving Inbox change…</Text>}
+      {error&&sourceItems.length>0&&<View style={{padding:12}}><Text accessibilityRole="alert" style={[typography.body,{color:colors.riskHigh}]}>{error}</Text><Button title="Refresh Inbox" variant="ghost" onPress={onRefresh}/></View>}
       {/* Undo Toast */}
       {undoItem && (
         <View
@@ -154,7 +178,7 @@ export default function InboxScreen() {
             disabled={acting} onPress={handleUndo}
             style={styles.undoBtn}
             accessibilityRole="button"
-            accessibilityLabel={`Undo moving ${undoItem.title}`}
+            accessibilityLabel={`Undo moving ${undoItem.item.title}`}
           >
             <Text style={[typography.footnote, { color: colors.brandLight, fontWeight: "700" }]}>Undo</Text>
           </TouchableOpacity>
@@ -164,7 +188,7 @@ export default function InboxScreen() {
       {isLoading ? (
         <LoadingState
           title="Loading your inbox..."
-          message="Fetching pull requests, status checks, and AI summaries."
+          message="Fetching accessible pull requests and your Inbox state."
         />
       ) : error && items.length===0 ? (
         <ErrorState
@@ -173,13 +197,13 @@ export default function InboxScreen() {
           onRetry={fetchItems}
         />
       ) : items.length === 0 ? (
-        <EmptyState
+        <View style={{flex:1}}><EmptyState
           icon="checkmark-done-outline"
           title="Inbox Zero"
           message="You're all caught up! No pull requests need your attention in this view."
           actionTitle="Refresh Inbox"
-          onAction={fetchItems}
-        />
+          onAction={onRefresh}
+        />{hasMore&&<Button title="Load more pull requests" loading={isRefreshing} onPress={more}/>}</View>
       ) : (
         <FlatList
           key={isDesktop?'desktop':'phone'} numColumns={isDesktop?2:1} columnWrapperStyle={isDesktop?{gap:16}:undefined}
@@ -269,7 +293,7 @@ export default function InboxScreen() {
 
                   <View style={styles.quickActions}>
                     <TouchableOpacity
-                      disabled={acting} onPress={() => handleSnooze(item)}
+                      disabled={acting||isDemo} onPress={() => handleSnooze(item)}
                       style={[styles.actionBtn, { borderColor: colors.border },{borderRadius:radius.md}]}
                       accessibilityRole="button"
                       accessibilityLabel={`Snooze ${item.title}`}
@@ -277,7 +301,7 @@ export default function InboxScreen() {
                       <Text style={[typography.caption, { color: colors.textSecondary, fontWeight: "600" }]}>Snooze</Text>
                     </TouchableOpacity>
                     <TouchableOpacity
-                      disabled={acting} onPress={() => handleDone(item)}
+                      disabled={acting||isDemo} onPress={() => handleDone(item)}
                       style={[styles.actionBtn, { borderColor: colors.border, backgroundColor: colors.surfaceInteractive },{borderRadius:radius.md}]}
                       accessibilityRole="button"
                       accessibilityLabel={`Mark ${item.title} as done`}

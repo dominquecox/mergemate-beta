@@ -3,6 +3,7 @@ import {notifySessionChange,hasPendingLogout,setPendingLogout} from "../auth/ses
 import { z } from "zod";
 import { RequestCache } from "./request-cache";
 import {
+  InboxPreference,InboxMutation,InboxReceipt,
   AuthCallbackResponse,
   AuthStartResponse,
   BillingLink,
@@ -182,7 +183,7 @@ export class HttpApiClient implements ApiClient {
       return this.reads.run(`get:${opts.auth !== false}:${!!opts.probe}:${!!opts.sessionMutation}:${opts.path}`, () => this.readRequest(opts));
     }
     return this.readRequest(opts).then(value=>{
-      if(/^\/(settings|consent|repos|account)(\/|$)/.test(opts.path))this.reads.invalidate();
+      if(/^\/(settings|consent|repos|account|inbox)(\/|$)/.test(opts.path))this.reads.invalidate();
       return value;
     });
   }
@@ -522,7 +523,15 @@ export class HttpApiClient implements ApiClient {
   // Notifications
   // ---------------------------------------------------------------------------------------------
 
-  getNotificationPage(filter: NotificationFilter = 'all', cursor?: string | null, search = ''): Promise<{items: Notification[]; nextCursor: string | null}> {
+  getInboxPreference(){return this.request({path:'/inbox/preference',schema:InboxPreference});}
+  async setInboxPreference(filter:NotificationFilter){return this.request({method:'PUT',path:'/inbox/preference',body:{filter},schema:InboxPreference});}
+  async mutateInboxItem(id:string,input:import('@mergemate/contracts').InboxMutation){
+    const body=InboxMutation.parse(input);
+    const receipt=await this.actions.run(`inbox-operation:${id}:${body.operationId}`,()=>this.request({method:'POST',path:`/notifications/${enc(id)}/state`,body,schema:InboxReceipt}));
+    this.reads.invalidate('inbox:');return receipt;
+  }
+
+  getNotificationPage(filter: NotificationFilter = 'all', cursor?: string | null, search = ''): Promise<{items: Notification[]; nextCursor: string | null;serverTime?:string;refreshAt?:string|null}> {
     const path = `/notifications?filter=${enc(filter)}${cursor ? `&cursor=${enc(cursor)}` : ''}${search ? `&search=${enc(search)}` : ''}`;
     return this.reads.run(`inbox:${path}`, () => this.request({path, schema: NotificationPage}), 15_000);
   }

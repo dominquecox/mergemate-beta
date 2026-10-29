@@ -1,3 +1,4 @@
+import type {InboxMutation,InboxReceipt} from "@mergemate/contracts";
 import type {FeatureFlags} from "@mergemate/contracts";
 import {
   User,
@@ -27,7 +28,7 @@ export interface ApiClient {
   invalidateCache(): void;
   clearCache(): void;
   invalidateSession(): void;
-  getNotificationPage(filter?: NotificationFilter, cursor?: string | null, search?: string): Promise<{items: Notification[]; nextCursor: string | null}>;
+  getNotificationPage(filter?: NotificationFilter, cursor?: string | null, search?: string): Promise<{items: Notification[]; nextCursor: string | null;serverTime?:string;refreshAt?:string|null}>;
   getRepoPage(cursor?: string | null): Promise<{items: Repo[]; nextCursor: string | null}>;
   getFeatureFlags(refresh?:boolean): Promise<FeatureFlags>;
   health(): Promise<{ ok: boolean; version: string }>;
@@ -53,6 +54,10 @@ export interface ApiClient {
   getRepos(): Promise<Repo[]>;
   toggleWatchRepo(id: string, watching: boolean): Promise<Repo>;
   getOrgInstallations(): Promise<InstallationList>;
+
+  getInboxPreference():Promise<{filter:NotificationFilter}>;
+  setInboxPreference(filter:NotificationFilter):Promise<{filter:NotificationFilter}>;
+  mutateInboxItem(id:string,input:InboxMutation):Promise<InboxReceipt>;
 
   // Notifications / Inbox
   getNotifications(filter?: NotificationFilter): Promise<Notification[]>;

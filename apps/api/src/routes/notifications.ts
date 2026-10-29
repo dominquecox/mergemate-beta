@@ -162,6 +162,10 @@ async function checkItemAccess(c:Context<AppEnv>,uid:string,id:string){
  await githubGet(c.get('deps'),token,`/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/pulls/${number}`);
 }
 
+async function requireLegacyState(c:Context<AppEnv>,id:string){
+ const state=await requireBinding(c.env,'DB').prepare('SELECT operation_id FROM notification_state WHERE user_id=? AND item_id=?').bind(userId(c),id).first<{operation_id:string|null}>();
+ if(state?.operation_id)throw new ApiError('state_conflict','Use the current app to update this item, then refresh your Inbox.');
+}
 export const notifications = new Hono<AppEnv>()
   .get("/notifications", async (c) => {
     const filter = parseValue(NotificationFilter, c.req.query("filter") ?? "all");
@@ -186,6 +190,7 @@ export const notifications = new Hono<AppEnv>()
 
   .post("/notifications/:id/done", async (c) => {
     const id = parseItemId(c.req.param("id"));
+    await requireLegacyState(c,id);
     const now = c.get("deps").now().toISOString();
     let observed=now;
     if(c.req.header('content-type')?.includes('application/json')){
@@ -206,6 +211,7 @@ export const notifications = new Hono<AppEnv>()
 
   .post("/notifications/:id/snooze", async (c) => {
     const id = parseItemId(c.req.param("id"));
+    await requireLegacyState(c,id);
     const { until } = await parseBody(c, SnoozeRequest);
     const now = c.get("deps").now();
     const untilMs = Date.parse(until);
@@ -225,6 +231,7 @@ export const notifications = new Hono<AppEnv>()
   // Undo for done and snooze.
   .post("/notifications/:id/restore", async (c) => {
     const id = parseItemId(c.req.param("id"));
+    await requireLegacyState(c,id);
     await requireBinding(c.env, "DB")
       .prepare("DELETE FROM notification_state WHERE user_id = ? AND item_id = ? AND operation_id IS NULL")
       .bind(userId(c), id)
