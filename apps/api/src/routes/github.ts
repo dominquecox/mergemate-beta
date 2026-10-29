@@ -214,6 +214,7 @@ export const fetchPrDetail = async (
   repo: string,
   number: number,
   lazy = false,
+  includeChecks=true,
 ): Promise<PrDetail> => {
   const base = `/repos/${owner}/${repo}`;
   const pull = await githubGet<GhPull>(deps, token, `${base}/pulls/${number}`);
@@ -225,8 +226,8 @@ export const fetchPrDetail = async (
         githubGet<GhFile[]>(deps, token, `${base}/pulls/${number}/files?per_page=100&page=${i + 1}`),
       ),
     ).then((pages) => pages.flat()),
-    githubGet<{ check_runs: GhCheckRun[] }>(deps, token, `${base}/commits/${pull.head.sha}/check-runs?per_page=100`),
-    githubGet<{ statuses: GhStatus[] }>(deps, token, `${base}/commits/${pull.head.sha}/status?per_page=100`),
+    includeChecks?githubGet<{check_runs:GhCheckRun[]}>(deps,token,`${base}/commits/${pull.head.sha}/check-runs?per_page=100`):Promise.resolve({check_runs:[]}),
+    includeChecks?githubGet<{statuses:GhStatus[]}>(deps,token,`${base}/commits/${pull.head.sha}/status?per_page=100`):Promise.resolve({statuses:[]}),
     lazy ? Promise.resolve([] as GhComment[]) : githubGet<GhComment[]>(deps, token, `${base}/pulls/${number}/comments?per_page=100`),
     lazy ? Promise.resolve([] as GhComment[]) : githubGet<GhComment[]>(deps, token, `${base}/issues/${number}/comments?per_page=100`),
   ]);
@@ -247,7 +248,7 @@ export const fetchPrDetail = async (
     changedFiles: pull.changed_files,
     files:files.map(file=>workspaceFile(file,false)),
     checks,
-    checkCursor:checkRuns.check_runs.length===100?"runs:5":statuses.statuses.length===100?"status:5":null,
+    checkCursor:!includeChecks?"checks:1":checkRuns.check_runs.length===100||statuses.statuses.length===100?"checks:5":null,
     threads: toThreads(review, conversation),
     createdAt: pull.created_at,
     updatedAt: pull.updated_at,
@@ -351,12 +352,12 @@ export const github = new Hono<AppEnv>()
   .get('/prs/:owner/:repo/:number/pages/:section',async c=>{
     const {owner,repo,number,section}=c.req.param();
     if(!NAME.test(owner)||!NAME.test(repo)||[owner,repo].some(value=>value==='.'||value==='..')||!/^[1-9]\d{0,9}$/.test(number)||!['files','comments','checks'].includes(section))throw new ApiError('validation_failed','Invalid pull request page.');
-    const modern=c.req.query('v')==='2',raw=c.req.query('cursor')??(section==='files'?'1':section==='checks'?'runs:1':'review:1');
+    const modern=c.req.query('v')==='2',raw=c.req.query('cursor')??(section==='files'?'1':section==='checks'?'checks:1':'review:1');
     let source=section==='files'?'files':raw.split(':')[0]??'',page=Number(section==='files'?raw:raw.split(':')[1]),revision:string|undefined,scope:string|undefined;
-    if(modern&&!/^\d+$|^(review|conversation|reviews|runs|status):\d+$/.test(raw)){
+    if(modern&&!/^\d+$|^(review|conversation|reviews|checks):\d+$/.test(raw)){
       try{if(raw.length>1024)throw new Error();const value:unknown=JSON.parse(atob(raw.replace(/-/g,'+').replace(/_/g,'/')));if(!value||typeof value!=='object'||!('source'in value)||typeof value.source!=='string'||!('page'in value)||typeof value.page!=='number'||!('head'in value)||typeof value.head!=='string'||!('scope'in value)||typeof value.scope!=='string')throw new Error();source=value.source;page=value.page;revision=value.head;scope=value.scope;}catch{throw new ApiError('validation_failed','Invalid workspace cursor.');}
     }
-    const sources=section==='files'?['files']:section==='checks'?['runs','status']:modern?['review','conversation','reviews']:['review','conversation'];
+    const sources=section==='files'?['files']:section==='checks'?['checks']:modern?['review','conversation','reviews']:['review','conversation'];
     if(!sources.includes(source)||!Number.isInteger(page)||page<1||page>120)throw new ApiError('validation_failed','Invalid workspace cursor.');
     if(c.get('session').demo){const detail=DEMO_PRS.find(pr=>pr.repo===`${owner}/${repo}`&&pr.number===Number(number));if(!detail)throw new ApiError('not_found','Pull request not found.');return c.json({items:section==='files'?detail.files:section==='checks'?detail.checks:detail.threads,nextCursor:null,headSha:detail.headSha,capped:false});}
     const token=await userToken(c),deps=workspaceDeps(c),base=`/repos/${owner}/${repo}`,limit=25;
@@ -368,8 +369,8 @@ export const github = new Hono<AppEnv>()
     let items:unknown[],length:number;
     if(section==='files'){const rows=await githubGet<GhFile[]>(deps,token,`${base}/pulls/${number}/files?per_page=${limit}&page=${page}`);length=rows.length;items=rows.map(file=>workspaceFile(file));}
     else if(section==='checks'){
-      if(source==='runs'){const rows=await githubGet<{check_runs:GhCheckRun[]}>(deps,token,`${base}/commits/${pull.head.sha}/check-runs?per_page=${limit}&page=${page}`);length=rows.check_runs.length;items=rows.check_runs.map((row,index)=>runCheck(row,(page-1)*limit+index));}
-      else{const rows=await githubGet<{statuses:GhStatus[]}>(deps,token,`${base}/commits/${pull.head.sha}/status?per_page=${limit}&page=${page}`);length=rows.statuses.length;items=rows.statuses.map(statusCheck);}
+      const [runs,statuses]=await Promise.all([githubGet<{check_runs:GhCheckRun[]}>(deps,token,`${base}/commits/${pull.head.sha}/check-runs?per_page=${limit}&page=${page}`),githubGet<{statuses:GhStatus[]}>(deps,token,`${base}/commits/${pull.head.sha}/status?per_page=${limit}&page=${page}`)]);
+      length=Math.max(runs.check_runs.length,statuses.statuses.length);items=[...runs.check_runs.map((row,index)=>runCheck(row,(page-1)*limit+index)),...statuses.statuses.map(statusCheck)];
     }else if(source==='reviews'){
       const rows=await githubGet<GhComment[]>(deps,token,`${base}/pulls/${number}/reviews?per_page=${limit}&page=${page}`);length=rows.length;items=rows.map(row=>({id:`review-${row.id}`,kind:'review-summary',reviewState:row.state,path:null,line:null,comments:[{id:String(row.id),author:row.user?.login??'ghost',body:row.body??'',createdAt:row.submitted_at??row.created_at}]}));
     }else{const rows=await githubGet<GhComment[]>(deps,token,`${base}/${source==='review'?'pulls':'issues'}/${number}/comments?per_page=${limit}&page=${page}`);length=rows.length;items=toThreads(source==='review'?rows:[],source==='conversation'?rows:[]);}
@@ -392,5 +393,5 @@ export const github = new Hono<AppEnv>()
 
     // The user's own token: GitHub enforces their access to this repository.
     const token = await userToken(c);
-    return c.json(await fetchPrDetail(workspaceDeps(c), token, owner, repo, Number(number), c.req.query("lazy") === "1"));
+    return c.json(await fetchPrDetail(workspaceDeps(c), token, owner, repo, Number(number), c.req.query("lazy") === "1",c.req.query("workspace")!=="1"));
   });

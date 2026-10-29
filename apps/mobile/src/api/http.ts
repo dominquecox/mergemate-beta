@@ -566,7 +566,7 @@ export class HttpApiClient implements ApiClient {
   }
 
   async getPrMetadata(owner: string, repo: string, number: number,signal?:AbortSignal): Promise<PrDetail> {
-    return mapPrDetail(await this.request({ path: `${prPath(owner, repo, number)}?lazy=1`,signal, schema: PrDetailSchema }));
+    return mapPrDetail(await this.request({ path: `${prPath(owner, repo, number)}?lazy=1&workspace=1`,signal, schema: PrDetailSchema }));
   }
 
   async getPrDetail(owner: string, repo: string, number: number,signal?:AbortSignal): Promise<PrDetail> {
