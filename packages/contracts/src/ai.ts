@@ -105,8 +105,8 @@ export type HighlightRegion = z.infer<typeof HighlightRegion>;
 
 /** Highlight result. The request id matches the `x-request-id` response header. */
 export const HighlightResult = z.object({
-  insight: z.string().min(1),
-  regions: z.array(HighlightRegion).default([]),
+  insight: z.string().trim().min(1).max(8000),
+  regions: z.array(HighlightRegion).max(20).default([]),
   requestId: z.string().min(1),
 });
 export type HighlightResult = z.infer<typeof HighlightResult>;
@@ -135,8 +135,8 @@ export type ModelRisk = z.infer<typeof ModelRisk>;
 
 /** Exact shape the vision model must return for a highlight. */
 export const ModelHighlight = z.object({
-  explanation: z.string().min(1),
-  regions: z.array(HighlightRegion).default([]),
+  explanation: z.string().trim().min(1).max(8000),
+  regions: z.array(HighlightRegion).max(20).default([]),
 });
 export type ModelHighlight = z.infer<typeof ModelHighlight>;
 
