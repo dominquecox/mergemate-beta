@@ -11,6 +11,7 @@ import {
   buildDiffContext,
   cacheKey,
   claimWork,
+  policyWorkKey,
   containsTodo,
   createDbCache,
   createDbUsageStore,
@@ -32,6 +33,7 @@ import type { PrDetail } from "@mergemate/contracts";
 import type { SessionRecord } from "../src/lib/sessions";
 import { createDbConsentStore, parseConsentUpdate, requireConsent } from "../src/routes/consent";
 import { ApiError } from "../src/errors";
+import { readAiPreferences } from "../src/lib/ai-policy";
 import type { AiBinding } from "../src/env";
 import { fakeAi, mockTransport, validModelEnv } from "./helpers";
 import { TestD1 } from "./d1";
@@ -500,7 +502,7 @@ describe("usage reservation", () => {
     it("ignore an expired claim left by a request that crashed", async () => {
       const transport = slowTransport();
       const deps = await grantedDeps(transport);
-      const key = cacheKey("u1", "o/r#77", "abc", "summary");
+      const key = policyWorkKey(cacheKey("u1", "o/r#77", "abc", "summary"), (await readAiPreferences(deps.db, "u1")).revision);
       await deps.db.prepare("INSERT INTO ai_inflight (key, user_id, expires_at) VALUES (?, 'u1', ?)").bind(key, "2000-01-01T00:00:00.000Z").run();
       await summarizePr(deps, user, ref, validModelEnv());
       expect(transport.calls).toHaveLength(1);
@@ -509,7 +511,8 @@ describe("usage reservation", () => {
     it("give up with a retry message instead of calling the model twice", async () => {
       const transport = slowTransport();
       const deps = { ...(await grantedDeps(transport)), sleep: async () => undefined };
-      expect(await claimWork(deps.db, cacheKey("u1", "o/r#77", "abc", "summary"), "u1")).toBe(true);
+      const { revision } = await readAiPreferences(deps.db, "u1");
+      expect(await claimWork(deps.db, policyWorkKey(cacheKey("u1", "o/r#77", "abc", "summary"), revision), "u1")).toBe(true);
       const err = await apiError(() => summarizePr(deps, user, ref, validModelEnv()));
       expect(err.code).toBe("upstream_unavailable");
       expect(err.message).toContain("still being prepared");
@@ -522,7 +525,7 @@ describe("usage reservation", () => {
       const deps = { ...(await grantedDeps(transport)), sleep: async () => undefined };
       await seedUser(deps.db, "u2", 4343);
       await createDbConsentStore(deps.db).write("u2", true);
-      expect(await claimWork(deps.db, cacheKey("u2", "o/r#77", "abc", "summary"), "u2")).toBe(true);
+      expect(await claimWork(deps.db, policyWorkKey(cacheKey("u2", "o/r#77", "abc", "summary"), (await readAiPreferences(deps.db, "u2")).revision), "u2")).toBe(true);
       await summarizePr(deps, user, ref, validModelEnv());
       expect(transport.calls).toHaveLength(1);
     });

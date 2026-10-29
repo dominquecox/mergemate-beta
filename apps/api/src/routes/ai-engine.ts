@@ -166,6 +166,9 @@ const INFLIGHT_WAIT_MS = 50_000;
 const INFLIGHT_POLL_MS = 1_000;
 
 /** Claims `key` for this request. True when it was free or its previous claim expired. */
+/** Work leases are scoped to the AI policy revision, so a lease taken before a revoke or re-grant never blocks or feeds later work. */
+export const policyWorkKey=(key:string,revision?:string):string=>revision?`${key}:${revision}`:key;
+
 export const claimWork = async (db: D1Database, key: string, userId: string, now = Date.now()): Promise<boolean> => {
   const result = await db
     .prepare(
@@ -894,7 +897,7 @@ export const summarizePr = async (
   if (!data) throw new ApiError("upstream_unavailable", "PR data is unavailable right now. Try again later.");
   const refStr = prRefString(ref);
   const key = cacheKey(userId, refStr, data.headSha, "summary");
-  const workKey=key+':'+stores.policy?.revision;
+  const workKey=policyWorkKey(key,stores.policy?.revision);
   const hit = await stores.cache.get<PrSummary>(key);
   if (hit) return { body: hit, limit, remaining };
   // Identical work already running for this user (a double tap, two tabs): wait for its result, charge nothing.
