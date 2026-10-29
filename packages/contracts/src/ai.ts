@@ -153,3 +153,13 @@ export const ModelTriage = z.object({
   reasons: z.array(z.string()).min(1),
 });
 export type ModelTriage = z.infer<typeof ModelTriage>;
+
+/** Canonical, account-owned processing consent and independent PR preference. */
+export const AiPreferences=z.object({ai:ConsentState.shape.ai,aiSummaries:z.boolean(),revision:z.string().min(1).max(128)});
+export type AiPreferences=z.infer<typeof AiPreferences>;
+export const AiPreferenceUpdate=z.discriminatedUnion('action',[
+ z.object({action:z.literal('grant'),version:z.string().min(1),expectedRevision:z.string().min(1).max(128)}).strict(),
+ z.object({action:z.literal('revoke')}).strict(),
+ z.object({action:z.literal('summaries'),enabled:z.boolean(),expectedRevision:z.string().min(1).max(128)}).strict(),
+]);
+export type AiPreferenceUpdate=z.infer<typeof AiPreferenceUpdate>;
