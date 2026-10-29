@@ -34,7 +34,9 @@ export const searchPrs=new Hono<AppEnv>().get('/search/prs',async c=>{
  }
  if(filters.risk!=='all'){if(!(await getSettings(c.env,uid)).aiSummaries)throw new ApiError('forbidden','Saved risk is disabled in Settings.');await requireConsent(createDbConsentStore(requireBinding(c.env,'DB')),uid);}
  if(githubSearchQuery(filters).length>256)throw new ApiError('validation_failed','Shorten your title, repository or author filters.');
- const deps=c.get('deps'),token=await getAccessToken(c.env,uid,deps.now());
+ const baseDeps=c.get('deps'),deadline=AbortSignal.timeout(20_000);
+ const deps={...baseDeps,fetch:(input:RequestInfo|URL,init?:RequestInit)=>baseDeps.fetch(input,{...init,signal:AbortSignal.any([deadline,c.req.raw.signal,...(init?.signal?[init.signal]:[])])})};
+ const token=await getAccessToken(c.env,uid,deps.now());
  // One search page; never scan unbounded upstream pages to fill a filtered page.
  const result=await githubGet<{total_count:number;incomplete_results?:boolean;items:Hit[]}>(deps,token,`/search/issues?q=${encodeURIComponent(githubSearchQuery(filters))}&sort=updated&order=desc&per_page=${SIZE}&page=${page}`);
  const items:PrSearchItem[]=[];
