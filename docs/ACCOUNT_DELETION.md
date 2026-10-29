@@ -24,7 +24,7 @@ Database triggers stop late user-budget/cache writes from recreating deleted use
 
 ## Device cleanup
 
-After the server confirms deletion, local erasure runs inside the same serialized session mutation before a queued new sign-in adopts credentials. It removes account consent preferences, recent searches, demo state, device/push preferences and browser push ownership. Session credentials and request caches are cleared; device theme is preserved. Pending PKCE cleanup remains guarded by the current identity generation.
+After the server confirms deletion, local erasure runs inside the same serialized session mutation before a queued new sign-in adopts credentials. It removes account consent preferences, recent searches, device/push preferences and browser push ownership, and resets demo state. Session credentials and request caches are cleared; device theme is preserved. Pending PKCE cleanup remains guarded by the current identity generation.
 
 If local storage erasure fails after remote success, the account is still correctly reported as deleted. A non-secret cleanup marker and an in-memory fence prevent sign-in/demo restoration until **Clear local data** succeeds. The recovery screen survives reload when storage can persist the marker; it retries local cleanup without repeating remote deletion. If the platform blocks both persistence and erasure, manual browser-site/app-data removal remains necessary. No claim is made that inaccessible storage was erased.
 
@@ -55,6 +55,10 @@ The browser command starts a temporary loopback server, uses the real exported a
 SQL tests seed every user-owned table type and a second user. They cover cascade/isolation, pagination, CSRF, cookie clearing, suspended-owner recovery, concurrency, lease takeover, owned/foreign billing locks, revocation status failures, reauthorization, changed-grant fencing, database rollback, storage retry, late writes and retention. Mobile tests cover erasure ordering, failure reporting and the cleanup marker.
 
 Baseline at6c13ab1:842 workspace tests/typecheck/lint passed on repeat. Early unchanged real-DO fixture runs intermittently reset localhost connections; bounded-worker API runs passed without skipping tests. Later full default `npm run check` runs passed too. Keep those failures visible; no runtime-test or CI suppression was introduced.
+
+## Measured source proof
+
+Final full `npm run check`:531 API,291 mobile,23 web and22 contract tests (867 total), typecheck/lint exit0. Site checker:18tests plus typecheck/lint/assets exit0. Web/iOS/Android JS exports and devAPI/site packaging dry runs exit0. The browser fixture covers6 width/scenario combinations and leaves ten inspected screenshots (retry/loading/public-guide/local-cleanup/demo). Changed-commit redacted Gitleaks scan:0 findings; whole source retains only2 unchanged published RFC8291 Web Push fixture matches at apps/api/test/web-push.test.ts:12/14. No scanner ignore or test suppression added.
 
 ## Review and release
 
