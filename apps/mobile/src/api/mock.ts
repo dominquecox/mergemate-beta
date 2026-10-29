@@ -23,6 +23,7 @@ import {
 
 export class MockApiClient implements ApiClient {
   async getFeatureFlags(){return disabledFeatureFlags();}
+  invalidateInbox():void {}
   invalidateCache(): void {  }
   clearCache(): void {}
   invalidateSession():void{}
@@ -43,6 +44,10 @@ export class MockApiClient implements ApiClient {
   async getPrivateNotes():Promise<import('@mergemate/contracts').PrivateNote[]>{return [];}
   async savePrivateNote():Promise<import('@mergemate/contracts').PrivateNote>{throw new ApiClientError('forbidden','Private notes are unavailable in demo mode.');}
   async removePrivateNote():Promise<void>{throw new ApiClientError('forbidden','Private notes are unavailable in demo mode.');}
+  async getInboxUndo(){return null;}
+  async getInboxPreference(){return {filter:'all' as const};}
+  async setInboxPreference(filter:NotificationFilter){return {filter};}
+  async mutateInboxItem():Promise<import('@mergemate/contracts').InboxReceipt>{throw new ApiClientError('forbidden','Inbox changes are unavailable in demo mode.');}
   public isMock = true;
 
   private user: User = {

@@ -37,6 +37,8 @@ try{
    const headers={'content-type':'application/json','access-control-allow-origin':base,'access-control-allow-credentials':'true','access-control-allow-headers':'content-type,x-csrf-token','access-control-allow-methods':'GET,POST,DELETE,OPTIONS'};
    const reply=(status,body)=>route.fulfill({status,headers,body:JSON.stringify(body)});if(request.method()==='OPTIONS')return route.fulfill({status:204,headers});const path=url.pathname.replace('/v1','');
    if(path==='/flags')return reply(mode==='error'?503:200,mode==='error'?{error:{code:'upstream_unavailable',message:'Unavailable',requestId:'fixture'}}:{voice_readout:flag,voice_notes:false,highlight:false});
+   if(path==='/inbox/preference')return reply(200,{filter:'all'});
+   if(path==='/inbox/undo')return reply(200,null);
    if(path==='/me')return reply(200,{id:'fixture-user',login:'fixture',name:'Fixture',avatarUrl:base+'/favicon.ico',demo:false});
    if(path==='/auth/refresh')return reply(200,{session:{expiresAt:'2099-01-01T00:00:00.000Z',csrfToken:'fixture-csrf'}});
    if(path==='/auth/csrf')return reply(200,{csrfToken:'fixture-csrf'});

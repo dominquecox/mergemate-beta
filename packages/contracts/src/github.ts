@@ -25,10 +25,11 @@ export const Notification = z.object({
   summaryLine: z.string().optional(),
   updatedAt: IsoDateTime,
   read: z.boolean(),
+  stateToken:z.uuid().nullable().optional(),
 });
 export type Notification = z.infer<typeof Notification>;
 
-export const NotificationPage = pageOf(Notification);
+export const NotificationPage = pageOf(Notification).extend({serverTime:IsoDateTime.optional(),refreshAt:IsoDateTime.nullable().optional()});
 export type NotificationPage = z.infer<typeof NotificationPage>;
 
 export const SnoozeRequest = z.object({
@@ -159,3 +160,12 @@ export const ActivityResponse = z.object({
   serverTime: IsoDateTime,
 });
 export type ActivityResponse = z.infer<typeof ActivityResponse>;
+
+export const InboxPreference=z.object({filter:NotificationFilter}).strict();
+export const InboxMutation=z.object({operationId:z.uuid(),expectedOperationId:z.uuid().nullable(),action:z.enum(['done','snooze','restore']),observedUpdatedAt:IsoDateTime,durationMinutes:z.number().int().min(1).max(525600).optional()}).strict().refine(value=>value.action==='snooze'?value.durationMinutes!==undefined:value.durationMinutes===undefined);
+export type InboxMutation=z.infer<typeof InboxMutation>;
+export const InboxReceipt=z.object({operationId:z.uuid(),doneAt:IsoDateTime.nullable(),snoozedUntil:IsoDateTime.nullable(),updatedAt:IsoDateTime});
+export type InboxReceipt=z.infer<typeof InboxReceipt>;
+
+export const InboxUndo=z.object({itemId:z.string(),receipt:InboxReceipt}).nullable();
+export type InboxUndo=z.infer<typeof InboxUndo>;

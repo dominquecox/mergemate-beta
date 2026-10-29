@@ -12,6 +12,7 @@ export const ERROR_STATUS: Record<ErrorCode, ContentfulStatusCode> = {
   payload_too_large: 413,
   not_found: 404,
   validation_failed: 422,
+  state_conflict:409,
   rate_limited: 429,
   rate_limit_unavailable: 503,
   upstream_unavailable: 502,

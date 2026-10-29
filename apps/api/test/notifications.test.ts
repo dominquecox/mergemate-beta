@@ -58,7 +58,9 @@ describe("GET /v1/notifications", () => {
     const page = await list(ctx, headers, "?filter=review");
     expect(ctx.net.calls.length - before).toBe(1);
     expect(page.items.every((n) => n.kind === "review")).toBe(true);
-    expect(page.nextCursor).toBe("2");
+    expect(page.nextCursor).toEqual(expect.any(String));
+    expect(page.nextCursor).not.toBe("2");
+    expect((await list(ctx,headers,`?filter=review&cursor=${encodeURIComponent(page.nextCursor??"")}`)).items.length).toBeGreaterThan(0);
     expect((await appFor(ctx)("/v1/notifications?filter=bogus", { headers })).status).toBe(422);
   });
 
