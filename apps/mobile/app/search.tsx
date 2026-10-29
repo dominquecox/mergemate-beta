@@ -1,274 +1,47 @@
-import React, { useState, useEffect, useCallback } from "react";
-import { View, TextInput, FlatList, TouchableOpacity, Pressable, StyleSheet } from "react-native";
-import { androidRipple, useAndroidBackHandler } from "../src/platform/android";
-import { Text } from "../src/components/Text";
-import { useRouter } from "expo-router";
-import { useTheme } from "../src/context/ThemeContext";
-import { StorageService } from "../src/storage";
-import { api } from "../src/api";
-import { toUserMessage } from "../src/api/errors";
-import { Notification, RiskLevel } from "../src/types";
-import { Header } from "../src/components/Header";
-import { StatusPill } from "../src/components/StatusPill";
-import { RiskBadge } from "../src/components/RiskBadge";
-import { EmptyState } from "../src/components/EmptyState";
-import { ErrorState } from "../src/components/ErrorState";
-import { LoadingState } from "../src/components/LoadingState";
-import { Icon } from "../src/components/Icon";
-
-import { usePagedList } from "../src/hooks/usePagedList";
-import { useDebouncedValue } from "../src/hooks/useDebouncedValue";
-
-export default function SearchScreen() {
-  const router = useRouter();
-  const { colors, typography, spacing, radius } = useTheme();
-
-  const [query, setQuery] = useState("");
-  const [selectedRisk, setSelectedRisk] = useState<RiskLevel | "all">("all");
-  const [recentSearches, setRecentSearches] = useState<string[]>([]);
-  const settledQuery = useDebouncedValue(query);
-  const {items:allPrs,loading:isLoading,busy,error,refresh:loadSearchItems,more,hasMore} = usePagedList(`search:${settledQuery}`, cursor=>api.getNotificationPage('all',cursor,settledQuery));
-  useEffect(()=>{void StorageService.getRecentSearches().then(setRecentSearches);},[]);
-
-  useAndroidBackHandler(() => {
-    if (query.trim().length > 0) {
-      setQuery("");
-      return true;
-    }
-    return false;
-  }, query.trim().length > 0);
-
-  const handleSearchSubmit = async () => {
-    if (query.trim()) {
-      await StorageService.addRecentSearch(query.trim());
-      setRecentSearches(await StorageService.getRecentSearches());
-    }
-  };
-
-  const filteredPrs = allPrs.filter((pr) => {
-    const matchesQuery =
-      settledQuery.trim() === "" ||
-      pr.title.toLowerCase().includes(settledQuery.toLowerCase()) ||
-      pr.repo.toLowerCase().includes(settledQuery.toLowerCase()) ||
-      pr.author.toLowerCase().includes(settledQuery.toLowerCase());
-
-    const matchesRisk = selectedRisk === "all" || pr.risk === selectedRisk;
-
-    return matchesQuery && matchesRisk;
-  });
-
-  return (
-    <View style={[styles.root, { backgroundColor: colors.background }]}>
-      <Header title="Search & Filters" showBack />
-      <View style={{ padding: spacing.base }}>
-
-        {/* Search Input Bar */}
-        <View style={[styles.searchBar, { backgroundColor: colors.surfaceElevated, borderColor: colors.border, borderRadius: radius.md }]}>
-          <Icon name="search-outline" size={18} color={colors.textMuted} />
-          <TextInput
-            value={query}
-            onChangeText={setQuery}
-            onSubmitEditing={handleSearchSubmit}
-            placeholder="Search title, repository, author..."
-            placeholderTextColor={colors.textMuted}
-            accessibilityLabel="Search pull requests by title, repository, or author"
-            style={[styles.input, { color: colors.text }]}
-            returnKeyType="search"
-          />
-          {query.length > 0 && (
-            <TouchableOpacity
-              onPress={() => setQuery("")}
-              accessibilityRole="button"
-              accessibilityLabel="Clear search query"
-              style={styles.clearBtn}
-            >
-              <Icon name="close-circle" size={18} color={colors.textMuted} />
-            </TouchableOpacity>
-          )}
-        </View>
-
-        {/* Filter Chips */}
-        <View style={styles.filterRow} accessibilityRole="tablist">
-          <Text style={[typography.caption, { color: colors.textSecondary }]}>Risk:</Text>
-          {(["all", "high", "medium", "low"] as const).map((r) => {
-            const active = selectedRisk === r;
-            return (
-              <TouchableOpacity
-                key={r}
-                onPress={() => setSelectedRisk(r)}
-                accessibilityRole="tab"
-                accessibilityState={{ selected: active }}
-                accessibilityLabel={`Filter by ${r} risk`}
-                style={[
-                  styles.filterChip,
-                  {
-                    backgroundColor: active ? colors.brand : colors.surfaceElevated,
-                    borderColor: active ? colors.brand : colors.border,
-                    borderRadius: radius.full,
-                  },
-                ]}
-              >
-                <Text style={[typography.caption, { color: active ? "#FFFFFF" : colors.textSecondary, textTransform: "capitalize", fontWeight: "600" }]}>
-                  {r}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
-        </View>
-
-        {/* Recent Searches */}
-        {recentSearches.length > 0 && query.trim() === "" && (
-          <View style={{ marginTop: spacing.md }}>
-            <Text style={[typography.caption, { color: colors.textMuted, textTransform: "uppercase" }]}>
-              Recent Searches
-            </Text>
-            <View style={styles.recentRow}>
-              {recentSearches.map((s, idx) => (
-                <TouchableOpacity
-                  key={idx}
-                  onPress={() => setQuery(s)}
-                  accessibilityRole="button"
-                  accessibilityLabel={`Search for ${s}`}
-                  style={[styles.recentPill, { backgroundColor: colors.surfaceElevated, borderColor: colors.border, borderRadius: radius.sm }]}
-                >
-                  <Text style={[typography.footnote, { color: colors.brandLight, fontWeight: "600" }]}>{s}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          </View>
-        )}
-      </View>
-
-      {isLoading ? (
-        <LoadingState
-          title="Loading pull requests..."
-          message="Preparing your searchable pull request list."
-        />
-      ) : error && allPrs.length===0 ? (
-        <ErrorState
-          title="Couldn't load search results"
-          message={error}
-          onRetry={loadSearchItems}
-        />
-      ) : (
-        <FlatList data={filteredPrs} keyExtractor={item=>item.id} initialNumToRender={8} maxToRenderPerBatch={8} windowSize={5}
-          contentContainerStyle={{paddingHorizontal:spacing.base,paddingBottom:60}}
-          onEndReached={()=>{if(!error)void more();}} onEndReachedThreshold={0.4}
-          ListEmptyComponent={<EmptyState icon="search-outline" title="No matching pull requests" message="Try another search or risk filter."/>}
-          ListHeaderComponent={<Text style={[typography.headline,{color:colors.text,marginBottom:16}]}>Results · {filteredPrs.length} loaded</Text>}
-          ListFooterComponent={hasMore?<TouchableOpacity disabled={busy} onPress={()=>void more()} accessibilityRole="button" style={{padding:16,minHeight:44}}><Text style={{color:colors.brandLight}}>{busy?'Loading…':'Load more results'}</Text></TouchableOpacity>:undefined}
-          renderItem={({item})=>(              <Pressable
-                key={item.id}
-                onPress={() => {
-                  const parts = item.repo.split("/");
-                  const owner = parts[0] || "owner";
-                  const repo = parts[1] || "repo";
-                  router.push(`/pr/${owner}/${repo}/${item.number}`);
-                }}
-                android_ripple={androidRipple()}
-                accessibilityRole="button"
-                accessibilityLabel={`Open pull request ${item.title} in ${item.repo}`}
-                style={({ pressed }) => [
-                  styles.resultCard,
-                  { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.md },
-                  pressed && { opacity: 0.85 },
-                ]}
-              >
-                <View style={styles.cardHeader}>
-                  <Text style={[typography.caption, { color: colors.textMuted, fontFamily: typography.code.fontFamily }]}>
-                    #{item.number} · {item.repo}
-                  </Text>
-                  {item.risk && <RiskBadge level={item.risk} compact />}
-                </View>
-                <Text style={[typography.headline, { color: colors.text, marginTop: 4 }]}>
-                  {item.title}
-                </Text>
-                {item.summaryLine && <View style={{padding:12,backgroundColor:colors.surfaceElevated,borderRadius:8,marginTop:12}}><Text style={[typography.footnote,{color:colors.textSecondary}]}>{item.summaryLine}</Text></View>}
-                <View style={styles.cardFooter}>
-                  <StatusPill status={item.status} />
-                  <Text style={[typography.caption, { color: colors.textMuted }]}>
-                    By @{item.author}
-                  </Text>
-                </View>
-              </Pressable>)}
-        />
-      )}
-    </View>
-  );
+import React,{useState,useEffect,useRef,useCallback} from 'react';
+import {View,TextInput,FlatList,Pressable,Platform,StyleSheet} from 'react-native';
+import {useRouter,useFocusEffect} from 'expo-router';
+import type {PrSearchFilters,PrSearchItem} from '@mergemate/contracts';
+import {useAuth} from '../src/context/AuthContext';
+import {useTheme} from '../src/context/ThemeContext';
+import {useAndroidBackHandler,androidRipple} from '../src/platform/android';
+import {StorageService} from '../src/storage';
+import {Text} from '../src/components/Text';
+import {Button} from '../src/components/Button';
+import {Header} from '../src/components/Header';
+import {StatusPill} from '../src/components/StatusPill';
+import {RiskBadge} from '../src/components/RiskBadge';
+import {EmptyState} from '../src/components/EmptyState';
+import {ErrorState} from '../src/components/ErrorState';
+import {LoadingState} from '../src/components/LoadingState';
+import {usePrSearch} from '../src/hooks/usePrSearch';
+const empty:PrSearchFilters={query:'',repo:'',author:'',risk:'all'};
+export default function SearchScreen(){const {user}=useAuth();return user?<SearchWorkspace key={user.id} account={user.id}/>:<LoadingState title="Checking your session..." message="Verifying access before searching."/>;}
+function SearchWorkspace({account}:{account:string}){
+ const router=useRouter(),{colors,typography,spacing,radius}=useTheme();const [filters,setFilters]=useState<PrSearchFilters>(empty),[recent,setRecent]=useState<string[]>([]);
+ const {items,loading,busy,error,hasMore,meta,refresh,more}=usePrSearch(filters);
+ const list=useRef<FlatList<PrSearchItem>>(null),offset=useRef(0),focused=useRef(false),mounted=useRef(true);
+ useEffect(()=>{void StorageService.getRecentSearches(account).then(values=>{if(mounted.current)setRecent(values);});return()=>{mounted.current=false;};},[account]);
+ useFocusEffect(useCallback(()=>{focused.current=true;const frame=requestAnimationFrame(()=>{list.current?.recordInteraction();list.current?.scrollToOffset({offset:offset.current,animated:false});const node:unknown=list.current?.getScrollableNode();if(Platform.OS==='web'&&typeof HTMLElement!=='undefined'&&node instanceof HTMLElement)node.dispatchEvent(new Event('scroll'));});return()=>{focused.current=false;cancelAnimationFrame(frame);};},[]));
+ const change=(key:keyof PrSearchFilters,value:string)=>{offset.current=0;setFilters(old=>({...old,[key]:value}));};
+ useAndroidBackHandler(()=>{if(filters.query){change('query','');return true;}return false;},!!filters.query);
+ const remember=async()=>{await StorageService.addRecentSearch(filters.query,account);const values=await StorageService.getRecentSearches(account);if(mounted.current)setRecent(values);};
+ const input=(key:'query'|'repo'|'author'|'from'|'to',label:string,placeholder:string)=> <View style={{flex:1,minWidth:key==='query'?240:140}}><Text style={[typography.caption,{color:colors.textSecondary}]}>{label}</Text><TextInput accessibilityLabel={label} value={filters[key]??''} onChangeText={value=>change(key,value)} onSubmitEditing={remember} maxLength={key==='repo'?200:key==='author'?100:key==='from'||key==='to'?10:120} autoCapitalize="none" autoCorrect={false} placeholder={placeholder} placeholderTextColor={colors.textMuted} style={[styles.input,{color:colors.text,borderColor:colors.border,backgroundColor:colors.surfaceElevated,borderRadius:radius.md}]}/></View>;
+ return <View style={{flex:1,backgroundColor:colors.background}}><Header title="Search & Filters" showBack/>
+  <View style={{padding:spacing.base,gap:8}}>
+   {input('query','Search PR titles','Title words (up to eight)')}
+   <View style={styles.row}>{input('repo','Repository','owner/repository')}{input('author','Author','GitHub username')}</View>
+   <View style={styles.row}>{input('from','Updated from (UTC)','YYYY-MM-DD')}{input('to','Updated through (UTC)','YYYY-MM-DD')}</View>
+   <View style={styles.row} accessibilityRole="radiogroup" accessibilityLabel="Saved risk filter">{(['all','high','medium','low','unassessed'] as const).map(risk=><Pressable key={risk} accessibilityRole="radio" aria-checked={filters.risk===risk} accessibilityState={{checked:filters.risk===risk}} accessibilityLabel={`Filter by ${risk} risk`} onPress={()=>change('risk',risk)} style={[styles.chip,{backgroundColor:filters.risk===risk?colors.brand:colors.surfaceElevated,borderColor:colors.border,borderRadius:radius.full}]}><Text style={{color:filters.risk===risk?'#fff':colors.textSecondary,textTransform:'capitalize'}}>{risk}</Text></Pressable>)}</View>
+   <Text style={[typography.caption,{color:colors.textSecondary}]}>Open PRs you can access. Risk filters use saved analysis for the current commit; search never runs analysis.</Text>
+   <View style={styles.row}><Button title="Clear filters" variant="ghost" onPress={()=>{offset.current=0;setFilters(empty);}}/><Button title="Refresh search" variant="ghost" onPress={()=>void refresh()} disabled={busy}/><Button title="Save recent search" variant="ghost" onPress={remember} disabled={!filters.query.trim()}/></View>
+   {recent.length>0&&!filters.query&&<View><Text style={[typography.caption,{color:colors.textSecondary}]}>Recent searches · this session only</Text><View style={styles.row}>{recent.map(term=><Button key={term} title={term} accessibilityLabel={`Search for ${term}`} variant="secondary" onPress={()=>change('query',term)}/>)}<Button title="Clear recent searches" variant="ghost" onPress={()=>{void StorageService.clearRecentSearches(account);setRecent([]);}}/></View></View>}
+  </View>
+  {loading?<LoadingState title="Searching pull requests..." message="Checking accessible results with your filters."/>:error&&items.length===0&&!hasMore?<ErrorState title="Couldn't load search results" message={error} onRetry={()=>void refresh()}/>:<FlatList ref={list} data={items} keyExtractor={row=>row.id} initialNumToRender={8} maxToRenderPerBatch={8} windowSize={5} onScroll={event=>{if(focused.current)offset.current=event.nativeEvent.contentOffset.y;}} scrollEventThrottle={16} contentContainerStyle={{paddingHorizontal:spacing.base,paddingBottom:60}}
+   onEndReached={()=>{if(!error&&items.length)void more();}} onEndReachedThreshold={0.4}
+   ListHeaderComponent={<View style={{gap:8,paddingBottom:12}}><Text accessibilityLiveRegion="polite" style={[typography.headline,{color:colors.text}]}>Results · {items.length} loaded</Text><Text style={[typography.caption,{color:colors.textSecondary}]}>{meta.candidates} candidates checked. Each page checks up to 20 PRs.</Text>{meta.incomplete&&<Text accessibilityRole="alert" style={{color:colors.textSecondary}}>GitHub returned incomplete results. Refresh or narrow your filters.</Text>}{meta.capped&&<Text style={{color:colors.textSecondary}}>GitHub search stops at 1,000 candidates. Narrow your filters to check beyond that limit.</Text>}{error&&<Text accessibilityRole="alert" style={{color:colors.riskHigh}}>{error}</Text>}</View>}
+   ListEmptyComponent={<EmptyState icon="search-outline" title={hasMore?'More results can be checked':'No matching pull requests'} message={hasMore?'No matches among these candidates. Continue to the next page.':meta.incomplete||meta.capped?'No matches in the available results. Narrow your filters or refresh.':'Try another title, repository, author, risk or date filter.'}/>}
+   ListFooterComponent={hasMore?<Button title={error?'Retry loading results':'Load more results'} loading={busy} onPress={()=>void more()}/>:undefined}
+   renderItem={({item})=><Pressable android_ripple={androidRipple()} onPress={()=>{const [owner,repo]=item.repo.split('/');router.push(`/pr/${owner}/${repo}/${item.number}`);}} accessibilityRole="button" accessibilityLabel={`Open pull request ${item.title} in ${item.repo}`} style={[styles.card,{backgroundColor:colors.surface,borderColor:colors.border,borderRadius:radius.md}]}><View style={styles.row}><Text style={[typography.caption,{color:colors.textMuted}]}>#{item.number} · {item.repo}</Text>{item.risk&&<RiskBadge level={item.risk} compact/>}</View><Text style={[typography.headline,{color:colors.text,marginVertical:8}]}>{item.title}</Text><View style={styles.row}><StatusPill status={item.status}/><Text style={{color:colors.textSecondary}}>By @{item.author} · {item.updatedAt.slice(0,10)} UTC</Text></View></Pressable>}/>}</View>;
 }
-
-const styles = StyleSheet.create({
-  root: {
-    flex: 1,
-  },
-  searchBar: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingLeft: 12,
-    paddingRight: 4,
-    minHeight: 44,
-    borderWidth: 1,
-    gap: 8,
-  },
-  input: {
-    fontFamily: "Geist_400Regular",
-    flex: 1,
-    minHeight: 44,
-  },
-  clearBtn: {
-    minWidth: 44,
-    minHeight: 44,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  filterRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    flexWrap: "wrap",
-    gap: 8,
-    marginTop: 10,
-  },
-  filterChip: {
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    minHeight: 44,
-    minWidth: 44,
-    alignItems: "center",
-    justifyContent: "center",
-    borderWidth: 1,
-  },
-  recentRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
-    marginTop: 6,
-  },
-  recentPill: {
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    minHeight: 44,
-    minWidth: 44,
-    alignItems: "center",
-    justifyContent: "center",
-    borderWidth: 1,
-  },
-  resultCard: {
-    padding: 20,
-    borderWidth: 1,
-    marginBottom: 16,
-    minHeight: 44,
-  },
-  cardHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    flexWrap: "wrap",
-    gap: 8,
-  },
-  cardFooter: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginTop: 8,
-  },
-});
+const styles=StyleSheet.create({row:{flexDirection:'row',flexWrap:'wrap',gap:8,alignItems:'center'},input:{borderWidth:1,minHeight:44,paddingHorizontal:12,marginTop:4},chip:{minHeight:44,paddingHorizontal:12,justifyContent:'center',borderWidth:1},card:{padding:16,borderWidth:1,marginBottom:12}});
