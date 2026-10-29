@@ -1,3 +1,4 @@
+import type { AiPreferenceUpdate, AiPreferences } from "@mergemate/contracts";
 import type {FeatureFlags} from "@mergemate/contracts";
 import {
   User,
@@ -48,6 +49,9 @@ export interface ApiClient {
   // AI Consent
   getConsent(): Promise<{ ai: { granted: boolean; version: string } }>;
   setConsent(granted: boolean): Promise<void>;
+  /** Canonical account-owned AI choices: processing consent, the independent summaries preference and a revision. */
+  getAiPreferences(): Promise<AiPreferences>;
+  updateAiPreferences(update: AiPreferenceUpdate): Promise<AiPreferences>;
 
   // Repos & Orgs
   getRepos(): Promise<Repo[]>;

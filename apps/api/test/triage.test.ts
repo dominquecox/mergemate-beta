@@ -5,6 +5,7 @@ import { createApp } from "../src/app";
 import { demoHeaders } from "./demo-session";
 import { fakeAi, json, testContext, validModelEnv } from "./helpers";
 import type { AiRun, TestContext } from "./helpers";
+import { setSummaries } from "./ai-choices";
 import { appFor, post, signIn } from "./sign-in";
 
 const encoded = encodeURIComponent("octo/demo#1");
@@ -341,12 +342,11 @@ describe("AI lane scoring", () => {
     expect(ai.runs).toHaveLength(0);
 
     await grantConsent(ctx, headers);
-    const settings = { notifications: { review: true, mention: true, mine: true }, quietHours: null, aiSummaries: false };
-    expect((await appFor(ctx)("/v1/settings", putJson(settings, headers))).status).toBe(200);
+    expect((await setSummaries(appFor(ctx), headers, false)).status).toBe(200);
     expect((await queue(ctx, headers)).every((i) => i.source === "rules")).toBe(true);
     expect(ai.runs).toHaveLength(0);
 
-    await appFor(ctx)("/v1/settings", putJson({ ...settings, aiSummaries: true }, headers));
+    expect((await setSummaries(appFor(ctx), headers, true)).status).toBe(200);
     await appFor(ctx)("/v1/consent", putJson({ ai: { granted: false, version: "1" } }, headers));
     expect((await queue(ctx, headers)).every((i) => i.source === "rules")).toBe(true);
     expect(ai.runs).toHaveLength(0);

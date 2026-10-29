@@ -10,129 +10,116 @@ import { Header } from "../../src/components/Header";
 import { EmptyState } from "../../src/components/EmptyState";
 import { LoadingState } from "../../src/components/LoadingState";
 import { Icon } from "../../src/components/Icon";
-import { ErrorState } from "../../src/components/ErrorState";
+import { useAuth } from "../../src/context/AuthContext";
+
+const SENT = [
+  "PR summaries and risk: the title and description, changed file names, selected parts of the diff and check results. Large PRs are only partly analyzed, and the screen says how much.",
+  "Screenshots (Highlight): the screenshot you choose, only when you pick it. A screenshot can show anything on your screen, so check it before you choose one.",
+  "Voice notes: the audio you record, only when you ask for a transcript.",
+];
+
+const LIMITS = [
+  "Known credential patterns are masked in PR text before it is sent. This is pattern matching, not a guarantee: it can miss secrets, and it does not look inside screenshots or audio.",
+  "MergeMate does not use your content to train its own models. How the AI provider handles requests is set by that provider's terms; MergeMate has not verified more than that.",
+  "MergeMate is read-only: AI never changes anything in GitHub.",
+];
 
 export default function ConsentScreen() {
   const router = useRouter();
   const { colors, typography, spacing, radius } = useTheme();
-  const { grantConsent, revokeConsent } = useConsent();
-  const [isSaving, setIsSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [lastChoice, setLastChoice] = useState<"agree" | "decline">("agree");
-  const [saved, setSaved] = useState(false);
+  const { isDemo } = useAuth();
+  const { aiConsentGranted, needsReview, isLoading, pending, error, grantConsent, revokeConsent, refreshConsent } = useConsent();
+  const [saved, setSaved] = useState<"granted" | "revoked" | null>(null);
+  const saving = pending === "grant" || pending === "revoke";
 
-  const handleChoice = async (choice: "agree" | "decline") => {
-    setLastChoice(choice);
-    setIsSaving(true);
-    setError(null);
-    try {
-      if (choice === "agree") {
-        await grantConsent();
-      } else {
-        await revokeConsent();
-      }
-      setSaved(true);
-      router.replace("/(tabs)/inbox");
-    } catch (e: any) {
-      setError(e?.message || "Could not save your AI preference. Please try again.");
-    } finally {
-      setIsSaving(false);
-    }
+  const choose = async (choice: "agree" | "turn_off") => {
+    const ok = choice === "agree" ? await grantConsent() : await revokeConsent();
+    if (ok) setSaved(choice === "agree" ? "granted" : "revoked");
   };
+
+  const list = (items: string[]) => (
+    <Text style={[typography.callout, { color: colors.textSecondary, marginTop: 4, lineHeight: 20 }]}>
+      {items.map((line) => `• ${line}`).join("\n")}
+    </Text>
+  );
+
+  const box = (title: string, icon: "checkmark-circle" | "alert-circle-outline", tint: string, items: string[], first = false) => (
+    <View style={[styles.box, { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.lg, marginTop: first ? spacing.xl : spacing.md }]}>
+      <View style={styles.boxTitleRow} accessibilityRole="header">
+        <Icon name={icon} size={18} color={tint} />
+        <Text style={[typography.headline, { color: colors.text }]}>{title}</Text>
+      </View>
+      {list(items)}
+    </View>
+  );
 
   return (
     <View style={[styles.root, { backgroundColor: colors.background }]}>
-      <Header title="AI Consent" showBack />
-      {isSaving ? (
-        <LoadingState
-          title="Saving your preference..."
-          message="Updating your AI summary settings."
+      <Header title="AI and your data" showBack />
+      {isDemo ? (
+        <EmptyState
+          icon="sparkles-outline"
+          title="Sample data"
+          message="The demo shows saved examples, so nothing is sent to an AI model and there is nothing to change here."
+          actionTitle="Back"
+          onAction={() => router.back()}
         />
-      ) : error ? (
-        <ErrorState
-          title="Could not save preference"
-          message={error}
-          onRetry={() => handleChoice(lastChoice)}
-        />
+      ) : isLoading ? (
+        <LoadingState title="Loading your choice..." message="Reading your AI settings." />
+      ) : saving ? (
+        <LoadingState title="Saving your choice..." message="Waiting for MergeMate to confirm." />
       ) : saved ? (
         <EmptyState
           icon="checkmark-circle-outline"
-          title="Preference saved"
-          message="Your AI summary setting has been updated."
+          title={saved === "granted" ? "AI is on" : "AI is off"}
+          message={
+            saved === "granted"
+              ? "MergeMate saved your agreement. You can turn AI off at any time in Settings."
+              : "MergeMate saved your choice. New AI requests stop, and results still being prepared are not shown."
+          }
           actionTitle="Continue to Inbox"
           onAction={() => router.replace("/(tabs)/inbox")}
         />
       ) : (
         <ScrollView contentContainerStyle={[styles.content, { padding: spacing.xl }]}>
+          <InfoLine icon="person-outline" title="You choose" detail="AI is off until you agree here. Nothing is sent to an AI model before that." />
 
-          <InfoLine icon="person-outline" title="Always human in the loop" detail="AI helps you review. Every action on a pull request happens in GitHub."/>
-
-          <View
-            style={[
-              styles.box,
-              {
-                backgroundColor: colors.surface,
-                borderColor: colors.border,
-                borderRadius: radius.lg,
-                marginTop: spacing.xl,
-              },
-            ]}
-          >
-            <View style={styles.boxTitleRow}>
-              <Icon name="checkmark-circle" size={18} color={colors.riskLow} />
-              <Text style={[typography.headline, { color: colors.riskLow }]}>What is sent to the model</Text>
-            </View>
-            <Text style={[typography.callout, { color: colors.textSecondary, marginTop: 4, lineHeight: 20 }]}>
-              • Pull request title and description{"\n"}
-              • Selected changed filenames and patch diffs{"\n"}
-              • File structure for risk checks
-            </Text>
-          </View>
-
-          <View
-            style={[
-              styles.box,
-              {
-                backgroundColor: colors.surface,
-                borderColor: colors.border,
-                borderRadius: radius.lg,
-                marginTop: spacing.md,
-              },
-            ]}
-          >
-            <View style={styles.boxTitleRow}>
-              <Icon name="close-circle" size={18} color={colors.riskHigh} />
-              <Text style={[typography.headline, { color: colors.riskHigh }]}>What is NEVER sent</Text>
-            </View>
-            <Text style={[typography.callout, { color: colors.textSecondary, marginTop: 4, lineHeight: 20 }]}>
-              • Passwords, API keys, or secrets (automatically masked first){"\n"}
-              • Full git history or untouched repository files{"\n"}
-              • Your personal profile details or email address
-            </Text>
-          </View>
+          {box("What may be sent to the AI model", "checkmark-circle", colors.riskLow, SENT, true)}
+          {box("What to know first", "alert-circle-outline", colors.riskMedium, LIMITS)}
 
           <View style={[styles.notice, { backgroundColor: colors.surfaceElevated, borderRadius: radius.md, marginTop: spacing.md }]}>
-            <View style={styles.noticeRow}>
-              <Icon name="lock-closed-outline" size={14} color={colors.textMuted} style={styles.noticeIcon} />
-              <Text style={[typography.caption, { color: colors.textMuted, lineHeight: 18, flex: 1 }]}>
-                Your code is never stored and never used to train AI models. You can turn AI summaries on or off anytime in Settings.
-              </Text>
-            </View>
+            <Text style={[typography.caption, { color: colors.textMuted, lineHeight: 18 }]}>
+              With AI summaries on, MergeMate may analyze PRs when you open them or load your inbox. Turning AI off stops new requests and
+              blocks results that were still being prepared, but cannot recall anything already sent. Agreeing here covers all of the
+              features above; AI summaries and risk can also be turned off on their own in Settings.
+            </Text>
           </View>
 
+          {needsReview && !aiConsentGranted ? (
+            <View accessibilityRole="alert" style={[styles.notice, { backgroundColor: colors.surfaceElevated, borderRadius: radius.md, marginTop: spacing.md }]}>
+              <Text style={[typography.body, { color: colors.text }]}>This text has changed since you last agreed. Read it again and choose.</Text>
+            </View>
+          ) : null}
+
+          {error ? (
+            <View accessibilityRole="alert" style={[styles.notice, { backgroundColor: colors.surfaceElevated, borderRadius: radius.md, marginTop: spacing.md }]}>
+              <Text style={[typography.body, { color: colors.text }]}>{error}</Text>
+              <Button title="Reload my choice" onPress={() => void refreshConsent()} variant="secondary" style={{ marginTop: spacing.sm }} />
+            </View>
+          ) : null}
+
           <View style={[styles.actions, { marginTop: spacing.xl }]}>
-            <Button
-              title="I Agree & Enable AI"
-              onPress={() => handleChoice("agree")}
-              variant="primary"
-              style={{ width: "100%" }}
-            />
-            <Button
-              title="Not Now (Keep AI Off)"
-              onPress={() => handleChoice("decline")}
-              variant="secondary"
-              style={{ width: "100%", marginTop: spacing.sm }}
-            />
+            {aiConsentGranted ? (
+              <>
+                <Text style={[typography.body, { color: colors.text, marginBottom: spacing.sm }]}>AI is on for your account.</Text>
+                <Button title="Turn off AI" onPress={() => choose("turn_off")} variant="secondary" style={{ width: "100%" }} />
+              </>
+            ) : (
+              <>
+                <Button title="I agree, turn on AI" onPress={() => choose("agree")} variant="primary" style={{ width: "100%" }} />
+                <Button title="Not now" onPress={() => router.back()} variant="secondary" style={{ width: "100%", marginTop: spacing.sm }} />
+              </>
+            )}
           </View>
         </ScrollView>
       )}

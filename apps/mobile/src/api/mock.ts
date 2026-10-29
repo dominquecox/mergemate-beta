@@ -1,5 +1,6 @@
 import {disabledFeatureFlags} from "./feature-flags";
-import { ApiClientError } from "./errors";
+import { ApiClientError, messageForCode } from "./errors";
+import type { AiPreferenceUpdate, AiPreferences } from "@mergemate/contracts";
 import { AI_CONSENT_VERSION } from "../config/consent";
 import { ApiClient } from "./client";
 import {
@@ -378,6 +379,39 @@ export class MockApiClient implements ApiClient {
 
   async setConsent(granted: boolean): Promise<void> {
     this.consentGranted = granted;
+  }
+
+  private aiSummariesPref = true;
+  private aiRevision = 1;
+
+  private aiPrefs(): AiPreferences {
+    return {
+      ai: { granted: this.consentGranted, version: AI_CONSENT_VERSION, currentVersion: AI_CONSENT_VERSION },
+      aiSummaries: this.aiSummariesPref,
+      revision: `mock-${this.aiRevision}`,
+    };
+  }
+
+  async getAiPreferences(): Promise<AiPreferences> {
+    return this.aiPrefs();
+  }
+
+  async updateAiPreferences(update: AiPreferenceUpdate): Promise<AiPreferences> {
+    if (update.action !== "revoke" && update.expectedRevision !== this.aiPrefs().revision) {
+      throw new ApiClientError("consent_changed", messageForCode("consent_changed"));
+    }
+    if (update.action === "grant") {
+      this.consentGranted = true;
+      this.aiSummariesPref = true;
+    } else if (update.action === "revoke") {
+      this.consentGranted = false;
+      this.aiSummariesPref = false;
+    } else {
+      if (update.enabled && !this.consentGranted) throw new ApiClientError("consent_required", messageForCode("consent_required"));
+      this.aiSummariesPref = update.enabled;
+    }
+    this.aiRevision += 1;
+    return this.aiPrefs();
   }
 
   async getRepos(): Promise<Repo[]> {
