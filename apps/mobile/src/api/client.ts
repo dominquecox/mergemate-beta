@@ -1,6 +1,8 @@
 import type {NoteContext,PrivateNote,SavePrivateNote,FeatureFlags} from "@mergemate/contracts";
 import type {InboxMutation,InboxReceipt} from "@mergemate/contracts";
 import type {PrSearchFilters,PrSearchPage} from '@mergemate/contracts';
+export type WorkspacePage<T>={items:T[];nextCursor:string|null;capped?:boolean;headSha?:string};
+export type WorkspaceRead={headSha?:string;signal?:AbortSignal};
 import {
   User,
   Session,
@@ -70,12 +72,13 @@ export interface ApiClient {
   restoreNotification(id: string): Promise<void>;
 
   // Pull Requests
-  getPrFilePage(owner: string, repo: string, number: number, cursor?: string | null): Promise<{items: import('../types').PrFile[]; nextCursor: string | null}>;
-  getPrCommentPage(owner: string, repo: string, number: number, cursor?: string | null): Promise<{items: import('../types').PrComment[]; nextCursor: string | null}>;
-  getPrMetadata(owner: string, repo: string, number: number): Promise<PrDetail>;
-  getPrDetail(owner: string, repo: string, number: number): Promise<PrDetail>;
-  getPrSummary(owner: string, repo: string, number: number): Promise<PrSummary>;
-  getPrRisk(owner: string, repo: string, number: number): Promise<PrRisk>;
+  getPrFilePage(owner: string, repo: string, number: number, cursor?:string|null,options?:WorkspaceRead):Promise<WorkspacePage<import('../types').PrFile>>;
+  getPrCommentPage(owner: string, repo: string, number: number, cursor?:string|null,options?:WorkspaceRead):Promise<WorkspacePage<import('../types').PrComment>>;
+  getPrCheckPage(owner:string,repo:string,number:number,cursor?:string|null,options?:WorkspaceRead):Promise<WorkspacePage<import('../types').PrCheck>>;
+  getPrMetadata(owner: string, repo: string, number: number,signal?:AbortSignal,workspace?:boolean): Promise<PrDetail>;
+  getPrDetail(owner: string, repo: string, number: number,signal?:AbortSignal): Promise<PrDetail>;
+  getPrSummary(owner: string, repo: string, number: number,signal?:AbortSignal): Promise<PrSummary>;
+  getPrRisk(owner: string, repo: string, number: number,signal?:AbortSignal): Promise<PrRisk>;
 
   // Triage
   getTriageQueue(): Promise<TriageItem[]>;

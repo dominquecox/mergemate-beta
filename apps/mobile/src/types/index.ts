@@ -75,18 +75,27 @@ export interface PrCheck {
   id: string;
   name: string;
   status: "completed" | "in_progress" | "queued";
-  conclusion: "success" | "failure" | "neutral" | "pending";
+  conclusion: "success" | "failure" | "neutral" | "pending" | "cancelled" | "skipped";
+  url?:string;
 }
 
 export interface PrFile {
   filename: string;
-  status: "added" | "modified" | "removed";
+  status: "added" | "modified" | "removed" | "renamed" | "copied" | "changed" | "unknown";
+  previousPath?:string;
+  patchState?:"available"|"partial"|"unavailable";
   additions: number;
   deletions: number;
   patchSnippet?: string;
 }
 
 export interface PrComment {
+  threadId?:string;
+  kind?:"review"|"conversation"|"review-summary";
+  path?:string|null;
+  line?:number|null;
+  outdated?:boolean;
+  reviewState?:string;
   id: string;
   author: string;
   avatarUrl: string;
@@ -105,6 +114,8 @@ export interface PrDetail {
   author: string;
   authorAvatar: string;
   status: PrStatus;
+  headSha?:string;
+  checkCursor?:string|null;
   headBranch: string;
   baseBranch: string;
   createdAt: string;

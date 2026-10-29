@@ -83,10 +83,13 @@ export const PrFile = z.object({
   deletions: z.number().int().nonnegative(),
   /** Unified diff for this file; absent for binary or very large files. */
   patch: z.string().optional(),
+  previousPath:z.string().optional(),
+  patchState:z.enum(["available","partial","unavailable"]).optional(),
 });
 export type PrFile = z.infer<typeof PrFile>;
 
 export const PrCheck = z.object({
+  id:z.string().optional(),
   name: z.string(),
   state: CheckState,
   url: z.url().optional(),
@@ -102,6 +105,9 @@ export const PrComment = z.object({
 export type PrComment = z.infer<typeof PrComment>;
 
 export const PrThread = z.object({
+  kind:z.enum(["review","conversation","review-summary"]).optional(),
+  reviewState:z.string().optional(),
+  outdated:z.boolean().optional(),
   id: z.string(),
   /** File path for review threads; null for the main conversation. */
   path: z.string().nullable(),
@@ -133,6 +139,7 @@ export const PrDetail = z.object({
   /** Files listed here; `changedFiles` is the full count. */
   files: z.array(PrFile),
   checks: z.array(PrCheck),
+  checkCursor:z.string().nullable().optional(),
   threads: z.array(PrThread),
   createdAt: IsoDateTime,
   updatedAt: IsoDateTime,

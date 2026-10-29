@@ -1,3 +1,4 @@
+import {readBoundedBody} from '../lib/bounded-body';
 import {
   type CheckState,
   type Installation,
@@ -14,7 +15,7 @@ import { type Context, Hono } from "hono";
 import { requireBinding, requireVar } from "../config";
 import type { AppEnv, Deps } from "../env";
 import { ApiError } from "../errors";
-import { base64url } from "../lib/crypto";
+import { base64url,sha256Hex } from "../lib/crypto";
 import { GITHUB_WEB, githubGet } from "../lib/github";
 import { getAccessToken } from "../lib/github-tokens";
 import { parseBody } from "../lib/validate";
@@ -29,6 +30,11 @@ const userToken = (c: Context<AppEnv>) => {
   if (!userId) throw new ApiError("forbidden", "Not available in the demo.");
   return getAccessToken(c.env, userId, c.get("deps").now());
 };
+
+function workspaceDeps(c:Context<AppEnv>):Deps{
+ const deps=c.get('deps'),deadline=AbortSignal.timeout(20_000);
+ return {...deps,fetch:async(input,init)=>{const response=await deps.fetch(input,{...init,signal:AbortSignal.any([deadline,c.req.raw.signal,...(init?.signal?[init.signal]:[])])});const body=await readBoundedBody(response,4*1024*1024);return new Response(body,{status:response.status,headers:response.headers});}};
+}
 
 interface GhInstallation {
   id: number;
@@ -89,6 +95,7 @@ interface GhPull {
 
 interface GhFile {
   filename: string;
+  previous_filename?:string;
   status: string;
   additions: number;
   deletions: number;
@@ -96,6 +103,7 @@ interface GhFile {
 }
 
 interface GhCheckRun {
+  id?:number;
   name: string;
   status: "queued" | "in_progress" | "completed" | string;
   conclusion: string | null;
@@ -116,6 +124,9 @@ interface GhComment {
   path?: string;
   line?: number | null;
   in_reply_to_id?: number;
+  original_line?:number|null;
+  submitted_at?:string;
+  state?:string;
 }
 
 /** Maps GitHub's mergeability onto MergeState. Only open pull requests have one. */
@@ -167,7 +178,14 @@ const STATUS_STATE: Record<GhStatus["state"], CheckState> = {
   error: "failure",
 };
 
-const httpsUrl = (value: string | null) => (value?.startsWith("https://") ? { url: value } : {});
+const httpsUrl=(value:string|null)=>{try{const url=new URL(value??'');return url.protocol==='https:'&&!url.username&&!url.password&&(url.hostname==='github.com'||url.hostname.endsWith('.github.com'))?{url:url.toString()}:{};}catch{return {};}};
+const runCheck=(run:GhCheckRun,index:number):PrCheck=>({id:`run:${run.id??`${run.name}:${index}`}`,name:run.name,state:checkRunState(run),...httpsUrl(run.html_url)});
+const statusCheck=(status:GhStatus):PrCheck=>({id:`status:${status.context}`,name:status.context,state:STATUS_STATE[status.state],...httpsUrl(status.target_url)});
+export function workspaceFile(file:GhFile,cap=true){
+ const patch=cap?file.patch?.slice(0,65536):file.patch;let adds=0,deletes=0,inHunk=false;
+ for(const line of (patch??'').split('\n')){if(/^@@ -\d+(?:,\d+)? \+\d+(?:,\d+)? @@/.test(line))inHunk=true;else if(inHunk&&line.startsWith('+'))adds++;else if(inHunk&&line.startsWith('-'))deletes++;}
+ return {path:file.filename,status:file.status,additions:file.additions,deletions:file.deletions,...(file.previous_filename?{previousPath:file.previous_filename}:{}),...(patch?{patch}:{}),patchState:!patch?'unavailable' as const:patch.length!==(file.patch?.length??0)||adds!==file.additions||deletes!==file.deletions?'partial' as const:'available' as const};
+}
 
 const toThreads = (review: GhComment[], conversation: GhComment[]): PrThread[] => {
   const comment = (c: GhComment) => ({
@@ -179,12 +197,12 @@ const toThreads = (review: GhComment[], conversation: GhComment[]): PrThread[] =
   const threads = new Map<number, PrThread>();
   for (const c of review) {
     const root = c.in_reply_to_id ?? c.id;
-    const thread = threads.get(root) ?? { id: String(root), path: c.path ?? null, line: c.line ?? null, comments: [] };
+    const thread:PrThread = threads.get(root) ?? {id:String(root),kind:"review",path:c.path??null,line:c.line??c.original_line??null,outdated:c.line===null&&c.original_line!=null,comments:[]};
     thread.comments.push(comment(c));
     threads.set(root, thread);
   }
   const result = [...threads.values()];
-  if (conversation.length) result.unshift({ id: "conversation", path: null, line: null, comments: conversation.map(comment) });
+  if (conversation.length) result.unshift({ id: "conversation",kind:"conversation", path: null, line: null, comments: conversation.map(comment) });
   return result;
 };
 
@@ -200,6 +218,7 @@ export const fetchPrDetail = async (
   repo: string,
   number: number,
   lazy = false,
+  includeChecks=true,
 ): Promise<PrDetail> => {
   const base = `/repos/${owner}/${repo}`;
   const pull = await githubGet<GhPull>(deps, token, `${base}/pulls/${number}`);
@@ -211,16 +230,13 @@ export const fetchPrDetail = async (
         githubGet<GhFile[]>(deps, token, `${base}/pulls/${number}/files?per_page=100&page=${i + 1}`),
       ),
     ).then((pages) => pages.flat()),
-    githubGet<{ check_runs: GhCheckRun[] }>(deps, token, `${base}/commits/${pull.head.sha}/check-runs?per_page=100`),
-    githubGet<{ statuses: GhStatus[] }>(deps, token, `${base}/commits/${pull.head.sha}/status?per_page=100`),
+    includeChecks?githubGet<{check_runs:GhCheckRun[]}>(deps,token,`${base}/commits/${pull.head.sha}/check-runs?per_page=100`):Promise.resolve({check_runs:[]}),
+    includeChecks?githubGet<{statuses:GhStatus[]}>(deps,token,`${base}/commits/${pull.head.sha}/status?per_page=100`):Promise.resolve({statuses:[]}),
     lazy ? Promise.resolve([] as GhComment[]) : githubGet<GhComment[]>(deps, token, `${base}/pulls/${number}/comments?per_page=100`),
     lazy ? Promise.resolve([] as GhComment[]) : githubGet<GhComment[]>(deps, token, `${base}/issues/${number}/comments?per_page=100`),
   ]);
 
-  const checks: PrCheck[] = [
-    ...checkRuns.check_runs.map((run) => ({ name: run.name, state: checkRunState(run), ...httpsUrl(run.html_url) })),
-    ...statuses.statuses.map((s) => ({ name: s.context, state: STATUS_STATE[s.state], ...httpsUrl(s.target_url) })),
-  ];
+  const checks:PrCheck[]=[...checkRuns.check_runs.map(runCheck),...statuses.statuses.map(statusCheck)];
   return {
     repo: `${owner}/${repo}`,
     number: pull.number,
@@ -234,14 +250,9 @@ export const fetchPrDetail = async (
     additions: pull.additions,
     deletions: pull.deletions,
     changedFiles: pull.changed_files,
-    files: files.map((f) => ({
-      path: f.filename,
-      status: f.status,
-      additions: f.additions,
-      deletions: f.deletions,
-      ...(f.patch ? { patch: f.patch } : {}),
-    })),
+    files:files.map(file=>workspaceFile(file,false)),
     checks,
+    checkCursor:!includeChecks?"checks:1":checkRuns.check_runs.length===100||statuses.statuses.length===100?"checks:5":null,
     threads: toThreads(review, conversation),
     createdAt: pull.created_at,
     updatedAt: pull.updated_at,
@@ -342,30 +353,39 @@ export const github = new Hono<AppEnv>()
     return c.json({ id: String(repo.id), fullName: repo.full_name, watching: body.watching });
   })
 
-  .get('/prs/:owner/:repo/:number/pages/:section', async c => {
+  .get('/prs/:owner/:repo/:number/pages/:section',async c=>{
     const {owner,repo,number,section}=c.req.param();
-    if(!NAME.test(owner) || !NAME.test(repo) || !/^[1-9]\d{0,8}$/.test(number) || !['files','comments'].includes(section))throw new ApiError('validation_failed','Invalid pull request page.');
-    const cursor=c.req.query('cursor') ?? (section==='files'?'1':'review:1');
-    const [source,pageText]=section==='files'?['files',cursor]:cursor.split(':');
-    const page=Number(pageText); const limit=25;
-    if(!Number.isInteger(page) || page<1 || page>120 || (section==='comments' && !['review','conversation'].includes(source ?? '')))throw new ApiError('validation_failed','Invalid cursor.');
-    if(c.get('session').demo){
-      const detail=DEMO_PRS.find(pr=>pr.repo===`${owner}/${repo}` && pr.number===Number(number));
-      if(!detail)throw new ApiError('not_found','Pull request not found.');
-      return c.json({items:section==='files'?detail.files:detail.threads,nextCursor:null});
+    if(!NAME.test(owner)||!NAME.test(repo)||[owner,repo].some(value=>value==='.'||value==='..')||!/^[1-9]\d{0,9}$/.test(number)||!['files','comments','checks'].includes(section))throw new ApiError('validation_failed','Invalid pull request page.');
+    const modern=c.req.query('v')==='2',raw=c.req.query('cursor')??(section==='files'?'1':section==='checks'?'checks:1':'review:1');
+    let source=section==='files'?'files':raw.split(':')[0]??'',page=Number(section==='files'?raw:raw.split(':')[1]),revision:string|undefined,scope:string|undefined;
+    if(modern&&!/^\d+$|^(review|conversation|reviews|checks):\d+$/.test(raw)){
+      try{if(raw.length>1024)throw new Error();const value:unknown=JSON.parse(atob(raw.replace(/-/g,'+').replace(/_/g,'/')));if(!value||typeof value!=='object'||!('source'in value)||typeof value.source!=='string'||!('page'in value)||typeof value.page!=='number'||!('head'in value)||typeof value.head!=='string'||!('scope'in value)||typeof value.scope!=='string')throw new Error();source=value.source;page=value.page;revision=value.head;scope=value.scope;}catch{throw new ApiError('validation_failed','Invalid workspace cursor.');}
     }
-    const token=await userToken(c); const deps=c.get('deps'); const base=`/repos/${owner}/${repo}`;
-    if(section==='files'){
-      const files=await githubGet<GhFile[]>(deps,token,`${base}/pulls/${number}/files?per_page=${limit}&page=${page}`);
-      return c.json({items:files.map(f=>({path:f.filename,status:f.status,additions:f.additions,deletions:f.deletions,...(f.patch?{patch:f.patch}:{})})),nextCursor:files.length===limit && page<120?String(page+1):null});
-    }
-    const comments=await githubGet<GhComment[]>(deps,token,`${base}/${source==='review'?'pulls':'issues'}/${number}/comments?per_page=${limit}&page=${page}`);
-    return c.json({items:toThreads(source==='review'?comments:[],source==='conversation'?comments:[]),nextCursor:comments.length===limit && page<120?`${source}:${page+1}`:source==='review'?'conversation:1':null});
+    const sources=section==='files'?['files']:section==='checks'?['checks']:modern?['review','conversation','reviews']:['review','conversation'];
+    if(!sources.includes(source)||!Number.isInteger(page)||page<1||page>120)throw new ApiError('validation_failed','Invalid workspace cursor.');
+    if(c.get('session').demo){const detail=DEMO_PRS.find(pr=>pr.repo===`${owner}/${repo}`&&pr.number===Number(number));if(!detail)throw new ApiError('not_found','Pull request not found.');return c.json({items:section==='files'?detail.files:section==='checks'?detail.checks:detail.threads,nextCursor:null,headSha:detail.headSha,capped:false});}
+    const token=await userToken(c),deps=workspaceDeps(c),base=`/repos/${owner}/${repo}`,limit=25;
+    // Revalidate PR access and revision for every source, including issue comments.
+    const pull=await githubGet<GhPull>(deps,token,`${base}/pulls/${number}`);
+    const bound=await sha256Hex(JSON.stringify([c.get('session').userId,owner,repo,number,section]));
+    if(scope!==undefined&&scope!==bound)throw new ApiError('validation_failed','Cursor belongs to another workspace.');
+    if((revision&&revision!==pull.head.sha)||(c.req.query('head')&&c.req.query('head')!==pull.head.sha))throw new ApiError('pr_changed','This PR changed. Refresh the workspace.');
+    let items:unknown[],length:number;
+    if(section==='files'){const rows=await githubGet<GhFile[]>(deps,token,`${base}/pulls/${number}/files?per_page=${limit}&page=${page}`);length=rows.length;items=rows.map(file=>workspaceFile(file));}
+    else if(section==='checks'){
+      const [runs,statuses]=await Promise.all([githubGet<{check_runs:GhCheckRun[]}>(deps,token,`${base}/commits/${pull.head.sha}/check-runs?per_page=${limit}&page=${page}`),githubGet<{statuses:GhStatus[]}>(deps,token,`${base}/commits/${pull.head.sha}/status?per_page=${limit}&page=${page}`)]);
+      length=Math.max(runs.check_runs.length,statuses.statuses.length);items=[...runs.check_runs.map((row,index)=>runCheck(row,(page-1)*limit+index)),...statuses.statuses.map(statusCheck)];
+    }else if(source==='reviews'){
+      const rows=await githubGet<GhComment[]>(deps,token,`${base}/pulls/${number}/reviews?per_page=${limit}&page=${page}`);length=rows.length;items=rows.filter(row=>row.state!=='PENDING'&&(row.submitted_at||row.created_at)).map(row=>({id:`review-${row.id}`,kind:'review-summary',reviewState:row.state,path:null,line:null,comments:[{id:String(row.id),author:row.user?.login??'ghost',body:row.body??'',createdAt:row.submitted_at??row.created_at}]}));
+    }else{const rows=await githubGet<GhComment[]>(deps,token,`${base}/${source==='review'?'pulls':'issues'}/${number}/comments?per_page=${limit}&page=${page}`);length=rows.length;items=toThreads(source==='review'?rows:[],source==='conversation'?rows:[]);}
+    const capped=length===limit&&page===120,index=sources.indexOf(source),nextSource=length===limit&&page<120?source:sources[index+1],nextPage=nextSource===source?page+1:1;
+    const nextCursor=!nextSource?null:modern?base64url(new TextEncoder().encode(JSON.stringify({source:nextSource,page:nextPage,head:pull.head.sha,scope:bound}))):nextSource==='files'?String(nextPage):`${nextSource}:${nextPage}`;
+    return c.json({items,nextCursor,headSha:pull.head.sha,capped});
   })
 
   .get("/prs/:owner/:repo/:number", async (c) => {
     const { owner, repo, number } = c.req.param();
-    if (!NAME.test(owner) || !NAME.test(repo) || !/^[1-9]\d{0,9}$/.test(number)) {
+    if (!NAME.test(owner) || !NAME.test(repo) || [owner,repo].some(value=>value==="."||value==="..") || !/^[1-9]\d{0,9}$/.test(number)) {
       throw new ApiError("validation_failed", "The pull request reference is not valid.");
     }
     const fullName = `${owner}/${repo}`;
@@ -377,5 +397,5 @@ export const github = new Hono<AppEnv>()
 
     // The user's own token: GitHub enforces their access to this repository.
     const token = await userToken(c);
-    return c.json(await fetchPrDetail(c.get("deps"), token, owner, repo, Number(number), c.req.query("lazy") === "1"));
+    return c.json(await fetchPrDetail(workspaceDeps(c), token, owner, repo, Number(number), c.req.query("lazy") === "1",c.req.query("workspace")!=="1"));
   });

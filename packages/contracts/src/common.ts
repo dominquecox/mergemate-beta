@@ -12,6 +12,7 @@ export const ErrorCode = z.enum([
   "not_found",
   "validation_failed",
   "state_conflict",
+  "pr_changed",
   "rate_limited",
   "rate_limit_unavailable",
   "upstream_unavailable",

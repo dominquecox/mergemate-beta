@@ -30,18 +30,19 @@ const githubAvatar = (login: string) => `https://github.com/${encodeURIComponent
 
 export const SECRET_PLACEHOLDER = "•••••••• value hidden: never shown, stored or sent to AI";
 
-function mapCheck(check: ContractPrDetail["checks"][number], index: number): PrCheck {
+export function mapCheck(check: ContractPrDetail["checks"][number], index: number): PrCheck {
   const state: CheckState = check.state;
-  const base = { id: `${index}:${check.name}`, name: check.name };
+  const base = { id:check.id??`${index}:${check.name}`,name:check.name,...(githubUrl(check.url)?{url:githubUrl(check.url)??undefined}:{}) };
   switch (state) {
     case "success":
       return { ...base, status: "completed", conclusion: "success" };
     case "failure":
       return { ...base, status: "completed", conclusion: "failure" };
     case "neutral":
+      return { ...base, status: "completed", conclusion: "neutral" };
     case "skipped":
     case "cancelled":
-      return { ...base, status: "completed", conclusion: "neutral" };
+      return {...base,status:"completed",conclusion:state};
     case "in_progress":
       return { ...base, status: "in_progress", conclusion: "pending" };
     case "queued":
@@ -53,16 +54,17 @@ function mapCheck(check: ContractPrDetail["checks"][number], index: number): PrC
 function mapFileStatus(status: string): PrFile["status"] {
   if (status === "added") return "added";
   if (status === "removed") return "removed";
-  return "modified";
+  switch(status){case "modified":case "renamed":case "copied":case "changed":return status;default:return "unknown";}
 }
 
 export function mapFile(file: ContractPrFile): PrFile {
   return {
     filename: file.path,
+    previousPath:file.previousPath,patchState:file.patchState,
     status: mapFileStatus(file.status),
     additions: file.additions,
     deletions: file.deletions,
-    ...(file.patch ? { patchSnippet: file.patch.slice(0, 2000) } : {}),
+    ...(file.patch ? { patchSnippet: file.patch } : {}),
   };
 }
 
@@ -70,7 +72,9 @@ export function mapFile(file: ContractPrFile): PrFile {
 export function mapComments(threads: ContractPrDetail["threads"]): PrComment[] {
   return threads.flatMap((thread) =>
     thread.comments.map((comment) => ({
-      id: `${thread.id}:${comment.id}`,
+      id:`${thread.kind??(thread.id==='conversation'?'conversation':'review')}:${comment.id}`,
+      threadId:`${thread.kind??(thread.id==='conversation'?'conversation':'review')}:${thread.id}`,
+      kind:thread.kind??(thread.id==='conversation'?'conversation':'review'),path:thread.path,line:thread.line,outdated:thread.outdated,reviewState:thread.reviewState,
       author: comment.author,
       avatarUrl: githubAvatar(comment.author),
       body: comment.body,
@@ -89,6 +93,7 @@ export function mapPrDetail(detail: ContractPrDetail): PrDetail {
     author: detail.author,
     authorAvatar: githubAvatar(detail.author),
     status: detail.status,
+    headSha:detail.headSha,checkCursor:detail.checkCursor,
     headBranch: detail.headBranch,
     baseBranch: detail.baseBranch,
     createdAt: detail.createdAt,

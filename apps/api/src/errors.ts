@@ -11,6 +11,7 @@ export const ERROR_STATUS: Record<ErrorCode, ContentfulStatusCode> = {
   sso_required: 403,
   payload_too_large: 413,
   not_found: 404,
+  pr_changed:409,
   validation_failed: 422,
   state_conflict:409,
   rate_limited: 429,

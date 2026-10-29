@@ -62,6 +62,7 @@ const FIXED_COPY: Record<ClientErrorCode, string> = {
   sso_required: "Your organization requires single sign-on. Authorize MergeMate on GitHub, then try again.",
   payload_too_large: "That file is too large.",
   not_found: "We couldn't find that.",
+  pr_changed:"This pull request changed. Refresh the workspace before loading more.",
   validation_failed: "That request wasn't valid. Check it and try again.",
   rate_limited: "You've reached a limit for now. Try again in a little while.",
   rate_limit_unavailable: "MergeMate is temporarily unavailable. Please try again shortly.",

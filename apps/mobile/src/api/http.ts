@@ -1,4 +1,6 @@
 import {PrSearchFilters,PrSearchPage} from '@mergemate/contracts';
+import type {WorkspaceRead} from './client';
+import {PrCheck as PrCheckSchema} from '@mergemate/contracts';
 import {FeatureFlagCache} from "./feature-flags";
 import {notifySessionChange,hasPendingLogout,setPendingLogout} from "../auth/session-events";
 import { z } from "zod";
@@ -68,7 +70,7 @@ import {
   mapInstallations,
   mapPostSummary,
   mapPrDetail,
-  mapFile,
+  mapFile,mapCheck,
   mapComments,
   secretWarningFromRisk,
 } from "./mappers";
@@ -585,33 +587,35 @@ export class HttpApiClient implements ApiClient {
   // Pull requests
   // ---------------------------------------------------------------------------------------------
 
-  async getPrFilePage(owner: string, repo: string, number: number, cursor?: string | null) {
-    const page=await this.request({path:`${prPath(owner,repo,number)}/pages/files${cursor?`?cursor=${enc(cursor)}`:''}`,schema:z.object({items:z.array(PrFileSchema),nextCursor:z.string().nullable()})});
-    return {items:page.items.map(mapFile),nextCursor:page.nextCursor};
+  private workspacePagePath(owner:string,repo:string,number:number,section:string,cursor?:string|null,options?:WorkspaceRead){return `${prPath(owner,repo,number)}/pages/${section}?v=2${cursor?`&cursor=${enc(cursor)}`:''}${options?.headSha?`&head=${enc(options.headSha)}`:''}`;}
+  async getPrFilePage(owner:string,repo:string,number:number,cursor?:string|null,options?:WorkspaceRead){
+    const page=await this.request({path:this.workspacePagePath(owner,repo,number,'files',cursor,options),signal:options?.signal,schema:z.object({items:z.array(PrFileSchema),nextCursor:z.string().nullable(),headSha:z.string().optional(),capped:z.boolean().optional()})});return {...page,items:page.items.map(mapFile)};
+  }
+  async getPrCommentPage(owner:string,repo:string,number:number,cursor?:string|null,options?:WorkspaceRead){
+    const page=await this.request({path:this.workspacePagePath(owner,repo,number,'comments',cursor,options),signal:options?.signal,schema:z.object({items:z.array(PrThreadSchema),nextCursor:z.string().nullable(),headSha:z.string().optional(),capped:z.boolean().optional()})});return {...page,items:mapComments(page.items)};
+  }
+  async getPrCheckPage(owner:string,repo:string,number:number,cursor?:string|null,options?:WorkspaceRead){
+    const page=await this.request({path:this.workspacePagePath(owner,repo,number,'checks',cursor,options),signal:options?.signal,schema:z.object({items:z.array(PrCheckSchema),nextCursor:z.string().nullable(),headSha:z.string().optional(),capped:z.boolean().optional()})});return {...page,items:page.items.map(mapCheck)};
   }
 
-  async getPrCommentPage(owner: string, repo: string, number: number, cursor?: string | null) {
-    const page=await this.request({path:`${prPath(owner,repo,number)}/pages/comments${cursor?`?cursor=${enc(cursor)}`:''}`,schema:z.object({items:z.array(PrThreadSchema),nextCursor:z.string().nullable()})});
-    return {items:mapComments(page.items).map(comment=>({...comment,id:`${cursor?.split(':')[0] ?? 'review'}:${comment.id}`})),nextCursor:page.nextCursor};
+  async getPrMetadata(owner: string, repo: string, number: number,signal?:AbortSignal,workspace=false): Promise<PrDetail> {
+    return mapPrDetail(await this.request({ path: `${prPath(owner, repo, number)}?lazy=1${workspace?'&workspace=1':''}`,signal, schema: PrDetailSchema }));
   }
 
-  async getPrMetadata(owner: string, repo: string, number: number): Promise<PrDetail> {
-    return mapPrDetail(await this.request({ path: `${prPath(owner, repo, number)}?lazy=1`, schema: PrDetailSchema }));
-  }
-
-  async getPrDetail(owner: string, repo: string, number: number): Promise<PrDetail> {
+  async getPrDetail(owner: string, repo: string, number: number,signal?:AbortSignal): Promise<PrDetail> {
+    if(signal)return this.loadPrDetail(owner,repo,number,signal);
     return this.reads.run(`detail:${prPath(owner, repo, number)}`, () => this.loadPrDetail(owner, repo, number), 30_000);
   }
 
-  private async loadPrDetail(owner: string, repo: string, number: number): Promise<PrDetail> {
+  private async loadPrDetail(owner: string, repo: string, number: number,signal?:AbortSignal): Promise<PrDetail> {
     const path = prPath(owner, repo, number);
-    const contract = await this.request({ path: `${path}?lazy=1`, schema: PrDetailSchema });
+    const contract = await this.request({ path: `${path}?lazy=1`,signal, schema: PrDetailSchema });
     const detail = mapPrDetail(contract);
 
     // Summary and risk are separate AI calls. If one is unavailable the PR still opens, with a plain reason.
     const [summary, risk] = await Promise.allSettled([
-      this.request({ method: "POST", path: `${path}/summary`, schema: PrSummarySchema, timeoutMs: AI_TIMEOUT_MS }),
-      this.request({ method: "POST", path: `${path}/risk`, schema: PrRiskSchema, timeoutMs: AI_TIMEOUT_MS }),
+      this.request({ method: "POST", path: `${path}/summary`,signal, schema: PrSummarySchema, timeoutMs: AI_TIMEOUT_MS }),
+      this.request({ method: "POST", path: `${path}/risk`,signal, schema: PrRiskSchema, timeoutMs: AI_TIMEOUT_MS }),
     ]);
     if (summary.status === "fulfilled") detail.summary = summary.value;
     if (risk.status === "fulfilled") {
@@ -631,19 +635,19 @@ export class HttpApiClient implements ApiClient {
     return detail;
   }
 
-  getPrSummary(owner: string, repo: string, number: number): Promise<PrSummary> {
+  getPrSummary(owner: string, repo: string, number: number,signal?:AbortSignal): Promise<PrSummary> {
     return this.request({
       method: "POST",
-      path: `${prPath(owner, repo, number)}/summary`,
+      path: `${prPath(owner, repo, number)}/summary`,signal,
       schema: PrSummarySchema,
       timeoutMs: AI_TIMEOUT_MS,
     });
   }
 
-  getPrRisk(owner: string, repo: string, number: number): Promise<PrRisk> {
+  getPrRisk(owner: string, repo: string, number: number,signal?:AbortSignal): Promise<PrRisk> {
     return this.request({
       method: "POST",
-      path: `${prPath(owner, repo, number)}/risk`,
+      path: `${prPath(owner, repo, number)}/risk`,signal,
       schema: PrRiskSchema,
       timeoutMs: AI_TIMEOUT_MS,
     });
