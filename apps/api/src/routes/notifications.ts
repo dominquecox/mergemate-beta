@@ -148,7 +148,7 @@ async function encodeCursor(uid:string,filter:string,limit:number,search:string,
 async function decodeCursor(raw:string|undefined,uid:string,filter:string,limit:number,search:string){
  if(!raw)return 1;
  // Existing development clients may still send page numbers; fresh searches remain user-token scoped.
- if(/^\d{1,3}$/.test(raw))return Number(raw);
+ if(/^\d{1,4}$/.test(raw))return Number(raw);
  try{if(raw.length>512)throw new Error();const value:unknown=JSON.parse(atob(raw.replace(/-/g,'+').replace(/_/g,'/')));if(!value||typeof value!=='object'||!('v'in value)||value.v!==1||!('page'in value)||typeof value.page!=='number'||!('scope'in value)||value.scope!==await scopeFor(uid,filter,limit,search))throw new Error();return value.page;}catch{throw new ApiError('validation_failed','The cursor is not valid for this inbox view.');}
 }
 type StateRow={operation_id:string|null;done_at:string|null;snoozed_until:string|null;updated_at:string};
@@ -206,6 +206,7 @@ export const notifications = new Hono<AppEnv>()
       )
       .bind(userId(c), id, observed, now)
       .run();
+    await requireLegacyState(c,id);
     return c.body(null, 204);
   })
 
@@ -225,6 +226,7 @@ export const notifications = new Hono<AppEnv>()
       )
       .bind(userId(c), id, new Date(untilMs).toISOString(), now.toISOString())
       .run();
+    await requireLegacyState(c,id);
     return c.body(null, 204);
   })
 
@@ -236,6 +238,7 @@ export const notifications = new Hono<AppEnv>()
       .prepare("DELETE FROM notification_state WHERE user_id = ? AND item_id = ? AND operation_id IS NULL")
       .bind(userId(c), id)
       .run();
+    await requireLegacyState(c,id);
     return c.body(null, 204);
   });
 
