@@ -58,7 +58,7 @@ Baseline at6c13ab1:842 workspace tests/typecheck/lint passed on repeat. Early un
 
 ## Measured source proof
 
-Final full `npm run check`:531 API,291 mobile,23 web and22 contract tests (867 total), typecheck/lint exit0. Site checker:18tests plus typecheck/lint/assets exit0. Web/iOS/Android JS exports and devAPI/site packaging dry runs exit0. The browser fixture covers6 width/scenario combinations and leaves ten inspected screenshots (retry/loading/public-guide/local-cleanup/demo). Changed-commit redacted Gitleaks scan:0 findings; whole source retains only2 unchanged published RFC8291 Web Push fixture matches at apps/api/test/web-push.test.ts:12/14. No scanner ignore or test suppression added.
+Final source verification2026-10-29 (America/Indianapolis), full `npm run check`:531 API,293 mobile,23 web and22 contract tests (869 total), typecheck/lint exit0. Site checker:18tests plus typecheck/lint/assets exit0. Web/iOS/Android JS exports and devAPI/site packaging dry runs exit0. The browser fixture covers6 width/scenario combinations and leaves ten inspected screenshots (retry/loading/public-guide/local-cleanup/demo). Changed-commit redacted Gitleaks scan:0 findings; whole source retains only2 unchanged published RFC8291 Web Push fixture matches at apps/api/test/web-push.test.ts:12/14. No scanner ignore or test suppression added.
 
 ## Review and release
 
