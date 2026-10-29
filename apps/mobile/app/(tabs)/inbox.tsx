@@ -181,7 +181,7 @@ function InboxWorkspace({initialFilter}:{initialFilter:NotificationFilter}) {
           style={[styles.undoToast, { backgroundColor: colors.surfaceElevated, borderColor: colors.border }]}
           accessibilityLiveRegion="polite"
         >
-          <Text style={[typography.footnote, { color: colors.text }]}>Moved out of your inbox</Text>
+          <Text style={[typography.footnote, { color: colors.text }]}>Inbox change saved</Text>
           <TouchableOpacity
             disabled={acting} onPress={handleUndo}
             style={styles.undoBtn}
@@ -202,16 +202,16 @@ function InboxWorkspace({initialFilter}:{initialFilter:NotificationFilter}) {
         <ErrorState
           title="Could not load your inbox"
           message={error}
-          onRetry={fetchItems}
+          onRetry={hasMore?more:fetchItems}
         />
       ) : items.length === 0 ? (
         <View style={{flex:1}}><EmptyState
           icon="checkmark-done-outline"
-          title="Inbox Zero"
-          message="You're all caught up! No pull requests need your attention in this view."
-          actionTitle="Refresh Inbox"
-          onAction={onRefresh}
-        />{hasMore&&<Button title="Load more pull requests" loading={isRefreshing} onPress={more}/>}</View>
+          title={hasMore?"More results are available":"Inbox Zero"}
+          message={hasMore?"No visible items on this page. Load more to continue checking your queue.":"No pull requests need your attention in this view."}
+          actionTitle={hasMore?"Load more pull requests":"Refresh Inbox"}
+          onAction={hasMore?more:onRefresh}
+        /></View>
       ) : (
         <FlatList
           key={isDesktop?'desktop':'phone'} numColumns={isDesktop?2:1} columnWrapperStyle={isDesktop?{gap:16}:undefined}
