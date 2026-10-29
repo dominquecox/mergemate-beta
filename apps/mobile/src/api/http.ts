@@ -474,7 +474,8 @@ export class HttpApiClient implements ApiClient {
     return this.mutateSession(async()=>{
       if(generation!==this.sessionGeneration)throw new ApiClientError('unauthorized',messageForCode('unauthorized'));
       // Once delivered for this identity, finish its cleanup before a queued new sign-in can adopt credentials.
-      await this.request({method:"DELETE",path:"/account",sessionMutation:true,sessionGeneration:generation,allowStaleSession:true});
+      const response=await this.exchange({method:"DELETE",path:"/account",sessionMutation:true,sessionGeneration:generation,allowStaleSession:true});
+      if(response.status!==204)throw new ApiClientError('parse_failed',messageForCode('parse_failed'),{status:response.status});
       const cleanup=await Promise.allSettled([this.store.clear(),this.onAccountDeleted?.()]);
       setInMemoryCsrfToken(null);this.csrfLoading=null;this.clearCache();notifySessionChange("signed-out");
       if(cleanup.some(result=>result.status==='rejected'))throw new ApiClientError('local_cleanup_incomplete',messageForCode('local_cleanup_incomplete'),{status:204});
