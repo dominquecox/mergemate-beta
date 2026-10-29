@@ -1,6 +1,6 @@
 import {PcmRecording,type VoiceCapture,type VoicePreview} from './pcm';
 /** Web Audio captures PCM directly; no compressed signature is passed off as validated audio. */
-export async function startVoiceCapture(onLimit:()=>void):Promise<VoiceCapture>{
+export async function startVoiceCapture(onLimit:()=>void,onProgress?:(seconds:number)=>void):Promise<VoiceCapture>{
  if(!navigator.mediaDevices?.getUserMedia || !globalThis.AudioContext)throw new Error('Recording is unavailable in this browser. Type a private note instead.');
  const stream=await navigator.mediaDevices.getUserMedia({audio:{channelCount:1,echoCancellation:true},video:false});
  let context:AudioContext|undefined;
@@ -10,7 +10,7 @@ export async function startVoiceCapture(onLimit:()=>void):Promise<VoiceCapture>{
   let closed=false,limited=false;
   processor.onaudioprocess=event=>{
    if(closed || limited)return;
-   if(recording.add(event.inputBuffer.getChannelData(0),event.inputBuffer.sampleRate,1)){limited=true;onLimit();}
+   const full=recording.add(event.inputBuffer.getChannelData(0),event.inputBuffer.sampleRate,1);onProgress?.(recording.seconds);if(full){limited=true;onLimit();}
   };
   source.connect(processor);processor.connect(context.destination);
   const close=async()=>{if(closed)return;closed=true;processor.onaudioprocess=null;processor.disconnect();source.disconnect();for(const track of stream.getTracks())track.stop();await context?.close();};

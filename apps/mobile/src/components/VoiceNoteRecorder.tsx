@@ -13,6 +13,7 @@ type Phase='idle'|'starting'|'recording'|'paused'|'ready'|'stopping'|'transcribi
 /** Unsaved audio and transcript live only in this screen's memory. */
 export function VoiceNoteRecorder({onTranscript}:{onTranscript:(text:string)=>void}){
  const {colors,typography}=useTheme();
+ const [seconds,setSeconds]=useState(0);
  const [phase,setPhase]=useState<Phase>('idle'),[error,setError]=useState<string|null>(null);
  const capture=useRef<VoiceCapture|null>(null),preview=useRef<VoicePreview|null>(null),bytes=useRef<Uint8Array|null>(null),controller=useRef<AbortController|null>(null),generation=useRef(0);
  const phaseRef=useRef<Phase>('idle');const set=(value:Phase)=>{phaseRef.current=value;setPhase(value);};
@@ -40,12 +41,12 @@ export function VoiceNoteRecorder({onTranscript}:{onTranscript:(text:string)=>vo
  };
  const stopRef=useRef(stop);stopRef.current=stop;
  const start=async()=>{
-  if(phaseRef.current!=='idle')return;set('starting');setError(null);const version=++generation.current;
+  if(phaseRef.current!=='idle')return;set('starting');setSeconds(0);setError(null);const version=++generation.current;
   try{
    const [flags,consent]=await Promise.all([api.getFeatureFlags(true),api.getConsent()]);
    if(version!==generation.current)return;
    if(!flags.voice_notes || !consent.ai.granted || consent.ai.version!=='1')throw new Error('Voice notes are unavailable. Check AI consent in Settings.');
-   const active=await startVoiceCapture(()=>{void stopRef.current();});
+   const active=await startVoiceCapture(()=>{void stopRef.current();},value=>{if(version===generation.current)setSeconds(Math.floor(value));});
    if(version!==generation.current){await active.dispose();return;}capture.current=active;set('recording');
   }catch(error){if(version===generation.current){set('idle');setError(error instanceof Error ? error.message : 'Microphone unavailable. Type a private note instead.');}}
  };
@@ -55,7 +56,7 @@ export function VoiceNoteRecorder({onTranscript}:{onTranscript:(text:string)=>vo
   catch{if(version===generation.current){set('ready');setError('Could not transcribe this recording. Try again or cancel and type a note.');}}
  };
  return <View style={{gap:8,marginVertical:12}}>
-  <Text style={[typography.body,{color:colors.textSecondary}]} accessibilityLiveRegion="polite">{phase==='recording'?'Recording. Stops automatically at 2 minutes.':phase==='paused'?'Recording paused.':phase==='ready'?'Recording ready. Play it back, then transcribe and review the text before saving.':phase==='transcribing'?'Transcribing. You can cancel.':phase==='starting'?'Waiting for microphone access…':'Record up to 2 minutes. Audio is sent only when you choose Transcribe, and is discarded afterward.'}</Text>
+  <Text style={[typography.body,{color:colors.textSecondary}]} accessibilityLiveRegion="polite">{phase==='recording'?`Recording ${Math.floor(seconds/60)}:${String(seconds%60).padStart(2,'0')}. Stops automatically at 2 minutes.`:phase==='paused'?'Recording paused.':phase==='ready'?'Recording ready. Play it back, then transcribe and review the text before saving.':phase==='transcribing'?'Transcribing. You can cancel.':phase==='starting'?'Waiting for microphone access…':'Record up to 2 minutes. Audio is sent only when you choose Transcribe, and is discarded afterward.'}</Text>
   {error && <Text accessibilityRole="alert" style={{color:colors.riskHigh}}>{error}</Text>}
   {phase==='idle' && <Button title="Record voice note" onPress={start} variant="secondary"/>}
   {phase==='recording' && <Button title="Pause recording" variant="secondary" onPress={()=>{capture.current?.pause();set('paused');}}/>}
