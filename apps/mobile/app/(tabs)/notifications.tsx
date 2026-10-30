@@ -117,7 +117,7 @@ export default function NotificationsScreen() {
                     <View style={{flexDirection:"row",alignItems:"flex-start",gap:8}}><Text style={[typography.code,{color:colors.textSecondary,fontSize:11,flex:1}]}>{item.repo} · #{item.number}</Text><Text style={[typography.caption,{color:colors.textSecondary}]}>{relativeTime(item.updatedAt)}</Text>{!item.read && <View accessibilityLabel="Unread" style={{width:6,height:6,borderRadius:3,backgroundColor:colors.brandLight,marginTop:5}}/>}</View>
                     <Text style={[typography.body,{color:colors.text,marginTop:8}]}><Text style={{fontWeight:"600"}}>@{item.author}</Text> {activityAction(item.kind)}</Text>
                     <Text style={[typography.headline,{color:colors.text,marginTop:4}]}>{item.title}</Text>
-                    {item.summaryLine && <Text style={[typography.footnote,{color:colors.textSecondary,marginTop:8}]}>{item.summaryLine}</Text>}
+                    {!!item.summaryLine && <Text style={[typography.footnote,{color:colors.textSecondary,marginTop:8}]}>{item.summaryLine}</Text>}
                     <View style={{flexDirection:"row",gap:8,alignItems:"center",flexWrap:"wrap",marginTop:12}}><StatusPill status={item.status}/>{item.risk && <RiskBadge level={item.risk} compact/>}</View>
                   </View>
                   <Icon name="chevron-forward" size={16} color={colors.textMuted}/>
