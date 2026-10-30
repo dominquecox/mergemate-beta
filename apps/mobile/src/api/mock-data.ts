@@ -122,10 +122,162 @@ export function seedNotifications(): Notification[] {
       updatedAt: new Date(Date.now() - 86400000).toISOString(),
       read: true,
     },
+    {
+      id: "notif_5",
+      kind: "review",
+      repo: "ploonu-llc/mariahlabs",
+      number: 57,
+      title: "Stripe webhook retry handler (#57)",
+      author: "jules-agent",
+      status: "open",
+      risk: "medium",
+      summaryLine: "Retries failed Stripe webhooks with backoff; one test fails and the handler skips signature checks on retry.",
+      updatedAt: new Date(Date.now() - 5400000).toISOString(),
+      read: false,
+    },
+    {
+      id: "notif_6",
+      kind: "mine",
+      repo: "ploonu-llc/typepress",
+      number: 398,
+      title: "Upgrade editor toolbar to the new ProseMirror plugin API (#398)",
+      author: "dominquecox",
+      status: "open",
+      risk: "low",
+      summaryLine: "Swaps the toolbar plugin for the maintained API; behaviour unchanged and all checks pass.",
+      updatedAt: new Date(Date.now() - 10800000).toISOString(),
+      read: true,
+    },
   ];
 }
 
+const AVATAR = "https://avatars.githubusercontent.com/u/92395929?v=4";
+
+interface DemoDetailInput {
+  owner: string;
+  repo: string;
+  number: number;
+  title: string;
+  author: string;
+  headBranch: string;
+  baseBranch: string;
+  hoursAgo: number;
+  checks: Array<[name: string, conclusion: "success" | "failure"]>;
+  files: Array<[filename: string, status: "added" | "modified", additions: number, deletions: number]>;
+  comment?: { author: string; body: string };
+  summary: { whatChanged: string; whyItMatters: string; suggestedFocus: string[] };
+  risk: { level: "low" | "medium" | "high"; reasons: string[]; closerLook?: string[] };
+}
+
+/** Builds one demo pull request detail; totals are derived from the file list so they always agree. */
+function demoDetail(i: DemoDetailInput): PrDetail {
+  const additions = i.files.reduce((n, f) => n + f[2], 0);
+  const deletions = i.files.reduce((n, f) => n + f[3], 0);
+  const coverage = { analyzedFiles: i.files.length, skippedFiles: 0, truncatedFiles: 0 };
+  const at = (hours: number) => new Date(Date.now() - hours * 3600000).toISOString();
+  return {
+    owner: i.owner,
+    repo: i.repo,
+    number: i.number,
+    title: i.title,
+    author: i.author,
+    authorAvatar: AVATAR,
+    status: "open",
+    headBranch: i.headBranch,
+    baseBranch: i.baseBranch,
+    createdAt: at(i.hoursAgo + 2),
+    updatedAt: at(i.hoursAgo),
+    additions,
+    deletions,
+    changedFilesCount: i.files.length,
+    htmlUrl: `https://github.com/${i.owner}/${i.repo}/pull/${i.number}`,
+    checks: i.checks.map(([name, conclusion], n) => ({ id: `c${n + 1}`, name, status: "completed", conclusion })),
+    files: i.files.map(([filename, status, a, d]) => ({ filename, status, additions: a, deletions: d })),
+    comments: i.comment
+      ? [{ id: `com_${i.number}`, author: i.comment.author, avatarUrl: AVATAR, body: i.comment.body, createdAt: at(i.hoursAgo / 2) }]
+      : [],
+    summary: { ...i.summary, coverage },
+    risk: {
+      level: i.risk.level,
+      reasons: i.risk.reasons,
+      coverage,
+      ...(i.risk.closerLook ? { quality: { needsCloserLook: true, reasons: i.risk.closerLook } } : {}),
+    },
+  };
+}
+
 export function seedPrDetails(): Record<string, PrDetail> {
+  return {
+    ...seedHeroPrDetails(),
+    "dominquecox/mergemate/8": demoDetail({
+      owner: "dominquecox", repo: "mergemate", number: 8, title: "Tooling: require Node 22",
+      author: "dominquecox", headBranch: "chore/node-22", baseBranch: "development", hoursAgo: 2,
+      checks: [["typecheck", "success"], ["lint", "success"], ["vitest", "success"]],
+      files: [["package.json", "modified", 2, 2], ["apps/api/package.json", "modified", 1, 1], [".nvmrc", "added", 1, 0]],
+      summary: {
+        whatChanged: "Raises the Node engine range to 22 or newer in the root and API packages and pins it in .nvmrc.",
+        whyItMatters: "Wrangler needs Node 22, so local builds and CI now agree with what the Worker is deployed with.",
+        suggestedFocus: ["package.json"],
+      },
+      risk: { level: "low", reasons: ["Three small config files", "All checks pass"] },
+    }),
+    "dominquecox/vidiloopapi/108": demoDetail({
+      owner: "dominquecox", repo: "vidiloopapi", number: 108, title: "Worker AI inference rate limiter",
+      author: "agy-agent", headBranch: "feat/ai-rate-limit", baseBranch: "main", hoursAgo: 24,
+      checks: [["typecheck", "success"], ["lint", "success"], ["vitest (18 tests)", "success"]],
+      files: [
+        ["src/ai/rate-limit.ts", "added", 94, 0],
+        ["src/ai/dispatch.ts", "modified", 11, 3],
+        ["test/rate-limit.test.ts", "added", 120, 0],
+      ],
+      comment: { author: "dominquecox", body: "Should the window be per session or per user? @agy-agent" },
+      summary: {
+        whatChanged: "Adds a per-session sliding-window limiter that runs before every AI dispatch and returns a clear retry-after.",
+        whyItMatters: "Caps model spend per session, so one runaway client cannot burn the shared AI budget.",
+        suggestedFocus: ["src/ai/rate-limit.ts", "src/ai/dispatch.ts"],
+      },
+      risk: {
+        level: "medium",
+        reasons: ["New code sits in front of every AI call", "Limit values are hard-coded, not configurable"],
+      },
+    }),
+    "ploonu-llc/mariahlabs/57": demoDetail({
+      owner: "ploonu-llc", repo: "mariahlabs", number: 57, title: "Stripe webhook retry handler",
+      author: "jules-agent", headBranch: "feat/webhook-retry", baseBranch: "main", hoursAgo: 1.5,
+      checks: [["typecheck", "success"], ["lint", "success"], ["vitest", "failure"]],
+      files: [
+        ["src/billing/webhook-retry.ts", "added", 76, 0],
+        ["src/billing/webhook.ts", "modified", 14, 9],
+        ["test/webhook-retry.test.ts", "added", 58, 0],
+      ],
+      comment: { author: "dominquecox", body: "The retry path calls the handler directly. Does it still verify the Stripe signature?" },
+      summary: {
+        whatChanged: "Retries failed Stripe webhook deliveries with exponential backoff and stores the attempt count.",
+        whyItMatters: "Missed webhooks mean customers pay but never get access, so retries matter, but only if they stay verified.",
+        suggestedFocus: ["src/billing/webhook-retry.ts", "src/billing/webhook.ts"],
+      },
+      risk: {
+        level: "medium",
+        reasons: ["Touches billing webhook handling", "One test is failing"],
+        closerLook: ["The retry path skips signature verification.", "The failing test covers the changed code."],
+      },
+    }),
+    "ploonu-llc/typepress/398": demoDetail({
+      owner: "ploonu-llc", repo: "typepress", number: 398, title: "Upgrade editor toolbar to the new ProseMirror plugin API",
+      author: "dominquecox", headBranch: "chore/toolbar-plugin", baseBranch: "main", hoursAgo: 3,
+      checks: [["typecheck", "success"], ["lint", "success"], ["vitest (61 tests)", "success"]],
+      files: [["src/editor/toolbar.ts", "modified", 28, 31], ["src/editor/plugins.ts", "modified", 6, 4]],
+      summary: {
+        whatChanged: "Replaces the deprecated toolbar plugin with the maintained ProseMirror API; menus and shortcuts stay the same.",
+        whyItMatters: "The old plugin is no longer patched, so this removes a dependency that would block future editor upgrades.",
+        suggestedFocus: ["src/editor/toolbar.ts"],
+      },
+      risk: { level: "low", reasons: ["Two files, behaviour unchanged", "All checks pass"] },
+    }),
+  };
+}
+
+function seedHeroPrDetails(): Record<string, PrDetail> {
   return {
     "dominquecox/mergemate/7": {
       owner: "dominquecox",
@@ -259,6 +411,16 @@ export function seedTriageQueue(): TriageItem[] {
       prRef: "dominquecox/mergemate#8",
       lane: "ignore",
       reason: "Your own tooling PR; checks already passing.",
+    },
+    {
+      prRef: "ploonu-llc/mariahlabs#57",
+      lane: "needs_you",
+      reason: "Billing webhook change with a failing test and no signature check on retries.",
+    },
+    {
+      prRef: "ploonu-llc/typepress#398",
+      lane: "ignore",
+      reason: "Your own low-risk toolbar upgrade; all checks pass.",
     },
   ];
 }
