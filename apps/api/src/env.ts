@@ -27,6 +27,12 @@ export interface Env {
   AI_DAILY_TRIAGE_FREE?: string;
   AI_DAILY_TRIAGE_PRO?: string;
   MODEL_ROUTE_HIGHLIGHT?: string;
+  /** Region boxes for Highlight (`meta:sam-3.1`). Unset means segmentation is off. */
+  MODEL_ROUTE_SEGMENT?: string;
+  /** Typed-question decisions (Clef). Unset falls back to the AI_PROFILE default. */
+  MODEL_ROUTE_DECISION?: string;
+  /** `hackathon` (default) or `prod`; see ai/routes.ts PROFILE_DEFAULTS. Not a secret. */
+  AI_PROFILE?: string;
   MODEL_BASE_URL?: string;
   MODEL_API_KEY?: string;
   /** AI Gateway id for Workers AI calls (not a secret). Absent means calls go without a gateway. */
