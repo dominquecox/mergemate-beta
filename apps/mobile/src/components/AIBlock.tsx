@@ -1,11 +1,12 @@
-import React, { useState } from "react";
-import { View, TouchableOpacity, StyleSheet } from "react-native";
+import React, { useEffect, useRef, useState } from "react";
+import { Animated, View, TouchableOpacity, StyleSheet } from "react-native";
 import { Text } from "./Text";
 import { useRouter } from "expo-router";
 import { useTheme } from "../context/ThemeContext";
 import { useConsent } from "../context/ConsentContext";
 import { AnalysisCoverage } from "../types";
 import { Icon } from "./Icon";
+import { useReducedMotion } from "../hooks/useReducedMotion";
 
 interface AIBlockProps {
   title?: string;
@@ -127,6 +128,40 @@ export function AIBlock({
           </Text>
         </View>
       )}
+    </View>
+  );
+}
+
+/** Placeholder while the summary is generated; a slow pulse unless the person prefers reduced motion. */
+export function AIBlockSkeleton() {
+  const { colors, typography, spacing, radius } = useTheme();
+  const reduced = useReducedMotion();
+  const pulse = useRef(new Animated.Value(1)).current;
+  useEffect(() => {
+    if (reduced) { pulse.setValue(1); return; }
+    const loop = Animated.loop(Animated.sequence([
+      Animated.timing(pulse, { toValue: 0.45, duration: 800, useNativeDriver: true }),
+      Animated.timing(pulse, { toValue: 1, duration: 800, useNativeDriver: true }),
+    ]));
+    loop.start();
+    return () => loop.stop();
+  }, [reduced, pulse]);
+  const bar = (width: `${number}%`) => (
+    <Animated.View style={{ height: 10, width, borderRadius: radius.sm, backgroundColor: colors.surfaceElevated, opacity: pulse }} />
+  );
+  return (
+    <View
+      accessibilityRole="progressbar"
+      accessibilityLabel="Writing the AI summary"
+      accessibilityLiveRegion="polite"
+      style={[styles.container, { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.lg, padding: spacing.base }]}
+    >
+      <View style={styles.titleRow}>
+        <Icon name="sparkles" size={14} color={colors.brandLight} />
+        <Text style={[typography.subhead, { color: colors.brandLight, fontWeight: "600" }]}>AI Summary</Text>
+        <Text style={[typography.caption, { color: colors.textMuted }]}>Reading the pull request...</Text>
+      </View>
+      <View style={{ marginTop: 14, gap: 10 }}>{bar("92%")}{bar("100%")}{bar("64%")}</View>
     </View>
   );
 }

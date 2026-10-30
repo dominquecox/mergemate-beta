@@ -22,7 +22,7 @@ import { Header } from "../../../../src/components/Header";
 import { StatusPill } from "../../../../src/components/StatusPill";
 import { RiskBadge } from "../../../../src/components/RiskBadge";
 import { riskAssessmentText } from "../../../../src/api/mappers";
-import { AIBlock } from "../../../../src/components/AIBlock";
+import { AIBlock, AIBlockSkeleton } from "../../../../src/components/AIBlock";
 import { Button } from "../../../../src/components/Button";
 import { EmptyState } from "../../../../src/components/EmptyState";
 import { ErrorState } from "../../../../src/components/ErrorState";
@@ -119,7 +119,7 @@ function PrWorkspace({owner,repo,number}:{owner:string;repo:string;number:string
           <ScrollView testID="pr-workspace-scroll" ref={scroll} onScroll={event=>{scrollOffset.current=event.nativeEvent.contentOffset.y;}} scrollEventThrottle={16} contentContainerStyle={{ padding:isDesktop?24:spacing.base, paddingBottom:120 }}>
             <ReadoutControls label="Pull request summary" sentences={narrationSentences([...(detail.summary?[detail.summary.whatChanged,detail.summary.whyItMatters,...detail.summary.suggestedFocus]:[]),...(detail.risk?[`Risk level: ${detail.risk.level}.`,...detail.risk.reasons]:[])])}/>
 
-            <Button title="Refresh workspace" variant="ghost" loading={isRefreshing} onPress={()=>void loadPr()}/>
+            <TouchableOpacity onPress={()=>void loadPr()} disabled={isRefreshing} accessibilityRole="button" accessibilityLabel="Refresh workspace" accessibilityState={{busy:isRefreshing,disabled:isRefreshing}} style={{alignSelf:"flex-end",flexDirection:"row",alignItems:"center",gap:6,minHeight:44,paddingHorizontal:4}}><Icon name="refresh-outline" size={14} color={colors.textMuted}/><Text style={[typography.caption,{color:colors.textMuted}]}>{isRefreshing?"Refreshing...":"Refresh"}</Text></TouchableOpacity>
             {!!(error||linkError)&&<Text accessibilityRole="alert" style={{color:colors.riskHigh,padding:12}}>{error??linkError}</Text>}
             {/* PR Header */}
             <View style={[styles.headerCard, { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.lg }]}>
@@ -194,11 +194,16 @@ function PrWorkspace({owner,repo,number}:{owner:string;repo:string;number:string
             {detail.summary && (
               <View style={{ marginTop: spacing.sm }}>
                 <AIBlock title="AI Summary" coverage={detail.summary.coverage}>
-                  <SummarySection title="What changed" icon="swap-horizontal-outline"><Text style={[typography.body,{color:colors.text}]}>{detail.summary.whatChanged}</Text></SummarySection>
-                  <SummarySection title="Why it matters" icon="shield-outline"><Text style={[typography.body,{color:colors.text}]}>{detail.summary.whyItMatters}</Text></SummarySection>
-                  <SummarySection title="Suggested focus" icon="scan-outline">{detail.summary.suggestedFocus.map((focus,index)=><Text key={index} style={[typography.body,{color:colors.text}]}>{focus}</Text>)}</SummarySection>
+                  <SummarySection title="What changed" icon="swap-horizontal-outline"><Text style={[typography.callout,{color:colors.text}]}>{detail.summary.whatChanged}</Text></SummarySection>
+                  <SummarySection title="Why it matters" icon="shield-outline"><Text style={[typography.callout,{color:colors.text}]}>{detail.summary.whyItMatters}</Text></SummarySection>
+                  <SummarySection title="Suggested focus" icon="scan-outline">{detail.summary.suggestedFocus.map((focus,index)=><Text key={index} style={[typography.callout,{color:colors.text}]}>{focus}</Text>)}</SummarySection>
                 </AIBlock>
               </View>
+            )}
+
+            {/* AI is on and the summary is still being written */}
+            {aiConsentGranted&&aiSummaries&&!detail.summary&&!detail.aiNotice&&(
+              <View style={{ marginTop: spacing.sm }}><AIBlockSkeleton/></View>
             )}
 
             {/* Why the AI parts are missing: not turned on, turned off, over the limit or unavailable */}
