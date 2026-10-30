@@ -59,7 +59,7 @@ export function Button({
           backgroundColor: bg,
           borderColor: border,
           borderWidth: variant === "secondary" ? 1 : 0,
-          borderRadius: radius.md,
+          borderRadius: radius.sm,
           opacity: disabled ? 0.55 : pressed ? 0.85 : 1,
         },
         style,
@@ -73,7 +73,7 @@ export function Button({
       ) : (
         <>
           {icon}
-          <Text style={[typography.headline, { color: text, fontWeight: "600" }, textStyle]}>
+          <Text style={[typography.subhead, { color: text }, textStyle]}>
             {title}
           </Text>
         </>
@@ -87,7 +87,7 @@ const styles = StyleSheet.create({
     minHeight: MIN_TOUCH_TARGET_DP,
     minWidth: MIN_TOUCH_TARGET_DP,
     paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingVertical: 10,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
