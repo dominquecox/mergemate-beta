@@ -30,7 +30,7 @@ export function EmptyState({ icon = "sparkles-outline", title, message, actionTi
       >
         {message}
       </Text>
-      {actionTitle && onAction && (
+      {!!actionTitle && !!onAction && (
         <Button title={actionTitle} onPress={onAction} variant="secondary" />
       )}
     </View>

@@ -109,6 +109,9 @@ MODEL_ROUTE_SUMMARY = "meta:muse-spark-1.2"
 MODEL_ROUTE_RISK = "meta:muse-spark-1.2"
 MODEL_ROUTE_TRIAGE = "meta:muse-spark-1.2"
 MODEL_ROUTE_HIGHLIGHT = "meta:muse-spark-1.2"
+# Dev only: Clef-flash classifies PR risk, SAM 3.1 finds regions for Highlight. Unset = off. Prod stays unset.
+MODEL_ROUTE_DECISION = "workers-ai:@cf/cloudflare/clef-flash"
+MODEL_ROUTE_SEGMENT = "meta:sam-3.1"
 MODEL_BASE_URL = "https://api.meta.ai/v1"
 # Initial value; confirm before launch.
 AI_GLOBAL_DAILY_ACTIONS = "300"

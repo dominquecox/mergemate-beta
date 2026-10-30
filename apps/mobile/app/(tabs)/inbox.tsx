@@ -125,6 +125,15 @@ function InboxWorkspace({initialFilter}:{initialFilter:NotificationFilter}) {
         rightAction={
           <View style={styles.headerIcons}>
             <TouchableOpacity
+              onPress={onRefresh}
+              disabled={isRefreshing}
+              style={[styles.iconBtn,isRefreshing&&{opacity:0.5}]}
+              accessibilityRole="button"
+              accessibilityLabel="Refresh Inbox"
+            >
+              <Icon name="refresh-outline" size={22} color={colors.textSecondary} />
+            </TouchableOpacity>
+            <TouchableOpacity
               onPress={() => router.push("/search")}
               style={styles.iconBtn}
               accessibilityRole="button"
@@ -144,7 +153,6 @@ function InboxWorkspace({initialFilter}:{initialFilter:NotificationFilter}) {
         }
       />
 
-      <Button title="Refresh Inbox" variant="ghost" loading={isRefreshing&&!isLoading} onPress={onRefresh}/>
       <ReadoutControls label="Inbox overview" sentences={inboxNarration(items)}/>
 
       {/* Segmented Filter Control */}
@@ -189,7 +197,7 @@ function InboxWorkspace({initialFilter}:{initialFilter:NotificationFilter}) {
         })}
       </View>
 
-      {(prefSaving||prefMessage)&&<Text accessibilityLiveRegion="polite" style={[typography.caption,{color:colors.textSecondary,paddingHorizontal:16}]}>{prefSaving?"Saving filter…":prefMessage}</Text>}
+      {(prefSaving||(prefMessage&&prefMessage!=="Filter saved for next time."))&&<Text accessibilityLiveRegion="polite" style={[typography.caption,{color:colors.textSecondary,paddingHorizontal:16}]}>{prefSaving?"Saving filter…":prefMessage}</Text>}
       {prefError&&<View style={{padding:12}}><Text style={[typography.body,{color:colors.textSecondary}]} accessibilityRole="alert">This filter applies here, but could not be saved for next time.</Text><Button title="Retry saving filter" variant="ghost" onPress={()=>persist(filter)}/></View>}
       {acting&&<Text accessibilityLiveRegion="polite" style={[typography.body,{color:colors.textSecondary,padding:12}]}>Saving Inbox change…</Text>}
       {error&&sourceItems.length>0&&<View style={{padding:12}}><Text accessibilityRole="alert" style={[typography.body,{color:colors.riskHigh}]}>{error}</Text><Button title="Refresh Inbox" variant="ghost" onPress={onRefresh}/></View>}

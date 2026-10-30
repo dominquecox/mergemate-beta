@@ -217,7 +217,7 @@ export default function SettingsScreen() {
         />
       ) : (
         <ScrollView contentContainerStyle={{padding:isDesktop?24:16,paddingBottom:48}}>
-          {(notice || consentError) && <View accessibilityRole="alert" style={{padding:12,backgroundColor:colors.surfaceElevated,borderRadius:12,marginBottom:16}}><Text style={[typography.body,{color:colors.text}]}>{notice ?? consentError}</Text></View>}
+          {!!(notice || consentError) && <View accessibilityRole="alert" style={{padding:12,backgroundColor:colors.surfaceElevated,borderRadius:12,marginBottom:16}}><Text style={[typography.body,{color:colors.text}]}>{notice ?? consentError}</Text></View>}
           <SettingsGroup title="GitHub authentication">
             <View style={{flexDirection:"row",alignItems:"center",gap:12,padding:16}}><Avatar login={user?.login ?? 'demo'} size={40}/><View style={{flex:1}}><Text style={[typography.headline,{color:colors.text}]}>{user?.name || user?.login || 'Demo User'}</Text><Text style={[typography.code,{color:colors.textSecondary,fontSize:11}]}>@{user?.login || 'demo-developer'}</Text></View><View style={{paddingHorizontal:8,paddingVertical:4,borderRadius:9999,backgroundColor:isDemo?colors.demoBadgeBg:colors.riskLowBg}}><Text style={[typography.caption,{color:isDemo?colors.demoBadge:colors.riskLow}]}>{isDemo?'Demo':'Signed in'}</Text></View></View>
             <SettingsRow label="Sign Out" icon="log-out-outline" danger onPress={handleSignOut}/>

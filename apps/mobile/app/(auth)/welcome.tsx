@@ -121,12 +121,12 @@ export default function WelcomeScreen() {
         </TouchableOpacity>
       </View>
 
-      <ScrollView contentContainerStyle={{paddingVertical:20,gap:20}}>
+      <ScrollView contentContainerStyle={{paddingTop:16,paddingBottom:24,gap:16}} showsVerticalScrollIndicator={false}>
         <Text style={[typography.caption,{color:colors.brandLight,letterSpacing:1.5}]}>STEP {card.step} OF 03</Text>
         <OnboardingPreview step={activeStep}/>
-        <View style={{gap:10}}><View style={{flexDirection:"row",gap:8,alignItems:"center"}}><Icon name={card.icon} size={16} color={colors.brandLight}/><Text style={[typography.caption,{color:colors.brandLight}]}>{["LIGHTNING REVIEWS","RISK MATRIX","HUMAN IN THE LOOP"][activeStep]}</Text></View>
-        <Text style={[typography.largeTitle,{color:colors.text}]} accessibilityRole="header">{card.title}</Text>
-        <Text style={[typography.body,{color:colors.textSecondary}]}>{card.subtitle}</Text></View>
+        <View style={{gap:8}}><View style={{flexDirection:"row",gap:8,alignItems:"center"}}><Icon name={card.icon} size={16} color={colors.brandLight}/><Text style={[typography.caption,{color:colors.brandLight}]}>{["LIGHTNING REVIEWS","RISK MATRIX","HUMAN IN THE LOOP"][activeStep]}</Text></View>
+        <Text style={[typography.title1,{color:colors.text}]} accessibilityRole="header">{card.title}</Text>
+        <Text style={[typography.callout,{color:colors.textSecondary}]}>{card.subtitle}</Text></View>
       </ScrollView>
 
       <View style={styles.footer}>

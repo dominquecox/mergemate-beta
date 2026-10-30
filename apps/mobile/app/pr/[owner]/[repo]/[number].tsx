@@ -22,7 +22,7 @@ import { Header } from "../../../../src/components/Header";
 import { StatusPill } from "../../../../src/components/StatusPill";
 import { RiskBadge } from "../../../../src/components/RiskBadge";
 import { riskAssessmentText } from "../../../../src/api/mappers";
-import { AIBlock } from "../../../../src/components/AIBlock";
+import { AIBlock, AIBlockSkeleton } from "../../../../src/components/AIBlock";
 import { Button } from "../../../../src/components/Button";
 import { EmptyState } from "../../../../src/components/EmptyState";
 import { ErrorState } from "../../../../src/components/ErrorState";
@@ -49,7 +49,7 @@ function PrWorkspace({owner,repo,number}:{owner:string;repo:string;number:string
   const scroll=useRef<React.ComponentRef<typeof ScrollView>>(null),scrollOffset=useRef(0);
   useEffect(()=>{setExpandedFiles([]);setCollapsedThreads([]);},[detail?.headSha]);
   useEffect(()=>{if(!detail||isLoading)return;const frame=requestAnimationFrame(()=>scroll.current?.scrollTo({y:scrollOffset.current,animated:false}));return()=>cancelAnimationFrame(frame);},[isLoading]);
-  const [showNoteInput, setShowNoteInput] = useState(false);
+  const [showNoteInput, setShowNoteInput] = useState(false),[noteFocus,setNoteFocus]=useState(0),noteY=useRef(0);
   const insets = useSafeAreaInsets();
   const bottomInset = Platform.OS === "web" ? 0 : insets.bottom;
 
@@ -119,8 +119,8 @@ function PrWorkspace({owner,repo,number}:{owner:string;repo:string;number:string
           <ScrollView testID="pr-workspace-scroll" ref={scroll} onScroll={event=>{scrollOffset.current=event.nativeEvent.contentOffset.y;}} scrollEventThrottle={16} contentContainerStyle={{ padding:isDesktop?24:spacing.base, paddingBottom:120 }}>
             <ReadoutControls label="Pull request summary" sentences={narrationSentences([...(detail.summary?[detail.summary.whatChanged,detail.summary.whyItMatters,...detail.summary.suggestedFocus]:[]),...(detail.risk?[`Risk level: ${detail.risk.level}.`,...detail.risk.reasons]:[])])}/>
 
-            <Button title="Refresh workspace" variant="ghost" loading={isRefreshing} onPress={()=>void loadPr()}/>
-            {(error||linkError)&&<Text accessibilityRole="alert" style={{color:colors.riskHigh,padding:12}}>{error??linkError}</Text>}
+            <TouchableOpacity onPress={()=>void loadPr()} disabled={isRefreshing} accessibilityRole="button" accessibilityLabel="Refresh workspace" accessibilityState={{busy:isRefreshing,disabled:isRefreshing}} style={{alignSelf:"flex-end",flexDirection:"row",alignItems:"center",gap:6,minHeight:44,paddingHorizontal:4}}><Icon name="refresh-outline" size={14} color={colors.textMuted}/><Text style={[typography.caption,{color:colors.textMuted}]}>{isRefreshing?"Refreshing...":"Refresh"}</Text></TouchableOpacity>
+            {!!(error||linkError)&&<Text accessibilityRole="alert" style={{color:colors.riskHigh,padding:12}}>{error??linkError}</Text>}
             {/* PR Header */}
             <View style={[styles.headerCard, { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.lg }]}>
               <View style={styles.topRow}>
@@ -131,7 +131,7 @@ function PrWorkspace({owner,repo,number}:{owner:string;repo:string;number:string
               </View>
 
               <Text
-                style={[typography.title2, { color: colors.text, marginTop: spacing.xs }]}
+                style={[typography.headline, { color: colors.text, marginTop: spacing.sm, lineHeight: 24 }]}
                 accessibilityRole="header"
               >
                 {detail.title}
@@ -194,11 +194,16 @@ function PrWorkspace({owner,repo,number}:{owner:string;repo:string;number:string
             {detail.summary && (
               <View style={{ marginTop: spacing.sm }}>
                 <AIBlock title="AI Summary" coverage={detail.summary.coverage}>
-                  <SummarySection title="What changed" icon="swap-horizontal-outline"><Text style={[typography.body,{color:colors.text}]}>{detail.summary.whatChanged}</Text></SummarySection>
-                  <SummarySection title="Why it matters" icon="shield-outline"><Text style={[typography.body,{color:colors.text}]}>{detail.summary.whyItMatters}</Text></SummarySection>
-                  <SummarySection title="Suggested focus" icon="scan-outline">{detail.summary.suggestedFocus.map((focus,index)=><Text key={index} style={[typography.body,{color:colors.text}]}>{focus}</Text>)}</SummarySection>
+                  <SummarySection title="What changed" icon="swap-horizontal-outline"><Text style={[typography.callout,{color:colors.text}]}>{detail.summary.whatChanged}</Text></SummarySection>
+                  <SummarySection title="Why it matters" icon="shield-outline"><Text style={[typography.callout,{color:colors.text}]}>{detail.summary.whyItMatters}</Text></SummarySection>
+                  <SummarySection title="Suggested focus" icon="scan-outline">{detail.summary.suggestedFocus.map((focus,index)=><Text key={index} style={[typography.callout,{color:colors.text}]}>{focus}</Text>)}</SummarySection>
                 </AIBlock>
               </View>
+            )}
+
+            {/* AI is on and the summary is still being written */}
+            {aiConsentGranted&&aiSummaries&&!detail.summary&&!detail.aiNotice&&(
+              <View style={{ marginTop: spacing.sm }}><AIBlockSkeleton/></View>
             )}
 
             {/* Why the AI parts are missing: not turned on, turned off, over the limit or unavailable */}
@@ -287,13 +292,13 @@ function PrWorkspace({owner,repo,number}:{owner:string;repo:string;number:string
                         color={chk.conclusion === "success" ? colors.riskLow : chk.conclusion === "failure" ? colors.riskHigh : colors.textMuted}
                       />
                       <Text style={[typography.subhead, { color: colors.text, flex: 1 }]}>{chk.name}</Text>
-                      <Text style={[typography.caption, { color: colors.textMuted }]}>{chk.status==='completed'?chk.conclusion:chk.status}</Text>{chk.url&&<Button title="Open check in GitHub" variant="ghost" onPress={()=>openLink(chk.url)}/>}
+                      <Text style={[typography.caption, { color: colors.textMuted }]}>{chk.status==='completed'?chk.conclusion:chk.status}</Text>{!!chk.url&&<Button title="Open check in GitHub" variant="ghost" onPress={()=>openLink(chk.url)}/>}
                     </View>
                   ))}
                 </View>
               )}
-              {checkCursor&&<Button title={detail.checks.length?'Load more checks':'Load checks'} loading={pageBusy.checks} onPress={()=>loadPage('checks')} variant="ghost"/>}
-              {pageError.checks&&<Text accessibilityRole="alert" style={{color:colors.riskHigh}}>{pageError.checks}</Text>}
+              {!!checkCursor&&<Button title={detail.checks.length?'Load more checks':'Load checks'} loading={pageBusy.checks} onPress={()=>loadPage('checks')} variant="ghost"/>}
+              {!!pageError.checks && <Text accessibilityRole="alert" style={{color:colors.riskHigh}}>{pageError.checks}</Text>}
               {capped.checks&&<Text style={{color:colors.textSecondary}}>Check pagination limit reached. Open this PR in GitHub for the full history.</Text>}
             </View>
 
@@ -313,7 +318,7 @@ function PrWorkspace({owner,repo,number}:{owner:string;repo:string;number:string
                   {detail.files.map((file) => (
                     <View testID={`workspace-file-${file.filename}`} key={file.filename} style={{marginTop:12,backgroundColor:colors.surfaceElevated,borderRadius:8,overflow:"hidden"}}>
                       <TouchableOpacity accessibilityRole="button" accessibilityLabel={`Toggle diff for ${file.filename}`} accessibilityState={{expanded:expandedFiles.includes(file.filename)}} aria-expanded={expandedFiles.includes(file.filename)} onPress={()=>setExpandedFiles(prev=>prev.includes(file.filename)?prev.filter(name=>name!==file.filename):[...prev,file.filename])} style={{flexDirection:"row",alignItems:"center",padding:12,gap:8,minHeight:48}}><Icon name={expandedFiles.includes(file.filename)?"chevron-down":"chevron-forward"} size={16} color={colors.textSecondary}/><Text style={[typography.code,{color:colors.text,flex:1}]}>{file.filename} · {file.status}</Text><Text style={[typography.code,{color:colors.riskLow,fontSize:11}]}>+{file.additions}</Text><Text style={[typography.code,{color:colors.riskHigh,fontSize:11}]}>-{file.deletions}</Text></TouchableOpacity>
-                      {file.previousPath&&<Text style={{color:colors.textSecondary,paddingHorizontal:12}}>Previously: {file.previousPath}</Text>}
+                      {!!file.previousPath&&<Text style={{color:colors.textSecondary,paddingHorizontal:12}}>Previously: {file.previousPath}</Text>}
                       {expandedFiles.includes(file.filename)&&file.patchState==='partial'&&<Text accessibilityRole="alert" style={{color:colors.textSecondary,padding:12}}>Partial patch: this is not the complete diff. Open this PR in GitHub for the full file.</Text>}
                       {expandedFiles.includes(file.filename) && (file.patchSnippet ? <DiffView patch={file.patchSnippet} wrap={Object.prototype.hasOwnProperty.call(fileWrap,file.filename)?fileWrap[file.filename]??true:true} onWrapChange={wrap=>setFileWrap(old=>({...old,[file.filename]:wrap}))}/> : <Text style={[typography.code,{color:colors.textSecondary,padding:12,borderTopWidth:1,borderTopColor:colors.border}]}>Patch unavailable: the file may be binary, empty or too large for GitHub to include. Open this PR in GitHub.</Text>)}
                     </View>
@@ -322,25 +327,29 @@ function PrWorkspace({owner,repo,number}:{owner:string;repo:string;number:string
               )}
             </View>
 
-            {fileCursor && <Button title={detail.files.length?'Load more files':'Load files'} loading={pageBusy.files} onPress={()=>loadPage('files')} variant="secondary"/>}
+            {!!fileCursor && <Button title={detail.files.length?'Load more files':'Load files'} loading={pageBusy.files} onPress={()=>loadPage('files')} variant="secondary"/>}
             {capped.files&&<Text style={{color:colors.textSecondary}}>File pagination limit reached. Open this PR in GitHub for remaining files.</Text>}
-            {pageError.files && <Text accessibilityRole="alert" style={[typography.footnote,{color:colors.riskHigh,padding:16}]}>{pageError.files}</Text>}
+            {!!pageError.files && <Text accessibilityRole="alert" style={[typography.footnote,{color:colors.riskHigh,padding:16}]}>{pageError.files}</Text>}
             <View style={[styles.card,{backgroundColor:colors.surface,borderColor:colors.border,borderRadius:radius.lg,marginTop:16}]}>
               <Text accessibilityRole="header" style={[typography.headline,{color:colors.text}]}>Conversation</Text>
               {discussionGroups(detail.comments).map(group=><View key={group.id} style={{paddingVertical:12,borderBottomWidth:1,borderBottomColor:colors.border}}><TouchableOpacity accessibilityRole="button" accessibilityLabel={group.kind==='conversation'?'Toggle PR conversation':group.kind==='review-summary'?`Toggle submitted review by ${group.comments[0]?.author??'reviewer'}`:`Toggle review discussion for ${group.path??'file unavailable'}${group.line?` line ${group.line}`:''}`} accessibilityState={{expanded:!collapsedThreads.includes(group.id)}} aria-expanded={!collapsedThreads.includes(group.id)} onPress={()=>setCollapsedThreads(old=>old.includes(group.id)?old.filter(id=>id!==group.id):[...old,group.id])} style={{minHeight:44,justifyContent:'center'}}><Text style={[typography.subhead,{color:colors.text}]}>{group.kind==='conversation'?'PR conversation':group.kind==='review-summary'?`Review: ${(group.reviewState??'submitted').toLowerCase().replaceAll('_',' ')}`:`Review discussion · ${group.path??'file unavailable'}${group.line?`:${group.line}`:''}${group.outdated?' (outdated)':''}`}</Text></TouchableOpacity>{!collapsedThreads.includes(group.id)&&group.comments.map(comment=><View key={comment.id} style={{paddingVertical:8}}><Text style={[typography.footnote,{color:colors.textSecondary}]}>@{comment.author} · {relativeTime(comment.createdAt)}</Text><Text selectable style={[typography.body,{color:colors.text,marginTop:4}]}>{comment.body||'No review message.'}</Text></View>)}</View>)}
               {commentCursor?<Button title="Load comments" loading={pageBusy.comments} onPress={()=>loadPage('comments')} variant="ghost"/>:detail.comments.length===0?<Text style={[typography.footnote,{color:colors.textSecondary}]}>No comments.</Text>:null}
               {capped.comments&&<Text style={{color:colors.textSecondary}}>Discussion pagination limit reached. Open this PR in GitHub for the full history.</Text>}
-              {pageError.comments && <Text accessibilityRole="alert" style={[typography.footnote,{color:colors.riskHigh,paddingTop:12}]}>{pageError.comments}</Text>}
+              {!!pageError.comments && <Text accessibilityRole="alert" style={[typography.footnote,{color:colors.riskHigh,paddingTop:12}]}>{pageError.comments}</Text>}
             </View>
 
-            {showNoteInput && <PrivateNotes context={{kind:'pr',repo:`${owner}/${repo}`,number:Number(number)}}/>}
+            {showNoteInput && <View onLayout={event=>{noteY.current=event.nativeEvent.layout.y;if(noteFocus>0)scroll.current?.scrollTo({y:Math.max(0,noteY.current-16),animated:true});}}><PrivateNotes focusRequest={noteFocus} onClose={()=>setShowNoteInput(false)} context={{kind:'pr',repo:`${owner}/${repo}`,number:Number(number)}}/></View>}
           </ScrollView>
 
           {/* Bottom Bar: Open in GitHub and Add note. STRICTLY NO MERGE, APPROVE, OR COMMENT CONTROLS ON GITHUB (US-12) */}
           <View style={[styles.bottomBar, { backgroundColor: colors.surface, borderTopColor: colors.border, paddingBottom: 16 + bottomInset }]}>
             <Button
-              title={showNoteInput ? "Hide Note" : "Add Note"}
-              onPress={() => setShowNoteInput((prev) => !prev)}
+              title="Add Note"
+              onPress={() => {
+                setShowNoteInput(true);
+                setNoteFocus((n) => n + 1);
+                if (showNoteInput) scroll.current?.scrollTo({ y: Math.max(0, noteY.current - 16), animated: true });
+              }}
               variant="secondary"
               style={{ flex: 1 }}
             />
@@ -370,8 +379,8 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   headerCard: {
-    padding: 4,
-    borderWidth: 0,
+    padding: 16,
+    borderWidth: 1,
   },
   topRow: {
     flexDirection: "row",

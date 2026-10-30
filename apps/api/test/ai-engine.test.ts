@@ -639,6 +639,73 @@ describe("assessPrRisk", () => {
   });
 });
 
+describe("assessPrRisk with the Clef-flash classifier", () => {
+  const riskText = JSON.stringify({ level: "low", reasons: ["model reason"] });
+  const clefEnv = { ...validModelEnv(), MODEL_ROUTE_DECISION: "workers-ai:@cf/cloudflare/clef-flash" };
+  const ref = { owner: "o", repo: "r", number: 1 };
+  const clefAi = (yes: number | "fail" | "bad") =>
+    fakeAi(async (run) => {
+      if (run.model === "@cf/cloudflare/clef-flash") {
+        if (yes === "fail") throw new Error("clef down");
+        if (yes === "bad") return { response: { answers: [] } };
+        return { response: { answers: [{ id: "needs_closer_look", probabilities: { true: yes, false: 1 - yes } }] } };
+      }
+      return { response: riskText };
+    });
+  const cleanPr = async (ai: ReturnType<typeof clefAi>) => {
+    const deps = await grantedDeps();
+    deps.ai = ai;
+    deps.prSource = async () => prData("run();");
+    return deps;
+  };
+  const quality = (body: unknown) => (body as { quality: { needsCloserLook: boolean; reasons: string[] } }).quality;
+
+  it("a high Clef probability drives the quality badge", async () => {
+    const ai = clefAi(0.9);
+    const body = (await assessPrRisk(await cleanPr(ai), user, ref, clefEnv)).body;
+    expect(quality(body)).toEqual({ needsCloserLook: true, reasons: ["Fast classifier flagged this PR."] });
+    expect(ai.runs.filter((r) => r.model === "@cf/cloudflare/clef-flash")).toHaveLength(1);
+  });
+
+  it("a low Clef probability leaves the badge off", async () => {
+    const body = (await assessPrRisk(await cleanPr(clefAi(0.1)), user, ref, clefEnv)).body;
+    expect(quality(body).needsCloserLook).toBe(false);
+  });
+
+  it("a low Clef answer cannot lower a deterministic secret finding", async () => {
+    const deps = await cleanPr(clefAi(0.01));
+    deps.prSource = async () => prData(`key = "${fakeToken()}"`);
+    const body = (await assessPrRisk(deps, user, ref, clefEnv)).body;
+    expect(body).toMatchObject({ level: "high", assessedBy: "rules_and_ai" });
+  });
+
+  it.each(["fail", "bad"] as const)("a %s Clef call falls back to rules-only quality without failing the risk check", async (mode) => {
+    const body = (await assessPrRisk(await cleanPr(clefAi(mode)), user, ref, clefEnv)).body;
+    expect(body).toMatchObject({ level: "low", assessedBy: "rules_and_ai" });
+    expect(quality(body).needsCloserLook).toBe(false);
+  });
+
+  it("makes no Clef call when no decision route is configured", async () => {
+    const ai = clefAi(0.9);
+    const body = (await assessPrRisk(await cleanPr(ai), user, ref, validModelEnv())).body;
+    expect(ai.runs.every((r) => r.model !== "@cf/cloudflare/clef-flash")).toBe(true);
+    expect(quality(body).needsCloserLook).toBe(false);
+  });
+
+  it("sends masked state only and counts one action", async () => {
+    const token = fakeToken();
+    const ai = clefAi(0.5);
+    const deps = await cleanPr(ai);
+    deps.prSource = async () => prData(`key = "${token}"`);
+    await assessPrRisk(deps, user, ref, clefEnv);
+    const sent = JSON.stringify(ai.runs.find((r) => r.model === "@cf/cloudflare/clef-flash")?.inputs);
+    expect(sent).not.toContain(token);
+    expect(sent).toContain("[REDACTED]");
+    const used = await deps.db.prepare("SELECT used FROM ai_usage_daily WHERE scope = ?").bind("u1").first<{ used: number }>();
+    expect(used?.used).toBe(1);
+  });
+});
+
 describe("assessPrRisk without a usable AI answer", () => {
   it("still returns the possible secret and the rule-based floor, marked rules-only and not cached", async () => {
     const token = fakeToken();

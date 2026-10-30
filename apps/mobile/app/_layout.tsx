@@ -80,6 +80,10 @@ function AppContent() {
           outline: 2px solid ${colors.brandLight} !important;
           outline-offset: 2px !important;
         }
+        /* Headings the router focuses on navigation are not controls; no box around them. */
+        [tabindex="-1"]:focus-visible {
+          outline: none !important;
+        }
       `;
     }
   }, [colors.brandLight]);

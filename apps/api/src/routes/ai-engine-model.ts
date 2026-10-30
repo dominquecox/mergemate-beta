@@ -57,14 +57,20 @@ export const createFetchTransport = (fetchImpl: typeof fetch = fetch): ModelTran
     const headers = { "content-type": "application/json", authorization: `Bearer ${apiKey}`, "cf-aig-collect-log": "false", "cf-aig-skip-cache": "true", "cf-aig-max-attempts": "1", "cf-aig-no-wholesale": "true" };
     const content: Record<string, string>[] = [{ type: "input_text", text: request.prompt }];
     if (request.image) content.push({ type: "input_image", image_url: request.image.dataUrl });
-    const body = JSON.stringify({
-      model: config.modelId,
-      instructions: request.system,
-      input: [{ role: "user", content }],
-      max_output_tokens: Math.max(request.maxOutputTokens * 8, META_MIN_OUTPUT_TOKENS),
-      reasoning: { effort: "low" },
-      store: false,
-    });
+    // SAM is a segmentation model, not a reasoner: it takes only the prompt and image, no instructions or reasoning budget.
+    const segmentation = config.modelId.startsWith("sam-");
+    const body = JSON.stringify(
+      segmentation
+        ? { model: config.modelId, input: [{ role: "user", content }], store: false }
+        : {
+            model: config.modelId,
+            instructions: request.system,
+            input: [{ role: "user", content }],
+            max_output_tokens: Math.max(request.maxOutputTokens * 8, META_MIN_OUTPUT_TOKENS),
+            reasoning: { effort: "low" },
+            store: false,
+          },
+    );
     const deadline = Date.now() + UPSTREAM_DEADLINE_MS;
     const timeoutSignal = AbortSignal.timeout(UPSTREAM_DEADLINE_MS);
     const signal=request.signal?AbortSignal.any([request.signal,timeoutSignal]):timeoutSignal;
@@ -89,7 +95,8 @@ export const createFetchTransport = (fetchImpl: typeof fetch = fetch): ModelTran
       }
       const data = (request.image ? JSON.parse(new TextDecoder().decode(await readBoundedBody(res,256*1024))) : await res.json()) as ResponsesApiResponse;
       const text = responsesOutputText(data);
-      if (!text.trim()) throw new Error(`empty upstream reply (status ${data.status ?? "unknown"})`);
+      // SAM answers with empty text when nothing matches; that is a result, not a failure.
+      if (!text.trim() && !segmentation) throw new Error(`empty upstream reply (status ${data.status ?? "unknown"})`);
       const { input_tokens: inputTokens, output_tokens: outputTokens } = data.usage ?? {};
       return typeof inputTokens === "number" && typeof outputTokens === "number"
         ? { text, usage: { inputTokens, outputTokens } }

@@ -64,7 +64,7 @@ export function VoiceNoteRecorder({onTranscript,onBusyChange}:{onTranscript:(tex
  return <View style={{gap:8,marginVertical:12}}>
   <Text style={[typography.body,{color:colors.textSecondary}]} accessibilityLiveRegion="polite">{phase==='recording'?'Recording. Stops automatically at 2 minutes.':phase==='paused'?'Recording paused.':phase==='ready'?'Recording ready. Play it back, then transcribe and review the text before saving.':phase==='transcribing'?'Transcribing. You can cancel.':phase==='starting'?'Waiting for microphone access…':'Record up to 2 minutes. Audio is sent only when you choose Transcribe. It is discarded after successful transcription, or when you cancel or leave.'}</Text>
   {phase==='recording' && <Text style={[typography.body,{color:colors.textSecondary}]}>{Math.floor(seconds/60)}:{String(seconds%60).padStart(2,'0')} / 2:00</Text>}
-  {error && <Text accessibilityRole="alert" style={{color:colors.riskHigh}}>{error}</Text>}
+  {!!error && <Text accessibilityRole="alert" style={{color:colors.riskHigh}}>{error}</Text>}
   {phase==='idle' && <Button title="Record voice note" disabled={cleanupFailed} onPress={start} variant="secondary"/>}
   {phase==='recording' && <Button title="Pause recording" variant="secondary" onPress={()=>{capture.current?.pause();set('paused');}}/>}
   {phase==='paused' && <Button title="Resume recording" variant="secondary" onPress={()=>{capture.current?.resume();set('recording');}}/>}

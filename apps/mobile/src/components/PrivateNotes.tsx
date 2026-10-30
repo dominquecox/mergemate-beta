@@ -12,15 +12,16 @@ import {Button} from './Button';
 import {Text} from './Text';
 import {VoiceNoteRecorder} from './VoiceNoteRecorder';
 
-export function PrivateNotes({context}:{context:NoteContext}){
+export function PrivateNotes({context,focusRequest=0,onClose}:{context:NoteContext;focusRequest?:number;onClose?:()=>void}){
  const {user,isDemo}=useAuth();const {colors,typography}=useTheme();
  if(!user || isDemo)return <Text style={[typography.body,{color:colors.textSecondary}]}>Private notes and recording are unavailable in demo mode.</Text>;
- return <NotesWorkspace key={`${user.id}:${noteContextKey(context)}`} context={context}/>;
+ return <NotesWorkspace key={`${user.id}:${noteContextKey(context)}`} context={context} focusRequest={focusRequest} onClose={onClose}/>;
 }
-function NotesWorkspace({context}:{context:NoteContext}){
+function NotesWorkspace({context,focusRequest,onClose}:{context:NoteContext;focusRequest:number;onClose?:()=>void}){
  const {colors,typography}=useTheme(),flags=useFeatureFlags();const {aiConsentGranted}=useConsent();
  const [items,setItems]=useState<PrivateNote[]>([]),[text,setText]=useState(''),[loading,setLoading]=useState(true),[busy,setBusy]=useState(false),[error,setError]=useState<string|null>(null),[loaded,setLoaded]=useState(false),[active,setActive]=useState(true),[uncertain,setUncertain]=useState(false),[recording,setRecording]=useState(false);
  const [notice,setNotice]=useState('');const noteInput=useRef<React.ComponentRef<typeof TextInput>|null>(null),focusTranscript=useRef(false);
+ useEffect(()=>{if(focusRequest>0)noteInput.current?.focus();},[focusRequest,loaded]);
  useEffect(()=>{if(!recording&&focusTranscript.current){focusTranscript.current=false;noteInput.current?.focus();}},[recording]);
  const id=useRef(Crypto.randomUUID()),generation=useRef(0),lock=useRef(false);
  useEffect(()=>onSessionChange(()=>{generation.current++;setActive(false);setText('');setItems([]);}),[]);
@@ -35,10 +36,10 @@ function NotesWorkspace({context}:{context:NoteContext}){
  const remove=async(note:PrivateNote)=>{if(lock.current)return;lock.current=true;setBusy(true);const version=generation.current;try{await api.removePrivateNote(note.id,context);if(version===generation.current)setItems(old=>old.filter(item=>item.id!==note.id));}catch{if(version===generation.current)setError('Could not remove this note. Try again.');}finally{lock.current=false;if(version===generation.current)setBusy(false);}};
  if(!active)return <Text style={[typography.body,{color:colors.textSecondary}]}>Account changed. Reopen this workspace to load its private notes.</Text>;
  return <View style={{gap:12,padding:16,borderWidth:1,borderColor:colors.border,borderRadius:12,marginVertical:16}}>
-  <Text accessibilityRole="header" style={[typography.headline,{color:colors.text}]}>Private notes</Text>
+  <View style={{flexDirection:'row',alignItems:'center',justifyContent:'space-between'}}><Text accessibilityRole="header" style={[typography.headline,{color:colors.text}]}>Private notes</Text>{!!onClose&&<Button title="Hide" variant="ghost" onPress={onClose}/>}</View>
   <Text style={[typography.body,{color:colors.textSecondary}]}>Only you can read these notes. They are never posted to GitHub.{context.kind==='highlight'?' Saved in your Highlight workspace; screenshots are not retained.':''}</Text>
   {loading && <Text style={[typography.body,{color:colors.textSecondary}]} accessibilityLiveRegion="polite">Loading private notes…</Text>}
-  {error && <Text accessibilityRole="alert" style={{color:colors.riskHigh}}>{error}</Text>}
+  {!!error && <Text accessibilityRole="alert" style={{color:colors.riskHigh}}>{error}</Text>}
   {!loaded && !loading && <Button title="Retry loading notes" onPress={load}/>}
   {loaded && items.length===0 && <Text style={[typography.body,{color:colors.textSecondary}]}>No private notes saved here yet.</Text>}
   {items.map((note,index)=><View key={note.id} style={{gap:6,paddingVertical:8,borderBottomWidth:1,borderColor:colors.border}}><Text selectable style={[typography.body,{color:colors.text}]}>{note.text}</Text><Button title={`Remove note ${index+1}`} variant="ghost" disabled={busy} onPress={()=>remove(note)}/></View>)}
