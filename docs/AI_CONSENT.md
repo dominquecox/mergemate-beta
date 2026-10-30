@@ -10,7 +10,7 @@
 - `src/consent/aiChoices.ts` holds the server's last confirmed state. Nothing shows as saved before the server confirms it; a failed change keeps the previous state and an error; `consent_changed` reloads the server state and keeps the message; answers that arrive after sign-out or an account switch are dropped.
 - `ConsentContext` makes one controller per account, refreshes on foreground (`AppState`, `visibilitychange`, window focus) and on opening Settings. The demo is read-only.
 - Consent screen lists what may be sent (PR text, screenshots and voice notes separately) and what to know (pattern-based masking can miss secrets and does not cover screenshots or audio; no claim about provider retention or training beyond "not verified").
-- Settings has two switches: AI processing (turning it on opens the disclosure; turning it off revokes) and AI summaries and risk.
+- Settings has two switches: AI processing (turning it on opens the disclosure; turning it off revokes) and AI summaries and risk. The second is a child of the first: indented, dimmed and disabled while processing is off, and switched on and off by a grant or revoke (a grant turns it on, a revoke turns it off). Once consent is on it can be turned off alone.
 
 ## Checks
 - `npm test` (API `test/ai-policy.test.ts`, `test/ai-engine.test.ts`; app `test/ai-choices.test.ts`), `npm run typecheck`, `npm run lint`.
