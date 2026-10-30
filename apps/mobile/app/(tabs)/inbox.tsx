@@ -239,7 +239,8 @@ function InboxWorkspace({initialFilter}:{initialFilter:NotificationFilter}) {
           contentContainerStyle={{padding:isDesktop?24:spacing.base,paddingBottom:80}}
           refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} tintColor={colors.brandLight}/>}
           onEndReached={()=>{if(!error)void more();}} onEndReachedThreshold={0.4}
-          ListHeaderComponent={<>          {/* Summary Strip Card */}
+          ListHeaderComponent={<>
+          {/* Summary Strip Card */}
           <View
             style={[styles.summaryStrip, { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.lg }, { padding:16, marginBottom:16 }]}
             accessibilityLabel={`Summary: ${items.filter((i) => i.kind === "review").length} needs you, ${items.filter((i) => i.kind === "mention").length} FYI, ${items.filter((i) => i.kind === "mine").length} mine`}
@@ -304,7 +305,7 @@ function InboxWorkspace({initialFilter}:{initialFilter:NotificationFilter}) {
                     {item.title}
                   </Text>
 
-                  {item.summaryLine && (
+                  {!!item.summaryLine && (
                     <View style={[styles.summaryRow,{padding:12,backgroundColor:colors.surfaceElevated,borderRadius:radius.sm,marginTop:12}]}>
                       <Icon name="sparkles" size={12} color={colors.brandLight} style={styles.summaryIcon} />
                       <Text style={[typography.footnote, { color: colors.textSecondary, flex: 1 }]} numberOfLines={2}>
