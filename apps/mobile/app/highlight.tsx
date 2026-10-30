@@ -156,8 +156,10 @@ export default function HighlightScreen() {
             loading={isAnalyzing}
             disabled={!image}
             variant="primary"
-            style={{ marginTop: spacing.md }}
+            style={{ marginTop: spacing.md, ...(!image && { backgroundColor: colors.surfaceInteractive, borderWidth: 1, borderColor: colors.border }) }}
+            textStyle={!image ? { color: colors.textMuted } : undefined}
           />
+          {!image && <Text style={[typography.caption, { color: colors.textMuted, marginTop: 6, textAlign: "center" }]}>Choose a screenshot to enable analysis.</Text>}
           {image && <Button title={isAnalyzing?"Cancel analysis and remove image":"Remove screenshot"} variant="ghost" onPress={()=>{clear();setImage(null);setResult(null);setIsAnalyzing(false);setError(null);}}/>}
         </Section>
 
@@ -170,8 +172,8 @@ export default function HighlightScreen() {
           <ErrorState
             title="Couldn't analyze screenshot"
             message={error}
-            onRetry={image ? handleAnalyze : pickFromLibrary}
-            retryLabel={image ? "Try Again" : "Choose Screenshot"}
+            onRetry={image ? handleAnalyze : undefined}
+            retryLabel="Try Again"
           />
         ) : result ? (
           <View style={{ marginTop: spacing.base }}>
@@ -219,15 +221,7 @@ export default function HighlightScreen() {
               </View>
             </Card>
           </View>
-        ) : (
-          <EmptyState
-            icon="scan-outline"
-            title="No screenshot analyzed yet"
-            message="Choose a screenshot above and tap Analyze Screenshot with AI to inspect layout and contrast regions."
-            actionTitle="Choose Screenshot"
-            onAction={pickFromLibrary}
-          />
-        )}
+        ) : null}
         <PrivateNotes context={{kind:"highlight"}}/>
       </ScrollView>
     </KeyboardAvoidingView>
