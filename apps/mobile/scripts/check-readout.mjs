@@ -69,7 +69,7 @@ try{
     assert.equal(aiCalls,before);assert((await page.evaluate(()=>window.__speech.spoken.join(' '))).includes('The review screen is clearer.'));assert(!/ghp_|Secrets|private.env/.test(await page.evaluate(()=>window.__speech.spoken.join(' '))));
     await page.getByRole('button',{name:'Play Pull request summary',exact:true}).click();flag=false;
     await page.evaluate(()=>{window.__readoutClock+=6000;document.dispatchEvent(new Event('visibilitychange'));});
-    await page.getByRole('button',{name:'Play Pull request summary',exact:true}).waitFor({state:'hidden'});assert.equal(await page.getByRole('button',{name:'Pause Pull request summary',exact:true}).count(),0);
+    await page.getByRole('button',{name:'Pause Pull request summary',exact:true}).waitFor({state:'hidden'});assert.equal(await page.getByRole('button',{name:'Play Pull request summary',exact:true}).count(),0);
    }
   }
   await page.screenshot({path:`${proof}/readout-${mode}-${width}.png`,fullPage:true});assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));assert.deepEqual(errors,[]);await context.close();
