@@ -10,13 +10,14 @@ import { AiDeps, AiRunResult, cacheKey, gateAction, runModelTask, storesFor, use
 import { RISK_MAX_TOKENS, RISK_SYSTEM, buildPrPrompt } from "./ai-engine-model";
 import { PrData, PrRefParts, prRefString } from "./ai-engine-pr-data";
 import { buildDiffContext, redactSecrets } from "./ai-engine-scan";
+import { classifyPr } from "./ai-engine-classifier";
 import { assessQuality, assessRiskSignals, commonSignals, maxLevel } from "./ai-engine-signals";
 
 export const RULES_FALLBACK = new Set(["rate_limited", "upstream_unavailable", "misconfigured"]);
 export const isRulesFallback = (error: unknown): error is ApiError => error instanceof ApiError && RULES_FALLBACK.has(error.code);
 
 /** The rule-based part of a risk check. Needs no model, so it is always available once the PR is readable. */
-export const ruleRisk = (data: PrData, coverage: AnalysisCoverage) => {
+export const ruleRisk = (data: PrData, coverage: AnalysisCoverage, classifierScore: number | null = null) => {
   const signals = commonSignals(data);
   const deterministic = assessRiskSignals({
     files: signals.files,
@@ -25,7 +26,7 @@ export const ruleRisk = (data: PrData, coverage: AnalysisCoverage) => {
     hasTests: data.hasTests,
     checksFailing: data.checksFailing,
   });
-  const quality = assessQuality(signals.qualityInput);
+  const quality = assessQuality({ ...signals.qualityInput, classifierScore });
   return {
     deterministic,
     rest: {
@@ -91,6 +92,9 @@ export const assessPrRisk = async (
     const { context, coverage } = buildDiffContext(prData, provider.config.maxInputChars);
     const { text } = redactSecrets(context);
     const { value: body, remaining: left } = await withReservation(stores, limits, userId, limit, async () => {
+      // The fast classifier runs beside the risk model under the same reserved action. It only feeds the quality
+      // badge (classifierScore); the rule-based level floor and secret findings are untouched.
+      const classifier = classifyPr(model.env, deps.ai, text);
       const answer = await runModelTask(
         env,
         provider,
@@ -103,7 +107,7 @@ export const assessPrRisk = async (
         },
         ModelRisk,stores.policy,
       );
-      const { deterministic, rest } = ruleRisk(prData, coverage);
+      const { deterministic, rest } = ruleRisk(prData, coverage, await classifier);
       const reasons = [...deterministic.reasons, ...answer.reasons].filter(
         (reason, index, all) => all.indexOf(reason) === index,
       );
