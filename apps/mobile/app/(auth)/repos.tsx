@@ -96,7 +96,7 @@ export default function ReposScreen() {
             message={error}
             onRetry={()=>{void refreshRepos();void loadData();}}
           />
-          {ssoUrl && (
+          {!!ssoUrl && (
             <View style={{ alignItems: "center", paddingHorizontal: spacing.base }}>
               <Button title="Authorize single sign-on on GitHub" onPress={() => Linking.openURL(ssoUrl)} variant="primary" />
             </View>
@@ -182,7 +182,7 @@ export default function ReposScreen() {
                       {note}
                     </Text>
 
-                    {org.manageUrl && (
+                    {!!org.manageUrl && (
                       <TouchableOpacity
                         onPress={() => Linking.openURL(org.manageUrl!)}
                         style={styles.configLinkBtn}
@@ -195,7 +195,7 @@ export default function ReposScreen() {
                       </TouchableOpacity>
                     )}
 
-                    {org.status === "sso_required" && org.ssoUrl && (
+                    {org.status === "sso_required" && !!org.ssoUrl && (
                       <TouchableOpacity
                         onPress={() => Linking.openURL(org.ssoUrl!)}
                         style={[styles.ssoBtn, { backgroundColor: colors.brand, borderRadius: radius.sm }]}

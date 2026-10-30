@@ -24,7 +24,7 @@ export function Header({title,onBack,showBack=false,showLogo=false,rightAction,f
     <View style={styles.row}>
       {showBack && <TouchableOpacity accessibilityRole="button" accessibilityLabel="Go back" onPress={onBack??(()=>router.back())} style={styles.back}><Icon name="chevron-back" size={22} color={colors.textSecondary}/></TouchableOpacity>}
       {showLogo ? <Image source={isDark?require('../../assets/logo-dark.png'):require('../../assets/logo-light.png')} style={{width:142,height:34}} resizeMode="contain" accessibilityLabel="MergeMate"/> : <Text ref={heading} accessibilityRole="header" numberOfLines={2} style={[typography.headline,{color:colors.text,flex:1}]}>{title}</Text>}
-      {rightAction && <View style={styles.actions}>{rightAction}</View>}
+      {!!rightAction && <View style={styles.actions}>{rightAction}</View>}
     </View>
     {footer}
   </View>;
