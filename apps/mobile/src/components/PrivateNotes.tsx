@@ -38,7 +38,7 @@ function NotesWorkspace({context}:{context:NoteContext}){
   <Text accessibilityRole="header" style={[typography.headline,{color:colors.text}]}>Private notes</Text>
   <Text style={[typography.body,{color:colors.textSecondary}]}>Only you can read these notes. They are never posted to GitHub.{context.kind==='highlight'?' Saved in your Highlight workspace; screenshots are not retained.':''}</Text>
   {loading && <Text style={[typography.body,{color:colors.textSecondary}]} accessibilityLiveRegion="polite">Loading private notes…</Text>}
-  {error && <Text accessibilityRole="alert" style={{color:colors.riskHigh}}>{error}</Text>}
+  {!!error && <Text accessibilityRole="alert" style={{color:colors.riskHigh}}>{error}</Text>}
   {!loaded && !loading && <Button title="Retry loading notes" onPress={load}/>}
   {loaded && items.length===0 && <Text style={[typography.body,{color:colors.textSecondary}]}>No private notes saved here yet.</Text>}
   {items.map((note,index)=><View key={note.id} style={{gap:6,paddingVertical:8,borderBottomWidth:1,borderColor:colors.border}}><Text selectable style={[typography.body,{color:colors.text}]}>{note.text}</Text><Button title={`Remove note ${index+1}`} variant="ghost" disabled={busy} onPress={()=>remove(note)}/></View>)}

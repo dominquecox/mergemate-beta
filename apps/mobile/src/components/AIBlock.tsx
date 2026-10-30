@@ -84,7 +84,7 @@ export function AIBlock({
           </Text>
         </View>
         <View style={styles.actionsRow}>
-          {cachedTime && (
+          {!!cachedTime && (
             <Text style={[typography.caption, { color: colors.textMuted }]}>
               {cachedTime}
             </Text>

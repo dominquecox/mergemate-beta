@@ -7,8 +7,8 @@ import { useTheme } from '../context/ThemeContext';
 export function Section({title,caption,icon,children,style}:{title?:string;caption?:string;icon?:IconName;children:React.ReactNode;style?:ViewStyle}) {
   const {colors,typography}=useTheme();
   return <View style={[styles.section,{backgroundColor:colors.surface,borderColor:colors.border},style]}>
-    {title && <View style={[styles.row,{marginBottom:12}]}>{icon && <Icon name={icon} size={18} color={colors.brandLight}/>}<Text accessibilityRole="header" style={[typography.headline,{color:colors.text,flex:1}]}>{title}</Text></View>}
-    {caption && <Text style={[typography.footnote,{color:colors.textSecondary,marginBottom:12}]}>{caption}</Text>}{children}
+    {!!title && <View style={[styles.row,{marginBottom:12}]}>{icon && <Icon name={icon} size={18} color={colors.brandLight}/>}<Text accessibilityRole="header" style={[typography.headline,{color:colors.text,flex:1}]}>{title}</Text></View>}
+    {!!caption && <Text style={[typography.footnote,{color:colors.textSecondary,marginBottom:12}]}>{caption}</Text>}{children}
   </View>;
 }
 export function InfoLine({icon,title,detail}:{icon:IconName;title:string;detail:string}) {

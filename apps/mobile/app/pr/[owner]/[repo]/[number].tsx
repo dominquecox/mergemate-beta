@@ -120,7 +120,7 @@ function PrWorkspace({owner,repo,number}:{owner:string;repo:string;number:string
             <ReadoutControls label="Pull request summary" sentences={narrationSentences([...(detail.summary?[detail.summary.whatChanged,detail.summary.whyItMatters,...detail.summary.suggestedFocus]:[]),...(detail.risk?[`Risk level: ${detail.risk.level}.`,...detail.risk.reasons]:[])])}/>
 
             <Button title="Refresh workspace" variant="ghost" loading={isRefreshing} onPress={()=>void loadPr()}/>
-            {(error||linkError)&&<Text accessibilityRole="alert" style={{color:colors.riskHigh,padding:12}}>{error??linkError}</Text>}
+            {!!(error||linkError)&&<Text accessibilityRole="alert" style={{color:colors.riskHigh,padding:12}}>{error??linkError}</Text>}
             {/* PR Header */}
             <View style={[styles.headerCard, { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.lg }]}>
               <View style={styles.topRow}>
@@ -287,13 +287,13 @@ function PrWorkspace({owner,repo,number}:{owner:string;repo:string;number:string
                         color={chk.conclusion === "success" ? colors.riskLow : chk.conclusion === "failure" ? colors.riskHigh : colors.textMuted}
                       />
                       <Text style={[typography.subhead, { color: colors.text, flex: 1 }]}>{chk.name}</Text>
-                      <Text style={[typography.caption, { color: colors.textMuted }]}>{chk.status==='completed'?chk.conclusion:chk.status}</Text>{chk.url&&<Button title="Open check in GitHub" variant="ghost" onPress={()=>openLink(chk.url)}/>}
+                      <Text style={[typography.caption, { color: colors.textMuted }]}>{chk.status==='completed'?chk.conclusion:chk.status}</Text>{!!chk.url&&<Button title="Open check in GitHub" variant="ghost" onPress={()=>openLink(chk.url)}/>}
                     </View>
                   ))}
                 </View>
               )}
-              {checkCursor&&<Button title={detail.checks.length?'Load more checks':'Load checks'} loading={pageBusy.checks} onPress={()=>loadPage('checks')} variant="ghost"/>}
-              {pageError.checks&&<Text accessibilityRole="alert" style={{color:colors.riskHigh}}>{pageError.checks}</Text>}
+              {!!checkCursor&&<Button title={detail.checks.length?'Load more checks':'Load checks'} loading={pageBusy.checks} onPress={()=>loadPage('checks')} variant="ghost"/>}
+              {!!pageError.checks && <Text accessibilityRole="alert" style={{color:colors.riskHigh}}>{pageError.checks}</Text>}
               {capped.checks&&<Text style={{color:colors.textSecondary}}>Check pagination limit reached. Open this PR in GitHub for the full history.</Text>}
             </View>
 
@@ -313,7 +313,7 @@ function PrWorkspace({owner,repo,number}:{owner:string;repo:string;number:string
                   {detail.files.map((file) => (
                     <View testID={`workspace-file-${file.filename}`} key={file.filename} style={{marginTop:12,backgroundColor:colors.surfaceElevated,borderRadius:8,overflow:"hidden"}}>
                       <TouchableOpacity accessibilityRole="button" accessibilityLabel={`Toggle diff for ${file.filename}`} accessibilityState={{expanded:expandedFiles.includes(file.filename)}} aria-expanded={expandedFiles.includes(file.filename)} onPress={()=>setExpandedFiles(prev=>prev.includes(file.filename)?prev.filter(name=>name!==file.filename):[...prev,file.filename])} style={{flexDirection:"row",alignItems:"center",padding:12,gap:8,minHeight:48}}><Icon name={expandedFiles.includes(file.filename)?"chevron-down":"chevron-forward"} size={16} color={colors.textSecondary}/><Text style={[typography.code,{color:colors.text,flex:1}]}>{file.filename} · {file.status}</Text><Text style={[typography.code,{color:colors.riskLow,fontSize:11}]}>+{file.additions}</Text><Text style={[typography.code,{color:colors.riskHigh,fontSize:11}]}>-{file.deletions}</Text></TouchableOpacity>
-                      {file.previousPath&&<Text style={{color:colors.textSecondary,paddingHorizontal:12}}>Previously: {file.previousPath}</Text>}
+                      {!!file.previousPath&&<Text style={{color:colors.textSecondary,paddingHorizontal:12}}>Previously: {file.previousPath}</Text>}
                       {expandedFiles.includes(file.filename)&&file.patchState==='partial'&&<Text accessibilityRole="alert" style={{color:colors.textSecondary,padding:12}}>Partial patch: this is not the complete diff. Open this PR in GitHub for the full file.</Text>}
                       {expandedFiles.includes(file.filename) && (file.patchSnippet ? <DiffView patch={file.patchSnippet} wrap={Object.prototype.hasOwnProperty.call(fileWrap,file.filename)?fileWrap[file.filename]??true:true} onWrapChange={wrap=>setFileWrap(old=>({...old,[file.filename]:wrap}))}/> : <Text style={[typography.code,{color:colors.textSecondary,padding:12,borderTopWidth:1,borderTopColor:colors.border}]}>Patch unavailable: the file may be binary, empty or too large for GitHub to include. Open this PR in GitHub.</Text>)}
                     </View>
@@ -322,15 +322,15 @@ function PrWorkspace({owner,repo,number}:{owner:string;repo:string;number:string
               )}
             </View>
 
-            {fileCursor && <Button title={detail.files.length?'Load more files':'Load files'} loading={pageBusy.files} onPress={()=>loadPage('files')} variant="secondary"/>}
+            {!!fileCursor && <Button title={detail.files.length?'Load more files':'Load files'} loading={pageBusy.files} onPress={()=>loadPage('files')} variant="secondary"/>}
             {capped.files&&<Text style={{color:colors.textSecondary}}>File pagination limit reached. Open this PR in GitHub for remaining files.</Text>}
-            {pageError.files && <Text accessibilityRole="alert" style={[typography.footnote,{color:colors.riskHigh,padding:16}]}>{pageError.files}</Text>}
+            {!!pageError.files && <Text accessibilityRole="alert" style={[typography.footnote,{color:colors.riskHigh,padding:16}]}>{pageError.files}</Text>}
             <View style={[styles.card,{backgroundColor:colors.surface,borderColor:colors.border,borderRadius:radius.lg,marginTop:16}]}>
               <Text accessibilityRole="header" style={[typography.headline,{color:colors.text}]}>Conversation</Text>
               {discussionGroups(detail.comments).map(group=><View key={group.id} style={{paddingVertical:12,borderBottomWidth:1,borderBottomColor:colors.border}}><TouchableOpacity accessibilityRole="button" accessibilityLabel={group.kind==='conversation'?'Toggle PR conversation':group.kind==='review-summary'?`Toggle submitted review by ${group.comments[0]?.author??'reviewer'}`:`Toggle review discussion for ${group.path??'file unavailable'}${group.line?` line ${group.line}`:''}`} accessibilityState={{expanded:!collapsedThreads.includes(group.id)}} aria-expanded={!collapsedThreads.includes(group.id)} onPress={()=>setCollapsedThreads(old=>old.includes(group.id)?old.filter(id=>id!==group.id):[...old,group.id])} style={{minHeight:44,justifyContent:'center'}}><Text style={[typography.subhead,{color:colors.text}]}>{group.kind==='conversation'?'PR conversation':group.kind==='review-summary'?`Review: ${(group.reviewState??'submitted').toLowerCase().replaceAll('_',' ')}`:`Review discussion · ${group.path??'file unavailable'}${group.line?`:${group.line}`:''}${group.outdated?' (outdated)':''}`}</Text></TouchableOpacity>{!collapsedThreads.includes(group.id)&&group.comments.map(comment=><View key={comment.id} style={{paddingVertical:8}}><Text style={[typography.footnote,{color:colors.textSecondary}]}>@{comment.author} · {relativeTime(comment.createdAt)}</Text><Text selectable style={[typography.body,{color:colors.text,marginTop:4}]}>{comment.body||'No review message.'}</Text></View>)}</View>)}
               {commentCursor?<Button title="Load comments" loading={pageBusy.comments} onPress={()=>loadPage('comments')} variant="ghost"/>:detail.comments.length===0?<Text style={[typography.footnote,{color:colors.textSecondary}]}>No comments.</Text>:null}
               {capped.comments&&<Text style={{color:colors.textSecondary}}>Discussion pagination limit reached. Open this PR in GitHub for the full history.</Text>}
-              {pageError.comments && <Text accessibilityRole="alert" style={[typography.footnote,{color:colors.riskHigh,paddingTop:12}]}>{pageError.comments}</Text>}
+              {!!pageError.comments && <Text accessibilityRole="alert" style={[typography.footnote,{color:colors.riskHigh,paddingTop:12}]}>{pageError.comments}</Text>}
             </View>
 
             {showNoteInput && <PrivateNotes context={{kind:'pr',repo:`${owner}/${repo}`,number:Number(number)}}/>}
