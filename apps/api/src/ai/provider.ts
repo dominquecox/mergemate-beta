@@ -457,7 +457,8 @@ export const createModelProvider = (env: Env, task: AiTask, deps: ProviderDeps):
         throw unavailable(failureDetail(config, error));
       }
       // No partial or invented text: an empty answer is a failure.
-      if (!reply.text.trim()) {
+      // Segmentation returns empty text when nothing matches, which is a valid (empty) result.
+      if (!reply.text.trim() && task !== "segment") {
         throw new ApiError("upstream_unavailable", "The AI service returned no result. Try again.", {}, `${config.provider}:${config.modelId} empty text`);
       }
       return {
