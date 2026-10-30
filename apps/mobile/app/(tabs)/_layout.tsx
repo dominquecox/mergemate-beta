@@ -18,6 +18,8 @@ export default function TabsLayout() {
     <Tabs
       screenOptions={{
         headerShown: false,
+        // The tab scene otherwise paints the navigation library's light default (#F2F2F2) behind loading and empty states.
+        sceneStyle: { backgroundColor: colors.background },
         tabBarStyle: isDesktop
           ? { display: "none" }
           : {
