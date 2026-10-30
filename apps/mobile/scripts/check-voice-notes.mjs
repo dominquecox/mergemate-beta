@@ -48,7 +48,7 @@ try{
    }
    return reply(404,{error:{code:'not_found',message:'Unavailable',requestId:'fixture'}});
   });
-  await page.goto(base+'/pr/fixture/repo/7');await page.getByRole('button',{name:'Add Note',exact:true}).click();await page.getByText('No private notes saved here yet.').waitFor();
+  await page.goto(base+'/pr/fixture/repo/7');await page.getByRole('button',{name:'Add Note',exact:true}).click();await page.getByText('No private notes saved here yet.').waitFor();await page.waitForFunction(()=>document.activeElement?.getAttribute('aria-label')==='Private note text');await page.waitForFunction(()=>{const r=document.querySelector('textarea[aria-label="Private note text"]')?.getBoundingClientRect();return !!r&&r.top>=0&&r.bottom<=innerHeight;},undefined,{timeout:5000});
   const record=page.getByRole('button',{name:'Record voice note',exact:true});
   if(mode==='off'||mode==='no-consent'){assert.equal(await record.count(),0);assert.equal(transcriptCalls,0);}
   else if(mode==='denied'){await record.click();await page.getByRole('alert').filter({hasText:/Microphone access denied/}).waitFor();assert.equal(transcriptCalls,0);}

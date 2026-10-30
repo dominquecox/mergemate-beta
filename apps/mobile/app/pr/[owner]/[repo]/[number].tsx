@@ -49,7 +49,7 @@ function PrWorkspace({owner,repo,number}:{owner:string;repo:string;number:string
   const scroll=useRef<React.ComponentRef<typeof ScrollView>>(null),scrollOffset=useRef(0);
   useEffect(()=>{setExpandedFiles([]);setCollapsedThreads([]);},[detail?.headSha]);
   useEffect(()=>{if(!detail||isLoading)return;const frame=requestAnimationFrame(()=>scroll.current?.scrollTo({y:scrollOffset.current,animated:false}));return()=>cancelAnimationFrame(frame);},[isLoading]);
-  const [showNoteInput, setShowNoteInput] = useState(false);
+  const [showNoteInput, setShowNoteInput] = useState(false),[noteFocus,setNoteFocus]=useState(0),noteY=useRef(0);
   const insets = useSafeAreaInsets();
   const bottomInset = Platform.OS === "web" ? 0 : insets.bottom;
 
@@ -131,7 +131,7 @@ function PrWorkspace({owner,repo,number}:{owner:string;repo:string;number:string
               </View>
 
               <Text
-                style={[typography.title2, { color: colors.text, marginTop: spacing.xs }]}
+                style={[typography.headline, { color: colors.text, marginTop: spacing.sm, lineHeight: 24 }]}
                 accessibilityRole="header"
               >
                 {detail.title}
@@ -333,14 +333,18 @@ function PrWorkspace({owner,repo,number}:{owner:string;repo:string;number:string
               {pageError.comments && <Text accessibilityRole="alert" style={[typography.footnote,{color:colors.riskHigh,paddingTop:12}]}>{pageError.comments}</Text>}
             </View>
 
-            {showNoteInput && <PrivateNotes context={{kind:'pr',repo:`${owner}/${repo}`,number:Number(number)}}/>}
+            {showNoteInput && <View onLayout={event=>{noteY.current=event.nativeEvent.layout.y;if(noteFocus>0)scroll.current?.scrollTo({y:Math.max(0,noteY.current-16),animated:true});}}><PrivateNotes focusRequest={noteFocus} onClose={()=>setShowNoteInput(false)} context={{kind:'pr',repo:`${owner}/${repo}`,number:Number(number)}}/></View>}
           </ScrollView>
 
           {/* Bottom Bar: Open in GitHub and Add note. STRICTLY NO MERGE, APPROVE, OR COMMENT CONTROLS ON GITHUB (US-12) */}
           <View style={[styles.bottomBar, { backgroundColor: colors.surface, borderTopColor: colors.border, paddingBottom: 16 + bottomInset }]}>
             <Button
-              title={showNoteInput ? "Hide Note" : "Add Note"}
-              onPress={() => setShowNoteInput((prev) => !prev)}
+              title="Add Note"
+              onPress={() => {
+                setShowNoteInput(true);
+                setNoteFocus((n) => n + 1);
+                if (showNoteInput) scroll.current?.scrollTo({ y: Math.max(0, noteY.current - 16), animated: true });
+              }}
               variant="secondary"
               style={{ flex: 1 }}
             />
@@ -370,8 +374,8 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   headerCard: {
-    padding: 4,
-    borderWidth: 0,
+    padding: 16,
+    borderWidth: 1,
   },
   topRow: {
     flexDirection: "row",
