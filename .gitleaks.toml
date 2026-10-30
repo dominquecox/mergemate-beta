@@ -8,3 +8,19 @@ description = "Names-only example files"
 paths = [
   '''\.env\.example$''',
 ]
+
+[[rules]]
+id = "generic-api-key"
+[[rules.allowlists]]
+description = "Public RFC 8291 appendix A web-push test vectors and an obvious placeholder key in tests"
+paths = [
+  '''apps/api/test/web-push\.test\.ts$''',
+  '''apps/mobile/test/http-web\.test\.ts$''',
+]
+regexes = [
+  '''q1dXpw3UpT5VOmu_cf_v6ih07Aems3njxI-JWgLcM94''',
+  '''BTBZMqHH6r4Tts7J_aSIgg''',
+  '''kyrL1jIIOHEzg3sM2ZWRHDRB62YACZhhSlknJ672kSs''',
+  '''abcdefghijklmnop1234''',
+]
+condition = "AND"
