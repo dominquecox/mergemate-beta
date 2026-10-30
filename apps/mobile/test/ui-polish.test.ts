@@ -67,7 +67,7 @@ describe("MM-035 UI Polish & Accessibility", () => {
     const appDir = path.resolve(__dirname, "../app");
     const screens = collectFiles(appDir).filter(
       // Legal pages load nothing; they hand off to the official pages on mergemate.dev.
-      (f) => !f.endsWith("_layout.tsx") && !f.endsWith("cancelled.tsx") && !fs.readFileSync(f, "utf8").includes("<LegalPage ")
+      (f) => !f.endsWith("_layout.tsx") && !f.endsWith("+html.tsx") && !f.endsWith("cancelled.tsx") && !fs.readFileSync(f, "utf8").includes("<LegalPage ")
     );
     expect(screens.length).toBeGreaterThanOrEqual(17);
     for (const file of screens) {
