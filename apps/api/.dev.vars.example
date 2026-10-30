@@ -31,6 +31,9 @@ SUPPORT_EMAIL=
 # MODEL_ROUTE_RISK=
 # MODEL_ROUTE_TRIAGE=
 # MODEL_ROUTE_HIGHLIGHT=
+# MODEL_ROUTE_SEGMENT=
+# MODEL_ROUTE_DECISION=
+# AI_PROFILE=
 # MODEL_BASE_URL=
 # The matching Web Push public key is in wrangler.toml [vars] (not a secret); uncomment only to override locally.
 # VAPID_PUBLIC_KEY=

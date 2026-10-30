@@ -64,6 +64,40 @@ export interface ModelTransport {
   }): Promise<{ text: string; usage?: TokenUsage }>;
 }
 
+/**
+ * One typed question for a decision model. `noul` is yes/no, `choice` picks among named options, `score` rates
+ * on ordered levels (2 to 10). The model returns probabilities, not prose.
+ */
+export type DecisionQuestion =
+  | { id: string; type: "noul"; question: string }
+  | { id: string; type: "choice"; question: string; options: readonly string[] }
+  | { id: string; type: "score"; question: string; levels: number };
+
+export interface DecisionRequest {
+  /** The facts to decide on, already masked by the caller. Same data rules as a text prompt. */
+  state: string;
+  questions: readonly DecisionQuestion[];
+}
+
+/** Probability of each option, keyed by option (`yes`/`no` for noul, `1`..`n` for score). Sums to about 1. */
+export interface DecisionAnswer {
+  id: string;
+  probabilities: Record<string, number>;
+  /** Highest-probability option. */
+  top: string;
+}
+
+export interface DecisionResult {
+  answers: DecisionAnswer[];
+  provider: ProviderName;
+  modelId: string;
+}
+
+export interface DecisionProvider {
+  readonly config: WorkersAiModelConfig;
+  completeDecision(request: DecisionRequest): Promise<DecisionResult>;
+}
+
 export interface ModelProvider {
   readonly config: ModelConfig;
   complete(request: CompletionRequest): Promise<CompletionResult>;
@@ -289,8 +323,107 @@ export const transcribeWithMeta = async (args: {
   }
 };
 
+const MAX_DECISION_QUESTIONS = 64;
+
+const decisionInvalid = (config: WorkersAiModelConfig, why: string) =>
+  new ApiError("upstream_unavailable", "The AI service returned no result. Try again.", {}, `workers-ai:${config.modelId} decision ${why}`);
+
+/** Option keys a question's answer must carry, in order. */
+const decisionKeys = (q: DecisionQuestion): string[] =>
+  q.type === "noul" ? ["yes", "no"] : q.type === "choice" ? [...q.options] : Array.from({ length: q.levels }, (_, i) => String(i + 1));
+
+/**
+ * Normalizes one answer. Accepts a `probabilities` map, a bare number for noul (probability of yes), or an array in
+ * option order. Anything missing an allowed option, non-finite, or outside 0..1 is rejected: no partial answers.
+ */
+const parseDecisionAnswer = (config: WorkersAiModelConfig, q: DecisionQuestion, raw: unknown): DecisionAnswer => {
+  const keys = decisionKeys(q);
+  const source = raw && typeof raw === "object" && !Array.isArray(raw) ? ((raw as { probabilities?: unknown }).probabilities ?? raw) : raw;
+  const probabilities: Record<string, number> = {};
+  if (typeof source === "number" && q.type === "noul") {
+    probabilities.yes = source;
+    probabilities.no = 1 - source;
+  } else if (Array.isArray(source) && source.length === keys.length) {
+    keys.forEach((key, i) => (probabilities[key] = source[i] as number));
+  } else if (source && typeof source === "object" && !Array.isArray(source)) {
+    const map = source as Record<string, unknown>;
+    // noul maps may use true/false instead of yes/no.
+    const alias = (key: string) => (q.type === "noul" ? (key === "yes" ? "true" : "false") : key);
+    for (const key of keys) probabilities[key] = (map[key] ?? map[alias(key)]) as number;
+  } else {
+    throw decisionInvalid(config, `answer ${q.id} unreadable`);
+  }
+  for (const key of keys) {
+    const p = probabilities[key];
+    if (typeof p !== "number" || !Number.isFinite(p) || p < 0 || p > 1.000001) throw decisionInvalid(config, `answer ${q.id} invalid`);
+  }
+  const top = keys.reduce((best, key) => ((probabilities[key] as number) > (probabilities[best] as number) ? key : best), keys[0] as string);
+  return { id: q.id, probabilities, top };
+};
+
+/**
+ * Builds the decision path for a `decision` task (Clef on Workers AI). Separate from text `complete()`: the
+ * request is a state plus typed questions and the answer is probabilities. Request/response field names follow
+ * Cloudflare's Clef description (`state`, `questions` of type noul/choice/score); they could not be checked
+ * against the live model schema from CI, so the parser above is strict about the result and the first live
+ * call (owner, flag-gated) confirms them.
+ */
+export const createDecisionProvider = (env: Env, deps: Pick<ProviderDeps, "ai">): DecisionProvider => {
+  const config = resolveModelConfig(env, "decision");
+  if (config.provider !== "workers-ai") throw new ConfigError("MODEL_ROUTE_DECISION is not an allowed route");
+  const ai = deps.ai;
+  if (!ai) throw new ConfigError("AI binding is missing");
+  const gatewayId = env.AI_GATEWAY_ID?.trim() || undefined;
+  return {
+    config,
+    async completeDecision(request) {
+      const { state, questions } = request;
+      if (!questions.length || questions.length > MAX_DECISION_QUESTIONS || state.length > config.maxInputChars) {
+        throw new ApiError("validation_failed", "The request to the AI service was not valid.");
+      }
+      const inputs = {
+        state,
+        questions: questions.map((q) => ({
+          id: q.id,
+          type: q.type,
+          question: q.question,
+          ...(q.type === "choice" ? { options: q.options } : {}),
+          ...(q.type === "score" ? { levels: q.levels } : {}),
+        })),
+      };
+      let result: unknown;
+      try {
+        result = await (gatewayId ? ai.run(config.modelId, inputs, { gateway: { id: gatewayId } }) : ai.run(config.modelId, inputs));
+      } catch (error) {
+        throw unavailable(failureDetail(config, error));
+      }
+      const root = (result && typeof result === "object" ? ((result as { response?: unknown }).response ?? result) : null) as
+        | { answers?: unknown }
+        | unknown[]
+        | null;
+      const list = Array.isArray(root) ? root : root && typeof root === "object" ? (root as { answers?: unknown }).answers : undefined;
+      const byId = new Map<string, unknown>();
+      if (Array.isArray(list)) {
+        for (const item of list) {
+          const id = (item as { id?: unknown } | null)?.id;
+          if (typeof id === "string") byId.set(id, item);
+        }
+      } else if (list && typeof list === "object") {
+        for (const [id, item] of Object.entries(list)) byId.set(id, item);
+      }
+      const answers = questions.map((q) => {
+        if (!byId.has(q.id)) throw decisionInvalid(config, `answer ${q.id} missing`);
+        return parseDecisionAnswer(config, q, byId.get(q.id));
+      });
+      return { answers, provider: "workers-ai", modelId: config.modelId };
+    },
+  };
+};
+
 /** Builds the provider for one task from Worker config. Fails before any call when config is missing or invalid. */
 export const createModelProvider = (env: Env, task: AiTask, deps: ProviderDeps): ModelProvider => {
+  // Decisions have their own path: a decision route must never be sent a text prompt.
+  if (task === "decision") throw new ConfigError("decision routes use createDecisionProvider");
   const config = resolveModelConfig(env, task);
   type Send = (request: CompletionRequest) => Promise<{ text: string; usage?: TokenUsage }>;
   let send: Send;
