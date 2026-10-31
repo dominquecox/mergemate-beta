@@ -289,6 +289,7 @@ function InboxWorkspace({initialFilter}:{initialFilter:NotificationFilter}) {
                     borderRadius: radius.lg,
                     borderLeftColor: item.risk === "high" ? colors.riskHigh : colors.border,
                     borderLeftWidth: item.risk === "high" ? 4 : 1,
+                    paddingLeft: item.risk === "high" ? 13 : 16,
                   },
                 ]}
               >

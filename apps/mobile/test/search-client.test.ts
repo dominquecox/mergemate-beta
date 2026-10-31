@@ -22,3 +22,11 @@ describe('Sample-data search',()=>{
   expect((await mock.searchPrs(PrSearchFilters.parse({query:'zzzz'}))).items).toEqual([]);
  });
 });
+describe('Sample-data review plan and Ask',()=>{
+ it('is specific to each sample pull request and keeps its model label',async()=>{
+  const {MockApiClient}=await import('../src/api/mock');const mock=new MockApiClient();
+  const a=await mock.getReviewPlan('ploonu-llc','typepress',412);const b=await mock.getReviewPlan('dominquecox','mergemate',7);
+  expect(a.readingOrder[0]?.file).not.toBe(b.readingOrder[0]?.file);expect(a.model).toBe('sample:demo');expect(a.readingOrder.length).toBeGreaterThan(0);
+  const tested=await mock.askPr('ploonu-llc','mariahlabs',57,'Is this change tested?');expect(tested.answer).toMatch(/Failing/);expect(tested.citations.length).toBeGreaterThan(0);expect(tested.model).toBe('sample:demo');
+ });
+});
