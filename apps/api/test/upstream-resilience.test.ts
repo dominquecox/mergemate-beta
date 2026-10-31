@@ -4,7 +4,7 @@ import { UpstreamStatusError, createModelProvider, withUserOwnedKey } from "../s
 import { githubGet } from "../src/lib/github";
 import { ApiError, ConfigError } from "../src/errors";
 import type { Deps, Env } from "../src/env";
-import { mockTransport, validModelEnv } from "./helpers";
+import { fakeAi, mockTransport, validModelEnv } from "./helpers";
 
 const META = { provider: "meta" as const, modelId: "muse-spark-1.2", maxInputChars: 190_000, baseUrl: "https://api.meta.ai/v1" };
 const REQUEST = { system: "s", prompt: "SECRET-PROMPT-FIXTURE", maxOutputTokens: 10 };
@@ -113,6 +113,16 @@ describe("model provider: what a failure means", () => {
     const timeout = mockTransport(async () => { throw new DOMException("The operation timed out.", "TimeoutError"); });
     const error = await createModelProvider(env(), "summary", { transport: timeout }).complete(REQUEST).catch((e: unknown) => e);
     expect((error as ApiError).logDetail).toContain("TimeoutError");
+  });
+
+  it("automatically fails over to Workers AI Llama when Meta encounters an upstream outage", async () => {
+    const ai = fakeAi(async () => ({ response: '{"fallback":true}' }));
+    const provider = createModelProvider(env(), "summary", { transport: rejecting(503), ai });
+    const result = await provider.complete(REQUEST);
+    expect(result.text).toBe('{"fallback":true}');
+    expect(result.provider).toBe("workers-ai");
+    expect(result.modelId).toBe("@cf/meta/llama-3.3-70b-instruct-fp8-fast");
+    expect(ai.runs).toHaveLength(1);
   });
 });
 

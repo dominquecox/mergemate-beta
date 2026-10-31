@@ -425,12 +425,48 @@ export const createModelProvider = (env: Env, task: AiTask, deps: ProviderDeps):
   // Decisions have their own path: a decision route must never be sent a text prompt.
   if (task === "decision") throw new ConfigError("decision routes use createDecisionProvider");
   const config = resolveModelConfig(env, task);
-  type Send = (request: CompletionRequest) => Promise<{ text: string; usage?: TokenUsage }>;
+  type Send = (request: CompletionRequest) => Promise<{ text: string; usage?: TokenUsage; provider?: ProviderName; modelId?: string }>;
   let send: Send;
   const userOwnedKey = (env as KeyedEnv)[USER_OWNED_KEY] === true;
   if (config.provider === "meta") {
     const apiKey = requireApiKey(env);
-    send = (request) => deps.transport.complete({ config, apiKey, request });
+    send = async (request) => {
+      try {
+        return await deps.transport.complete({ config, apiKey, request });
+      } catch (err) {
+        // Multi-tier resilience: If Meta is down or rate-limited and Workers AI is bound, failover to Meta Llama on Workers AI.
+        if (
+          deps.ai &&
+          !(err instanceof ApiError && err.code === "misconfigured") &&
+          !(err instanceof UpstreamStatusError && (err.status === 401 || err.status === 403))
+        ) {
+          const fallbackModelId =
+            task === "highlight"
+              ? "@cf/meta/llama-4-scout-17b-16e-instruct"
+              : "@cf/meta/llama-3.3-70b-instruct-fp8-fast";
+          const fallbackConfig: WorkersAiModelConfig = {
+            provider: "workers-ai",
+            modelId: fallbackModelId,
+            maxInputChars: task === "highlight" ? 190_000 : 50_000,
+          };
+          const gatewayId = env.AI_GATEWAY_ID?.trim() || undefined;
+          let fallbackRequest = request;
+          if (request.prompt.length > fallbackConfig.maxInputChars) {
+            fallbackRequest = {
+              ...request,
+              prompt: request.prompt.slice(0, fallbackConfig.maxInputChars),
+            };
+          }
+          const reply = await completeWithWorkersAi(fallbackConfig, deps.ai, gatewayId, fallbackRequest);
+          return {
+            ...reply,
+            provider: "workers-ai",
+            modelId: fallbackConfig.modelId,
+          };
+        }
+        throw err;
+      }
+    };
   } else {
     const ai = deps.ai;
     if (!ai) throw new ConfigError("AI binding is missing");
@@ -441,7 +477,7 @@ export const createModelProvider = (env: Env, task: AiTask, deps: ProviderDeps):
   return {
     config,
     async complete(request) {
-      let reply: { text: string; usage?: TokenUsage };
+      let reply: { text: string; usage?: TokenUsage; provider?: ProviderName; modelId?: string };
       try {
         reply = await send(request);
       } catch (error) {
@@ -463,8 +499,8 @@ export const createModelProvider = (env: Env, task: AiTask, deps: ProviderDeps):
       }
       return {
         text: reply.text,
-        provider: config.provider,
-        modelId: config.modelId,
+        provider: reply.provider ?? config.provider,
+        modelId: reply.modelId ?? config.modelId,
         ...(reply.usage ? { usage: reply.usage } : {}),
       };
     },
