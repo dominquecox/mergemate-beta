@@ -23,7 +23,7 @@ import { Header } from "../../../../src/components/Header";
 import { StatusPill } from "../../../../src/components/StatusPill";
 import { RiskBadge } from "../../../../src/components/RiskBadge";
 import { riskAssessmentText } from "../../../../src/api/mappers";
-import { riskBanner } from "../../../../src/workspace/risk";
+import { riskBanner, riskEvidence } from "../../../../src/workspace/risk";
 import { AIBlock, AIBlockSkeleton } from "../../../../src/components/AIBlock";
 import { Button } from "../../../../src/components/Button";
 import { EmptyState } from "../../../../src/components/EmptyState";
@@ -31,6 +31,7 @@ import { ErrorState } from "../../../../src/components/ErrorState";
 import { LoadingState } from "../../../../src/components/LoadingState";
 import { Icon } from "../../../../src/components/Icon";
 import { DemoTour } from "../../../../src/components/DemoTour";
+import { PrivacyStrip } from "../../../../src/components/PrivacyStrip";
 import { DiffView } from "../../../../src/components/DiffView";
 import { MergeStateChip } from "../../../../src/components/MergeStateChip";
 
@@ -128,6 +129,7 @@ function PrWorkspace({owner,repo,number}:{owner:string;repo:string;number:string
             <TouchableOpacity onPress={()=>void loadPr()} disabled={isRefreshing} accessibilityRole="button" accessibilityLabel="Refresh workspace" accessibilityState={{busy:isRefreshing,disabled:isRefreshing}} style={{alignSelf:"flex-end",flexDirection:"row",alignItems:"center",gap:6,minHeight:44,paddingHorizontal:4}}><Icon name="refresh-outline" size={14} color={colors.textMuted}/><Text style={[typography.caption,{color:colors.textMuted}]}>{isRefreshing?"Refreshing...":"Refresh"}</Text></TouchableOpacity>
             {!!(error||linkError)&&<Text accessibilityRole="alert" style={{color:colors.riskHigh,padding:12}}>{error??linkError}</Text>}
             {isDemo&&tour==="1"&&!tourClosed&&<DemoTour onClose={()=>setTourClosed(true)}/>}
+            <PrivacyStrip onOpenSettings={()=>router.push("/(tabs)/settings")}/>
             {(()=>{const banner=riskBanner(detail.risk,detail.files);if(!banner)return null;const tone=banner.level==="high"?colors.riskHigh:banner.level==="medium"?colors.riskMedium:colors.riskLow,bg=banner.level==="high"?colors.riskHighBg:banner.level==="medium"?colors.riskMediumBg:colors.riskLowBg;return <View testID="risk-banner" style={{flexDirection:"row",alignItems:"center",flexWrap:"wrap",gap:8,padding:12,marginBottom:spacing.sm,borderRadius:radius.lg,backgroundColor:bg}}><Icon name={banner.level==="low"?"checkmark-circle":"alert-circle"} size={16} color={tone}/><Text style={[typography.subhead,{color:tone,flex:1,minWidth:200}]}>{banner.text}</Text>{!!banner.file&&<TouchableOpacity accessibilityRole="button" accessibilityLabel={`Jump to riskiest file ${banner.file}`} onPress={()=>jumpToFile(banner.file!)} style={{minHeight:44,justifyContent:"center",paddingHorizontal:8}}><Text style={[typography.footnote,{color:tone,fontWeight:"600",textDecorationLine:"underline"}]} numberOfLines={1}>Jump to {banner.file}</Text></TouchableOpacity>}</View>;})()}
             {/* PR Header */}
             <View style={[styles.headerCard, { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.lg }]}>
@@ -252,14 +254,14 @@ function PrWorkspace({owner,repo,number}:{owner:string;repo:string;number:string
               <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.lg, marginTop: spacing.sm }]}>
                 <View style={[styles.riskHeader,{flexWrap:"wrap",gap:8}]}>
                   <Text style={[typography.headline, { color: colors.text }]} accessibilityRole="header">
-                    Risk Assessment
+                    Why this risk
                   </Text>
                   <RiskBadge level={detail.risk.level} secretWarning={detail.secretWarning} />
                 </View>
 
                 <View style={{ marginTop: spacing.sm }}>
-                  {detail.risk.reasons.map((reason: string, idx: number) => (
-                    <View key={idx} style={styles.reasonRow}>
+                  {riskEvidence(detail.risk, detail.files, detail.checks).map(({ reason, file, check }, idx) => (
+                    <View key={idx} style={[styles.reasonRow,{flexWrap:"wrap"}]} testID="risk-reason">
                       <Icon
                         name="ellipse"
                         size={8}
@@ -267,6 +269,8 @@ function PrWorkspace({owner,repo,number}:{owner:string;repo:string;number:string
                         style={styles.reasonDot}
                       />
                       <Text style={[typography.body, { color: colors.text, flex: 1 }]}>{reason}</Text>
+                      {!!file&&<TouchableOpacity accessibilityRole="button" accessibilityLabel={`Open ${file}, the file behind this reason`} onPress={()=>jumpToFile(file)} style={{minHeight:44,justifyContent:"center",paddingLeft:16,width:"100%"}}><Text style={[typography.footnote,{color:colors.brandLight,textDecorationLine:"underline"}]} numberOfLines={1}>Because of {file}</Text></TouchableOpacity>}
+                      {!!check&&<Text style={[typography.footnote,{color:colors.textSecondary,paddingLeft:16,width:"100%"}]}>Failing check: {check}</Text>}
                     </View>
                   ))}
                 </View>
