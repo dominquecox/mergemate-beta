@@ -8,7 +8,7 @@
 - Do not send secrets, personal tokens or private source to a model.
 - If a secret is committed, rotate it first, then remove it from history.
 
-Report a vulnerability privately to the repository owner.
+Report a vulnerability privately through GitHub: use the "Report a vulnerability" button on the repository's Security tab (private vulnerability reporting). Do not open a public issue or PR for it.
 
 ## Reproducible local dependency and bundle review
 
