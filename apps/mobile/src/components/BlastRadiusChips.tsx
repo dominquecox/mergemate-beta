@@ -31,10 +31,6 @@ export function BlastRadiusChips({ files }: { files: readonly PrFile[] }) {
         </Text>
       </View>
 
-      <Text style={[typography.caption, { color: colors.textSecondary, marginBottom: 10 }]}>
-        Architectural areas affected by this PR. Tap a domain to view touched files.
-      </Text>
-
       {/* Domain Chips */}
       <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
         {domains.map((domain) => {

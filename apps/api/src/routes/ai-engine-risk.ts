@@ -108,9 +108,11 @@ export const assessPrRisk = async (
         ModelRisk,stores.policy,
       );
       const { deterministic, rest } = ruleRisk(prData, coverage, await classifier);
-      const reasons = [...deterministic.reasons, ...answer.reasons].filter(
-        (reason, index, all) => all.indexOf(reason) === index,
+      const activeDeterministic = deterministic.reasons.filter(
+        (r) => !r.startsWith("No rule-based risk signals") && !r.startsWith("No risk signals:"),
       );
+      const combined = (activeDeterministic.length > 0 ? activeDeterministic : answer.reasons.length > 0 ? [] : deterministic.reasons).concat(answer.reasons);
+      const reasons = combined.filter((reason, index, all) => all.indexOf(reason) === index).slice(0, 3);
       const result: PrRisk = { level: maxLevel(deterministic.level, answer.level), reasons, ...rest, assessedBy: "rules_and_ai" };
       await stores.cache.set(key, userId, result);
       return result;

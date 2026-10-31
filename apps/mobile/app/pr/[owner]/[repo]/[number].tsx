@@ -9,7 +9,7 @@ import { Avatar } from "../../../../src/components/Avatar";
 import { relativeTime } from "../../../../src/format/activity";
 import { AskPrCard, ReviewPlanCard } from "../../../../src/components/ReviewCopilot";
 import { BlastRadiusChips } from "../../../../src/components/BlastRadiusChips";
-import { SummarySection } from "../../../../src/components/SummarySection";
+import { SummarySection, ExecutiveSummaryText } from "../../../../src/components/SummarySection";
 import { GitMetadataCard } from "../../../../src/components/GitMetadataCard";
 import React, { useState, useEffect, useRef } from "react";
 import { View, ScrollView, TouchableOpacity, TextInput, StyleSheet, Linking, Share, Platform, KeyboardAvoidingView } from "react-native";
@@ -132,7 +132,7 @@ function PrWorkspace({owner,repo,number}:{owner:string;repo:string;number:string
             {!!(error||linkError)&&<Text accessibilityRole="alert" style={{color:colors.riskHigh,padding:12}}>{error??linkError}</Text>}
             {isDemo&&tour==="1"&&!tourClosed&&<DemoTour onClose={()=>setTourClosed(true)}/>}
             <PrivacyStrip onOpenSettings={()=>router.push("/(tabs)/settings")}/>
-            {(()=>{const banner=riskBanner(detail.risk,detail.files);if(!banner)return null;const tone=banner.level==="high"?colors.riskHigh:banner.level==="medium"?colors.riskMedium:colors.riskLow,bg=banner.level==="high"?colors.riskHighBg:banner.level==="medium"?colors.riskMediumBg:colors.riskLowBg;return <View testID="risk-banner" style={{flexDirection:"row",alignItems:"center",flexWrap:"wrap",gap:8,padding:12,marginBottom:spacing.sm,borderRadius:radius.lg,backgroundColor:bg}}><Icon name={banner.level==="low"?"checkmark-circle":"alert-circle"} size={16} color={tone}/><Text style={[typography.subhead,{color:tone,flex:1,minWidth:200}]}>{banner.text}</Text>{!!banner.file&&<TouchableOpacity accessibilityRole="button" accessibilityLabel={`Jump to riskiest file ${banner.file}`} onPress={()=>jumpToFile(banner.file!)} style={{minHeight:44,justifyContent:"center",paddingHorizontal:8}}><Text style={[typography.footnote,{color:tone,fontWeight:"600",textDecorationLine:"underline"}]} numberOfLines={1}>Jump to {banner.file}</Text></TouchableOpacity>}</View>;})()}
+            {(()=>{const banner=riskBanner(detail.risk,detail.files);if(!banner||banner.level==="low")return null;const tone=banner.level==="high"?colors.riskHigh:colors.riskMedium,bg=banner.level==="high"?colors.riskHighBg:colors.riskMediumBg;return <View testID="risk-banner" style={{flexDirection:"row",alignItems:"center",flexWrap:"wrap",gap:8,padding:12,marginBottom:spacing.sm,borderRadius:radius.lg,backgroundColor:bg}}><Icon name="alert-circle" size={16} color={tone}/><Text style={[typography.subhead,{color:tone,flex:1,minWidth:200}]}>{banner.text}</Text>{!!banner.file&&<TouchableOpacity accessibilityRole="button" accessibilityLabel={`Jump to riskiest file ${banner.file}`} onPress={()=>jumpToFile(banner.file!)} style={{minHeight:44,justifyContent:"center",paddingHorizontal:8}}><Text style={[typography.footnote,{color:tone,fontWeight:"600",textDecorationLine:"underline"}]} numberOfLines={1}>Jump to {banner.file}</Text></TouchableOpacity>}</View>;})()}
             {/* PR Header */}
             <View style={[styles.headerCard, { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.lg }]}>
               <View style={styles.topRow}>
@@ -221,9 +221,11 @@ function PrWorkspace({owner,repo,number}:{owner:string;repo:string;number:string
             {detail.summary && (
               <View style={{ marginTop: spacing.sm }}>
                 <AIBlock title="AI Summary" coverage={detail.summary.coverage} model={detail.summary.model}>
-                  <SummarySection title="What changed" icon="swap-horizontal-outline"><Text style={[typography.callout,{color:colors.text}]}>{detail.summary.whatChanged}</Text></SummarySection>
-                  <SummarySection title="Why it matters" icon="shield-outline"><Text style={[typography.callout,{color:colors.text}]}>{detail.summary.whyItMatters}</Text></SummarySection>
-                  <SummarySection title="Suggested focus" icon="scan-outline">{detail.summary.suggestedFocus.map((focus,index)=><Text key={index} style={[typography.callout,{color:colors.text}]}>{focus}</Text>)}</SummarySection>
+                  <SummarySection title="What changed" icon="swap-horizontal-outline"><ExecutiveSummaryText text={detail.summary.whatChanged} /></SummarySection>
+                  <SummarySection title="Why it matters" icon="shield-outline"><ExecutiveSummaryText text={detail.summary.whyItMatters} /></SummarySection>
+                  {detail.summary.suggestedFocus.length > 0 && (
+                    <SummarySection title="Suggested focus" icon="scan-outline">{detail.summary.suggestedFocus.slice(0, 3).map((focus,index)=><Text key={index} style={[typography.callout,{color:colors.text}]}>• {focus}</Text>)}</SummarySection>
+                  )}
                 </AIBlock>
               </View>
             )}
@@ -284,7 +286,10 @@ function PrWorkspace({owner,repo,number}:{owner:string;repo:string;number:string
                 </View>
 
                 <View style={{ marginTop: spacing.sm }}>
-                  {riskEvidence(detail.risk, detail.files, detail.checks).map(({ reason, file, check }, idx) => (
+                  {riskEvidence(detail.risk, detail.files, detail.checks)
+                    .filter((item, _, all) => all.length === 1 || !item.reason.startsWith("No rule-based risk signals"))
+                    .slice(0, 3)
+                    .map(({ reason, file, check }, idx) => (
                     <View key={idx} style={[styles.reasonRow,{flexWrap:"wrap"}]} testID="risk-reason">
                       <Icon
                         name="ellipse"
@@ -318,7 +323,7 @@ function PrWorkspace({owner,repo,number}:{owner:string;repo:string;number:string
               </Text>
               {detail.checks.length === 0 ? (
                 <Text style={[typography.footnote, { color: colors.textMuted, marginTop: spacing.xs }]}>
-                  {checkCursor?"Checks are still being loaded. Continue checking all pages.":"No status checks have been reported for this pull request."}
+                  {checkCursor ? "Checks loading..." : "No status checks reported."}
                 </Text>
               ) : (
                 <View style={{ marginTop: spacing.xs }}>
