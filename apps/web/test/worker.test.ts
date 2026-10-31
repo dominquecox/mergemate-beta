@@ -1,5 +1,5 @@
 import { readFileSync } from "node:fs";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import worker, {
   ANDROID_PACKAGE_DEV,
   ANDROID_PACKAGE_PROD,
@@ -51,6 +51,42 @@ it("uses the dev binding and strips browser Access credentials", async () => {
   expect(seen?.headers.get("cookie")).toBe("sid=ok");
   expect(res.headers.get("access-control-allow-origin")).toBeNull();
   expect(res.headers.get("set-cookie")).toContain("Path=/__api/auth");
+});
+
+describe("proxy token-mode path hardening", () => {
+  const tokenEnv = () => ({ ...env(), DEV_API_PROXY: "1", CF_ACCESS_CLIENT_ID: "id", CF_ACCESS_CLIENT_SECRET: "secret" });
+  const bad = [
+    "/__api//evil.example/x",
+    "/__api/%2f%2fevil.example/x",
+    "/__api/%2F/evil.example/x",
+    "/__api/%252f%252fevil.example/x",
+    "/__api/\\evil.example/x",
+    "/__api/%5Cevil.example/x",
+    "/__api/https://evil.example/x",
+    "/__api/javascript:alert(1)",
+    "/__api/%0d%0aHost:evil.example",
+  ];
+  for (const path of bad) {
+    it(`rejects ${path} with 400 and never fetches`, async () => {
+      const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("leak"));
+      try {
+        const res = await get(path, tokenEnv());
+        expect(res.status).toBe(400);
+        expect(fetchSpy).not.toHaveBeenCalled();
+      } finally { fetchSpy.mockRestore(); }
+    });
+  }
+  it("sends Access headers only to the pinned origin", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("ok"));
+    try {
+      const res = await get("/__api/v1/health?x=1", tokenEnv());
+      expect(res.status).toBe(200);
+      const sent = fetchSpy.mock.calls.at(0)?.at(0) as Request;
+      expect(new URL(sent.url).origin).toBe("https://api-dev.mergemate.dev");
+      expect(sent.url).toBe("https://api-dev.mergemate.dev/v1/health?x=1");
+      expect(sent.headers.get("CF-Access-Client-Id")).toBe("id");
+    } finally { fetchSpy.mockRestore(); }
+  });
 });
 
 const get = (path: string, e: Env = env(), init?: RequestInit) => worker.fetch(new Request(`https://dev.mergemate.dev${path}`, init), e);

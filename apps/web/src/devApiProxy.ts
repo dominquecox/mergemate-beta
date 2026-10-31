@@ -15,15 +15,32 @@ function rewriteCookie(value: string): string {
   return value.replace(/;\s*Domain=[^;]*/gi, "").replace(/;\s*Path=([^;]*)/gi, (_m, path: string) => `; Path=/__api${path.trim().startsWith("/") ? path.trim() : `/${path.trim()}`}`);
 }
 
+const PINNED_ORIGIN = "https://api-dev.mergemate.dev";
+
+/** Returns the safe upstream path (with query) or null if the request tries to leave the pinned origin. */
+function upstreamPath(pathname: string, search: string): string | null {
+  const raw = pathname.slice("/__api".length) || "/";
+  let decoded = raw;
+  for (let i = 0; i < 3; i++) {
+    try { const next = decodeURIComponent(decoded); if (next === decoded) break; decoded = next; } catch { return null; }
+  }
+  if (!raw.startsWith("/") || raw.startsWith("//") || /\\|\/\//.test(decoded) || decoded.includes("\\") || /^[a-z][a-z0-9+.-]*:/i.test(decoded.replace(/^\/+/, "")) || [...decoded].some((ch) => ch.charCodeAt(0) < 32)) return null;
+  const url = new URL(raw + search, PINNED_ORIGIN);
+  return url.origin === PINNED_ORIGIN ? url.pathname + url.search : null;
+}
+
 export async function devApiProxy(request: Request, env: { DEV_API_PROXY?: string; DEV_API?: Fetcher; CF_ACCESS_CLIENT_ID?: string; CF_ACCESS_CLIENT_SECRET?: string }): Promise<Response> {
   if (env.DEV_API_PROXY !== "1") return new Response("Not found", { status: 404 });
   const incoming = new URL(request.url);
-  const target = new URL((incoming.pathname.slice("/__api".length) || "/") + incoming.search, "https://api-dev.mergemate.dev");
+  const path = upstreamPath(incoming.pathname, incoming.search);
+  if (path === null) return Response.json({ error: { code: "bad_proxy_path" } }, { status: 400 });
+  const target = new URL(path, PINNED_ORIGIN);
+  if (target.origin !== PINNED_ORIGIN) return Response.json({ error: { code: "bad_proxy_path" } }, { status: 400 });
   const headers = cleanHeaders(request.headers);
   let response: Response;
   if (env.DEV_API) {
     response = await env.DEV_API.fetch(new Request(target, { method: request.method, headers, body: request.body, redirect: "manual" }));
-  } else if (env.CF_ACCESS_CLIENT_ID && env.CF_ACCESS_CLIENT_SECRET) {
+  } else if (env.CF_ACCESS_CLIENT_ID && env.CF_ACCESS_CLIENT_SECRET && target.origin === PINNED_ORIGIN) {
     headers.set("CF-Access-Client-Id", env.CF_ACCESS_CLIENT_ID);
     headers.set("CF-Access-Client-Secret", env.CF_ACCESS_CLIENT_SECRET);
     response = await fetch(new Request(target, { method: request.method, headers, body: request.body, redirect: "manual" }));

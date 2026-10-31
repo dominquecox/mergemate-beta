@@ -12,13 +12,25 @@ export function resolveAppName(variant = process.env.APP_VARIANT): string {
   return variant === "development" ? "MergeMate (Dev)" : appJson.expo.name;
 }
 
-export default ({ config }: ConfigContext): ExpoConfig => {
-  const accessId = process.env.EXPO_PUBLIC_CF_ACCESS_CLIENT_ID?.trim();
-  const accessSecret = process.env.EXPO_PUBLIC_CF_ACCESS_CLIENT_SECRET?.trim();
-  const apiBase = process.env.EXPO_PUBLIC_API_BASE_URL?.trim() ?? "";
-  if ((accessId || accessSecret) && (apiBase === "/__api" || !apiBase.includes("api-dev.mergemate.dev"))) {
+/** True when Expo is running a web export or web dev server (`expo export -p web`, `--platform web`, `expo start --web`). */
+export function isWebExport(argv: readonly string[] = process.argv, env: Record<string, string | undefined> = process.env): boolean {
+  if (env.EXPO_PLATFORM === "web" || env.EXPO_OS === "web") return true;
+  return argv.some((arg, i) => arg === "--web" || arg === "--platform=web" || arg === "-p=web" || (arg === "web" && /^(-p|--platform)$/.test(argv[i - 1] ?? "")));
+}
+
+/** CF Access service-token values may only ever be baked into native development/preview builds, never any web export. */
+export function assertAccessTokenAllowed(env: Record<string, string | undefined> = process.env, argv: readonly string[] = process.argv): void {
+  const accessId = env.EXPO_PUBLIC_CF_ACCESS_CLIENT_ID?.trim();
+  const accessSecret = env.EXPO_PUBLIC_CF_ACCESS_CLIENT_SECRET?.trim();
+  if (!accessId && !accessSecret) return;
+  const apiBase = env.EXPO_PUBLIC_API_BASE_URL?.trim() ?? "";
+  if (isWebExport(argv, env) || apiBase === "/__api" || !apiBase.includes("api-dev.mergemate.dev")) {
     throw new Error("CF Access service-token variables are allowed only in native development/preview builds.");
   }
+}
+
+export default ({ config }: ConfigContext): ExpoConfig => {
+  assertAccessTokenAllowed();
   const variant = process.env.APP_VARIANT;
   const base = appJson.expo as unknown as ExpoConfig;
   const host = variant === "development" ? "dev.mergemate.dev" : "app.mergemate.dev";
