@@ -47,16 +47,16 @@ describe("MM-042 responsive web shell", () => {
     expect(s.columnMaxWidth).toBe(720);
   });
 
-  it("shows the sidebar and a wide inbox column on desktop", () => {
+  it("shows the sidebar and a fluid workspace on desktop", () => {
     const s = web(1440, ["(tabs)", "inbox"]);
     expect(s.sidebar).toBe(true);
-    expect(s.columnMaxWidth).toBe(COLUMN_WIDTH.wide);
+    expect(s.columnMaxWidth).toBeUndefined();
   });
 
   it("keeps readable line lengths for text-heavy screens on desktop", () => {
-    expect(web(1440, ["pr", "[owner]", "[repo]", "[number]"]).columnMaxWidth).toBe(COLUMN_WIDTH.wide);
-    expect(web(1440, ["(tabs)", "settings"]).columnMaxWidth).toBe(COLUMN_WIDTH.wide);
-    expect(web(1440, ["(tabs)", "notifications"]).columnMaxWidth).toBe(COLUMN_WIDTH.wide);
+    expect(web(1440, ["pr", "[owner]", "[repo]", "[number]"]).columnMaxWidth).toBeUndefined();
+    expect(web(1440, ["(tabs)", "settings"]).columnMaxWidth).toBeUndefined();
+    expect(web(1440, ["(tabs)", "notifications"]).columnMaxWidth).toBeUndefined();
     expect(web(1440, ["(public)", "privacy"]).columnMaxWidth).toBe(COLUMN_WIDTH.reading);
   });
 

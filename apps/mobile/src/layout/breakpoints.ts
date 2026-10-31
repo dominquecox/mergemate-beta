@@ -79,13 +79,12 @@ export function resolveShell({ width, segments, signedIn, isWeb }: ResolveShellI
   const card = kind === "auth";
   const sidebar = mode === "desktop" && kind === "app" && signedIn;
 
-  let columnMaxWidth: number = COLUMN_WIDTH.reading;
+  let columnMaxWidth: number | undefined = COLUMN_WIDTH.reading;
   if (card) {
     columnMaxWidth = COLUMN_WIDTH.authCard;
-  } else if (mode === "desktop" && kind === "app" && segments[0] === "pr") {
-    columnMaxWidth = COLUMN_WIDTH.wide;
-  } else if (mode === "desktop" && segments[0] === "(tabs)" && WIDE_TAB_SCREENS.has(segments[1] ?? "")) {
-    columnMaxWidth = COLUMN_WIDTH.wide;
+  } else if (sidebar || (mode === "desktop" && kind === "app")) {
+    // Desktop signed-in workspace is fluid next to the sidebar (no artificial gutters).
+    columnMaxWidth = undefined;
   }
 
   return { mode, kind, sidebar, card, columnMaxWidth };

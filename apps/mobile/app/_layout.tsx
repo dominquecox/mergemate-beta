@@ -143,7 +143,7 @@ function AppContent() {
                 styles.webFrame,
                 { backgroundColor: colors.background },
                 shell.columnMaxWidth !== undefined && { maxWidth: shell.columnMaxWidth },
-
+                shell.sidebar && { alignSelf: "stretch" },
                 hasGutter && !shell.card && { borderLeftWidth: 1, borderRightWidth: 1, borderColor: colors.border },
                 shell.card && {
                   ...styles.authCard,

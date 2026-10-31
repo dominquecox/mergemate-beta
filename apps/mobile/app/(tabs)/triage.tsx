@@ -27,7 +27,6 @@ export default function TriageScreen() {
   const [inbox,setInbox]=useState<Notification[]>([]);
   const [metadata,setMetadata]=useState<{ref:string;detail?:PrDetail;failed?:boolean}|null>(null);
   const [queue, setQueue] = useState<TriageItem[]>([]);
-  const [totalCount, setTotalCount] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [undoStack, setUndoStack] = useState<TriageItem[]>([]);
@@ -39,7 +38,7 @@ export default function TriageScreen() {
       const [items,notifications] = await Promise.all([api.getTriageQueue(),api.getNotifications("all").catch(()=>[])]);
       setInbox(notifications);
       setQueue(items);
-      setTotalCount(items.length);
+      setUndoStack([]);
     } catch (e) {
       setError(toUserMessage(e, "We couldn't load your triage deck right now. Please try again."));
     } finally {
@@ -94,20 +93,21 @@ export default function TriageScreen() {
   const ciFailed=checks.some(check=>check.conclusion==='failure');
   const ciPassed=checks.length>0 && checks.every(check=>check.conclusion==='success');
   const ciLabel=!detail?'CI unavailable':checks.length===0?'No checks':ciPassed?'All CI green':ciFailed?'CI failed':'CI pending';
-  const processedCount = totalCount - queue.length;
-  const progressPercent = totalCount > 0 ? (processedCount / totalCount) * 100 : 100;
+  const total = queue.length + undoStack.length;
+  const processedCount = undoStack.length;
+  const progressPercent = total > 0 ? (processedCount / total) * 100 : 100;
 
   return (
     <View style={[styles.root, { backgroundColor: colors.background }]}>
       <Header
         title="Triage Deck"
-        rightAction={<View style={{flexDirection:"row",alignItems:"center",gap:12}}><Text style={[typography.code,{color:colors.textSecondary,fontSize:11}]}>{processedCount} of {totalCount}</Text>{undoStack.length>0 && <TouchableOpacity disabled={saving} onPress={handleUndo} style={styles.undoBtn} accessibilityRole="button" accessibilityLabel="Undo last triage choice"><Icon name="arrow-undo-outline" size={20} color={colors.brandLight}/></TouchableOpacity>}</View>}
-        footer={<View style={{paddingHorizontal:16,paddingBottom:8}}><View style={[styles.progressTrack,{backgroundColor:colors.surfaceElevated}]} accessibilityRole="progressbar" accessibilityLabel="Triage progress" accessibilityValue={{min:0,max:totalCount||1,now:processedCount}}><View style={[styles.progressBar,{backgroundColor:colors.brand,width:`${progressPercent}%`}]}/></View></View>}
+        rightAction={<View style={{flexDirection:"row",alignItems:"center",gap:12}}><Text style={[typography.code,{color:colors.textSecondary,fontSize:11}]}>{processedCount} of {total}</Text>{undoStack.length>0 && <TouchableOpacity disabled={saving} onPress={handleUndo} style={styles.undoBtn} accessibilityRole="button" accessibilityLabel="Undo last triage choice"><Icon name="arrow-undo-outline" size={20} color={colors.brandLight}/></TouchableOpacity>}</View>}
+        footer={<View style={{paddingHorizontal:16,paddingBottom:8}}><View style={[styles.progressTrack,{backgroundColor:colors.surfaceElevated}]} accessibilityRole="progressbar" accessibilityLabel="Triage progress" accessibilityValue={{min:0,max:total||1,now:processedCount}}><View style={[styles.progressBar,{backgroundColor:colors.brand,width:`${progressPercent}%`}]}/></View></View>}
       />
 
       <ScrollView contentContainerStyle={{padding:16,paddingBottom:32,flexGrow:1}}>
 
-        {isLoading ? <LoadingState title="Loading triage deck..." message="Sorting your pull requests by review priority."/> : error && !currentItem ? <ErrorState title="Could not load triage deck" message={error} onRetry={loadQueue}/> : !currentItem ? <EmptyState icon="checkmark-done-outline" title="All Caught Up!" message={`You've sorted all ${totalCount} pull requests.`} actionTitle="Reload Deck" onAction={loadQueue}/> : (
+        {isLoading ? <LoadingState title="Loading triage deck..." message="Sorting your pull requests by review priority."/> : error && !currentItem ? <ErrorState title="Could not load triage deck" message={error} onRetry={loadQueue}/> : !currentItem ? <EmptyState icon="checkmark-done-outline" title="All Caught Up!" message={total > 0 ? `You've sorted all ${total} pull requests.` : "No pull requests waiting to be triaged."} actionTitle="Reload Deck" onAction={loadQueue}/> : (
           <View style={{marginTop:16}}>
             <TriageDigestBar queue={queue}/>
             {!!error && <Text accessibilityRole="alert" style={[typography.footnote,{color:colors.riskHigh}]}>{error}</Text>}
