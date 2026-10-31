@@ -1,3 +1,4 @@
+import { sessionEndedMessage } from "../auth/session-ended";
 import {cancelReadout} from "../readout/active";
 import {hideSessionForPageCache,revealSessionAfterCheck} from "../auth/page-session";
 import {onSessionChange,hasPendingLogout,notifySessionChange,type SessionChange} from "../auth/session-events";
@@ -59,6 +60,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signedInRef = useRef(false);
   signedInRef.current = user !== null;
+  const demoRef = useRef(false);
+  demoRef.current = isDemo;
   // Set once a sign-in completes, so a slower start-up check cannot overwrite it.
   const authVersion=useRef(0);
 
@@ -130,6 +133,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     api.setUnauthorizedHandler(() => {
       if (!signedInRef.current) return;
+      const wasDemo = demoRef.current;
       cancelReadout();
       ++authVersion.current;setIsLoading(false);
       setUser(null);
@@ -138,7 +142,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       StorageService.setDemoFlag(false).catch(() => undefined);
       // The server removed this browser's push row with the session; stop the browser subscription too.
       if (isWeb && !api.isMock) dropWebPush().catch(() => undefined);
-      setError("Your session has ended. Sign in again to continue.");
+      setError(sessionEndedMessage(wasDemo));
     });
     return () => api.setUnauthorizedHandler(null);
   }, []);
