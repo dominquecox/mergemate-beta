@@ -91,11 +91,8 @@ export default function HighlightScreen() {
       <ScrollView contentContainerStyle={{ padding: spacing.base, paddingBottom: 60 }}>
 
         {/* Intro Card */}
-        <Section title="Screenshot" icon="image-outline">
-          <Text style={[typography.headline, { color: colors.text }]} accessibilityRole="header">
-            Meta AI Vision Analysis
-          </Text>
-          <Text style={[typography.body, { color: colors.textSecondary, marginTop: 4 }]}>
+        <Section title="Meta AI Vision Analysis" icon="image-outline">
+          <Text style={[typography.body, { color: colors.textSecondary }]}>
             Capture or upload a PR screenshot or UI diff. Get an explanation and suggested areas to inspect. Boxes are approximate AI suggestions, not precise measurements.
           </Text>
 
