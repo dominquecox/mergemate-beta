@@ -6,6 +6,7 @@ import { ApiClientError, messageForCode } from "../api/errors";
 import { useTheme } from "../context/ThemeContext";
 import { modelDisplayName } from "../format/model";
 import { narrationSentences } from "../readout/text";
+import { checklistMarkdown } from "../workspace/checklist";
 import { Button } from "./Button";
 import { Icon } from "./Icon";
 import { ReadoutControls } from "./ReadoutControls";
@@ -73,6 +74,14 @@ export function ReviewPlanCard({ owner, repo, number }: { owner: string; repo: s
       setNote("Could not copy. Select the text instead.");
     }
   };
+  const copyChecklist = async () => {
+    if (!plan) return;
+    try {
+      setNote((await copyText(checklistMarkdown(plan))) === "copied" ? "Checklist copied as Markdown. MergeMate never posts it." : "");
+    } catch {
+      setNote("Could not copy. Select the text instead.");
+    }
+  };
   return (
     <Panel title="Review plan" icon="list-outline">
       {!plan ? (
@@ -102,6 +111,7 @@ export function ReviewPlanCard({ owner, repo, number }: { owner: string; repo: s
               <Text style={[typography.callout, { color: colors.text, flex: 1 }]}>{item}</Text>
             </View>
           ))}
+          <Button title={Platform.OS === "web" ? "Copy checklist" : "Share checklist"} variant="secondary" onPress={copyChecklist} style={{ alignSelf: "flex-start" }} />
           <Text style={[typography.caption, { color: colors.textMuted, letterSpacing: 0.4, marginTop: 4 }]}>DRAFT COMMENT</Text>
           <Text selectable style={[typography.callout, { color: colors.text, padding: 10, borderRadius: 8, backgroundColor: colors.surfaceSecondary }]}>{plan.draftComment}</Text>
           <Button title={Platform.OS === "web" ? "Copy comment" : "Share comment"} variant="secondary" onPress={copy} style={{ alignSelf: "flex-start" }} />
