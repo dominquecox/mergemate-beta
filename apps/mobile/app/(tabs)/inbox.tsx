@@ -25,6 +25,7 @@ import { Icon } from "../../src/components/Icon";
 import { useLayout } from "../../src/layout/useLayout";
 
 import { usePagedList } from "../../src/hooks/usePagedList";
+import { groupByRepo, type InboxRow } from "../../src/workspace/inboxGroups";
 
 export default function InboxScreen(){const {user}=useAuth();return user?<InboxBootstrap key={user.id}/>:<LoadingState title="Loading your inbox..." message="Checking your account."/>;}
 function InboxBootstrap(){
@@ -51,12 +52,14 @@ function InboxWorkspace({initialFilter}:{initialFilter:NotificationFilter}) {
   const actionLock=useRef(false),undoGeneration=useRef(0),retryActions=useRef(new Map<string,{key:string;operationId:string}>()),undoRetry=useRef<{expected:string;id:string}|null>(null);
   useEffect(()=>{const version=view.current,generation=undoGeneration.current;api.getInboxUndo().then(saved=>{if(version===view.current&&generation===undoGeneration.current&&saved)setUndoItem(saved);},()=>{});},[]);
   const items=sourceItems.filter(item=>{const removed=hidden[item.id];return !removed||Date.parse(item.updatedAt)>Date.parse(removed.revision)||(removed.until!==undefined&&removed.until<=Date.now());}).sort((a,b)=>Date.parse(b.updatedAt)-Date.parse(a.updatedAt)||(a.id<b.id?-1:a.id>b.id?1:0));
+  const [grouped,setGrouped]=useState(false);
+  const rows:InboxRow[]=grouped?groupByRepo(items):items.map(item=>({type:"item",item}));
   const persist=(next:NotificationFilter)=>{
     if(isDemo)return;setPrefSaving(true);setPrefMessage("");const version=view.current;
     preferenceQueue.current=preferenceQueue.current.catch(()=>{}).then(async()=>{if(version!==view.current)return;try{await api.setInboxPreference(next);if(version===view.current){setPrefError(false);setPrefMessage("Filter saved for next time.");}}catch{if(version===view.current)setPrefError(true);}finally{if(version===view.current)setPrefSaving(false);}});
   };
   const selectFilter=(next:NotificationFilter)=>{if(next===filter)return;view.current++;undoGeneration.current++;actionLock.current=false;setActing(false);setUndoItem(null);setFilter(next);persist(next);};
-  const listRef=useRef<FlatList<Notification>>(null),scrollOffset=useRef(0),listActive=useRef(false);
+  const listRef=useRef<FlatList<InboxRow>>(null),scrollOffset=useRef(0),listActive=useRef(false);
   const focused=useRef(false);
   useFocusEffect(useCallback(()=>{
     let active=true;listActive.current=true;
@@ -160,7 +163,7 @@ function InboxWorkspace({initialFilter}:{initialFilter:NotificationFilter}) {
         {(["all", "review", "mentions", "mine"] as NotificationFilter[]).map((tab) => {
           const isSelected = filter === tab;
           let label = "All";
-          if (tab === "review") label = "Needs review";
+          if (tab === "review") label = "Needs my review";
           if (tab === "mentions") label = "Mentions";
           if (tab === "mine") label = "Mine";
 
@@ -242,12 +245,13 @@ function InboxWorkspace({initialFilter}:{initialFilter:NotificationFilter}) {
         <FlatList
           ref={listRef}
           onScroll={event=>{if(listActive.current)scrollOffset.current=event.nativeEvent.contentOffset.y;}} scrollEventThrottle={16}
-          key={isDesktop?'desktop':'phone'} numColumns={isDesktop?2:1} columnWrapperStyle={isDesktop?{gap:16}:undefined}
-          data={items} keyExtractor={item=>item.id} initialNumToRender={8} maxToRenderPerBatch={8} windowSize={5}
+          key={`${isDesktop?'desktop':'phone'}:${grouped?'grouped':'flat'}`} numColumns={isDesktop&&!grouped?2:1} columnWrapperStyle={isDesktop&&!grouped?{gap:16}:undefined}
+          data={rows} keyExtractor={row=>row.type==='header'?`repo:${row.repo}`:row.item.id} initialNumToRender={8} maxToRenderPerBatch={8} windowSize={5}
           contentContainerStyle={{padding:isDesktop?24:spacing.base,paddingBottom:80}}
           refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} tintColor={colors.brandLight}/>}
           onEndReached={()=>{if(!error)void more();}} onEndReachedThreshold={0.4}
           ListHeaderComponent={<>
+          <TouchableOpacity onPress={()=>setGrouped(value=>!value)} accessibilityRole="switch" accessibilityLabel="Group by repository" accessibilityState={{checked:grouped}} style={{alignSelf:'flex-start',flexDirection:'row',alignItems:'center',gap:6,minHeight:44,paddingHorizontal:12,marginBottom:8,borderRadius:radius.md,backgroundColor:grouped?colors.brandSubtle:colors.surfaceElevated}}><Icon name="folder-outline" size={14} color={grouped?colors.brandLight:colors.textSecondary}/><Text style={[typography.footnote,{color:grouped?colors.brandLight:colors.textSecondary,fontWeight:'600'}]}>{grouped?"Grouped by repo":"Group by repo"}</Text></TouchableOpacity>
           {/* Summary Strip Card */}
           <View
             style={[styles.summaryStrip, { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.lg }, { padding:16, marginBottom:16 }]}
@@ -275,7 +279,7 @@ function InboxWorkspace({initialFilter}:{initialFilter:NotificationFilter}) {
 
 </>}
           ListFooterComponent={hasMore || error?<TouchableOpacity disabled={isRefreshing} onPress={()=>void more()} accessibilityRole="button" style={{padding:16,minHeight:44}}><Text style={{color:colors.brandLight}}>{isRefreshing?'Loading…':error?'Retry loading pull requests':'Load more pull requests'}</Text></TouchableOpacity>:undefined}
-          renderItem={({item})=>(
+          renderItem={({item:row})=>row.type==='header'?(<View testID={`inbox-repo-${row.repo}`} accessibilityRole="header" accessibilityLabel={`${row.repo}, ${row.count} pull request${row.count===1?'':'s'}`} style={{flexDirection:'row',alignItems:'center',gap:8,marginBottom:12}}><Icon name="folder-outline" size={14} color={colors.textMuted}/><Text style={[typography.subhead,{color:colors.text,fontWeight:'700',flexShrink:1}]}>{row.repo}</Text><Text style={[typography.caption,{color:colors.textSecondary}]}>{row.count}</Text></View>):((item:Notification)=>(
               <View
                 key={item.id}
                 style={[
@@ -349,7 +353,7 @@ function InboxWorkspace({initialFilter}:{initialFilter:NotificationFilter}) {
                   </View>
                 </View>
               </View>
-)}
+))(row.item)}
         />
       )}
     </View>
