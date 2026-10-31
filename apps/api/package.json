@@ -12,7 +12,8 @@
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "test": "vitest run",
-    "check:env": "node scripts/check-env.mjs"
+    "check:env": "node scripts/check-env.mjs",
+    "check:dev-ai": "node scripts/check-dev-ai.mjs"
   },
   "dependencies": {
     "@mergemate/contracts": "*",
