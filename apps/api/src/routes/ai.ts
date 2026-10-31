@@ -1,10 +1,6 @@
 import { PrQuestion, PrRef } from "@mergemate/contracts";
 import { type Context, Hono } from "hono";
 import {
-  FIXTURE_ANSWER,
-  FIXTURE_PLAN,
-  FIXTURE_RISK,
-  FIXTURE_SUMMARY,
   actionHeaders,
   actionLimits,
   askPr,
@@ -16,6 +12,7 @@ import {
   prRefString,
   summarizePr,
 } from "./ai-engine";
+import { demoAiFor } from "./ai-demo-fixtures";
 import type { AiDeps, PrDataSource, PrRefParts } from "./ai-engine";
 import type { ModelTransport } from "../ai/provider";
 import { requireBinding } from "../config";
@@ -64,7 +61,7 @@ export const createAiRouter = (deps: AiRouterDeps = {}) => {
     const session = c.get("session");
     const ref = parseRef(c.req.param("owner"), c.req.param("repo"), c.req.param("number"));
     if (session.demo) {
-      return c.json(FIXTURE_SUMMARY, 200, actionHeaders({ limit: 30, remaining: 30 }));
+      return c.json(demoAiFor(ref).summary, 200, actionHeaders({ limit: 30, remaining: 30 }));
     }
     const result = await summarizePr(aiDeps(c), session, ref, c.env);
     return c.json(result.body, 200, actionHeaders(result));
@@ -74,7 +71,7 @@ export const createAiRouter = (deps: AiRouterDeps = {}) => {
     const session = c.get("session");
     const ref = parseRef(c.req.param("owner"), c.req.param("repo"), c.req.param("number"));
     if (session.demo) {
-      return c.json(FIXTURE_RISK, 200, actionHeaders({ limit: 30, remaining: 30 }));
+      return c.json(demoAiFor(ref).risk, 200, actionHeaders({ limit: 30, remaining: 30 }));
     }
     const result = await assessPrRisk(aiDeps(c), session, ref, c.env);
     return c.json(result.body, 200, actionHeaders(result));
@@ -84,7 +81,7 @@ export const createAiRouter = (deps: AiRouterDeps = {}) => {
     const session = c.get("session");
     const ref = parseRef(c.req.param("owner"), c.req.param("repo"), c.req.param("number"));
     if (session.demo) {
-      return c.json(FIXTURE_PLAN, 200, actionHeaders({ limit: 30, remaining: 30 }));
+      return c.json(demoAiFor(ref).plan, 200, actionHeaders({ limit: 30, remaining: 30 }));
     }
     const result = await planReview(aiDeps(c), session, ref, c.env);
     return c.json(result.body, 200, actionHeaders(result));
@@ -96,7 +93,7 @@ export const createAiRouter = (deps: AiRouterDeps = {}) => {
     const body: unknown = await c.req.json().catch(() => undefined);
     if (session.demo) {
       if (!PrQuestion.safeParse(body).success) throw new ApiError("validation_failed", "Ask a question of 3 to 300 characters.");
-      return c.json(FIXTURE_ANSWER, 200, actionHeaders({ limit: 30, remaining: 30 }));
+      return c.json(demoAiFor(ref).answer, 200, actionHeaders({ limit: 30, remaining: 30 }));
     }
     const result = await askPr(aiDeps(c), session, ref, body, c.env);
     return c.json(result.body, 200, actionHeaders(result));

@@ -169,3 +169,17 @@ describe("GET /v1/ai/engine", () => {
     expect(JSON.stringify(body)).not.toContain("never-shown");
   });
 });
+
+describe("demo fixtures per sample PR", () => {
+  it("match the sample pull request and validate against the contracts", async () => {
+    const { demoAiFor } = await import("../src/routes/ai-demo-fixtures");
+    const { PrRisk, PrSummary } = await import("@mergemate/contracts");
+    const known = demoAiFor({ owner: "acme-demo", repo: "payments-api", number: 42 });
+    expect(PrSummary.parse(known.summary).whatChanged).toContain("card charges");
+    expect(PrRisk.parse(known.risk).level).toBe("high");
+    expect(ReviewPlan.parse(known.plan).readingOrder[0]?.file).toBe("src/charges/retry.ts");
+    expect(PrAnswer.parse(known.answer).citations.length).toBeGreaterThan(0);
+    const other = demoAiFor({ owner: "octo", repo: "demo", number: 7 });
+    expect(other.summary.suggestedFocus).toEqual(["src/sync.ts"]);
+  });
+});

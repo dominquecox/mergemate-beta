@@ -84,7 +84,7 @@ export function ReviewPlanCard({ owner, repo, number }: { owner: string; repo: s
         </>
       ) : (
         <>
-          <ReadoutControls label="Review plan" sentences={narrationSentences([...plan.readingOrder.map((f) => `${f.file}. ${f.why}`), ...plan.verify])} />
+          <ReadoutControls label="Listen to review plan" sentences={narrationSentences([...plan.readingOrder.map((f) => `${f.file}. ${f.why}`), ...plan.verify])} />
           <Text style={[typography.caption, { color: colors.textMuted, letterSpacing: 0.4 }]}>READ IN THIS ORDER</Text>
           {plan.readingOrder.map((item, index) => (
             <View key={item.file} style={{ flexDirection: "row", gap: 8 }}>
