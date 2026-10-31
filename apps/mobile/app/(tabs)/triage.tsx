@@ -15,6 +15,7 @@ import { Avatar } from "../../src/components/Avatar";
 import { RiskBadge } from "../../src/components/RiskBadge";
 import { relativeTime } from "../../src/format/activity";
 import { Icon } from "../../src/components/Icon";
+import { TriageDigestBar } from "../../src/components/TriageDigestBar";
 import { triggerAndroidHaptic } from "../../src/platform/android";
 
 export default function TriageScreen() {
@@ -108,6 +109,7 @@ export default function TriageScreen() {
 
         {isLoading ? <LoadingState title="Loading triage deck..." message="Sorting your pull requests by review priority."/> : error && !currentItem ? <ErrorState title="Could not load triage deck" message={error} onRetry={loadQueue}/> : !currentItem ? <EmptyState icon="checkmark-done-outline" title="All Caught Up!" message={`You've sorted all ${totalCount} pull requests.`} actionTitle="Reload Deck" onAction={loadQueue}/> : (
           <View style={{marginTop:16}}>
+            <TriageDigestBar queue={queue}/>
             {!!error && <Text accessibilityRole="alert" style={[typography.footnote,{color:colors.riskHigh}]}>{error}</Text>}
             <View style={{height:12,marginHorizontal:24,backgroundColor:colors.surfaceElevated,borderRadius:16}}/>
             <View style={{height:12,marginHorizontal:12,marginTop:-4,backgroundColor:colors.surfaceSecondary,borderRadius:16}}/>
