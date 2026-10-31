@@ -6,8 +6,8 @@ import { ApiClient } from "./client";
 import { type ApiMode, resolveApiConfig } from "./config";
 import { createApiClient } from "./factory";
 
-// Expo inlines this exact expression at build time. __DEV__ is true only for development bundles.
-const isDevBuild = typeof __DEV__ !== "undefined" ? __DEV__ : false;
+// Expo inlines this exact expression at build time. __DEV__ is true for development bundles; /__api is dev-only proxy.
+const isDevBuild = (typeof __DEV__ !== "undefined" && Boolean(__DEV__)) || process.env.EXPO_PUBLIC_API_BASE_URL === "/__api";
 
 export const apiMode: ApiMode = resolveApiConfig(process.env.EXPO_PUBLIC_API_BASE_URL, isDevBuild);
 
