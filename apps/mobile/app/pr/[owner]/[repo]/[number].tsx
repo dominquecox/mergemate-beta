@@ -221,10 +221,77 @@ function PrWorkspace({owner,repo,number}:{owner:string;repo:string;number:string
             {detail.summary && (
               <View style={{ marginTop: spacing.sm }}>
                 <AIBlock title="AI Summary" coverage={detail.summary.coverage} model={detail.summary.model}>
-                  <SummarySection title="What changed" icon="swap-horizontal-outline"><ExecutiveSummaryText text={detail.summary.whatChanged} /></SummarySection>
-                  <SummarySection title="Why it matters" icon="shield-outline"><ExecutiveSummaryText text={detail.summary.whyItMatters} /></SummarySection>
+                  {/* Executive Impact Callout */}
+                  {!!detail.summary.whyItMatters && (
+                    <View
+                      style={{
+                        backgroundColor: colors.brandSubtle,
+                        borderLeftWidth: 3,
+                        borderLeftColor: colors.brandLight,
+                        borderRadius: radius.md,
+                        padding: 12,
+                        marginBottom: 4,
+                      }}
+                    >
+                      <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 4 }}>
+                        <Icon name="shield-checkmark-outline" size={14} color={colors.brandLight} />
+                        <Text style={[typography.caption, { color: colors.brandLight, fontWeight: "700", letterSpacing: 0.5 }]}>
+                          EXECUTIVE IMPACT
+                        </Text>
+                      </View>
+                      <Text style={[typography.callout, { color: colors.text, lineHeight: 20 }]}>
+                        {detail.summary.whyItMatters.replace(/^[\s•\-*]+/, "").trim()}
+                      </Text>
+                    </View>
+                  )}
+
+                  {!!detail.summary.whatChanged && (
+                    <SummarySection title="What changed" icon="swap-horizontal-outline">
+                      <ExecutiveSummaryText text={detail.summary.whatChanged} />
+                    </SummarySection>
+                  )}
+
                   {detail.summary.suggestedFocus.length > 0 && (
-                    <SummarySection title="Suggested focus" icon="scan-outline">{detail.summary.suggestedFocus.slice(0, 3).map((focus,index)=><Text key={index} style={[typography.callout,{color:colors.text}]}>• {focus}</Text>)}</SummarySection>
+                    <SummarySection title="Suggested focus" icon="scan-outline">
+                      <View style={{ gap: 8 }}>
+                        {detail.summary.suggestedFocus.slice(0, 3).map((focus, index) => {
+                          const cleanFocus = focus.replace(/^[\s•\-*]+/, "").trim();
+                          return (
+                            <View
+                              key={index}
+                              style={{
+                                flexDirection: "row",
+                                alignItems: "flex-start",
+                                gap: 10,
+                                paddingVertical: 10,
+                                paddingHorizontal: 12,
+                                backgroundColor: colors.surfaceElevated,
+                                borderRadius: radius.md,
+                                borderWidth: 1,
+                                borderColor: colors.border,
+                              }}
+                            >
+                              <View
+                                style={{
+                                  width: 20,
+                                  height: 20,
+                                  borderRadius: 10,
+                                  backgroundColor: colors.brandSubtle,
+                                  alignItems: "center",
+                                  justifyContent: "center",
+                                  marginTop: 1,
+                                }}
+                              >
+                                <Icon name="search-outline" size={12} color={colors.brandLight} />
+                              </View>
+                              <Text style={[typography.callout, { color: colors.text, flex: 1, lineHeight: 20 }]}>
+                                {cleanFocus}
+                              </Text>
+                            </View>
+                          );
+                        })}
+                      </View>
+                    </SummarySection>
                   )}
                 </AIBlock>
               </View>
@@ -285,29 +352,92 @@ function PrWorkspace({owner,repo,number}:{owner:string;repo:string;number:string
                   <RiskBadge level={detail.risk.level} secretWarning={detail.secretWarning} />
                 </View>
 
-                <View style={{ marginTop: spacing.sm }}>
+                <View style={{ marginTop: spacing.sm, gap: 8 }}>
                   {riskEvidence(detail.risk, detail.files, detail.checks)
                     .filter((item, _, all) => all.length === 1 || !item.reason.startsWith("No rule-based risk signals"))
                     .slice(0, 3)
-                    .map(({ reason, file, check }, idx) => (
-                    <View key={idx} style={[styles.reasonRow,{flexWrap:"wrap"}]} testID="risk-reason">
-                      <Icon
-                        name="ellipse"
-                        size={8}
-                        color={detail.risk!.level === "high" ? colors.riskHigh : detail.risk!.level === "medium" ? colors.riskMedium : colors.riskLow}
-                        style={styles.reasonDot}
-                      />
-                      <Text style={[typography.body, { color: colors.text, flex: 1 }]}>{reason}</Text>
-                      {!!file&&<TouchableOpacity accessibilityRole="button" accessibilityLabel={`Open ${file}, the file behind this reason`} onPress={()=>jumpToFile(file)} style={{minHeight:44,justifyContent:"center",paddingLeft:16,width:"100%"}}><Text style={[typography.footnote,{color:colors.brandLight,textDecorationLine:"underline"}]} numberOfLines={1}>Because of {file}</Text></TouchableOpacity>}
-                      {!!check&&<Text style={[typography.footnote,{color:colors.textSecondary,paddingLeft:16,width:"100%"}]}>Failing check: {check}</Text>}
-                    </View>
-                  ))}
+                    .map(({ reason, file, check }, idx) => {
+                      const cleanReason = reason.replace(/^[\s•\-*]+/, "").trim();
+                      const isHigh = detail.risk!.level === "high";
+                      const isMedium = detail.risk!.level === "medium";
+                      const badgeBg = isHigh ? colors.riskHighBg : isMedium ? colors.riskMediumBg : colors.riskLowBg;
+                      const badgeColor = isHigh ? colors.riskHigh : isMedium ? colors.riskMedium : colors.riskLow;
+                      const iconName = isHigh ? "alert-circle" : isMedium ? "warning" : "checkmark-circle";
+                      return (
+                        <View
+                          key={idx}
+                          style={{
+                            flexDirection: "row",
+                            alignItems: "flex-start",
+                            gap: 10,
+                            paddingVertical: 10,
+                            paddingHorizontal: 12,
+                            backgroundColor: colors.surfaceElevated,
+                            borderRadius: radius.md,
+                            borderWidth: 1,
+                            borderColor: colors.border,
+                          }}
+                          testID="risk-reason"
+                        >
+                          <View
+                            style={{
+                              width: 22,
+                              height: 22,
+                              borderRadius: 11,
+                              backgroundColor: badgeBg,
+                              alignItems: "center",
+                              justifyContent: "center",
+                              marginTop: 1,
+                            }}
+                          >
+                            <Icon name={iconName} size={14} color={badgeColor} />
+                          </View>
+                          <View style={{ flex: 1 }}>
+                            <Text style={[typography.callout, { color: colors.text, lineHeight: 20 }]}>
+                              {cleanReason}
+                            </Text>
+                            {!!file && (
+                              <TouchableOpacity
+                                accessibilityRole="button"
+                                accessibilityLabel={`Open ${file}, the file behind this reason`}
+                                onPress={() => jumpToFile(file)}
+                                style={{ minHeight: 32, justifyContent: "center", marginTop: 4 }}
+                              >
+                                <Text style={[typography.caption, { color: colors.brandLight, fontWeight: "600" }]} numberOfLines={1}>
+                                  View {file} ↗
+                                </Text>
+                              </TouchableOpacity>
+                            )}
+                            {!!check && (
+                              <Text style={[typography.caption, { color: colors.riskHigh, marginTop: 4 }]}>
+                                Failing check: {check}
+                              </Text>
+                            )}
+                          </View>
+                        </View>
+                      );
+                    })}
                 </View>
 
                 {detail.risk.quality?.needsCloserLook && (
-                  <View style={{marginTop:12}}>
-                    <Text style={[typography.subhead,{color:colors.text,fontWeight:"600"}]} accessibilityRole="header">Needs a closer look</Text>
-                    {detail.risk.quality.reasons.map((reason,idx)=><Text key={idx} style={[typography.footnote,{color:colors.textSecondary,marginTop:4}]}>{reason}</Text>)}
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      gap: 8,
+                      paddingVertical: 8,
+                      paddingHorizontal: 12,
+                      backgroundColor: colors.surfaceElevated,
+                      borderRadius: radius.md,
+                      borderWidth: 1,
+                      borderColor: colors.border,
+                      marginTop: 8,
+                    }}
+                  >
+                    <Icon name="eye-outline" size={16} color={colors.textSecondary} />
+                    <Text style={[typography.footnote, { color: colors.textSecondary, flex: 1 }]}>
+                      {detail.risk.quality.reasons.join(" · ")}
+                    </Text>
                   </View>
                 )}
 

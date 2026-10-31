@@ -125,11 +125,26 @@ export function BlastRadiusChips({ files }: { files: readonly PrFile[] }) {
           <Text style={[typography.caption, { color: colors.textSecondary, marginBottom: 8 }]}>
             {selected.summary}
           </Text>
-          <View style={{ gap: 4 }}>
+          <View style={{ gap: 6 }}>
             {selected.files.map((file) => (
-              <Text key={file} selectable style={[typography.caption, { color: colors.brandLight }]}>
-                • {file}
-              </Text>
+              <View
+                key={file}
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: 6,
+                  paddingVertical: 4,
+                  paddingHorizontal: 8,
+                  backgroundColor: colors.surfaceElevated,
+                  borderRadius: radius.sm,
+                  alignSelf: "flex-start",
+                }}
+              >
+                <Icon name="document-text-outline" size={12} color={colors.brandLight} />
+                <Text selectable style={[typography.code, { color: colors.text, fontSize: 12 }]}>
+                  {file}
+                </Text>
+              </View>
             ))}
           </View>
         </View>
