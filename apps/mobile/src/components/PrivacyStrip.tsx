@@ -1,0 +1,38 @@
+import React, { useState } from "react";
+import { TouchableOpacity, View } from "react-native";
+import { Text } from "./Text";
+import { Icon } from "./Icon";
+import { PRIVACY_FACTS } from "../workspace/privacy";
+import { useTheme } from "../context/ThemeContext";
+
+export function PrivacyStrip({ onOpenSettings }: { onOpenSettings: () => void }) {
+  const { colors, typography, radius, spacing } = useTheme();
+  const [open, setOpen] = useState(false);
+  return (
+    <View testID="privacy-strip" style={{ marginBottom: spacing.sm }}>
+      <TouchableOpacity
+        accessibilityRole="button"
+        accessibilityLabel="Read-only. MergeMate cannot merge, approve or comment. What we send to the model"
+        accessibilityState={{ expanded: open }}
+        aria-expanded={open}
+        onPress={() => setOpen((v) => !v)}
+        style={{ flexDirection: "row", alignItems: "center", gap: 8, minHeight: 44, paddingHorizontal: 12, borderRadius: radius.lg, backgroundColor: colors.surfaceElevated }}
+      >
+        <Icon name="lock-closed" size={14} color={colors.riskLow} />
+        <Text style={[typography.footnote, { color: colors.textSecondary, flex: 1 }]}>Read-only: MergeMate cannot merge, approve or comment</Text>
+        <Icon name={open ? "chevron-up" : "chevron-down"} size={16} color={colors.textSecondary} />
+      </TouchableOpacity>
+      {open && (
+        <View testID="privacy-sheet" style={{ padding: 12, gap: 8 }}>
+          <Text style={[typography.subhead, { color: colors.text, fontWeight: "600" }]} accessibilityRole="header">What we send to the model</Text>
+          {PRIVACY_FACTS.map((fact) => (
+            <Text key={fact} style={[typography.footnote, { color: colors.textSecondary }]}>{`• ${fact}`}</Text>
+          ))}
+          <TouchableOpacity accessibilityRole="button" accessibilityLabel="Open Settings to manage AI choices or delete your data" onPress={onOpenSettings} style={{ minHeight: 44, justifyContent: "center" }}>
+            <Text style={[typography.footnote, { color: colors.brandLight, textDecorationLine: "underline" }]}>Manage AI choices or delete my data</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+    </View>
+  );
+}
