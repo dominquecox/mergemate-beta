@@ -28,6 +28,7 @@ export async function devApiProxy(request: Request, env: { DEV_API_PROXY?: strin
     headers.set("CF-Access-Client-Secret", env.CF_ACCESS_CLIENT_SECRET);
     response = await fetch(new Request(target, { method: request.method, headers, body: request.body, redirect: "manual" }));
   } else return Response.json({ error: { code: "proxy_not_configured" } }, { status: 503 });
+  if (response.status === 101) return response;
   const output = new Headers(response.headers);
   for (const name of [...output.keys()]) if (name.toLowerCase().startsWith("access-control-")) output.delete(name);
   const cookies = (output as Headers & { getSetCookie?: () => string[] }).getSetCookie?.() ?? [];
