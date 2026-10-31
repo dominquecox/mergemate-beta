@@ -25,6 +25,7 @@ import { Icon } from "../../src/components/Icon";
 import { AiEngineGroup } from "../../src/components/AiEngineGroup";
 import { BrowserNotificationsRow } from "../../src/components/BrowserNotificationsRow";
 import { billingStatusLabel } from "../../src/config/billing";
+import { META_KEY_COPY } from "../../src/config/metaKeyCopy";
 
 export default function SettingsScreen() {
   const router = useRouter();
@@ -141,7 +142,7 @@ export default function SettingsScreen() {
     try {
       await api.saveMetaKey(metaKeyInput);
       setMetaKey({ configured: true });
-      setNotice("Your Meta key is saved. It is never shown again.");
+      setNotice(META_KEY_COPY.saved);
     } catch (e) {
       setNotice(toUserMessage(e, "Couldn't save your Meta key."));
     } finally {
@@ -157,6 +158,7 @@ export default function SettingsScreen() {
     try {
       await api.removeMetaKey();
       setMetaKey({ configured: false });
+      setNotice(META_KEY_COPY.removed);
     } catch (e) {
       setNotice(toUserMessage(e, "Couldn't remove your Meta key."));
     } finally {
@@ -240,8 +242,8 @@ export default function SettingsScreen() {
           </SettingsGroup>
           {!isDemo && <AiEngineGroup/>}
           {metaKey && !isDemo && <SettingsGroup title="Your Meta key">
-            <SettingsRow first label={metaKey.configured?'Using your key':'Key not configured'} detail="Stored encrypted and never shown again" icon="key-outline"/>
-            {Platform.OS==='web'?<View style={{padding:16,paddingTop:0}}><TextInput value={metaKeyInput} onChangeText={setMetaKeyInput} placeholder={metaKey.configured?'Paste a replacement key':'Paste your Meta key'} placeholderTextColor={colors.textSecondary} secureTextEntry autoCapitalize="none" autoCorrect={false} spellCheck={false} autoComplete="off" accessibilityLabel="Meta key" style={[styles.keyInput,{color:colors.text,backgroundColor:colors.surfaceElevated,borderColor:colors.border,borderRadius:12}]}/><Button title="Save key" variant="secondary" onPress={saveMetaKey} loading={metaKeyBusy} disabled={metaKeyInput.trim().length===0} style={{marginTop:8}}/>{metaKey.configured && <Button title="Remove key" variant="ghost" onPress={removeMetaKey} disabled={metaKeyBusy || saving || preferenceBusy}/>}</View>:<Text style={[typography.caption,{color:colors.textSecondary,padding:16,paddingTop:0}]}>Manage your key in the web app.</Text>}
+            <SettingsRow first label={metaKey.configured?META_KEY_COPY.usingKey:META_KEY_COPY.noKey} detail="Stored encrypted and never shown again" icon="key-outline"/>
+            {Platform.OS==='web'?<View style={{padding:16,paddingTop:0}}><TextInput value={metaKeyInput} onChangeText={setMetaKeyInput} placeholder={metaKey.configured?'Paste a replacement key':'Paste your Meta key'} placeholderTextColor={colors.textSecondary} secureTextEntry autoCapitalize="none" autoCorrect={false} spellCheck={false} autoComplete="off" accessibilityLabel="Meta key" style={[styles.keyInput,{color:colors.text,backgroundColor:colors.surfaceElevated,borderColor:colors.border,borderRadius:12}]}/><Text style={[typography.caption,{color:colors.textSecondary,marginTop:8}]} accessibilityRole="text">{metaKeyBusy?META_KEY_COPY.checking:META_KEY_COPY.verifyNotice}</Text><Button title={META_KEY_COPY.saveLabel} variant="secondary" onPress={saveMetaKey} loading={metaKeyBusy} disabled={metaKeyInput.trim().length===0} style={{marginTop:8}}/>{metaKey.configured && <Button title="Remove key" variant="ghost" onPress={removeMetaKey} disabled={metaKeyBusy || saving || preferenceBusy}/>}</View>:<Text style={[typography.caption,{color:colors.textSecondary,padding:16,paddingTop:0}]}>{META_KEY_COPY.nativeNote}</Text>}
           </SettingsGroup>}
           <SettingsGroup title="Appearance">
             <SettingsRow first label="Interface Theme" icon="contrast-outline"/>
