@@ -23,6 +23,7 @@ import { Header } from "../../../../src/components/Header";
 import { StatusPill } from "../../../../src/components/StatusPill";
 import { RiskBadge } from "../../../../src/components/RiskBadge";
 import { riskAssessmentText } from "../../../../src/api/mappers";
+import { riskBanner } from "../../../../src/workspace/risk";
 import { AIBlock, AIBlockSkeleton } from "../../../../src/components/AIBlock";
 import { Button } from "../../../../src/components/Button";
 import { EmptyState } from "../../../../src/components/EmptyState";
@@ -47,7 +48,8 @@ function PrWorkspace({owner,repo,number}:{owner:string;repo:string;number:string
   const [expandedFiles,setExpandedFiles]=useState<string[]>([]);
   const {detail,isLoading,isRefreshing,error,loadPr,loadPage,pageBusy,pageError,capped,fileCursor,commentCursor,checkCursor,retryAi,aiRetrying}=usePrWorkspace(owner,repo,Number(number),aiConsentGranted&&aiSummaries);
   const [fileWrap,setFileWrap]=useState<Record<string,boolean>>({}),[collapsedThreads,setCollapsedThreads]=useState<string[]>([]),[linkError,setLinkError]=useState<string|null>(null);
-  const scroll=useRef<React.ComponentRef<typeof ScrollView>>(null),scrollOffset=useRef(0);
+  const scroll=useRef<React.ComponentRef<typeof ScrollView>>(null),scrollOffset=useRef(0),fileRows=useRef<Record<string,React.ComponentRef<typeof View>|null>>({});
+  const jumpToFile=(name:string)=>{setExpandedFiles(prev=>prev.includes(name)?prev:[...prev,name]);const row=fileRows.current[name],host=scroll.current as unknown as {getInnerViewNode?:()=>unknown}|null;if(!row||!host)return;requestAnimationFrame(()=>{try{row.measureLayout((host.getInnerViewNode?.()??scroll.current) as never,(_x:number,y:number)=>scroll.current?.scrollTo({y:Math.max(0,y-16),animated:true}),()=>{});}catch{/* no measurement support: the file stays expanded in place */}});};
   useEffect(()=>{setExpandedFiles([]);setCollapsedThreads([]);},[detail?.headSha]);
   useEffect(()=>{if(!detail||isLoading)return;const frame=requestAnimationFrame(()=>scroll.current?.scrollTo({y:scrollOffset.current,animated:false}));return()=>cancelAnimationFrame(frame);},[isLoading]);
   const [showNoteInput, setShowNoteInput] = useState(false),[noteFocus,setNoteFocus]=useState(0),noteY=useRef(0);
@@ -122,6 +124,7 @@ function PrWorkspace({owner,repo,number}:{owner:string;repo:string;number:string
 
             <TouchableOpacity onPress={()=>void loadPr()} disabled={isRefreshing} accessibilityRole="button" accessibilityLabel="Refresh workspace" accessibilityState={{busy:isRefreshing,disabled:isRefreshing}} style={{alignSelf:"flex-end",flexDirection:"row",alignItems:"center",gap:6,minHeight:44,paddingHorizontal:4}}><Icon name="refresh-outline" size={14} color={colors.textMuted}/><Text style={[typography.caption,{color:colors.textMuted}]}>{isRefreshing?"Refreshing...":"Refresh"}</Text></TouchableOpacity>
             {!!(error||linkError)&&<Text accessibilityRole="alert" style={{color:colors.riskHigh,padding:12}}>{error??linkError}</Text>}
+            {(()=>{const banner=riskBanner(detail.risk,detail.files);if(!banner)return null;const tone=banner.level==="high"?colors.riskHigh:banner.level==="medium"?colors.riskMedium:colors.riskLow,bg=banner.level==="high"?colors.riskHighBg:banner.level==="medium"?colors.riskMediumBg:colors.riskLowBg;return <View testID="risk-banner" style={{flexDirection:"row",alignItems:"center",flexWrap:"wrap",gap:8,padding:12,marginBottom:spacing.sm,borderRadius:radius.lg,backgroundColor:bg}}><Icon name={banner.level==="low"?"checkmark-circle":"alert-circle"} size={16} color={tone}/><Text style={[typography.subhead,{color:tone,flex:1,minWidth:200}]}>{banner.text}</Text>{!!banner.file&&<TouchableOpacity accessibilityRole="button" accessibilityLabel={`Jump to riskiest file ${banner.file}`} onPress={()=>jumpToFile(banner.file!)} style={{minHeight:44,justifyContent:"center",paddingHorizontal:8}}><Text style={[typography.footnote,{color:tone,fontWeight:"600",textDecorationLine:"underline"}]} numberOfLines={1}>Jump to {banner.file}</Text></TouchableOpacity>}</View>;})()}
             {/* PR Header */}
             <View style={[styles.headerCard, { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.lg }]}>
               <View style={styles.topRow}>
@@ -325,7 +328,7 @@ function PrWorkspace({owner,repo,number}:{owner:string;repo:string;number:string
               ) : (
                 <View style={{ marginTop: spacing.xs }}>
                   {detail.files.map((file) => (
-                    <View testID={`workspace-file-${file.filename}`} key={file.filename} style={{marginTop:12,backgroundColor:colors.surfaceElevated,borderRadius:8,overflow:"hidden"}}>
+                    <View testID={`workspace-file-${file.filename}`} ref={node=>{fileRows.current[file.filename]=node;}} key={file.filename} style={{marginTop:12,backgroundColor:colors.surfaceElevated,borderRadius:8,overflow:"hidden"}}>
                       <TouchableOpacity accessibilityRole="button" accessibilityLabel={`Toggle diff for ${file.filename}`} accessibilityState={{expanded:expandedFiles.includes(file.filename)}} aria-expanded={expandedFiles.includes(file.filename)} onPress={()=>setExpandedFiles(prev=>prev.includes(file.filename)?prev.filter(name=>name!==file.filename):[...prev,file.filename])} style={{flexDirection:"row",alignItems:"center",padding:12,gap:8,minHeight:48}}><Icon name={expandedFiles.includes(file.filename)?"chevron-down":"chevron-forward"} size={16} color={colors.textSecondary}/><Text style={[typography.code,{color:colors.text,flex:1}]}>{file.filename} · {file.status}</Text><Text style={[typography.code,{color:colors.riskLow,fontSize:11}]}>+{file.additions}</Text><Text style={[typography.code,{color:colors.riskHigh,fontSize:11}]}>-{file.deletions}</Text></TouchableOpacity>
                       {!!file.previousPath&&<Text style={{color:colors.textSecondary,paddingHorizontal:12}}>Previously: {file.previousPath}</Text>}
                       {expandedFiles.includes(file.filename)&&file.patchState==='partial'&&<Text accessibilityRole="alert" style={{color:colors.textSecondary,padding:12}}>Partial patch: this is not the complete diff. Open this PR in GitHub for the full file.</Text>}
