@@ -7,6 +7,7 @@ import {ReadoutControls} from "../../../../src/components/ReadoutControls";
 import {narrationSentences} from "../../../../src/readout/text";
 import { Avatar } from "../../../../src/components/Avatar";
 import { relativeTime } from "../../../../src/format/activity";
+import { AskPrCard, ReviewPlanCard } from "../../../../src/components/ReviewCopilot";
 import { SummarySection } from "../../../../src/components/SummarySection";
 import React, { useState, useEffect, useRef } from "react";
 import { View, ScrollView, TouchableOpacity, TextInput, StyleSheet, Linking, Share, Platform, KeyboardAvoidingView } from "react-native";
@@ -193,12 +194,20 @@ function PrWorkspace({owner,repo,number}:{owner:string;repo:string;number:string
             {/* AI Summary Card (US-09) */}
             {detail.summary && (
               <View style={{ marginTop: spacing.sm }}>
-                <AIBlock title="AI Summary" coverage={detail.summary.coverage}>
+                <AIBlock title="AI Summary" coverage={detail.summary.coverage} model={detail.summary.model}>
                   <SummarySection title="What changed" icon="swap-horizontal-outline"><Text style={[typography.callout,{color:colors.text}]}>{detail.summary.whatChanged}</Text></SummarySection>
                   <SummarySection title="Why it matters" icon="shield-outline"><Text style={[typography.callout,{color:colors.text}]}>{detail.summary.whyItMatters}</Text></SummarySection>
                   <SummarySection title="Suggested focus" icon="scan-outline">{detail.summary.suggestedFocus.map((focus,index)=><Text key={index} style={[typography.callout,{color:colors.text}]}>{focus}</Text>)}</SummarySection>
                 </AIBlock>
               </View>
+            )}
+
+            {/* Reviewer co-pilot: read-only, built on request */}
+            {detail.summary && aiConsentGranted && aiSummaries && (
+              <>
+                <ReviewPlanCard key={`plan-${detail.headSha}`} owner={owner} repo={repo} number={Number(number)} />
+                <AskPrCard key={`ask-${detail.headSha}`} owner={owner} repo={repo} number={Number(number)} />
+              </>
             )}
 
             {/* AI is on and the summary is still being written */}

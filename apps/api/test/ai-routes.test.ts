@@ -1,7 +1,7 @@
-import { ErrorBody, PrRisk, PrSummary } from "@mergemate/contracts";
+import { ErrorBody, PrAnswer, PrRisk, PrSummary, ReviewPlan } from "@mergemate/contracts";
 import { describe, expect, it } from "vitest";
 import { Hono } from "hono";
-import { FIXTURE_RISK, FIXTURE_SUMMARY } from "../src/routes/ai-engine";
+import { FIXTURE_ANSWER, FIXTURE_PLAN, FIXTURE_RISK, FIXTURE_SUMMARY } from "../src/routes/ai-engine";
 import { createAiRouter } from "../src/routes/ai";
 import type { AppEnv } from "../src/env";
 import type { SessionRecord } from "../src/lib/sessions";
@@ -68,6 +68,22 @@ describe("AI summary and risk routes", () => {
     const risk = await call("/v1/prs/octo/demo/7/risk", { method: "POST", headers });
     expect(risk.status).toBe(200);
     expect(PrRisk.parse(await risk.json())).toEqual(FIXTURE_RISK);
+    expect(ctx.net.calls).toEqual([]);
+  });
+
+  it("serves the review plan and a validated answer to demo sessions without model calls", async () => {
+    const ctx = testContext();
+    const call = appFor(ctx);
+    const headers = await demoHeaders(ctx);
+    const plan = await call("/v1/prs/octo/demo/7/plan", { method: "POST", headers });
+    expect(plan.status).toBe(200);
+    expect(ReviewPlan.parse(await plan.json())).toEqual(FIXTURE_PLAN);
+    const ask = (body: unknown) =>
+      call("/v1/prs/octo/demo/7/ask", { method: "POST", headers: { ...headers, "content-type": "application/json" }, body: JSON.stringify(body) });
+    const answer = await ask({ question: "What does this change?" });
+    expect(answer.status).toBe(200);
+    expect(PrAnswer.parse(await answer.json())).toEqual(FIXTURE_ANSWER);
+    expect((await ask({ question: "" })).status).toBe(422);
     expect(ctx.net.calls).toEqual([]);
   });
 

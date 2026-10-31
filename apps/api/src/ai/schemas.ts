@@ -1,4 +1,4 @@
-import { ModelRisk, ModelSummary, ModelTriage } from "@mergemate/contracts";
+import { ModelPrAnswer, ModelReviewPlan, ModelRisk, ModelSummary, ModelTriage } from "@mergemate/contracts";
 import { z } from "zod";
 
 const jsonSchemaOf = (schema: z.ZodType): Record<string, unknown> => {
@@ -11,3 +11,5 @@ const jsonSchemaOf = (schema: z.ZodType): Record<string, unknown> => {
 export const SUMMARY_JSON_SCHEMA = jsonSchemaOf(ModelSummary);
 export const RISK_JSON_SCHEMA = jsonSchemaOf(ModelRisk);
 export const TRIAGE_JSON_SCHEMA = jsonSchemaOf(ModelTriage);
+export const PLAN_JSON_SCHEMA = jsonSchemaOf(ModelReviewPlan);
+export const ANSWER_JSON_SCHEMA = jsonSchemaOf(ModelPrAnswer);

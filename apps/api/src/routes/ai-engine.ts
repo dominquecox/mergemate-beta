@@ -42,6 +42,8 @@ export {
   stripCodeFences,
 } from "./ai-engine-model";
 export {
+  FIXTURE_ANSWER,
+  FIXTURE_PLAN,
   FIXTURE_PR,
   FIXTURE_RISK,
   FIXTURE_SUMMARY,
@@ -89,3 +91,4 @@ export {
   readWavInfo,
   transcribeVoiceNote,
 } from "./ai-engine-voice";
+export { askPr, planReview } from "./ai-engine-assist";

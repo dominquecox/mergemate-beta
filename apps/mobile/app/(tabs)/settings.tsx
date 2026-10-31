@@ -22,6 +22,7 @@ import { ErrorState } from "../../src/components/ErrorState";
 import { LoadingState } from "../../src/components/LoadingState";
 import { useLayout } from "../../src/layout/useLayout";
 import { Icon } from "../../src/components/Icon";
+import { AiEngineGroup } from "../../src/components/AiEngineGroup";
 import { BrowserNotificationsRow } from "../../src/components/BrowserNotificationsRow";
 import { billingStatusLabel } from "../../src/config/billing";
 
@@ -237,6 +238,7 @@ export default function SettingsScreen() {
             <SettingsRow child dimmed={!aiConsentGranted} label="AI summaries and risk" detail={aiConsentGranted?"Analyze PRs automatically when you open them or load your inbox. Turn off to analyze only when you ask.":"Part of AI processing. Turn AI processing on to use this."} trailing={<Switch value={aiConsentGranted && aiSummaries} onValueChange={value=>runPreference(()=>toggleAiSummaries(value))} disabled={isDemo || !aiConsentGranted || preferenceBusy || consentPending!==null} accessibilityLabel="AI summaries and risk" trackColor={{false:colors.surfaceSecondary,true:colors.brand}} thumbColor="#FFFFFF"/>}/>
             <SettingsRow label="What is sent to AI" detail="Review your consent and privacy choices" icon="shield-checkmark-outline" onPress={()=>router.push('/(auth)/consent')}/>
           </SettingsGroup>
+          {!isDemo && <AiEngineGroup/>}
           {metaKey && !isDemo && <SettingsGroup title="Your Meta key">
             <SettingsRow first label={metaKey.configured?'Using your key':'Key not configured'} detail="Stored encrypted and never shown again" icon="key-outline"/>
             {Platform.OS==='web'?<View style={{padding:16,paddingTop:0}}><TextInput value={metaKeyInput} onChangeText={setMetaKeyInput} placeholder={metaKey.configured?'Paste a replacement key':'Paste your Meta key'} placeholderTextColor={colors.textSecondary} secureTextEntry autoCapitalize="none" autoCorrect={false} spellCheck={false} autoComplete="off" accessibilityLabel="Meta key" style={[styles.keyInput,{color:colors.text,backgroundColor:colors.surfaceElevated,borderColor:colors.border,borderRadius:12}]}/><Button title="Save key" variant="secondary" onPress={saveMetaKey} loading={metaKeyBusy} disabled={metaKeyInput.trim().length===0} style={{marginTop:8}}/>{metaKey.configured && <Button title="Remove key" variant="ghost" onPress={removeMetaKey} disabled={metaKeyBusy || saving || preferenceBusy}/>}</View>:<Text style={[typography.caption,{color:colors.textSecondary,padding:16,paddingTop:0}]}>Manage your key in the web app.</Text>}
