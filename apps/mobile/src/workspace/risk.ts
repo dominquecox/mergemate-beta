@@ -1,4 +1,4 @@
-import type {PrFile, PrRisk} from "../types";
+import type {PrCheck, PrFile, PrRisk} from "../types";
 
 // Mirrors the API's sensitive-area rule so the file we point at matches the reason Clef gave.
 const SENSITIVE_PATHS = /(auth|login|session|password|payment|billing|stripe|migrat)/i;
@@ -34,4 +34,34 @@ export function riskBanner(risk: PrRisk | undefined, files: readonly PrFile[]): 
       ? `Low risk: ${first || "no risky signals found"}.`
       : `Why this is ${risk.level === "high" ? "high" : "medium"} risk: ${first}.`;
   return {level: risk.level, text, file};
+}
+
+export interface RiskEvidence {
+  reason: string;
+  /** A loaded file that backs this reason, or null when none can be named honestly. */
+  file: string | null;
+  /** A failing check that backs this reason. */
+  check: string | null;
+}
+
+const TEST_WORDS = /\b(tests?|failing|failed|checks?|ci)\b/i;
+const SENSITIVE_WORDS = /(auth|login|session|password|payment|billing|stripe|webhook|migrat|secret|sensitive)/i;
+
+/**
+ * Pairs each plain-English reason with the file or check that earned it. Matching is by keyword against what is
+ * loaded: a reason with no clear match is shown without a link rather than pointing at a guess.
+ */
+export function riskEvidence(risk: PrRisk | undefined, files: readonly PrFile[], checks: readonly PrCheck[]): RiskEvidence[] {
+  if (!risk) return [];
+  const failing = checks.find((c) => c.conclusion === "failure") ?? null;
+  return risk.reasons.map((reason) => {
+    let file: string | null = null;
+    let check: string | null = null;
+    if (TEST_WORDS.test(reason) && failing) check = failing.name;
+    if (SENSITIVE_WORDS.test(reason)) {
+      const sensitive = files.filter((f) => SENSITIVE_PATHS.test(f.filename) && !TEST_PATHS.test(f.filename));
+      file = riskiestFile(sensitive)?.filename ?? null;
+    }
+    return { reason, file, check };
+  });
 }

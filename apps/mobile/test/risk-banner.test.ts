@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { riskBanner, riskiestFile } from "../src/workspace/risk";
-import type { PrFile, PrRisk } from "../src/types";
+import { riskBanner, riskEvidence, riskiestFile } from "../src/workspace/risk";
+import type { PrCheck, PrFile, PrRisk } from "../src/types";
 
 const file = (filename: string, additions: number, deletions = 0): PrFile => ({ filename, status: "modified", additions, deletions });
 const risk = (level: PrRisk["level"], reasons: string[]): PrRisk => ({ level, reasons, coverage: { analyzedFiles: 1, skippedFiles: 0, truncatedFiles: 0 } });
@@ -29,5 +29,23 @@ describe("risk banner", () => {
   });
   it("is absent without a risk result", () => {
     expect(riskBanner(undefined, [])).toBeNull();
+  });
+});
+
+describe("risk evidence", () => {
+  const check = (name: string, conclusion: "success" | "failure"): PrCheck => ({ id: name, name, status: "completed", conclusion });
+  it("links a sensitive-area reason to the sensitive file and a test reason to the failing check", () => {
+    const out = riskEvidence(
+      risk("high", ["Touches billing webhook handling", "One test is failing", "Looks tidy"]),
+      [file("src/billing/webhook.ts", 20), file("src/ui.ts", 90)],
+      [check("unit", "failure")],
+    );
+    expect(out[0]).toMatchObject({ file: "src/billing/webhook.ts", check: null });
+    expect(out[1]).toMatchObject({ file: null, check: "unit" });
+    expect(out[2]).toEqual({ reason: "Looks tidy", file: null, check: null });
+  });
+  it("never invents a link when nothing matches", () => {
+    expect(riskEvidence(risk("high", ["Touches auth"]), [file("a.ts", 5)], [])[0].file).toBeNull();
+    expect(riskEvidence(undefined, [], [])).toEqual([]);
   });
 });
