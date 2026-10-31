@@ -30,6 +30,7 @@ import { EmptyState } from "../../../../src/components/EmptyState";
 import { ErrorState } from "../../../../src/components/ErrorState";
 import { LoadingState } from "../../../../src/components/LoadingState";
 import { Icon } from "../../../../src/components/Icon";
+import { DemoTour } from "../../../../src/components/DemoTour";
 import { PrivacyStrip } from "../../../../src/components/PrivacyStrip";
 import { DiffView } from "../../../../src/components/DiffView";
 import { MergeStateChip } from "../../../../src/components/MergeStateChip";
@@ -44,6 +45,8 @@ function PrWorkspace({owner,repo,number}:{owner:string;repo:string;number:string
   const {isDesktop}=useLayout();
   const { aiConsentGranted, aiSummaries } = useConsent();
   const router = useRouter();
+  const [tourClosed,setTourClosed]=useState(false);
+  const {tour}=useLocalSearchParams<{tour?:string}>(),{isDemo}=useAuth();
 
   const [assessmentOpen,setAssessmentOpen]=useState(false);
   const [expandedFiles,setExpandedFiles]=useState<string[]>([]);
@@ -125,6 +128,7 @@ function PrWorkspace({owner,repo,number}:{owner:string;repo:string;number:string
 
             <TouchableOpacity onPress={()=>void loadPr()} disabled={isRefreshing} accessibilityRole="button" accessibilityLabel="Refresh workspace" accessibilityState={{busy:isRefreshing,disabled:isRefreshing}} style={{alignSelf:"flex-end",flexDirection:"row",alignItems:"center",gap:6,minHeight:44,paddingHorizontal:4}}><Icon name="refresh-outline" size={14} color={colors.textMuted}/><Text style={[typography.caption,{color:colors.textMuted}]}>{isRefreshing?"Refreshing...":"Refresh"}</Text></TouchableOpacity>
             {!!(error||linkError)&&<Text accessibilityRole="alert" style={{color:colors.riskHigh,padding:12}}>{error??linkError}</Text>}
+            {isDemo&&tour==="1"&&!tourClosed&&<DemoTour onClose={()=>setTourClosed(true)}/>}
             <PrivacyStrip onOpenSettings={()=>router.push("/(tabs)/settings")}/>
             {(()=>{const banner=riskBanner(detail.risk,detail.files);if(!banner)return null;const tone=banner.level==="high"?colors.riskHigh:banner.level==="medium"?colors.riskMedium:colors.riskLow,bg=banner.level==="high"?colors.riskHighBg:banner.level==="medium"?colors.riskMediumBg:colors.riskLowBg;return <View testID="risk-banner" style={{flexDirection:"row",alignItems:"center",flexWrap:"wrap",gap:8,padding:12,marginBottom:spacing.sm,borderRadius:radius.lg,backgroundColor:bg}}><Icon name={banner.level==="low"?"checkmark-circle":"alert-circle"} size={16} color={tone}/><Text style={[typography.subhead,{color:tone,flex:1,minWidth:200}]}>{banner.text}</Text>{!!banner.file&&<TouchableOpacity accessibilityRole="button" accessibilityLabel={`Jump to riskiest file ${banner.file}`} onPress={()=>jumpToFile(banner.file!)} style={{minHeight:44,justifyContent:"center",paddingHorizontal:8}}><Text style={[typography.footnote,{color:tone,fontWeight:"600",textDecorationLine:"underline"}]} numberOfLines={1}>Jump to {banner.file}</Text></TouchableOpacity>}</View>;})()}
             {/* PR Header */}
