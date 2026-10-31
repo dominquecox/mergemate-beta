@@ -6,7 +6,7 @@ import { detectBlastRadius, type BlastDomain } from "../workspace/blastRadius";
 import { Icon } from "./Icon";
 import { Text } from "./Text";
 
-export function BlastRadiusChips({ files }: { files: readonly PrFile[] }) {
+export function BlastRadiusChips({ files, inline = false }: { files: readonly PrFile[]; inline?: boolean }) {
   const { colors, typography, radius, spacing } = useTheme();
   const domains = detectBlastRadius(files);
   const [selected, setSelected] = useState<BlastDomain | null>(null);
@@ -15,18 +15,22 @@ export function BlastRadiusChips({ files }: { files: readonly PrFile[] }) {
 
   return (
     <View
-      style={{
-        marginTop: spacing.sm,
-        padding: spacing.base,
-        backgroundColor: colors.surface,
-        borderColor: colors.border,
-        borderWidth: 1,
-        borderRadius: radius.lg,
-      }}
+      style={
+        inline
+          ? { marginTop: 4, marginBottom: 4 }
+          : {
+              marginTop: spacing.sm,
+              padding: spacing.base,
+              backgroundColor: colors.surface,
+              borderColor: colors.border,
+              borderWidth: 1,
+              borderRadius: radius.lg,
+            }
+      }
     >
       <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 8 }}>
-        <Icon name="flash-outline" size={16} color={colors.brandLight} />
-        <Text style={[typography.headline, { color: colors.text }]} accessibilityRole="header">
+        <Icon name="flash-outline" size={14} color={colors.brandLight} />
+        <Text style={[typography.subhead, { color: colors.text, fontWeight: "600" }]} accessibilityRole="header">
           Blast Radius Analysis
         </Text>
       </View>

@@ -16,6 +16,7 @@ export interface GitMetadataProps {
   additions: number;
   deletions: number;
   fileCount?: number;
+  inline?: boolean;
 }
 
 export function GitMetadataCard({
@@ -27,6 +28,7 @@ export function GitMetadataCard({
   additions,
   deletions,
   fileCount,
+  inline = false,
 }: GitMetadataProps) {
   const { colors, typography, radius, spacing } = useTheme();
   const [copied, setCopied] = useState(false);
@@ -52,15 +54,19 @@ export function GitMetadataCard({
 
   return (
     <View
-      style={[
-        styles.container,
-        {
-          backgroundColor: colors.surfaceElevated,
-          borderColor: colors.border,
-          borderRadius: radius.md,
-          padding: spacing.md,
-        },
-      ]}
+      style={
+        inline
+          ? [styles.inlineContainer, { borderTopColor: colors.border }]
+          : [
+              styles.container,
+              {
+                backgroundColor: colors.surfaceElevated,
+                borderColor: colors.border,
+                borderRadius: radius.md,
+                padding: spacing.md,
+              },
+            ]
+      }
       accessibilityRole="summary"
       accessibilityLabel={`Git metadata: base ${baseBranch}, head ${headBranch}, authored by ${author}`}
     >
@@ -109,7 +115,7 @@ export function GitMetadataCard({
       </View>
 
       {/* Metrics Strip: Author · Diff Stats · Commit SHA */}
-      <View style={[styles.metaStrip, { borderTopColor: colors.border, marginTop: spacing.sm, paddingTop: spacing.sm }]}>
+      <View style={[styles.metaStrip, inline ? { borderTopWidth: 0, marginTop: 8, paddingTop: 0 } : { borderTopColor: colors.border, marginTop: spacing.sm, paddingTop: spacing.sm }]}>
         <View style={styles.authorGroup}>
           <Avatar login={author} size={20} />
           <Text style={[typography.footnote, { color: colors.textSecondary }]}>
@@ -172,6 +178,12 @@ export function GitMetadataCard({
 }
 
 const styles = StyleSheet.create({
+  inlineContainer: {
+    borderTopWidth: 1,
+    marginTop: 12,
+    paddingTop: 10,
+    gap: 8,
+  },
   container: {
     borderWidth: 1,
     marginVertical: 8,

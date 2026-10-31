@@ -128,15 +128,17 @@ function PrWorkspace({owner,repo,number}:{owner:string;repo:string;number:string
           <ScrollView testID="pr-workspace-scroll" ref={scroll} onScroll={event=>{scrollOffset.current=event.nativeEvent.contentOffset.y;}} scrollEventThrottle={16} contentContainerStyle={{ padding:isDesktop?24:spacing.base, paddingBottom:120 }}>
             <ReadoutControls label="Pull request summary" sentences={narrationSentences([...(detail.summary?[detail.summary.whatChanged,detail.summary.whyItMatters,...detail.summary.suggestedFocus]:[]),...(detail.risk?[`Risk level: ${detail.risk.level}.`,...detail.risk.reasons]:[])])}/>
 
-            <TouchableOpacity onPress={()=>void loadPr()} disabled={isRefreshing} accessibilityRole="button" accessibilityLabel="Refresh workspace" accessibilityState={{busy:isRefreshing,disabled:isRefreshing}} style={{alignSelf:"flex-end",flexDirection:"row",alignItems:"center",gap:6,minHeight:44,paddingHorizontal:4}}><Icon name="refresh-outline" size={14} color={colors.textMuted}/><Text style={[typography.caption,{color:colors.textMuted}]}>{isRefreshing?"Refreshing...":"Refresh"}</Text></TouchableOpacity>
+            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+              <PrivacyStrip onOpenSettings={()=>router.push("/(tabs)/settings")}/>
+              <TouchableOpacity onPress={()=>void loadPr()} disabled={isRefreshing} accessibilityRole="button" accessibilityLabel="Refresh workspace" accessibilityState={{busy:isRefreshing,disabled:isRefreshing}} style={{flexDirection:"row",alignItems:"center",gap:6,minHeight:32,paddingHorizontal:4}}><Icon name="refresh-outline" size={13} color={colors.textMuted}/><Text style={[typography.caption,{color:colors.textMuted}]}>{isRefreshing?"Refreshing...":"Refresh"}</Text></TouchableOpacity>
+            </View>
             {!!(error||linkError)&&<Text accessibilityRole="alert" style={{color:colors.riskHigh,padding:12}}>{error??linkError}</Text>}
             {isDemo&&tour==="1"&&!tourClosed&&<DemoTour onClose={()=>setTourClosed(true)}/>}
-            <PrivacyStrip onOpenSettings={()=>router.push("/(tabs)/settings")}/>
             {(()=>{const banner=riskBanner(detail.risk,detail.files);if(!banner||banner.level==="low")return null;const tone=banner.level==="high"?colors.riskHigh:colors.riskMedium,bg=banner.level==="high"?colors.riskHighBg:colors.riskMediumBg;return <View testID="risk-banner" style={{flexDirection:"row",alignItems:"center",flexWrap:"wrap",gap:8,padding:12,marginBottom:spacing.sm,borderRadius:radius.lg,backgroundColor:bg}}><Icon name="alert-circle" size={16} color={tone}/><Text style={[typography.subhead,{color:tone,flex:1,minWidth:200}]}>{banner.text}</Text>{!!banner.file&&<TouchableOpacity accessibilityRole="button" accessibilityLabel={`Jump to riskiest file ${banner.file}`} onPress={()=>jumpToFile(banner.file!)} style={{minHeight:44,justifyContent:"center",paddingHorizontal:8}}><Text style={[typography.footnote,{color:tone,fontWeight:"600",textDecorationLine:"underline"}]} numberOfLines={1}>Jump to {banner.file}</Text></TouchableOpacity>}</View>;})()}
-            {/* PR Header */}
-            <View style={[styles.headerCard, { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.lg }]}>
+            {/* Unified Modern PR Header Surface */}
+            <View style={[styles.headerCard, { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.lg, padding: 16 }]}>
               <View style={styles.topRow}>
-                <View style={{ flexDirection: "row", alignItems: "center", gap: 6, flex: 1, minWidth: 0 }}>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 6, flex: 1, minWidth: 0, flexWrap: "wrap" }}>
                   <Icon name="folder-outline" size={13} color={colors.textMuted} />
                   <Text style={[typography.caption, { color: colors.textMuted, fontFamily: typography.code.fontFamily }]} numberOfLines={1}>
                     {detail.owner}/{detail.repo} · #{detail.number}
@@ -144,33 +146,30 @@ function PrWorkspace({owner,repo,number}:{owner:string;repo:string;number:string
                 </View>
                 <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
                   <StatusPill status={detail.status} />
+                  {detail.mergeState && <MergeStateChip state={detail.mergeState} />}
                   {detail.risk && <RiskBadge level={detail.risk.level} compact />}
                 </View>
               </View>
 
               <Text
-                style={[typography.headline, { color: colors.text, marginTop: spacing.sm, lineHeight: 24 }]}
+                style={[typography.headline, { color: colors.text, marginTop: 10, fontSize: 18, lineHeight: 24, fontWeight: "700" }]}
                 accessibilityRole="header"
               >
                 {detail.title}
               </Text>
-              {detail.mergeState && (
-                <View style={{ marginTop: spacing.sm }}>
-                  <MergeStateChip state={detail.mergeState} />
-                </View>
-              )}
-            </View>
 
-            <GitMetadataCard
-              baseBranch={detail.baseBranch}
-              headBranch={detail.headBranch}
-              headSha={detail.headSha}
-              author={detail.author}
-              createdAt={detail.createdAt}
-              additions={detail.additions}
-              deletions={detail.deletions}
-              fileCount={detail.files?.length}
-            />
+              <GitMetadataCard
+                inline
+                baseBranch={detail.baseBranch}
+                headBranch={detail.headBranch}
+                headSha={detail.headSha}
+                author={detail.author}
+                createdAt={detail.createdAt}
+                additions={detail.additions}
+                deletions={detail.deletions}
+                fileCount={detail.files?.length ?? detail.changedFilesCount}
+              />
+            </View>
 
             {/* US-25: Secret Leak Warning Banner */}
             {detail.secretWarning && (
@@ -213,89 +212,63 @@ function PrWorkspace({owner,repo,number}:{owner:string;repo:string;number:string
             {(() => {
               const hasAiInsights = Boolean(detail.summary || detail.risk || detail.secretWarning || detail.aiNotice);
 
-              const renderChecksCard = () => (
-                <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.lg, marginTop: spacing.sm }]}>
-                  <Text style={[typography.headline, { color: colors.text }]} accessibilityRole="header">
-                    Checks ({detail.checks.filter((c) => c.conclusion === "success").length}/{detail.checks.length} loaded)
-                  </Text>
-                  {detail.checks.length === 0 ? (
-                    <Text style={[typography.footnote, { color: colors.textMuted, marginTop: spacing.xs }]}>
-                      {checkCursor ? "Checks loading..." : "No status checks reported."}
+              const renderChecksCard = () => {
+                if (detail.checks.length === 0 && !checkCursor) return null;
+                return (
+                  <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.lg, marginTop: spacing.sm, padding: 14 }]}>
+                    <Text style={[typography.headline, { color: colors.text, fontSize: 15 }]} accessibilityRole="header">
+                      Checks ({detail.checks.filter((c) => c.conclusion === "success").length}/{detail.checks.length} loaded)
                     </Text>
-                  ) : (
-                    <View style={{ marginTop: spacing.xs }}>
-                      {detail.checks.map((chk) => (
-                        <View key={chk.id} style={styles.checkRow}>
-                          <Icon
-                            name={
-                              chk.conclusion === "success"
-                                ? "checkmark-circle"
-                                : chk.conclusion === "failure"
-                                  ? "close-circle"
-                                  : "ellipsis-horizontal-circle-outline"
-                            }
-                            size={18}
-                            color={chk.conclusion === "success" ? colors.riskLow : chk.conclusion === "failure" ? colors.riskHigh : colors.textMuted}
-                          />
-                          <Text style={[typography.subhead, { color: colors.text, flex: 1 }]}>{chk.name}</Text>
-                          <Text style={[typography.caption, { color: colors.textMuted }]}>{chk.status === "completed" ? chk.conclusion : chk.status}</Text>
-                          {!!chk.url && (
-                            <TouchableOpacity accessibilityRole="button" accessibilityLabel="Open check in GitHub" onPress={() => openLink(chk.url)} style={styles.shareBtn}>
-                              <Icon name="open-outline" size={18} color={colors.textSecondary} />
-                            </TouchableOpacity>
-                          )}
-                        </View>
-                      ))}
-                    </View>
-                  )}
-                  {!!checkCursor && (
-                    <View style={{ marginTop: 10, alignItems: "center" }}>
-                      <Button title={detail.checks.length ? "Load more checks" : "Load checks"} loading={pageBusy.checks} onPress={() => loadPage("checks")} variant="ghost" style={{ minWidth: 140, alignSelf: "center" }} />
-                    </View>
-                  )}
-                  {!!pageError.checks && <Text accessibilityRole="alert" style={{ color: colors.riskHigh, marginTop: 4 }}>{pageError.checks}</Text>}
-                  {capped.checks && <Text style={{ color: colors.textSecondary, marginTop: 4 }}>Check pagination limit reached. Open this PR in GitHub for the full history.</Text>}
-                </View>
-              );
+                    {detail.checks.length === 0 ? (
+                      <Text style={[typography.footnote, { color: colors.textMuted, marginTop: spacing.xs }]}>
+                        {checkCursor ? "Checks loading..." : "No status checks reported."}
+                      </Text>
+                    ) : (
+                      <View style={{ marginTop: spacing.xs }}>
+                        {detail.checks.map((chk) => (
+                          <View key={chk.id} style={styles.checkRow}>
+                            <Icon
+                              name={
+                                chk.conclusion === "success"
+                                  ? "checkmark-circle"
+                                  : chk.conclusion === "failure"
+                                    ? "close-circle"
+                                    : "ellipsis-horizontal-circle-outline"
+                              }
+                              size={18}
+                              color={chk.conclusion === "success" ? colors.riskLow : chk.conclusion === "failure" ? colors.riskHigh : colors.textMuted}
+                            />
+                            <Text style={[typography.subhead, { color: colors.text, flex: 1 }]}>{chk.name}</Text>
+                            <Text style={[typography.caption, { color: colors.textMuted }]}>{chk.status === "completed" ? chk.conclusion : chk.status}</Text>
+                            {!!chk.url && (
+                              <TouchableOpacity accessibilityRole="button" accessibilityLabel="Open check in GitHub" onPress={() => openLink(chk.url)} style={styles.shareBtn}>
+                                <Icon name="open-outline" size={18} color={colors.textSecondary} />
+                              </TouchableOpacity>
+                            )}
+                          </View>
+                        ))}
+                      </View>
+                    )}
+                    {!!checkCursor && (
+                      <View style={{ marginTop: 10, alignItems: "center" }}>
+                        <Button title={detail.checks.length ? "Load more checks" : "Load checks"} loading={pageBusy.checks} onPress={() => loadPage("checks")} variant="ghost" style={{ minWidth: 140, alignSelf: "center" }} />
+                      </View>
+                    )}
+                    {!!pageError.checks && <Text accessibilityRole="alert" style={{ color: colors.riskHigh, marginTop: 4 }}>{pageError.checks}</Text>}
+                    {capped.checks && <Text style={{ color: colors.textSecondary, marginTop: 4 }}>Check pagination limit reached. Open this PR in GitHub for the full history.</Text>}
+                  </View>
+                );
+              };
 
               if (!hasAiInsights) {
+                const hasBlast = Boolean(detail.files && detail.files.length > 0);
+                const hasChecks = detail.checks.length > 0 || Boolean(checkCursor);
+                if (!hasBlast && !hasChecks) return null;
+
                 return (
-                  <View style={isDesktop ? { flexDirection: "row", gap: 16, alignItems: "flex-start", marginTop: spacing.sm } : undefined}>
-                    <View style={isDesktop ? { flex: 1.2, minWidth: 0 } : undefined}>
-                      <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.lg, marginTop: spacing.sm }]}>
-                        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-                          <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-                            <Icon name="git-pull-request" size={18} color={colors.brandLight} />
-                            <Text style={[typography.headline, { color: colors.text }]} accessibilityRole="header">
-                              Pull Request Overview
-                            </Text>
-                          </View>
-                          <View style={{ backgroundColor: colors.surfaceElevated, paddingHorizontal: 8, paddingVertical: 4, borderRadius: radius.sm }}>
-                            <Text style={[typography.caption, { color: colors.brandLight, fontWeight: "600" }]}>
-                              {detail.changedFilesCount} {detail.changedFilesCount === 1 ? "file" : "files"}
-                            </Text>
-                          </View>
-                        </View>
-                        <View style={{ flexDirection: "row", gap: 16, marginTop: 12, alignItems: "center" }}>
-                          <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-                            <Icon name="add-circle-outline" size={16} color={colors.riskLow} />
-                            <Text style={[typography.subhead, { color: colors.riskLow, fontWeight: "600" }]}>+{detail.additions} lines</Text>
-                          </View>
-                          <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-                            <Icon name="remove-circle-outline" size={16} color={colors.riskHigh} />
-                            <Text style={[typography.subhead, { color: colors.riskHigh, fontWeight: "600" }]}>-{detail.deletions} lines</Text>
-                          </View>
-                        </View>
-                        {detail.files && detail.files.length > 0 && (
-                          <View style={{ marginTop: 12 }}>
-                            <BlastRadiusChips files={detail.files} />
-                          </View>
-                        )}
-                      </View>
-                    </View>
-                    <View style={isDesktop ? { flex: 1, minWidth: 0 } : undefined}>
-                      {renderChecksCard()}
-                    </View>
+                  <View style={{ marginTop: spacing.xs, gap: 10 }}>
+                    {hasBlast && <BlastRadiusChips files={detail.files!} />}
+                    {hasChecks && renderChecksCard()}
                   </View>
                 );
               }

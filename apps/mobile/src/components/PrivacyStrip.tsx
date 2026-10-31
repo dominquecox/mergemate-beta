@@ -9,21 +9,32 @@ export function PrivacyStrip({ onOpenSettings }: { onOpenSettings: () => void })
   const { colors, typography, radius, spacing } = useTheme();
   const [open, setOpen] = useState(false);
   return (
-    <View testID="privacy-strip" style={{ marginBottom: spacing.sm }}>
+    <View testID="privacy-strip" style={{ marginBottom: spacing.xs }}>
       <TouchableOpacity
         accessibilityRole="button"
         accessibilityLabel="Read-only. MergeMate cannot merge, approve or comment. What we send to the model"
         accessibilityState={{ expanded: open }}
         aria-expanded={open}
         onPress={() => setOpen((v) => !v)}
-        style={{ flexDirection: "row", alignItems: "center", gap: 8, minHeight: 44, paddingHorizontal: 12, borderRadius: radius.lg, backgroundColor: colors.surfaceElevated }}
+        style={{
+          flexDirection: "row",
+          alignItems: "center",
+          gap: 6,
+          paddingHorizontal: 10,
+          paddingVertical: 6,
+          borderRadius: radius.full,
+          backgroundColor: colors.surfaceElevated,
+          borderWidth: 1,
+          borderColor: colors.border,
+          alignSelf: "flex-start",
+        }}
       >
-        <Icon name="lock-closed" size={14} color={colors.riskLow} />
-        <Text style={[typography.footnote, { color: colors.textSecondary, flex: 1 }]}>Read-only: MergeMate cannot merge, approve or comment</Text>
-        <Icon name={open ? "chevron-up" : "chevron-down"} size={16} color={colors.textSecondary} />
+        <Icon name="lock-closed" size={12} color={colors.riskLow} />
+        <Text style={[typography.caption, { color: colors.textSecondary }]}>Read-only: MergeMate cannot merge, approve or comment</Text>
+        <Icon name={open ? "chevron-up" : "chevron-down"} size={13} color={colors.textSecondary} />
       </TouchableOpacity>
       {open && (
-        <View testID="privacy-sheet" style={{ padding: 12, gap: 8 }}>
+        <View testID="privacy-sheet" style={{ padding: 12, gap: 8, marginTop: 4, backgroundColor: colors.surfaceElevated, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border }}>
           <Text style={[typography.subhead, { color: colors.text, fontWeight: "600" }]} accessibilityRole="header">What we send to the model</Text>
           {PRIVACY_FACTS.map((fact) => (
             <View key={fact} style={{ flexDirection: "row", alignItems: "flex-start", gap: 8 }}>
