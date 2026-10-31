@@ -1,12 +1,15 @@
 import React from "react";
 import { View, TouchableOpacity, StyleSheet } from "react-native";
 import { Text } from "./Text";
+import { useRouter } from "expo-router";
+import { DEMO_TOUR_PATH } from "../workspace/tour";
 import { useAuth } from "../context/AuthContext";
 import { useTheme } from "../context/ThemeContext";
 
 export function DemoBanner() {
   const { isDemo, signOut } = useAuth();
   const { colors, typography, spacing, radius } = useTheme();
+  const router = useRouter();
 
   if (!isDemo) return null;
 
@@ -30,6 +33,16 @@ export function DemoBanner() {
           DEMO MODE · Sample Data Only
         </Text>
       </View>
+      <TouchableOpacity
+        onPress={() => router.push(DEMO_TOUR_PATH as never)}
+        style={[styles.exitBtn, { borderColor: colors.demoBadge, borderRadius: radius.sm }]}
+        accessibilityRole="button"
+        accessibilityLabel="Start the guided tour"
+      >
+        <Text style={[typography.caption, { color: colors.demoBadge, fontWeight: "700" }]}>
+          Tour
+        </Text>
+      </TouchableOpacity>
       <TouchableOpacity
         onPress={signOut}
         style={[styles.exitBtn, { borderColor: colors.demoBadge, borderRadius: radius.sm }]}
