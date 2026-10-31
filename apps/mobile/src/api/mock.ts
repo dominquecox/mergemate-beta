@@ -39,7 +39,19 @@ import {
 } from "../types";
 
 export class MockApiClient implements ApiClient {
-  async searchPrs(_filters:PrSearchFilters,_cursor?:string|null,_signal?:AbortSignal):Promise<PrSearchPage>{throw new ApiClientError('not_configured','Search needs a configured API.');}
+  /** Sample-data search: the same filters as the API, applied to the sample pull requests. */
+  async searchPrs(filters:PrSearchFilters,_cursor?:string|null,_signal?:AbortSignal):Promise<PrSearchPage>{
+    const terms=filters.query.toLowerCase().split(/\s+/).filter(Boolean);
+    const items=this.notifications.filter(n=>
+      terms.every(t=>n.title.toLowerCase().includes(t))
+      &&(!filters.repo||n.repo.toLowerCase()===filters.repo.toLowerCase())
+      &&(!filters.author||n.author.toLowerCase()===filters.author.toLowerCase())
+      &&(filters.risk==='all'||(filters.risk==='unassessed'?!n.risk:n.risk===filters.risk))
+      &&(!filters.from||n.updatedAt.slice(0,10)>=filters.from)
+      &&(!filters.to||n.updatedAt.slice(0,10)<=filters.to),
+    ).map(({kind:_kind,read:_read,...row})=>row);
+    return {items,nextCursor:null,candidates:items.length,incomplete:false,capped:false};
+  }
   async getFeatureFlags(){return disabledFeatureFlags();}
   invalidateInbox():void {}
   invalidateCache(): void {  }
@@ -287,23 +299,41 @@ export class MockApiClient implements ApiClient {
     return null;
   }
 
-  async getReviewPlan(_owner: string, _repo: string, _number: number): Promise<ReviewPlan> {
+  /** Sample files in reading order: source before tests, lockfiles last. */
+  private async sampleFiles(owner: string, repo: string, number: number) {
+    const detail = await this.getPrDetail(owner, repo, number);
+    const rank = (name: string) => (/lock\.json$|\.lock$/.test(name) ? 2 : /test|spec/.test(name) ? 1 : 0);
+    const files = [...detail.files].sort((x, y) => rank(x.filename) - rank(y.filename) || y.additions + y.deletions - (x.additions + x.deletions));
+    return { detail, files, coverage: { analyzedFiles: files.length, skippedFiles: 0, truncatedFiles: 0 } };
+  }
+
+  async getReviewPlan(owner: string, repo: string, number: number): Promise<ReviewPlan> {
+    const { detail, files, coverage } = await this.sampleFiles(owner, repo, number);
+    const reasons = detail.risk?.reasons ?? [];
     return {
-      readingOrder: [{ file: "src/index.ts", why: "The only changed file; start here." }],
-      verify: ["The change matches the title.", "Checks are green."],
-      draftComment: "Thanks for this. It looks good to me.",
-      coverage: { analyzedFiles: 1, skippedFiles: 0, truncatedFiles: 0 },
+      readingOrder: files.slice(0, 5).map((f, i) => ({
+        file: f.filename,
+        why: i === 0 ? `Biggest source change (+${f.additions} -${f.deletions}); start here.` : `${f.status === "added" ? "New file" : "Changed"}, +${f.additions} -${f.deletions}.`,
+      })),
+      verify: reasons.slice(0, 4).concat(detail.checks.some((c) => c.conclusion === "failure") ? ["A failing check is explained or fixed."] : ["Checks are green."]),
+      draftComment: `Thanks for "${detail.title}". ${detail.summary?.suggestedFocus[0] ? `I read ${detail.summary.suggestedFocus[0]} first.` : ""} Happy to approve once the points above are confirmed.`.replace("  ", " "),
+      coverage,
       model: "sample:demo",
     };
   }
 
-  async askPr(_owner: string, _repo: string, _number: number, _question: string): Promise<PrAnswer> {
-    return {
-      answer: "This is sample data. Sign in to ask about a real pull request.",
-      citations: [{ file: "src/index.ts" }],
-      coverage: { analyzedFiles: 1, skippedFiles: 0, truncatedFiles: 0 },
-      model: "sample:demo",
-    };
+  async askPr(owner: string, repo: string, number: number, question: string): Promise<PrAnswer> {
+    const { detail, files, coverage } = await this.sampleFiles(owner, repo, number);
+    const q = question.toLowerCase();
+    const failing = detail.checks.filter((c) => c.conclusion === "failure").map((c) => c.name);
+    const answer = /break|risk|danger/.test(q)
+      ? detail.risk?.reasons.join(" ") || "Nothing risky stands out in this sample."
+      : /test|check|ci/.test(q)
+        ? failing.length ? `Failing: ${failing.join(", ")}. ${detail.checks.length - failing.length} other checks pass.` : `All ${detail.checks.length} checks pass.`
+        : /first|start|read/.test(q)
+          ? `Start with ${files[0]?.filename ?? "the first changed file"}.`
+          : detail.summary?.whatChanged ?? "This is sample data.";
+    return { answer, citations: files.slice(0, 2).map((f) => ({ file: f.filename })), coverage, model: "sample:demo" };
   }
 
   async getPrRisk(owner: string, repo: string, number: number): Promise<PrRisk> {

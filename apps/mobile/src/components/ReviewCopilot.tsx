@@ -7,12 +7,12 @@ import { useTheme } from "../context/ThemeContext";
 import { modelDisplayName } from "../format/model";
 import { narrationSentences } from "../readout/text";
 import { checklistMarkdown } from "../workspace/checklist";
+import { suggestedQuestions } from "../workspace/starters";
 import { Button } from "./Button";
 import { Icon } from "./Icon";
 import { ReadoutControls } from "./ReadoutControls";
 import { Text } from "./Text";
 
-const SUGGESTED = ["What could break?", "Is this change tested?", "What should I read first?"];
 
 const failure = (error: unknown): string =>
   error instanceof ApiClientError ? error.message : messageForCode("internal");
@@ -125,7 +125,8 @@ export function ReviewPlanCard({ owner, repo, number }: { owner: string; repo: s
 }
 
 /** Ask this PR: one question at a time, answered from the PR with citations limited to its files. */
-export function AskPrCard({ owner, repo, number }: { owner: string; repo: string; number: number }) {
+export function AskPrCard({ owner, repo, number, files = [] }: { owner: string; repo: string; number: number; files?: readonly string[] }) {
+  const starters = suggestedQuestions(files);
   const { colors, typography } = useTheme();
   const [question, setQuestion] = useState("");
   const [asked, setAsked] = useState("");
@@ -165,7 +166,7 @@ export function AskPrCard({ owner, repo, number }: { owner: string; repo: string
         style={{ minHeight: 44, paddingHorizontal: 12, color: colors.text, borderColor: colors.border, borderWidth: 1, borderRadius: 8 }}
       />
       <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-        {SUGGESTED.map((text) => (
+        {starters.map((text) => (
           <Pressable
             key={text}
             accessibilityRole="button"

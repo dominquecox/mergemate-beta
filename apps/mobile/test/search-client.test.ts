@@ -13,3 +13,20 @@ describe('PR search client',()=>{
  });
  it('keeps newer revisions and stable first-seen order across tied pages',()=>{const row=(id:string,updatedAt:string)=>({id,repo:'acme/api',number:1,title:'Fixture',author:'fixture',status:'open' as const,updatedAt});expect(mergeSearchRows([row('b','2026-10-27T10:00:00Z'),row('a','2026-10-27T10:00:00Z'),row('b','2026-10-26T10:00:00Z')]).map(r=>r.id)).toEqual(['b','a']);});
 });
+describe('Sample-data search',()=>{
+ it('filters the sample pull requests instead of failing',async()=>{
+  const {MockApiClient}=await import('../src/api/mock');const mock=new MockApiClient();
+  const all=await mock.searchPrs(PrSearchFilters.parse({}));expect(all.items.length).toBeGreaterThan(3);
+  const high=await mock.searchPrs(PrSearchFilters.parse({risk:'high'}));expect(high.items.length).toBeGreaterThan(0);expect(high.items.every(i=>i.risk==='high')).toBe(true);
+  const q=await mock.searchPrs(PrSearchFilters.parse({query:'stripe'}));expect(q.items.map(i=>i.number)).toEqual([57]);
+  expect((await mock.searchPrs(PrSearchFilters.parse({query:'zzzz'}))).items).toEqual([]);
+ });
+});
+describe('Sample-data review plan and Ask',()=>{
+ it('is specific to each sample pull request and keeps its model label',async()=>{
+  const {MockApiClient}=await import('../src/api/mock');const mock=new MockApiClient();
+  const a=await mock.getReviewPlan('ploonu-llc','typepress',412);const b=await mock.getReviewPlan('dominquecox','mergemate',7);
+  expect(a.readingOrder[0]?.file).not.toBe(b.readingOrder[0]?.file);expect(a.model).toBe('sample:demo');expect(a.readingOrder.length).toBeGreaterThan(0);
+  const tested=await mock.askPr('ploonu-llc','mariahlabs',57,'Is this change tested?');expect(tested.answer).toMatch(/Failing/);expect(tested.citations.length).toBeGreaterThan(0);expect(tested.model).toBe('sample:demo');
+ });
+});
