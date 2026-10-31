@@ -30,7 +30,8 @@ export function usePrWorkspace(owner:string,repo:string,number:number,consent:bo
    if(changed||!previous){for(const key of ['files','comments','checks'] as const){versions.current[key]++;locks.current[key]=false;pageControllers.current[key]?.abort();}next.current={files:fresh.changedFilesCount===0?null:'1',comments:'review:1',checks:fresh.checkCursor??'checks:1'};setPageBusy({...idle});setPageError({...noErrors});setCapped({...idle});}
    else if(resetChecks){versions.current.checks++;locks.current.checks=false;pageControllers.current.checks?.abort();next.current={...next.current,checks:'checks:1'};setPageError(old=>({...old,checks:null}));setCapped(old=>({...old,checks:false}));}
    const merged=previous&&!changed?{...fresh,files:previous.files,comments:previous.comments,checks:resetChecks?[]:previous.checks,summary:previous.summary,risk:previous.risk,secretWarning:previous.secretWarning,aiNotice:previous.aiNotice}:fresh;value.current=merged;setDetail(merged);setCursors(next.current);
-   if(changed||!previous||resetChecks)void loadPage('checks');
+   if(changed||!previous){void loadPage('files');void loadPage('checks');}
+   else if(resetChecks)void loadPage('checks');
   }catch(error){if(active.current&&!abort.signal.aborted){setError(toUserMessage(error,'Could not refresh this pull request.'));if(error instanceof ApiClientError&&['not_found','forbidden','unauthorized'].includes(error.code)){value.current=null;setDetail(null);}}}
   finally{controllers.current.delete(abort);if(active.current&&!abort.signal.aborted){setLoading(false);setRefreshing(false);}}
  },[owner,repo,number,loadPage]);

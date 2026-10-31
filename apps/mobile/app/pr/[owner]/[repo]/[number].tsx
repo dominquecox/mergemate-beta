@@ -210,311 +210,411 @@ function PrWorkspace({owner,repo,number}:{owner:string;repo:string;number:string
               </View>
             )}
 
-            <View style={isDesktop ? styles.analysisGrid : undefined}>
-            <View style={isDesktop ? {flex:1.45,minWidth:0} : undefined}>
-            {/* Blast Radius Analysis (Impact Domains) */}
-            {detail.files && detail.files.length > 0 && (
-              <BlastRadiusChips files={detail.files} />
-            )}
+            {(() => {
+              const hasAiInsights = Boolean(detail.summary || detail.risk || detail.secretWarning || detail.aiNotice);
 
-            {/* AI Summary Card (US-09) */}
-            {detail.summary && (
-              <View style={{ marginTop: spacing.sm }}>
-                <AIBlock title="AI Summary" coverage={detail.summary.coverage} model={detail.summary.model}>
-                  {/* Executive Impact Callout */}
-                  {!!detail.summary.whyItMatters && (
-                    <View
-                      style={{
-                        backgroundColor: colors.brandSubtle,
-                        borderLeftWidth: 3,
-                        borderLeftColor: colors.brandLight,
-                        borderRadius: radius.md,
-                        padding: 12,
-                        marginBottom: 4,
-                      }}
-                    >
-                      <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 4 }}>
-                        <Icon name="shield-checkmark-outline" size={14} color={colors.brandLight} />
-                        <Text style={[typography.caption, { color: colors.brandLight, fontWeight: "700", letterSpacing: 0.5 }]}>
-                          EXECUTIVE IMPACT
-                        </Text>
-                      </View>
-                      <Text style={[typography.callout, { color: colors.text, lineHeight: 20 }]}>
-                        {detail.summary.whyItMatters.replace(/^[\s•\-*]+/, "").trim()}
-                      </Text>
+              const renderChecksCard = () => (
+                <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.lg, marginTop: spacing.sm }]}>
+                  <Text style={[typography.headline, { color: colors.text }]} accessibilityRole="header">
+                    Checks ({detail.checks.filter((c) => c.conclusion === "success").length}/{detail.checks.length} loaded)
+                  </Text>
+                  {detail.checks.length === 0 ? (
+                    <Text style={[typography.footnote, { color: colors.textMuted, marginTop: spacing.xs }]}>
+                      {checkCursor ? "Checks loading..." : "No status checks reported."}
+                    </Text>
+                  ) : (
+                    <View style={{ marginTop: spacing.xs }}>
+                      {detail.checks.map((chk) => (
+                        <View key={chk.id} style={styles.checkRow}>
+                          <Icon
+                            name={
+                              chk.conclusion === "success"
+                                ? "checkmark-circle"
+                                : chk.conclusion === "failure"
+                                  ? "close-circle"
+                                  : "ellipsis-horizontal-circle-outline"
+                            }
+                            size={18}
+                            color={chk.conclusion === "success" ? colors.riskLow : chk.conclusion === "failure" ? colors.riskHigh : colors.textMuted}
+                          />
+                          <Text style={[typography.subhead, { color: colors.text, flex: 1 }]}>{chk.name}</Text>
+                          <Text style={[typography.caption, { color: colors.textMuted }]}>{chk.status === "completed" ? chk.conclusion : chk.status}</Text>
+                          {!!chk.url && (
+                            <TouchableOpacity accessibilityRole="button" accessibilityLabel="Open check in GitHub" onPress={() => openLink(chk.url)} style={styles.shareBtn}>
+                              <Icon name="open-outline" size={18} color={colors.textSecondary} />
+                            </TouchableOpacity>
+                          )}
+                        </View>
+                      ))}
                     </View>
                   )}
-
-                  {!!detail.summary.whatChanged && (
-                    <SummarySection title="What changed" icon="swap-horizontal-outline">
-                      <ExecutiveSummaryText text={detail.summary.whatChanged} />
-                    </SummarySection>
+                  {!!checkCursor && (
+                    <View style={{ marginTop: 10, alignItems: "center" }}>
+                      <Button title={detail.checks.length ? "Load more checks" : "Load checks"} loading={pageBusy.checks} onPress={() => loadPage("checks")} variant="ghost" style={{ minWidth: 140, alignSelf: "center" }} />
+                    </View>
                   )}
-
-                  {detail.summary.suggestedFocus.length > 0 && (
-                    <SummarySection title="Suggested focus" icon="scan-outline">
-                      <View style={{ gap: 8 }}>
-                        {detail.summary.suggestedFocus.slice(0, 3).map((focus, index) => {
-                          const cleanFocus = focus.replace(/^[\s•\-*]+/, "").trim();
-                          return (
-                            <View
-                              key={index}
-                              style={{
-                                flexDirection: "row",
-                                alignItems: "flex-start",
-                                gap: 10,
-                                paddingVertical: 10,
-                                paddingHorizontal: 12,
-                                backgroundColor: colors.surfaceElevated,
-                                borderRadius: radius.md,
-                                borderWidth: 1,
-                                borderColor: colors.border,
-                              }}
-                            >
-                              <View
-                                style={{
-                                  width: 20,
-                                  height: 20,
-                                  borderRadius: 10,
-                                  backgroundColor: colors.brandSubtle,
-                                  alignItems: "center",
-                                  justifyContent: "center",
-                                  marginTop: 1,
-                                }}
-                              >
-                                <Icon name="search-outline" size={12} color={colors.brandLight} />
-                              </View>
-                              <Text style={[typography.callout, { color: colors.text, flex: 1, lineHeight: 20 }]}>
-                                {cleanFocus}
-                              </Text>
-                            </View>
-                          );
-                        })}
-                      </View>
-                    </SummarySection>
-                  )}
-                </AIBlock>
-              </View>
-            )}
-
-            {/* Reviewer co-pilot: read-only, built on request */}
-            {detail.summary && aiConsentGranted && aiSummaries && (
-              <>
-                <ReviewPlanCard
-                  key={`plan-${detail.headSha}`}
-                  owner={owner}
-                  repo={repo}
-                  number={Number(number)}
-                  files={detail.files}
-                  prTitle={detail.title}
-                />
-                <AskPrCard key={`ask-${detail.headSha}`} owner={owner} repo={repo} number={Number(number)} files={detail.files.map(file=>file.filename)} />
-              </>
-            )}
-
-            {/* AI is on and the summary is still being written */}
-            {aiConsentGranted&&aiSummaries&&!detail.summary&&!detail.aiNotice&&(
-              <View style={{ marginTop: spacing.sm }}><AIBlockSkeleton/></View>
-            )}
-
-            {/* Why the AI parts are missing: not turned on, turned off, over the limit or unavailable */}
-            {detail.aiNotice && (
-              <View style={{ marginTop: spacing.sm }}>
-                {detail.aiNotice.code === "consent_required" && !detail.summary ? (
-                  <AIBlock title="AI Summary">
-                    <Text style={[typography.body, { color: colors.text }]}>{detail.aiNotice.message}</Text>
-                    <Button title="Open Settings" variant="secondary" onPress={()=>router.push("/(tabs)/settings")} style={{marginTop:12,alignSelf:"flex-start"}}/>
-                  </AIBlock>
-                ) : (
-                  <View style={[styles.card, { backgroundColor: colors.surfaceElevated, borderColor: colors.border, borderRadius: radius.lg }]}>
-                    <Text style={[typography.headline, { color: colors.text }]} accessibilityRole="header">
-                      AI summary unavailable
-                    </Text>
-                    <Text style={[typography.body, { color: colors.textSecondary, marginTop: 4 }]} accessibilityLiveRegion="polite">
-                      {detail.aiNotice.message}
-                    </Text>
-                    {aiNoticeAction(detail.aiNotice.code)==="retry" && <Button title="Try again" variant="secondary" loading={aiRetrying} onPress={retryAi} style={{marginTop:12,alignSelf:"flex-start"}} accessibilityLabel="Try the AI summary again"/>}
-                    {aiNoticeAction(detail.aiNotice.code)==="settings" && <Button title="Open Settings" variant="secondary" onPress={()=>router.push("/(tabs)/settings")} style={{marginTop:12,alignSelf:"flex-start"}}/>}
-                  </View>
-                )}
-              </View>
-            )}
-
-            </View>
-            <View style={isDesktop ? {flex:1,minWidth:0} : undefined}>
-            {/* Risk Assessment Card (US-10) */}
-            {detail.risk && (
-              <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.lg, marginTop: spacing.sm }]}>
-                <View style={[styles.riskHeader,{flexWrap:"wrap",gap:8}]}>
-                  <Text style={[typography.headline, { color: colors.text }]} accessibilityRole="header">
-                    Why this risk
-                  </Text>
-                  <RiskBadge level={detail.risk.level} secretWarning={detail.secretWarning} />
+                  {!!pageError.checks && <Text accessibilityRole="alert" style={{ color: colors.riskHigh, marginTop: 4 }}>{pageError.checks}</Text>}
+                  {capped.checks && <Text style={{ color: colors.textSecondary, marginTop: 4 }}>Check pagination limit reached. Open this PR in GitHub for the full history.</Text>}
                 </View>
+              );
 
-                <View style={{ marginTop: spacing.sm, gap: 8 }}>
-                  {riskEvidence(detail.risk, detail.files, detail.checks)
-                    .filter((item, _, all) => all.length === 1 || !item.reason.startsWith("No rule-based risk signals"))
-                    .slice(0, 3)
-                    .map(({ reason, file, check }, idx) => {
-                      const cleanReason = reason.replace(/^[\s•\-*]+/, "").trim();
-                      const isHigh = detail.risk!.level === "high";
-                      const isMedium = detail.risk!.level === "medium";
-                      const badgeBg = isHigh ? colors.riskHighBg : isMedium ? colors.riskMediumBg : colors.riskLowBg;
-                      const badgeColor = isHigh ? colors.riskHigh : isMedium ? colors.riskMedium : colors.riskLow;
-                      const iconName = isHigh ? "alert-circle" : isMedium ? "warning" : "checkmark-circle";
-                      return (
-                        <View
-                          key={idx}
-                          style={{
-                            flexDirection: "row",
-                            alignItems: "flex-start",
-                            gap: 10,
-                            paddingVertical: 10,
-                            paddingHorizontal: 12,
-                            backgroundColor: colors.surfaceElevated,
-                            borderRadius: radius.md,
-                            borderWidth: 1,
-                            borderColor: colors.border,
-                          }}
-                          testID="risk-reason"
-                        >
-                          <View
-                            style={{
-                              width: 22,
-                              height: 22,
-                              borderRadius: 11,
-                              backgroundColor: badgeBg,
-                              alignItems: "center",
-                              justifyContent: "center",
-                              marginTop: 1,
-                            }}
-                          >
-                            <Icon name={iconName} size={14} color={badgeColor} />
-                          </View>
-                          <View style={{ flex: 1 }}>
-                            <Text style={[typography.callout, { color: colors.text, lineHeight: 20 }]}>
-                              {cleanReason}
+              if (!hasAiInsights) {
+                return (
+                  <View style={isDesktop ? { flexDirection: "row", gap: 16, alignItems: "flex-start", marginTop: spacing.sm } : undefined}>
+                    <View style={isDesktop ? { flex: 1.2, minWidth: 0 } : undefined}>
+                      <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.lg, marginTop: spacing.sm }]}>
+                        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+                          <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                            <Icon name="git-pull-request" size={18} color={colors.brandLight} />
+                            <Text style={[typography.headline, { color: colors.text }]} accessibilityRole="header">
+                              Pull Request Overview
                             </Text>
-                            {!!file && (
-                              <TouchableOpacity
-                                accessibilityRole="button"
-                                accessibilityLabel={`Open ${file}, the file behind this reason`}
-                                onPress={() => jumpToFile(file)}
-                                style={{ minHeight: 32, justifyContent: "center", marginTop: 4 }}
-                              >
-                                <Text style={[typography.caption, { color: colors.brandLight, fontWeight: "600" }]} numberOfLines={1}>
-                                  View {file} ↗
-                                </Text>
-                              </TouchableOpacity>
-                            )}
-                            {!!check && (
-                              <Text style={[typography.caption, { color: colors.riskHigh, marginTop: 4 }]}>
-                                Failing check: {check}
-                              </Text>
-                            )}
+                          </View>
+                          <View style={{ backgroundColor: colors.surfaceElevated, paddingHorizontal: 8, paddingVertical: 4, borderRadius: radius.sm }}>
+                            <Text style={[typography.caption, { color: colors.brandLight, fontWeight: "600" }]}>
+                              {detail.changedFilesCount} {detail.changedFilesCount === 1 ? "file" : "files"}
+                            </Text>
                           </View>
                         </View>
-                      );
-                    })}
-                </View>
-
-                {detail.risk.quality?.needsCloserLook && (
-                  <View
-                    style={{
-                      flexDirection: "row",
-                      alignItems: "center",
-                      gap: 8,
-                      paddingVertical: 8,
-                      paddingHorizontal: 12,
-                      backgroundColor: colors.surfaceElevated,
-                      borderRadius: radius.md,
-                      borderWidth: 1,
-                      borderColor: colors.border,
-                      marginTop: 8,
-                    }}
-                  >
-                    <Icon name="eye-outline" size={16} color={colors.textSecondary} />
-                    <Text style={[typography.footnote, { color: colors.textSecondary, flex: 1 }]}>
-                      {detail.risk.quality.reasons.join(" · ")}
-                    </Text>
-                  </View>
-                )}
-
-                <TouchableOpacity accessibilityRole="button" accessibilityLabel="How this was assessed" accessibilityState={{expanded:assessmentOpen}} aria-expanded={assessmentOpen} onPress={()=>setAssessmentOpen(open=>!open)} style={{flexDirection:"row",alignItems:"center",gap:8,minHeight:44,padding:12,marginTop:12,backgroundColor:colors.surfaceElevated,borderRadius:12}}><Icon name="information-circle-outline" size={18} color={colors.brandLight}/><Text style={[typography.footnote,{color:colors.textSecondary,flex:1}]}>How this was assessed</Text><Icon name={assessmentOpen?'chevron-up':'chevron-down'} size={16} color={colors.textSecondary}/></TouchableOpacity>
-                {assessmentOpen && <Text style={[typography.footnote,{color:colors.textSecondary,padding:12}]}>{riskAssessmentText(detail.risk.assessedBy)}</Text>}
-              </View>
-            )}
-
-            {/* CI Checks List */}
-            <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.lg, marginTop: spacing.sm }]}>
-              <Text style={[typography.headline, { color: colors.text }]} accessibilityRole="header">
-                Checks ({detail.checks.filter((c) => c.conclusion === "success").length}/{detail.checks.length} loaded)
-              </Text>
-              {detail.checks.length === 0 ? (
-                <Text style={[typography.footnote, { color: colors.textMuted, marginTop: spacing.xs }]}>
-                  {checkCursor ? "Checks loading..." : "No status checks reported."}
-                </Text>
-              ) : (
-                <View style={{ marginTop: spacing.xs }}>
-                  {detail.checks.map((chk) => (
-                    <View key={chk.id} style={styles.checkRow}>
-                      <Icon
-                        name={
-                          chk.conclusion === "success"
-                            ? "checkmark-circle"
-                            : chk.conclusion === "failure"
-                              ? "close-circle"
-                              : "ellipsis-horizontal-circle-outline"
-                        }
-                        size={18}
-                        color={chk.conclusion === "success" ? colors.riskLow : chk.conclusion === "failure" ? colors.riskHigh : colors.textMuted}
-                      />
-                      <Text style={[typography.subhead, { color: colors.text, flex: 1 }]}>{chk.name}</Text>
-                      <Text style={[typography.caption, { color: colors.textMuted }]}>{chk.status==='completed'?chk.conclusion:chk.status}</Text>{!!chk.url&&<TouchableOpacity accessibilityRole="button" accessibilityLabel="Open check in GitHub" onPress={()=>openLink(chk.url)} style={styles.shareBtn}><Icon name="open-outline" size={18} color={colors.textSecondary}/></TouchableOpacity>}
+                        <View style={{ flexDirection: "row", gap: 16, marginTop: 12, alignItems: "center" }}>
+                          <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                            <Icon name="add-circle-outline" size={16} color={colors.riskLow} />
+                            <Text style={[typography.subhead, { color: colors.riskLow, fontWeight: "600" }]}>+{detail.additions} lines</Text>
+                          </View>
+                          <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                            <Icon name="remove-circle-outline" size={16} color={colors.riskHigh} />
+                            <Text style={[typography.subhead, { color: colors.riskHigh, fontWeight: "600" }]}>-{detail.deletions} lines</Text>
+                          </View>
+                        </View>
+                        {detail.files && detail.files.length > 0 && (
+                          <View style={{ marginTop: 12 }}>
+                            <BlastRadiusChips files={detail.files} />
+                          </View>
+                        )}
+                      </View>
                     </View>
-                  ))}
-                </View>
-              )}
-              {!!checkCursor&&<Button title={detail.checks.length?'Load more checks':'Load checks'} loading={pageBusy.checks} onPress={()=>loadPage('checks')} variant="ghost"/>}
-              {!!pageError.checks && <Text accessibilityRole="alert" style={{color:colors.riskHigh}}>{pageError.checks}</Text>}
-              {capped.checks&&<Text style={{color:colors.textSecondary}}>Check pagination limit reached. Open this PR in GitHub for the full history.</Text>}
-            </View>
+                    <View style={isDesktop ? { flex: 1, minWidth: 0 } : undefined}>
+                      {renderChecksCard()}
+                    </View>
+                  </View>
+                );
+              }
 
-            </View>
-            </View>
+              return (
+                <View style={isDesktop ? styles.analysisGrid : undefined}>
+                  <View style={isDesktop ? { flex: 1.45, minWidth: 0 } : undefined}>
+                    {/* Blast Radius Analysis (Impact Domains) */}
+                    {detail.files && detail.files.length > 0 && (
+                      <BlastRadiusChips files={detail.files} />
+                    )}
+
+                    {/* AI Summary Card (US-09) */}
+                    {detail.summary && (
+                      <View style={{ marginTop: spacing.sm }}>
+                        <AIBlock title="AI Summary" coverage={detail.summary.coverage} model={detail.summary.model}>
+                          {/* Executive Impact Callout */}
+                          {!!detail.summary.whyItMatters && (
+                            <View
+                              style={{
+                                backgroundColor: colors.brandSubtle,
+                                borderLeftWidth: 3,
+                                borderLeftColor: colors.brandLight,
+                                borderRadius: radius.md,
+                                padding: 12,
+                                marginBottom: 4,
+                              }}
+                            >
+                              <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 4 }}>
+                                <Icon name="shield-checkmark-outline" size={14} color={colors.brandLight} />
+                                <Text style={[typography.caption, { color: colors.brandLight, fontWeight: "700", letterSpacing: 0.5 }]}>
+                                  EXECUTIVE IMPACT
+                                </Text>
+                              </View>
+                              <Text style={[typography.callout, { color: colors.text, lineHeight: 20 }]}>
+                                {detail.summary.whyItMatters.replace(/^[\s•\-*]+/, "").trim()}
+                              </Text>
+                            </View>
+                          )}
+
+                          {!!detail.summary.whatChanged && (
+                            <SummarySection title="What changed" icon="swap-horizontal-outline">
+                              <ExecutiveSummaryText text={detail.summary.whatChanged} />
+                            </SummarySection>
+                          )}
+
+                          {detail.summary.suggestedFocus.length > 0 && (
+                            <SummarySection title="Suggested focus" icon="scan-outline">
+                              <View style={{ gap: 8 }}>
+                                {detail.summary.suggestedFocus.slice(0, 3).map((focus, index) => {
+                                  const cleanFocus = focus.replace(/^[\s•\-*]+/, "").trim();
+                                  return (
+                                    <View
+                                      key={index}
+                                      style={{
+                                        flexDirection: "row",
+                                        alignItems: "flex-start",
+                                        gap: 10,
+                                        paddingVertical: 10,
+                                        paddingHorizontal: 12,
+                                        backgroundColor: colors.surfaceElevated,
+                                        borderRadius: radius.md,
+                                        borderWidth: 1,
+                                        borderColor: colors.border,
+                                      }}
+                                    >
+                                      <View
+                                        style={{
+                                          width: 20,
+                                          height: 20,
+                                          borderRadius: 10,
+                                          backgroundColor: colors.brandSubtle,
+                                          alignItems: "center",
+                                          justifyContent: "center",
+                                          marginTop: 1,
+                                        }}
+                                      >
+                                        <Icon name="search-outline" size={12} color={colors.brandLight} />
+                                      </View>
+                                      <Text style={[typography.callout, { color: colors.text, flex: 1, lineHeight: 20 }]}>
+                                        {cleanFocus}
+                                      </Text>
+                                    </View>
+                                  );
+                                })}
+                              </View>
+                            </SummarySection>
+                          )}
+                        </AIBlock>
+                      </View>
+                    )}
+
+                    {/* Reviewer co-pilot: read-only, built on request */}
+                    {detail.summary && aiConsentGranted && aiSummaries && (
+                      <>
+                        <ReviewPlanCard
+                          key={`plan-${detail.headSha}`}
+                          owner={owner}
+                          repo={repo}
+                          number={Number(number)}
+                          files={detail.files}
+                          prTitle={detail.title}
+                        />
+                        <AskPrCard key={`ask-${detail.headSha}`} owner={owner} repo={repo} number={Number(number)} files={detail.files.map((file) => file.filename)} />
+                      </>
+                    )}
+
+                    {/* AI is on and the summary is still being written */}
+                    {aiConsentGranted && aiSummaries && !detail.summary && !detail.aiNotice && (
+                      <View style={{ marginTop: spacing.sm }}><AIBlockSkeleton /></View>
+                    )}
+
+                    {/* Why the AI parts are missing: not turned on, turned off, over the limit or unavailable */}
+                    {detail.aiNotice && (
+                      <View style={{ marginTop: spacing.sm }}>
+                        {detail.aiNotice.code === "consent_required" && !detail.summary ? (
+                          <AIBlock title="AI Summary">
+                            <Text style={[typography.body, { color: colors.text }]}>{detail.aiNotice.message}</Text>
+                            <Button title="Open Settings" variant="secondary" onPress={() => router.push("/(tabs)/settings")} style={{ marginTop: 12, alignSelf: "flex-start" }} />
+                          </AIBlock>
+                        ) : (
+                          <View style={[styles.card, { backgroundColor: colors.surfaceElevated, borderColor: colors.border, borderRadius: radius.lg }]}>
+                            <Text style={[typography.headline, { color: colors.text }]} accessibilityRole="header">
+                              AI summary unavailable
+                            </Text>
+                            <Text style={[typography.body, { color: colors.textSecondary, marginTop: 4 }]} accessibilityLiveRegion="polite">
+                              {detail.aiNotice.message}
+                            </Text>
+                            {aiNoticeAction(detail.aiNotice.code) === "retry" && <Button title="Try again" variant="secondary" loading={aiRetrying} onPress={retryAi} style={{ marginTop: 12, alignSelf: "flex-start" }} accessibilityLabel="Try the AI summary again" />}
+                            {aiNoticeAction(detail.aiNotice.code) === "settings" && <Button title="Open Settings" variant="secondary" onPress={() => router.push("/(tabs)/settings")} style={{ marginTop: 12, alignSelf: "flex-start" }} />}
+                          </View>
+                        )}
+                      </View>
+                    )}
+                  </View>
+
+                  <View style={isDesktop ? { flex: 1, minWidth: 0 } : undefined}>
+                    {/* Risk Assessment Card (US-10) */}
+                    {detail.risk && (
+                      <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.lg, marginTop: spacing.sm }]}>
+                        <View style={[styles.riskHeader, { flexWrap: "wrap", gap: 8 }]}>
+                          <Text style={[typography.headline, { color: colors.text }]} accessibilityRole="header">
+                            Why this risk
+                          </Text>
+                          <RiskBadge level={detail.risk.level} secretWarning={detail.secretWarning} />
+                        </View>
+
+                        <View style={{ marginTop: spacing.sm, gap: 8 }}>
+                          {riskEvidence(detail.risk, detail.files, detail.checks)
+                            .filter((item, _, all) => all.length === 1 || !item.reason.startsWith("No rule-based risk signals"))
+                            .slice(0, 3)
+                            .map(({ reason, file, check }, idx) => {
+                              const cleanReason = reason.replace(/^[\s•\-*]+/, "").trim();
+                              const isHigh = detail.risk!.level === "high";
+                              const isMedium = detail.risk!.level === "medium";
+                              const badgeBg = isHigh ? colors.riskHighBg : isMedium ? colors.riskMediumBg : colors.riskLowBg;
+                              const badgeColor = isHigh ? colors.riskHigh : isMedium ? colors.riskMedium : colors.riskLow;
+                              const iconName = isHigh ? "alert-circle" : isMedium ? "warning" : "checkmark-circle";
+                              return (
+                                <View
+                                  key={idx}
+                                  style={{
+                                    flexDirection: "row",
+                                    alignItems: "flex-start",
+                                    gap: 10,
+                                    paddingVertical: 10,
+                                    paddingHorizontal: 12,
+                                    backgroundColor: colors.surfaceElevated,
+                                    borderRadius: radius.md,
+                                    borderWidth: 1,
+                                    borderColor: colors.border,
+                                  }}
+                                  testID="risk-reason"
+                                >
+                                  <View
+                                    style={{
+                                      width: 22,
+                                      height: 22,
+                                      borderRadius: 11,
+                                      backgroundColor: badgeBg,
+                                      alignItems: "center",
+                                      justifyContent: "center",
+                                      marginTop: 1,
+                                    }}
+                                  >
+                                    <Icon name={iconName} size={14} color={badgeColor} />
+                                  </View>
+                                  <View style={{ flex: 1 }}>
+                                    <Text style={[typography.callout, { color: colors.text, lineHeight: 20 }]}>
+                                      {cleanReason}
+                                    </Text>
+                                    {!!file && (
+                                      <TouchableOpacity
+                                        accessibilityRole="button"
+                                        accessibilityLabel={`Open ${file}, the file behind this reason`}
+                                        onPress={() => jumpToFile(file)}
+                                        style={{ minHeight: 32, justifyContent: "center", marginTop: 4 }}
+                                      >
+                                        <Text style={[typography.caption, { color: colors.brandLight, fontWeight: "600" }]} numberOfLines={1}>
+                                          View {file} ↗
+                                        </Text>
+                                      </TouchableOpacity>
+                                    )}
+                                    {!!check && (
+                                      <Text style={[typography.caption, { color: colors.riskHigh, marginTop: 4 }]}>
+                                        Failing check: {check}
+                                      </Text>
+                                    )}
+                                  </View>
+                                </View>
+                              );
+                            })}
+                        </View>
+
+                        {detail.risk.quality?.needsCloserLook && (
+                          <View
+                            style={{
+                              flexDirection: "row",
+                              alignItems: "center",
+                              gap: 8,
+                              paddingVertical: 8,
+                              paddingHorizontal: 12,
+                              backgroundColor: colors.surfaceElevated,
+                              borderRadius: radius.md,
+                              borderWidth: 1,
+                              borderColor: colors.border,
+                              marginTop: 8,
+                            }}
+                          >
+                            <Icon name="eye-outline" size={16} color={colors.textSecondary} />
+                            <Text style={[typography.footnote, { color: colors.textSecondary, flex: 1 }]}>
+                              {detail.risk.quality.reasons.join(" · ")}
+                            </Text>
+                          </View>
+                        )}
+
+                        <TouchableOpacity accessibilityRole="button" accessibilityLabel="How this was assessed" accessibilityState={{ expanded: assessmentOpen }} aria-expanded={assessmentOpen} onPress={() => setAssessmentOpen((open) => !open)} style={{ flexDirection: "row", alignItems: "center", gap: 8, minHeight: 44, padding: 12, marginTop: 12, backgroundColor: colors.surfaceElevated, borderRadius: 12 }}><Icon name="information-circle-outline" size={18} color={colors.brandLight} /><Text style={[typography.footnote, { color: colors.textSecondary, flex: 1 }]}>How this was assessed</Text><Icon name={assessmentOpen ? "chevron-up" : "chevron-down"} size={16} color={colors.textSecondary} /></TouchableOpacity>
+                        {assessmentOpen && <Text style={[typography.footnote, { color: colors.textSecondary, padding: 12 }]}>{riskAssessmentText(detail.risk.assessedBy)}</Text>}
+                      </View>
+                    )}
+
+                    {renderChecksCard()}
+                  </View>
+                </View>
+              );
+            })()}
+
             {/* Changed Files List */}
             <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.lg, marginTop: spacing.sm }]}>
-              <Text style={[typography.headline, { color: colors.text }]} accessibilityRole="header">
-                Files Changed ({detail.changedFilesCount})
-              </Text>
-              {detail.files.length === 0 ? (
-                <Text style={[typography.footnote, { color: colors.textMuted, marginTop: spacing.xs }]}>
-                  {detail.changedFilesCount ? "Load changed files when you are ready to review them." : "No changed files reported for this pull request."}
+              <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+                <Text style={[typography.headline, { color: colors.text }]} accessibilityRole="header">
+                  Files Changed ({detail.changedFilesCount})
                 </Text>
+                {detail.files.length > 0 && (
+                  <Text style={[typography.caption, { color: colors.textMuted }]}>
+                    +{detail.additions} / -{detail.deletions}
+                  </Text>
+                )}
+              </View>
+              {detail.files.length === 0 ? (
+                <View style={{ paddingVertical: 12, alignItems: "center", gap: 8 }}>
+                  <Text style={[typography.footnote, { color: colors.textMuted }]}>
+                    {pageBusy.files ? "Loading files..." : "No changed files loaded yet."}
+                  </Text>
+                  {!!fileCursor && (
+                    <Button
+                      title="Load files"
+                      loading={pageBusy.files}
+                      onPress={() => loadPage("files")}
+                      variant="secondary"
+                      style={{ minWidth: 140, alignSelf: "center", marginTop: 4 }}
+                    />
+                  )}
+                </View>
               ) : (
                 <View style={{ marginTop: spacing.xs }}>
                   {detail.files.map((file) => (
-                    <View testID={`workspace-file-${file.filename}`} ref={node=>{fileRows.current[file.filename]=node;}} key={file.filename} style={{marginTop:12,backgroundColor:colors.surfaceElevated,borderRadius:8,overflow:"hidden"}}>
-                      <TouchableOpacity accessibilityRole="button" accessibilityLabel={`Toggle diff for ${file.filename}`} accessibilityState={{expanded:expandedFiles.includes(file.filename)}} aria-expanded={expandedFiles.includes(file.filename)} onPress={()=>setExpandedFiles(prev=>prev.includes(file.filename)?prev.filter(name=>name!==file.filename):[...prev,file.filename])} style={{flexDirection:"row",alignItems:"center",padding:12,gap:8,minHeight:48}}><Icon name={expandedFiles.includes(file.filename)?"chevron-down":"chevron-forward"} size={16} color={colors.textSecondary}/><Text style={[typography.code,{color:colors.text,flex:1}]}>{file.filename} · {file.status}</Text><Text style={[typography.code,{color:colors.riskLow,fontSize:11}]}>+{file.additions}</Text><Text style={[typography.code,{color:colors.riskHigh,fontSize:11}]}>-{file.deletions}</Text></TouchableOpacity>
-                      {!!file.previousPath&&<Text style={{color:colors.textSecondary,paddingHorizontal:12}}>Previously: {file.previousPath}</Text>}
-                      {expandedFiles.includes(file.filename)&&file.patchState==='partial'&&<Text accessibilityRole="alert" style={{color:colors.textSecondary,padding:12}}>Partial patch: this is not the complete diff. Open this PR in GitHub for the full file.</Text>}
-                      {expandedFiles.includes(file.filename) && (file.patchSnippet ? <DiffView patch={file.patchSnippet} wrap={Object.prototype.hasOwnProperty.call(fileWrap,file.filename)?fileWrap[file.filename]??true:true} onWrapChange={wrap=>setFileWrap(old=>({...old,[file.filename]:wrap}))}/> : <Text style={[typography.code,{color:colors.textSecondary,padding:12,borderTopWidth:1,borderTopColor:colors.border}]}>Patch unavailable: the file may be binary, empty or too large for GitHub to include. Open this PR in GitHub.</Text>)}
+                    <View testID={`workspace-file-${file.filename}`} ref={(node) => { fileRows.current[file.filename] = node; }} key={file.filename} style={{ marginTop: 12, backgroundColor: colors.surfaceElevated, borderRadius: 8, overflow: "hidden" }}>
+                      <TouchableOpacity accessibilityRole="button" accessibilityLabel={`Toggle diff for ${file.filename}`} accessibilityState={{ expanded: expandedFiles.includes(file.filename) }} aria-expanded={expandedFiles.includes(file.filename)} onPress={() => setExpandedFiles((prev) => prev.includes(file.filename) ? prev.filter((name) => name !== file.filename) : [...prev, file.filename])} style={{ flexDirection: "row", alignItems: "center", padding: 12, gap: 8, minHeight: 48 }}><Icon name={expandedFiles.includes(file.filename) ? "chevron-down" : "chevron-forward"} size={16} color={colors.textSecondary} /><Text style={[typography.code, { color: colors.text, flex: 1 }]}>{file.filename} · {file.status}</Text><Text style={[typography.code, { color: colors.riskLow, fontSize: 11 }]}>+{file.additions}</Text><Text style={[typography.code, { color: colors.riskHigh, fontSize: 11 }]}>-{file.deletions}</Text></TouchableOpacity>
+                      {!!file.previousPath && <Text style={{ color: colors.textSecondary, paddingHorizontal: 12 }}>Previously: {file.previousPath}</Text>}
+                      {expandedFiles.includes(file.filename) && file.patchState === "partial" && <Text accessibilityRole="alert" style={{ color: colors.textSecondary, padding: 12 }}>Partial patch: this is not the complete diff. Open this PR in GitHub for the full file.</Text>}
+                      {expandedFiles.includes(file.filename) && (file.patchSnippet ? <DiffView patch={file.patchSnippet} wrap={Object.prototype.hasOwnProperty.call(fileWrap, file.filename) ? fileWrap[file.filename] ?? true : true} onWrapChange={(wrap) => setFileWrap((old) => ({ ...old, [file.filename]: wrap }))} /> : <Text style={[typography.code, { color: colors.textSecondary, padding: 12, borderTopWidth: 1, borderTopColor: colors.border }]}>Patch unavailable: the file may be binary, empty or too large for GitHub to include. Open this PR in GitHub.</Text>)}
                     </View>
                   ))}
+                  {!!fileCursor && (
+                    <View style={{ marginTop: 14, alignItems: "center" }}>
+                      <Button
+                        title={detail.files.length ? "Load more files" : "Load files"}
+                        loading={pageBusy.files}
+                        onPress={() => loadPage("files")}
+                        variant="secondary"
+                        style={{ minWidth: 160, alignSelf: "center" }}
+                      />
+                    </View>
+                  )}
                 </View>
               )}
+              {capped.files && <Text style={{ color: colors.textSecondary, marginTop: 8 }}>File pagination limit reached. Open this PR in GitHub for remaining files.</Text>}
+              {!!pageError.files && <Text accessibilityRole="alert" style={[typography.footnote, { color: colors.riskHigh, padding: 16 }]}>{pageError.files}</Text>}
             </View>
 
-            {!!fileCursor && <Button title={detail.files.length?'Load more files':'Load files'} loading={pageBusy.files} onPress={()=>loadPage('files')} variant="secondary"/>}
-            {capped.files&&<Text style={{color:colors.textSecondary}}>File pagination limit reached. Open this PR in GitHub for remaining files.</Text>}
-            {!!pageError.files && <Text accessibilityRole="alert" style={[typography.footnote,{color:colors.riskHigh,padding:16}]}>{pageError.files}</Text>}
-            <View style={[styles.card,{backgroundColor:colors.surface,borderColor:colors.border,borderRadius:radius.lg,marginTop:16}]}>
-              <Text accessibilityRole="header" style={[typography.headline,{color:colors.text}]}>Conversation</Text>
-              {discussionGroups(detail.comments).map(group=><View key={group.id} style={{paddingVertical:12,borderBottomWidth:1,borderBottomColor:colors.border}}><TouchableOpacity accessibilityRole="button" accessibilityLabel={group.kind==='conversation'?'Toggle PR conversation':group.kind==='review-summary'?`Toggle submitted review by ${group.comments[0]?.author??'reviewer'}`:`Toggle review discussion for ${group.path??'file unavailable'}${group.line?` line ${group.line}`:''}`} accessibilityState={{expanded:!collapsedThreads.includes(group.id)}} aria-expanded={!collapsedThreads.includes(group.id)} onPress={()=>setCollapsedThreads(old=>old.includes(group.id)?old.filter(id=>id!==group.id):[...old,group.id])} style={{minHeight:44,justifyContent:'center'}}><Text style={[typography.subhead,{color:colors.text}]}>{group.kind==='conversation'?'PR conversation':group.kind==='review-summary'?`Review: ${(group.reviewState??'submitted').toLowerCase().replaceAll('_',' ')}`:`Review discussion · ${group.path??'file unavailable'}${group.line?`:${group.line}`:''}${group.outdated?' (outdated)':''}`}</Text></TouchableOpacity>{!collapsedThreads.includes(group.id)&&group.comments.map(comment=><View key={comment.id} style={{paddingVertical:8}}><Text style={[typography.footnote,{color:colors.textSecondary}]}>@{comment.author} · {relativeTime(comment.createdAt)}</Text><Text selectable style={[typography.body,{color:colors.text,marginTop:4}]}>{comment.body||'No review message.'}</Text></View>)}</View>)}
-              {commentCursor?<Button title="Load comments" loading={pageBusy.comments} onPress={()=>loadPage('comments')} variant="ghost"/>:detail.comments.length===0?<Text style={[typography.footnote,{color:colors.textSecondary}]}>No comments.</Text>:null}
-              {capped.comments&&<Text style={{color:colors.textSecondary}}>Discussion pagination limit reached. Open this PR in GitHub for the full history.</Text>}
-              {!!pageError.comments && <Text accessibilityRole="alert" style={[typography.footnote,{color:colors.riskHigh,paddingTop:12}]}>{pageError.comments}</Text>}
+            <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.lg, marginTop: 16 }]}>
+              <Text accessibilityRole="header" style={[typography.headline, { color: colors.text }]}>Conversation</Text>
+              {discussionGroups(detail.comments).map((group) => <View key={group.id} style={{ paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: colors.border }}><TouchableOpacity accessibilityRole="button" accessibilityLabel={group.kind === "conversation" ? "Toggle PR conversation" : group.kind === "review-summary" ? `Toggle submitted review by ${group.comments[0]?.author ?? "reviewer"}` : `Toggle review discussion for ${group.path ?? "file unavailable"}${group.line ? ` line ${group.line}` : ""}`} accessibilityState={{ expanded: !collapsedThreads.includes(group.id) }} aria-expanded={!collapsedThreads.includes(group.id)} onPress={() => setCollapsedThreads((old) => old.includes(group.id) ? old.filter((id) => id !== group.id) : [...old, group.id])} style={{ minHeight: 44, justifyContent: "center" }}><Text style={[typography.subhead, { color: colors.text }]}>{group.kind === "conversation" ? "PR conversation" : group.kind === "review-summary" ? `Review: ${(group.reviewState ?? "submitted").toLowerCase().replaceAll("_", " ")}` : `Review discussion · ${group.path ?? "file unavailable"}${group.line ? `:${group.line}` : ""}${group.outdated ? " (outdated)" : ""}`}</Text></TouchableOpacity>{!collapsedThreads.includes(group.id) && group.comments.map((comment) => <View key={comment.id} style={{ paddingVertical: 8 }}><Text style={[typography.footnote, { color: colors.textSecondary }]}>@{comment.author} · {relativeTime(comment.createdAt)}</Text><Text selectable style={[typography.body, { color: colors.text, marginTop: 4 }]}>{comment.body || "No review message."}</Text></View>)}</View>)}
+              {commentCursor ? (
+                <View style={{ marginTop: 12, alignItems: "center" }}>
+                  <Button
+                    title="Load comments"
+                    loading={pageBusy.comments}
+                    onPress={() => loadPage("comments")}
+                    variant="ghost"
+                    style={{ minWidth: 160, alignSelf: "center" }}
+                  />
+                </View>
+              ) : detail.comments.length === 0 ? (
+                <Text style={[typography.footnote, { color: colors.textSecondary, marginTop: 8 }]}>No comments.</Text>
+              ) : null}
+              {capped.comments && <Text style={{ color: colors.textSecondary, marginTop: 8 }}>Discussion pagination limit reached. Open this PR in GitHub for the full history.</Text>}
+              {!!pageError.comments && <Text accessibilityRole="alert" style={[typography.footnote, { color: colors.riskHigh, paddingTop: 12 }]}>{pageError.comments}</Text>}
             </View>
 
             {showNoteInput && <View onLayout={event=>{noteY.current=event.nativeEvent.layout.y;if(noteFocus>0)scroll.current?.scrollTo({y:Math.max(0,noteY.current-16),animated:true});}}><PrivateNotes focusRequest={noteFocus} onClose={()=>setShowNoteInput(false)} context={{kind:'pr',repo:`${owner}/${repo}`,number:Number(number)}}/></View>}

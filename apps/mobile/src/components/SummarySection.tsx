@@ -45,6 +45,58 @@ export function cleanCopy(input: string): string {
     .trim();
 }
 
+export interface FormattedInsight {
+  title?: string;
+  body: string;
+  chips: string[];
+}
+
+/** Parses raw technical log sentences into structured executive insight cards. */
+export function parseInsight(raw: string): FormattedInsight {
+  let text = cleanCopy(raw);
+  // Strip commit SHAs like "off main 84a1c75" or "@3e017f1"
+  text = text.replace(/\s+(?:off\s+main\s+|commit\s+|@)[0-9a-f]{7,40}/gi, '');
+
+  const chips: string[] = [];
+
+  // Extract long parenthetical lists like (yaps, vidiloop, mergemate...)
+  text = text.replace(/\(([^)]+)\)/g, (match, inner) => {
+    const parts = inner.split(/[,;]/).map((s: string) => s.trim()).filter(Boolean);
+    if (parts.length >= 3) {
+      chips.push(...parts.slice(0, 5));
+      return parts.length > 5 ? `(${parts.length} product boards)` : '';
+    }
+    return match;
+  });
+
+  // Extract file paths like "PICKUP.md", "BOARD.md"
+  const fileMatches = text.match(/\b([a-zA-Z0-9_.-]+\.(?:md|ts|tsx|json|sql|swift|ya?ml))\b/gi);
+  if (fileMatches && fileMatches.length >= 2) {
+    for (const file of fileMatches) {
+      if (!chips.includes(file)) chips.push(file);
+    }
+  }
+
+  let title: string | undefined;
+  let body = text;
+
+  if (text.includes(':') && !text.startsWith('http')) {
+    const idx = text.indexOf(':');
+    title = text.slice(0, idx).trim();
+    body = text.slice(idx + 1).trim();
+  }
+
+  if (title) {
+    title = title.replace(/^(?:and\s+added|added|adding|updated|updating|docs-only\s+pr\s+adding)\s+/i, '');
+    title = title.charAt(0).toUpperCase() + title.slice(1);
+  }
+
+  body = body.replace(/^(?:new\s+|and\s+)/i, '');
+  body = body.charAt(0).toUpperCase() + body.slice(1);
+
+  return { title, body, chips: chips.slice(0, 4) };
+}
+
 /** Formats summary narrative into sleek, executive-grade copy. ZERO bundled bullets. */
 export function ExecutiveSummaryText({ text }: { text: string }) {
   const { colors, typography, radius } = useTheme();
@@ -60,23 +112,53 @@ export function ExecutiveSummaryText({ text }: { text: string }) {
   if (sentences.length > 1 && expanded) {
     return (
       <View style={{ gap: 8 }}>
-        {sentences.map((sentence, i) => (
-          <View
-            key={i}
-            style={{
-              backgroundColor: colors.surfaceElevated,
-              borderRadius: radius.md,
-              paddingVertical: 10,
-              paddingHorizontal: 12,
-              borderWidth: 1,
-              borderColor: colors.border,
-            }}
-          >
-            <Text style={[typography.callout, { color: colors.text, lineHeight: 21 }]}>
-              {sentence}
-            </Text>
-          </View>
-        ))}
+        {sentences.map((sentence, i) => {
+          const insight = parseInsight(sentence);
+          return (
+            <View
+              key={i}
+              style={{
+                backgroundColor: colors.surfaceElevated,
+                borderRadius: radius.md,
+                paddingVertical: 12,
+                paddingHorizontal: 14,
+                borderWidth: 1,
+                borderColor: colors.border,
+              }}
+            >
+              {!!insight.title && (
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                  <Icon name="git-commit-outline" size={14} color={colors.brandLight} />
+                  <Text style={[typography.subhead, { color: colors.text, fontWeight: '600' }]}>
+                    {insight.title}
+                  </Text>
+                </View>
+              )}
+              <Text style={[typography.callout, { color: insight.title ? colors.textSecondary : colors.text, lineHeight: 21 }]}>
+                {insight.body}
+              </Text>
+              {insight.chips.length > 0 && (
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 8 }}>
+                  {insight.chips.map((chip) => (
+                    <View
+                      key={chip}
+                      style={{
+                        paddingHorizontal: 6,
+                        paddingVertical: 2,
+                        backgroundColor: colors.surfaceSecondary,
+                        borderRadius: radius.sm,
+                      }}
+                    >
+                      <Text style={[typography.code, { fontSize: 11, color: colors.brandLight }]}>
+                        {chip}
+                      </Text>
+                    </View>
+                  ))}
+                </View>
+              )}
+            </View>
+          );
+        })}
         {isLong && (
           <Pressable
             accessibilityRole="button"
