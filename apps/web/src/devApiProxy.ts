@@ -12,7 +12,10 @@ function cleanHeaders(input: Headers): Headers {
 }
 
 function rewriteCookie(value: string): string {
-  return value.replace(/;\s*Domain=[^;]*/gi, "").replace(/;\s*Path=([^;]*)/gi, (_m, path: string) => `; Path=/__api${path.trim().startsWith("/") ? path.trim() : `/${path.trim()}`}`);
+  const strippedDomain = value.replace(/;\s*Domain=[^;]*/gi, "");
+  // RFC 6265bis: __Host- prefixed cookies MUST have Path=/ and no Domain. Rewriting Path drops them in browsers.
+  if (/^__Host-/i.test(strippedDomain.trim())) return strippedDomain;
+  return strippedDomain.replace(/;\s*Path=([^;]*)/gi, (_m, path: string) => `; Path=/__api${path.trim().startsWith("/") ? path.trim() : `/${path.trim()}`}`);
 }
 
 const PINNED_ORIGIN = "https://api-dev.mergemate.dev";

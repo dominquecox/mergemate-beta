@@ -53,6 +53,13 @@ it("uses the dev binding and strips browser Access credentials", async () => {
   expect(res.headers.get("set-cookie")).toContain("Path=/__api/auth");
 });
 
+it("preserves Path=/ for __Host- prefixed cookies to satisfy RFC 6265bis", async () => {
+  const binding = { fetch: async () => new Response("ok", { headers: { "set-cookie": "__Host-mm_session=token123; Path=/; Secure; HttpOnly; SameSite=Lax" } }) } as Fetcher;
+  const res = await get("/__api/v1/auth/github/complete", { ...env(), DEV_API_PROXY: "1", DEV_API: binding });
+  expect(res.status).toBe(200);
+  expect(res.headers.get("set-cookie")).toBe("__Host-mm_session=token123; Path=/; Secure; HttpOnly; SameSite=Lax");
+});
+
 describe("proxy token-mode path hardening", () => {
   const tokenEnv = () => ({ ...env(), DEV_API_PROXY: "1", CF_ACCESS_CLIENT_ID: "id", CF_ACCESS_CLIENT_SECRET: "secret" });
   const bad = [
