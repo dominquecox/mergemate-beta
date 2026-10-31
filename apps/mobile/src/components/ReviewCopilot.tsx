@@ -1,12 +1,12 @@
 import React, { useRef, useState } from "react";
 import { Platform, Pressable, Share, TextInput, View } from "react-native";
-import type { PrAnswer, ReviewPlan } from "@mergemate/contracts";
+import type { PrAnswer, PrFile, ReviewPlan } from "../types";
 import { api } from "../api";
 import { ApiClientError, messageForCode } from "../api/errors";
 import { useTheme } from "../context/ThemeContext";
 import { modelDisplayName } from "../format/model";
 import { narrationSentences } from "../readout/text";
-import { checklistMarkdown } from "../workspace/checklist";
+import { checklistMarkdown, fullReviewMarkdown } from "../workspace/checklist";
 import { suggestedQuestions } from "../workspace/starters";
 import { Button } from "./Button";
 import { Icon } from "./Icon";
@@ -53,7 +53,19 @@ function Panel({ title, icon, children }: { title: string; icon: "list-outline" 
 }
 
 /** Review plan: what to read first, what to verify, and a draft comment to copy. Built on request, cached per commit. */
-export function ReviewPlanCard({ owner, repo, number }: { owner: string; repo: string; number: number }) {
+export function ReviewPlanCard({
+  owner,
+  repo,
+  number,
+  files = [],
+  prTitle,
+}: {
+  owner: string;
+  repo: string;
+  number: number;
+  files?: readonly PrFile[];
+  prTitle?: string;
+}) {
   const { colors, typography } = useTheme();
   const [plan, setPlan] = useState<ReviewPlan | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -78,6 +90,21 @@ export function ReviewPlanCard({ owner, repo, number }: { owner: string; repo: s
     if (!plan) return;
     try {
       setNote((await copyText(checklistMarkdown(plan))) === "copied" ? "Checklist copied as Markdown. MergeMate never posts it." : "");
+    } catch {
+      setNote("Could not copy. Select the text instead.");
+    }
+  };
+  const copyFullReview = async () => {
+    if (!plan) return;
+    try {
+      const md = fullReviewMarkdown({
+        title: prTitle,
+        number,
+        repo: `${owner}/${repo}`,
+        plan,
+        files,
+      });
+      setNote((await copyText(md)) === "copied" ? "Full GitHub review copied as Markdown. Paste directly into GitHub; MergeMate never posts." : "");
     } catch {
       setNote("Could not copy. Select the text instead.");
     }
@@ -111,10 +138,13 @@ export function ReviewPlanCard({ owner, repo, number }: { owner: string; repo: s
               <Text style={[typography.callout, { color: colors.text, flex: 1 }]}>{item}</Text>
             </View>
           ))}
-          <Button title={Platform.OS === "web" ? "Copy checklist" : "Share checklist"} variant="secondary" onPress={copyChecklist} style={{ alignSelf: "flex-start" }} />
           <Text style={[typography.caption, { color: colors.textMuted, letterSpacing: 0.4, marginTop: 4 }]}>DRAFT COMMENT</Text>
           <Text selectable style={[typography.callout, { color: colors.text, padding: 10, borderRadius: 8, backgroundColor: colors.surfaceSecondary }]}>{plan.draftComment}</Text>
-          <Button title={Platform.OS === "web" ? "Copy comment" : "Share comment"} variant="secondary" onPress={copy} style={{ alignSelf: "flex-start" }} />
+          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 6 }}>
+            <Button title={Platform.OS === "web" ? "Copy Full GitHub Review" : "Share GitHub Review"} onPress={copyFullReview} style={{ alignSelf: "flex-start" }} />
+            <Button title={Platform.OS === "web" ? "Copy checklist" : "Share checklist"} variant="secondary" onPress={copyChecklist} style={{ alignSelf: "flex-start" }} />
+            <Button title={Platform.OS === "web" ? "Copy comment" : "Share comment"} variant="secondary" onPress={copy} style={{ alignSelf: "flex-start" }} />
+          </View>
           {!!note && <Text accessibilityLiveRegion="polite" style={[typography.caption, { color: colors.textSecondary }]}>{note}</Text>}
           <ModelChip label={plan.model} />
         </>

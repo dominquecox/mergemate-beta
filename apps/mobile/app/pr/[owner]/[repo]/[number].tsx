@@ -8,6 +8,7 @@ import {narrationSentences} from "../../../../src/readout/text";
 import { Avatar } from "../../../../src/components/Avatar";
 import { relativeTime } from "../../../../src/format/activity";
 import { AskPrCard, ReviewPlanCard } from "../../../../src/components/ReviewCopilot";
+import { BlastRadiusChips } from "../../../../src/components/BlastRadiusChips";
 import { SummarySection } from "../../../../src/components/SummarySection";
 import React, { useState, useEffect, useRef } from "react";
 import { View, ScrollView, TouchableOpacity, TextInput, StyleSheet, Linking, Share, Platform, KeyboardAvoidingView } from "react-native";
@@ -200,6 +201,11 @@ function PrWorkspace({owner,repo,number}:{owner:string;repo:string;number:string
 
             <View style={isDesktop ? styles.analysisGrid : undefined}>
             <View style={isDesktop ? {flex:1.45,minWidth:0} : undefined}>
+            {/* Blast Radius Analysis (Impact Domains) */}
+            {detail.files && detail.files.length > 0 && (
+              <BlastRadiusChips files={detail.files} />
+            )}
+
             {/* AI Summary Card (US-09) */}
             {detail.summary && (
               <View style={{ marginTop: spacing.sm }}>
@@ -214,7 +220,14 @@ function PrWorkspace({owner,repo,number}:{owner:string;repo:string;number:string
             {/* Reviewer co-pilot: read-only, built on request */}
             {detail.summary && aiConsentGranted && aiSummaries && (
               <>
-                <ReviewPlanCard key={`plan-${detail.headSha}`} owner={owner} repo={repo} number={Number(number)} />
+                <ReviewPlanCard
+                  key={`plan-${detail.headSha}`}
+                  owner={owner}
+                  repo={repo}
+                  number={Number(number)}
+                  files={detail.files}
+                  prTitle={detail.title}
+                />
                 <AskPrCard key={`ask-${detail.headSha}`} owner={owner} repo={repo} number={Number(number)} files={detail.files.map(file=>file.filename)} />
               </>
             )}

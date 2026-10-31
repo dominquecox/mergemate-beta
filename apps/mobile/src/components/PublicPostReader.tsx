@@ -42,7 +42,7 @@ export function PublicPostList({type}:{type:"news"|"changelog"}) {
           <Text style={[typography.caption,{color:colors.brandLight}]}>{post.date}</Text>
           <Text accessibilityRole="header" style={[typography.title2,{color:colors.text,marginTop:4}]}>{post.title}</Text>
           <Text style={[typography.body,{color:colors.textSecondary,marginVertical:12}]}>{post.summary}</Text>
-          <Button title="Read full post" accessibilityLabel={`Read full post: ${post.title}`} onPress={()=>router.push(`/posts/${post.slug}`)}/>
+          <Button title="Read full post" accessibilityLabel={`Read full post: ${post.title}`} onPress={()=>router.push(`/posts/${post.slug}` as never)}/>
         </Section>)}
         {error?<ErrorState title={retryCursor?"Couldn't load more updates":"Couldn't refresh updates"} message={error} onRetry={()=>void load(retryCursor)}/>:null}
         {next?<Button title={more?'Loading more...':'Load more updates'} disabled={more} onPress={()=>void load(next)}/>:null}
