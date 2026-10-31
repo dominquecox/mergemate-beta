@@ -26,7 +26,10 @@ export function PrivacyStrip({ onOpenSettings }: { onOpenSettings: () => void })
         <View testID="privacy-sheet" style={{ padding: 12, gap: 8 }}>
           <Text style={[typography.subhead, { color: colors.text, fontWeight: "600" }]} accessibilityRole="header">What we send to the model</Text>
           {PRIVACY_FACTS.map((fact) => (
-            <Text key={fact} style={[typography.footnote, { color: colors.textSecondary }]}>{`• ${fact}`}</Text>
+            <View key={fact} style={{ flexDirection: "row", alignItems: "flex-start", gap: 8 }}>
+              <Icon name="checkmark" size={14} color={colors.riskLow} style={{ marginTop: 2 }} />
+              <Text style={[typography.footnote, { color: colors.textSecondary, flex: 1, lineHeight: 18 }]}>{fact}</Text>
+            </View>
           ))}
           <TouchableOpacity accessibilityRole="button" accessibilityLabel="Open Settings to manage AI choices or delete your data" onPress={onOpenSettings} style={{ minHeight: 44, justifyContent: "center" }}>
             <Text style={[typography.footnote, { color: colors.brandLight, textDecorationLine: "underline" }]}>Manage AI choices or delete my data</Text>
