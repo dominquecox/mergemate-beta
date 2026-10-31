@@ -60,6 +60,24 @@ describe("parseSegmentBoxes", () => {
   });
 });
 
+// UNVERIFIED: no live SAM 3.1 call has been made yet. These pin how the parser treats plausible variations of the
+// documented token format, so the first real output either matches one of them or is a one-line fix here.
+describe("parseSegmentBoxes on plausible live output (unverified shape)", () => {
+  it("reads boxes separated by newlines or spaces, with surrounding prose", () => {
+    const text = `Found 2 regions:\n0<|box;x1=100;y1=200;x2=300;y2=400;w=1000;h=2000|>\n1<|box;x1=0;y1=0;x2=500;y2=1000;w=1000;h=2000|> done`;
+    expect(parseSegmentBoxes(text)).toHaveLength(2);
+  });
+
+  it("caps the number of boxes at MAX_SEGMENT_REGIONS", () => {
+    const text = Array.from({ length: 30 }, (_, i) => `${i}<|box;x1=1;y1=1;x2=50;y2=50;w=100;h=100|>`).join("");
+    expect(parseSegmentBoxes(text)).toHaveLength(20);
+  });
+
+  it("returns nothing for decimal coordinates rather than guessing, so Highlight falls back to Muse-only", () => {
+    expect(parseSegmentBoxes("0<|box;x1=10.5;y1=20.5;x2=300.5;y2=400.5;w=1000;h=2000|>")).toEqual([]);
+  });
+});
+
 describe("highlight with SAM then Muse", () => {
   it("calls SAM first, hands Muse the boxes, and returns the measured boxes", async () => {
     const { ctx, order, bodies } = setup(SAM_ONE);
