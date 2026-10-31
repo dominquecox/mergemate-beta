@@ -10,6 +10,7 @@ import { relativeTime } from "../../../../src/format/activity";
 import { AskPrCard, ReviewPlanCard } from "../../../../src/components/ReviewCopilot";
 import { BlastRadiusChips } from "../../../../src/components/BlastRadiusChips";
 import { SummarySection } from "../../../../src/components/SummarySection";
+import { GitMetadataCard } from "../../../../src/components/GitMetadataCard";
 import React, { useState, useEffect, useRef } from "react";
 import { View, ScrollView, TouchableOpacity, TextInput, StyleSheet, Linking, Share, Platform, KeyboardAvoidingView } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -135,10 +136,16 @@ function PrWorkspace({owner,repo,number}:{owner:string;repo:string;number:string
             {/* PR Header */}
             <View style={[styles.headerCard, { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.lg }]}>
               <View style={styles.topRow}>
-                <Text style={[typography.caption, { color: colors.textMuted, fontFamily: typography.code.fontFamily }]}>
-                  {detail.owner}/{detail.repo} · #{detail.number}
-                </Text>
-                <StatusPill status={detail.status} />
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 6, flex: 1, minWidth: 0 }}>
+                  <Icon name="folder-outline" size={13} color={colors.textMuted} />
+                  <Text style={[typography.caption, { color: colors.textMuted, fontFamily: typography.code.fontFamily }]} numberOfLines={1}>
+                    {detail.owner}/{detail.repo} · #{detail.number}
+                  </Text>
+                </View>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                  <StatusPill status={detail.status} />
+                  {detail.risk && <RiskBadge level={detail.risk.level} compact />}
+                </View>
               </View>
 
               <Text
@@ -152,14 +159,18 @@ function PrWorkspace({owner,repo,number}:{owner:string;repo:string;number:string
                   <MergeStateChip state={detail.mergeState} />
                 </View>
               )}
+            </View>
 
-            </View>
-            <View style={{flexDirection:"row",alignItems:"center",gap:8,flexWrap:"wrap",marginTop:12}}>
-              <View style={{flexDirection:"row",alignItems:"center",gap:6,paddingHorizontal:10,paddingVertical:5,borderRadius:9999,backgroundColor:colors.surfaceElevated,maxWidth:"70%"}}><Icon name="git-branch-outline" size={14} color={colors.brandLight}/><Text style={[typography.code,{color:colors.brandLight,fontSize:11,flexShrink:1}]}>{detail.headBranch}</Text></View>
-              <Icon name="arrow-forward" size={16} color={colors.textSecondary}/>
-              <View style={{paddingHorizontal:10,paddingVertical:5,borderRadius:9999,backgroundColor:colors.surfaceElevated}}><Text style={[typography.code,{color:colors.textSecondary,fontSize:11}]}>{detail.baseBranch}</Text></View>
-            </View>
-            <View style={{flexDirection:"row",gap:8,alignItems:"center",marginVertical:16,flexWrap:"wrap"}}><Avatar login={detail.author} size={24}/><Text style={[typography.footnote,{color:colors.textSecondary}]}>{detail.author} · {relativeTime(detail.createdAt)}</Text><View style={{flexDirection:"row",gap:8,marginLeft:"auto"}}><Text style={[typography.code,{color:colors.riskLow}]}>+{detail.additions}</Text><Text style={[typography.code,{color:colors.riskHigh}]}>-{detail.deletions}</Text></View></View>
+            <GitMetadataCard
+              baseBranch={detail.baseBranch}
+              headBranch={detail.headBranch}
+              headSha={detail.headSha}
+              author={detail.author}
+              createdAt={detail.createdAt}
+              additions={detail.additions}
+              deletions={detail.deletions}
+              fileCount={detail.files?.length}
+            />
 
             {/* US-25: Secret Leak Warning Banner */}
             {detail.secretWarning && (

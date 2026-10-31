@@ -16,6 +16,7 @@ import { api } from "../../src/api";
 import { toUserMessage } from "../../src/api/errors";
 import { Notification, NotificationFilter } from "../../src/types";
 import { Header } from "../../src/components/Header";
+import { Avatar } from "../../src/components/Avatar";
 import { RiskBadge } from "../../src/components/RiskBadge";
 import { StatusPill } from "../../src/components/StatusPill";
 import { EmptyState } from "../../src/components/EmptyState";
@@ -305,9 +306,12 @@ function InboxWorkspace({initialFilter}:{initialFilter:NotificationFilter}) {
                   accessibilityLabel={`Open pull request #${item.number}: ${item.title} in ${item.repo}, ${item.risk || "normal"} risk`}
                 >
                   <View style={[styles.cardTop,{flexWrap:"wrap",gap:8}]}>
-                    <Text style={[typography.caption, { color: colors.textMuted, fontFamily: typography.code.fontFamily, flexShrink:1 }]}>
-                      {item.repo} #{item.number}
-                    </Text>
+                    <View style={{flexDirection:"row",alignItems:"center",gap:5,flexShrink:1}}>
+                      <Icon name="git-pull-request-outline" size={13} color={colors.textMuted} />
+                      <Text style={[typography.caption, { color: colors.textMuted, fontFamily: typography.code.fontFamily, flexShrink:1 }]}>
+                        {item.repo} #{item.number}
+                      </Text>
+                    </View>
                     <View style={styles.badgeGroup}>
                       <StatusPill status={item.status} />
                       {item.risk && <RiskBadge level={item.risk} compact />}
@@ -329,9 +333,12 @@ function InboxWorkspace({initialFilter}:{initialFilter:NotificationFilter}) {
                 </Pressable>
 
                 <View style={[styles.cardBottom,{flexWrap:"wrap",gap:8,borderTopColor:colors.border,marginTop:12,paddingTop:12}]}>
-                  <Text style={[typography.caption, { color: colors.textMuted, flex: 1 }]}>
-                    By @{item.author} · {new Date(item.updatedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-                  </Text>
+                  <View style={{flexDirection:"row",alignItems:"center",gap:6,flex:1}}>
+                    <Avatar login={item.author} size={18} />
+                    <Text style={[typography.caption, { color: colors.textMuted }]}>
+                      @{item.author} · {new Date(item.updatedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                    </Text>
+                  </View>
 
                   <View style={styles.quickActions}>
                     <TouchableOpacity
