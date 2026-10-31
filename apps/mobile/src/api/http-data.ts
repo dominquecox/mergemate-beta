@@ -2,8 +2,8 @@ import { PrSearchFilters, PrSearchPage } from '@mergemate/contracts';
 import type { WorkspaceRead } from './client';
 import { PrCheck as PrCheckSchema } from '@mergemate/contracts';
 import { z } from "zod";
-import { PrivateNotes, PrivateNote, VoiceNoteResult, SavePrivateNote, type NoteContext, InboxPreference, InboxMutation, InboxReceipt, InboxUndo, ConsentState, AiPreferences, type AiPreferenceUpdate, HighlightResult as HighlightResultSchema, InstallationList as InstallationListSchema, NotificationPage, PrDetail as PrDetailSchema, PrFile as PrFileSchema, PrThread as PrThreadSchema, PrRisk as PrRiskSchema, PrSummary as PrSummarySchema, RepoPage, TriageQueue, TriageRecord } from "@mergemate/contracts";
-import type { HighlightResult, InstallationList, Notification, NotificationFilter, PrDetail, PrRisk, PrSummary, Repo, TriageItem, TriageLane } from "../types";
+import { PrivateNotes, PrivateNote, VoiceNoteResult, SavePrivateNote, type NoteContext, InboxPreference, InboxMutation, InboxReceipt, InboxUndo, ConsentState, AiPreferences, type AiPreferenceUpdate, HighlightResult as HighlightResultSchema, InstallationList as InstallationListSchema, NotificationPage, PrDetail as PrDetailSchema, PrFile as PrFileSchema, PrThread as PrThreadSchema, PrRisk as PrRiskSchema, PrSummary as PrSummarySchema, ReviewPlan as ReviewPlanSchema, AiEngineInfo as AiEngineInfoSchema, PrAnswer as PrAnswerSchema, RepoPage, TriageQueue, TriageRecord } from "@mergemate/contracts";
+import type { HighlightResult, InstallationList, Notification, NotificationFilter, AiEngineInfo, PrAnswer, PrDetail, PrRisk, PrSummary, Repo, ReviewPlan, TriageItem, TriageLane } from "../types";
 import { AI_CONSENT_VERSION } from "../config/consent";
 import { ApiClientError, messageForCode } from "./errors";
 import { mapHighlight, mapInstallations, mapPrDetail, mapFile, mapCheck, mapComments, secretWarningFromRisk } from "./mappers";
@@ -165,6 +165,23 @@ export abstract class HttpData extends HttpSession {
       schema: PrSummarySchema,
       timeoutMs: AI_TIMEOUT_MS,
     });
+  }
+
+  async getAiEngine(): Promise<AiEngineInfo | null> {
+    try {
+      return await this.request({ path: "/ai/engine", schema: AiEngineInfoSchema });
+    } catch (error) {
+      if (error instanceof ApiClientError && error.code === "unauthorized") throw error;
+      return null;
+    }
+  }
+
+  getReviewPlan(owner: string, repo: string, number: number,signal?:AbortSignal): Promise<ReviewPlan> {
+    return this.request({ method: "POST", path: `${prPath(owner, repo, number)}/plan`,signal, schema: ReviewPlanSchema, timeoutMs: AI_TIMEOUT_MS });
+  }
+
+  askPr(owner: string, repo: string, number: number, question: string,signal?:AbortSignal): Promise<PrAnswer> {
+    return this.request({ method: "POST", path: `${prPath(owner, repo, number)}/ask`, body: { question },signal, schema: PrAnswerSchema, timeoutMs: AI_TIMEOUT_MS });
   }
 
   getPrRisk(owner: string, repo: string, number: number,signal?:AbortSignal): Promise<PrRisk> {

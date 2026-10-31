@@ -11,6 +11,9 @@ import {
   Notification,
   NotificationFilter,
   PrSummary,
+  PrAnswer,
+  ReviewPlan,
+  AiEngineInfo,
   PrRisk,
   TriageItem,
   TriageLane,
@@ -83,6 +86,13 @@ export interface ApiClient {
   getPrDetail(owner: string, repo: string, number: number,signal?:AbortSignal): Promise<PrDetail>;
   getPrSummary(owner: string, repo: string, number: number,signal?:AbortSignal): Promise<PrSummary>;
   getPrRisk(owner: string, repo: string, number: number,signal?:AbortSignal): Promise<PrRisk>;
+  /** Reading order, verify checklist and a copy-only draft comment. Read-only: nothing is posted to GitHub. */
+  getReviewPlan(owner: string, repo: string, number: number,signal?:AbortSignal): Promise<ReviewPlan>;
+  /** One grounded answer about this PR, with citations limited to its files. */
+  askPr(owner: string, repo: string, number: number, question: string,signal?:AbortSignal): Promise<PrAnswer>;
+
+  /** Which model serves each AI job. null when this API does not offer it. */
+  getAiEngine(): Promise<AiEngineInfo | null>;
 
   // Triage
   getTriageQueue(): Promise<TriageItem[]>;

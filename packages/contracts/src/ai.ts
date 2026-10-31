@@ -9,11 +9,17 @@ export const AnalysisCoverage = z.object({
 });
 export type AnalysisCoverage = z.infer<typeof AnalysisCoverage>;
 
+/** The model that produced an AI result, as `provider:model`. Shown to the user; never a secret. */
+export const AiModelLabel = z.string().min(1).max(120);
+export type AiModelLabel = z.infer<typeof AiModelLabel>;
+
 export const PrSummary = z.object({
   whatChanged: z.string(),
   whyItMatters: z.string(),
   suggestedFocus: z.array(z.string()),
   coverage: AnalysisCoverage,
+  /** Absent on summaries cached before provenance was recorded. */
+  model: AiModelLabel.optional(),
 });
 export type PrSummary = z.infer<typeof PrSummary>;
 
@@ -164,10 +170,6 @@ export const AiPreferenceUpdate=z.discriminatedUnion('action',[
 ]);
 export type AiPreferenceUpdate=z.infer<typeof AiPreferenceUpdate>;
 
-/** The model that produced an AI result, as `provider:model`. Shown to the user; never a secret. */
-export const AiModelLabel = z.string().min(1).max(120);
-export type AiModelLabel = z.infer<typeof AiModelLabel>;
-
 /** One file in the suggested reading order, with the reason to read it at that point. */
 export const ReviewPlanFile = z.object({
   file: z.string().trim().min(1).max(300),
@@ -206,3 +208,13 @@ export const PrAnswer = ModelPrAnswer.extend({
   model: AiModelLabel.optional(),
 });
 export type PrAnswer = z.infer<typeof PrAnswer>;
+
+/** Which model serves each AI job right now, for the Settings "AI engine" card. Config names only. */
+export const AiEngineInfo = z.object({
+  profile: z.enum(["hackathon", "prod"]),
+  jobs: z.array(z.object({
+    task: z.enum(["summary", "risk", "highlight", "segment", "decision"]),
+    model: AiModelLabel,
+  })).max(8),
+});
+export type AiEngineInfo = z.infer<typeof AiEngineInfo>;

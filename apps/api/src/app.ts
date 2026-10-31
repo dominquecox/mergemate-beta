@@ -17,6 +17,7 @@ import { billingWebhooks } from "./routes/billing-webhooks";
 import { account } from "./routes/account";
 import { activity } from "./routes/activity";
 import { createAiRouter } from "./routes/ai";
+import { aiEngine } from "./routes/ai-engine-info";
 import { auth } from "./routes/auth";
 import { createConsentRouter } from "./routes/consent";
 import { github } from "./routes/github";
@@ -82,6 +83,7 @@ export const createApp = (deps: Deps = defaultDeps) => {
   app.route("/v1", publicContent);
   app.route("/v1", webhooks);
   app.route("/v1/consent", createConsentRouter());
+  app.route("/v1/ai", aiEngine);
   app.route("/v1/prs", createAiRouter());
   app.route("/v1/triage", createTriageRouter());
   app.route("/v1/highlight", createHighlightRouter());

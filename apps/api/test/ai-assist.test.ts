@@ -1,4 +1,4 @@
-import { PrAnswer, ReviewPlan } from "@mergemate/contracts";
+import { AiEngineInfo, PrAnswer, ReviewPlan } from "@mergemate/contracts";
 import { describe, expect, it } from "vitest";
 import { askPr, planReview, storesFor, userKey } from "../src/routes/ai-engine";
 import type { PrData } from "../src/routes/ai-engine";
@@ -154,5 +154,18 @@ describe("askPr", () => {
       expect((await apiError(() => askPr(deps, user, ref, body, validModelEnv()))).code).toBe("validation_failed");
     }
     expect(transport.calls).toHaveLength(0);
+  });
+});
+
+describe("GET /v1/ai/engine", () => {
+  it("lists the configured model per job and the profile, without secrets", async () => {
+    const { aiEngine } = await import("../src/routes/ai-engine-info");
+    const env = { ...validModelEnv(), AI_PROFILE: "hackathon", MODEL_ROUTE_SEGMENT: "meta:sam-3.1", MODEL_API_KEY: "never-shown" };
+    const res = await aiEngine.request("/engine", {}, env as never);
+    const body = AiEngineInfo.parse(await res.json());
+    expect(body.profile).toBe("hackathon");
+    expect(body.jobs.find((j) => j.task === "segment")?.model).toBe("meta:sam-3.1");
+    expect(body.jobs.find((j) => j.task === "decision")).toBeUndefined();
+    expect(JSON.stringify(body)).not.toContain("never-shown");
   });
 });

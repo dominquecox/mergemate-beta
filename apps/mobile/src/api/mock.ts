@@ -23,6 +23,9 @@ import {
   Notification,
   NotificationFilter,
   PrSummary,
+  PrAnswer,
+  ReviewPlan,
+  AiEngineInfo,
   PrRisk,
   TriageItem,
   TriageLane,
@@ -278,6 +281,29 @@ export class MockApiClient implements ApiClient {
       throw new Error("Summary unavailable");
     }
     return detail.summary;
+  }
+
+  async getAiEngine(): Promise<AiEngineInfo | null> {
+    return null;
+  }
+
+  async getReviewPlan(_owner: string, _repo: string, _number: number): Promise<ReviewPlan> {
+    return {
+      readingOrder: [{ file: "src/index.ts", why: "The only changed file; start here." }],
+      verify: ["The change matches the title.", "Checks are green."],
+      draftComment: "Thanks for this. It looks good to me.",
+      coverage: { analyzedFiles: 1, skippedFiles: 0, truncatedFiles: 0 },
+      model: "sample:demo",
+    };
+  }
+
+  async askPr(_owner: string, _repo: string, _number: number, _question: string): Promise<PrAnswer> {
+    return {
+      answer: "This is sample data. Sign in to ask about a real pull request.",
+      citations: [{ file: "src/index.ts" }],
+      coverage: { analyzedFiles: 1, skippedFiles: 0, truncatedFiles: 0 },
+      model: "sample:demo",
+    };
   }
 
   async getPrRisk(owner: string, repo: string, number: number): Promise<PrRisk> {

@@ -6,6 +6,7 @@ import { useTheme } from "../context/ThemeContext";
 import { useConsent } from "../context/ConsentContext";
 import { AnalysisCoverage } from "../types";
 import { Icon } from "./Icon";
+import { modelDisplayName } from "../format/model";
 import { useReducedMotion } from "../hooks/useReducedMotion";
 
 interface AIBlockProps {
@@ -13,6 +14,8 @@ interface AIBlockProps {
   children: React.ReactNode;
   coverage?: AnalysisCoverage;
   cachedTime?: string;
+  /** `provider:model` of the model that wrote this block. */
+  model?: string;
 }
 
 export function AIBlock({
@@ -20,6 +23,7 @@ export function AIBlock({
   children,
   coverage,
   cachedTime,
+  model,
 }: AIBlockProps) {
   const { colors, typography, spacing, radius } = useTheme();
   const router = useRouter();
@@ -124,7 +128,7 @@ export function AIBlock({
       {coverage && (
         <View style={[styles.footer, { borderTopColor: colors.border }]}>
           <Text style={[typography.caption, { color: colors.textMuted }]}>
-            Analyzed {coverage.analyzedFiles} files · {coverage.skippedFiles} skipped · {coverage.truncatedFiles} truncated
+            Analyzed {coverage.analyzedFiles} files · {coverage.skippedFiles} skipped · {coverage.truncatedFiles} truncated{modelDisplayName(model) ? ` · ${modelDisplayName(model)}` : ""}
           </Text>
         </View>
       )}

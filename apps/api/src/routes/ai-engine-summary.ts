@@ -70,7 +70,7 @@ export const generateSummary = async (
       },
       ModelSummary,stores.policy,
     );
-    const result: PrSummary = { ...answer, coverage };
+    const result: PrSummary = { ...answer, coverage, model: `${provider.config.provider}:${provider.config.modelId}` };
     await stores.cache.set(key, userId, result);
     return result;
   });
