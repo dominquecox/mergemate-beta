@@ -1,3 +1,4 @@
+import { DemoHighlightGallery } from "../src/components/DemoHighlightGallery";
 import {PrivateNotes} from "../src/components/PrivateNotes";
 import {useFocusEffect,useRouter} from "expo-router";
 import {useConsent} from "../src/context/ConsentContext";
@@ -83,7 +84,9 @@ export default function HighlightScreen() {
 
   if(!flags.highlight||flagBlocked)return <View style={[styles.root,{backgroundColor:colors.background}]}><Header title="Screenshot Insight" showBack/><EmptyState icon="image-outline" title="Screenshot highlight is unavailable" message="This feature isn’t enabled. You can keep reviewing pull requests from Inbox."/></View>;
 
-  if(isDemo || !aiConsentGranted)return <View style={[styles.root,{backgroundColor:colors.background}]}><Header title="Screenshot Insight" showBack/><EmptyState icon="shield-checkmark-outline" title={isDemo?"Screenshots are unavailable in demo mode":"AI consent is required"} message={isDemo?"Sign in with GitHub to analyze your own screenshots. Nothing is uploaded in the demo.":"Your screenshot is shared with the configured AI provider only after you choose to analyze it."} {...(isDemo?{}:{actionTitle:"Open Settings",onAction:()=>router.push('/settings')})}/></View>;
+  if(isDemo)return <View style={[styles.root,{backgroundColor:colors.background}]}><Header title="Screenshot Insight" showBack/><DemoHighlightGallery/></View>;
+
+  if(!aiConsentGranted)return <View style={[styles.root,{backgroundColor:colors.background}]}><Header title="Screenshot Insight" showBack/><EmptyState icon="shield-checkmark-outline" title={isDemo?"Screenshots are unavailable in demo mode":"AI consent is required"} message={isDemo?"Sign in with GitHub to analyze your own screenshots. Nothing is uploaded in the demo.":"Your screenshot is shared with the configured AI provider only after you choose to analyze it."} {...(isDemo?{}:{actionTitle:"Open Settings",onAction:()=>router.push('/settings')})}/></View>;
 
   return (
     <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={[styles.root, { backgroundColor: colors.background }]}>
