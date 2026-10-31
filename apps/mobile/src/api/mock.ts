@@ -39,7 +39,19 @@ import {
 } from "../types";
 
 export class MockApiClient implements ApiClient {
-  async searchPrs(_filters:PrSearchFilters,_cursor?:string|null,_signal?:AbortSignal):Promise<PrSearchPage>{throw new ApiClientError('not_configured','Search needs a configured API.');}
+  /** Sample-data search: the same filters as the API, applied to the sample pull requests. */
+  async searchPrs(filters:PrSearchFilters,_cursor?:string|null,_signal?:AbortSignal):Promise<PrSearchPage>{
+    const terms=filters.query.toLowerCase().split(/\s+/).filter(Boolean);
+    const items=this.notifications.filter(n=>
+      terms.every(t=>n.title.toLowerCase().includes(t))
+      &&(!filters.repo||n.repo.toLowerCase()===filters.repo.toLowerCase())
+      &&(!filters.author||n.author.toLowerCase()===filters.author.toLowerCase())
+      &&(filters.risk==='all'||(filters.risk==='unassessed'?!n.risk:n.risk===filters.risk))
+      &&(!filters.from||n.updatedAt.slice(0,10)>=filters.from)
+      &&(!filters.to||n.updatedAt.slice(0,10)<=filters.to),
+    ).map(({kind:_kind,read:_read,...row})=>row);
+    return {items,nextCursor:null,candidates:items.length,incomplete:false,capped:false};
+  }
   async getFeatureFlags(){return disabledFeatureFlags();}
   invalidateInbox():void {}
   invalidateCache(): void {  }
