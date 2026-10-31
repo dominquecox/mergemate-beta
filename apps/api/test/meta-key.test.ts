@@ -150,4 +150,19 @@ describe('user-key AI routing and budgets',()=>{
     await expect(userModelContext(rotated,other.userId,'summary')).rejects.toMatchObject({code:'upstream_unavailable'});
     expect(ctx.env.MODEL_API_KEY).not.toBe(key(2));
   });
+  it('removes the key for new requests while an outstanding request keeps its own request-local copy',async()=>{
+    const {ctx,web,call,headers,put}=await fixture();await put();await createDbConsentStore(ctx.env.DB).write(web.userId,true);
+    const outstanding=await userModelContext(ctx.env,web.userId,'summary');
+    expect(outstanding.ownsMetaKey).toBe(true);
+    expect((await call('/v1/settings/meta-key',{method:'DELETE',headers})).status).toBe(204);
+    expect(await metaKeyStatus(ctx.env,web.userId)).toEqual({configured:false});
+    // The request that already started finishes with its own copy; the Worker binding is never mutated.
+    expect(outstanding.env.MODEL_API_KEY).toBe(key());expect(ctx.env.MODEL_API_KEY).not.toBe(key());
+    // The next request sees no saved key, so it uses the shared key under the shared budget.
+    expect((await userModelContext(ctx.env,web.userId,'summary')).ownsMetaKey).toBe(false);
+    await createDbUsageStore(ctx.env.DB).reserve('global',1);
+    const transport=mockTransport();
+    await expect(summarizePr({db:ctx.env.DB,transport,prSource:source,limits:{free:30,pro:200,global:1}},record(web.userId),ref,ctx.env)).rejects.toMatchObject({code:'rate_limited'});
+    expect(transport.calls).toHaveLength(0);
+  });
 });
