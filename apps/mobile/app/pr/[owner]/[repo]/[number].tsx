@@ -209,7 +209,7 @@ function PrWorkspace({owner,repo,number}:{owner:string;repo:string;number:string
             {detail.summary && aiConsentGranted && aiSummaries && (
               <>
                 <ReviewPlanCard key={`plan-${detail.headSha}`} owner={owner} repo={repo} number={Number(number)} />
-                <AskPrCard key={`ask-${detail.headSha}`} owner={owner} repo={repo} number={Number(number)} />
+                <AskPrCard key={`ask-${detail.headSha}`} owner={owner} repo={repo} number={Number(number)} files={detail.files.map(file=>file.filename)} />
               </>
             )}
 
