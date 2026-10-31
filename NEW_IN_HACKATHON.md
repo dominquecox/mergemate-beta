@@ -6,7 +6,7 @@ What was built for the Meta Global AI Developer Hackathon build window (Oct 27 t
 git log origin/development --first-parent --since='2026-10-27T00:00:00-04:00' --until='2026-11-05T00:00:00-04:00'
 ```
 
-- Snapshot: `development` at `d6b1619`, 2026-10-30 (ET). 67 first-parent entries (PR merges) from `595473b` (2026-10-27) to `d6b1619`. It will be refreshed once more on Nov 4 before submission.
+- Snapshot: `development` at `274002c`, 2026-10-30 (ET). 72 first-parent entries (PR merges) from `595473b` (2026-10-27) to `274002c`. It will be refreshed once more on Nov 4 before submission.
 - Dates are committer dates in ET. SHAs are the commit that landed on `development` (the merge commit for "Merge pull request" entries, the squashed commit otherwise).
 - Nothing here is invented: if it is not in the log, it is not listed.
 - MergeMate stays read-only by design; none of these changes add a write path to GitHub.
@@ -135,3 +135,8 @@ Chronological, oldest first. The Muse-authored row above is the only one not dra
 | 2026-10-30 | #160 | `73d84f3` | J-021: Bring-your-own Meta key settings, verification notice and removal tests |
 | 2026-10-30 | #163 | `d951c6d` | J-019: Demo network-denial sweep and expired-demo message |
 | 2026-10-30 | #161 | `d6b1619` | Demo AI text matches each sample PR; clear Listen label; NEW_IN_HACKATHON through #159 |
+| 2026-10-30 | #164 | `52a6357` | Demo polish: sample-mode Search, per-PR Review plan and Ask, Inbox alignment |
+| 2026-10-30 | #165 | `4c0ac26` | PR workspace: "Why this is risky" banner with jump to riskiest file |
+| 2026-10-30 | #166 | `6926c08` | Inbox: group by repo with counts, "Needs my review" filter label |
+| 2026-10-30 | #167 | `a3b70cf` | Ask this PR: three starter questions based on the PR's files |
+| 2026-10-30 | #168 | `274002c` | Review plan: copy checklist as Markdown |
