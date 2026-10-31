@@ -133,14 +133,14 @@ function InboxWorkspace({initialFilter}:{initialFilter:NotificationFilter}) {
             >
               <Icon name="refresh-outline" size={22} color={colors.textSecondary} />
             </TouchableOpacity>
-            <TouchableOpacity
+            {!isDesktop && <TouchableOpacity
               onPress={() => router.push("/search")}
               style={styles.iconBtn}
               accessibilityRole="button"
               accessibilityLabel="Search pull requests"
             >
               <Icon name="search-outline" size={22} color={colors.textSecondary} />
-            </TouchableOpacity>
+            </TouchableOpacity>}
             {flags.highlight && <TouchableOpacity
               onPress={() => router.push("/highlight")}
               style={styles.iconBtn}
@@ -200,7 +200,7 @@ function InboxWorkspace({initialFilter}:{initialFilter:NotificationFilter}) {
       {(prefSaving||(prefMessage&&prefMessage!=="Filter saved for next time."))&&<Text accessibilityLiveRegion="polite" style={[typography.caption,{color:colors.textSecondary,paddingHorizontal:16}]}>{prefSaving?"Saving filter…":prefMessage}</Text>}
       {prefError&&<View style={{padding:12}}><Text style={[typography.body,{color:colors.textSecondary}]} accessibilityRole="alert">This filter applies here, but could not be saved for next time.</Text><Button title="Retry saving filter" variant="ghost" onPress={()=>persist(filter)}/></View>}
       {acting&&<Text accessibilityLiveRegion="polite" style={[typography.body,{color:colors.textSecondary,padding:12}]}>Saving Inbox change…</Text>}
-      {error&&sourceItems.length>0&&<View style={{padding:12}}><Text accessibilityRole="alert" style={[typography.body,{color:colors.riskHigh}]}>{error}</Text><Button title="Refresh Inbox" variant="ghost" onPress={onRefresh}/></View>}
+      {error&&sourceItems.length>0&&<View style={{padding:12}}><Text accessibilityRole="alert" style={[typography.body,{color:colors.riskHigh}]}>{error}</Text></View>}
       {/* Undo Toast */}
       {undoItem && (
         <View
@@ -235,8 +235,8 @@ function InboxWorkspace({initialFilter}:{initialFilter:NotificationFilter}) {
           icon="checkmark-done-outline"
           title={hasMore?"More results are available":"Inbox Zero"}
           message={hasMore?"No visible items on this page. Load more to continue checking your queue.":"No pull requests need your attention in this view."}
-          actionTitle={hasMore?"Load more pull requests":"Refresh Inbox"}
-          onAction={hasMore?more:onRefresh}
+          actionTitle={hasMore?"Load more pull requests":undefined}
+          onAction={hasMore?more:undefined}
         /></View>
       ) : (
         <FlatList

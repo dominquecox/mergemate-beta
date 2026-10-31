@@ -111,20 +111,19 @@ export default function WelcomeScreen() {
           accessibilityRole="image"
           accessibilityLabel="MergeMate"
         />
-        <TouchableOpacity
+        {activeStep < CARDS.length - 1 && <TouchableOpacity
           onPress={goToSignIn}
           style={styles.skipBtn}
           accessibilityRole="button"
           accessibilityLabel="Skip intro and go to sign in"
         >
           <Text style={[typography.subhead, { color: colors.textSecondary, fontWeight: "600" }]}>Skip</Text>
-        </TouchableOpacity>
+        </TouchableOpacity>}
       </View>
 
       <ScrollView contentContainerStyle={{paddingTop:16,paddingBottom:24,gap:16}} showsVerticalScrollIndicator={false}>
-        <Text style={[typography.caption,{color:colors.brandLight,letterSpacing:1.5}]}>STEP {card.step} OF 03</Text>
         <OnboardingPreview step={activeStep}/>
-        <View style={{gap:8}}><View style={{flexDirection:"row",gap:8,alignItems:"center"}}><Icon name={card.icon} size={16} color={colors.brandLight}/><Text style={[typography.caption,{color:colors.brandLight}]}>{["LIGHTNING REVIEWS","RISK MATRIX","HUMAN IN THE LOOP"][activeStep]}</Text></View>
+        <View style={{gap:8}}><View style={{flexDirection:"row",gap:8,alignItems:"center"}}><Icon name={card.icon} size={16} color={colors.brandLight}/><Text style={[typography.caption,{color:colors.brandLight,letterSpacing:1.5}]}>STEP {card.step} OF 03</Text></View>
         <Text style={[typography.title1,{color:colors.text}]} accessibilityRole="header">{card.title}</Text>
         <Text style={[typography.callout,{color:colors.textSecondary}]}>{card.subtitle}</Text></View>
       </ScrollView>
@@ -175,6 +174,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
     paddingTop: 8,
+    minHeight: 52,
   },
   logo: {
     width: 148,

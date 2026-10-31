@@ -292,7 +292,7 @@ function PrWorkspace({owner,repo,number}:{owner:string;repo:string;number:string
                         color={chk.conclusion === "success" ? colors.riskLow : chk.conclusion === "failure" ? colors.riskHigh : colors.textMuted}
                       />
                       <Text style={[typography.subhead, { color: colors.text, flex: 1 }]}>{chk.name}</Text>
-                      <Text style={[typography.caption, { color: colors.textMuted }]}>{chk.status==='completed'?chk.conclusion:chk.status}</Text>{!!chk.url&&<Button title="Open check in GitHub" variant="ghost" onPress={()=>openLink(chk.url)}/>}
+                      <Text style={[typography.caption, { color: colors.textMuted }]}>{chk.status==='completed'?chk.conclusion:chk.status}</Text>{!!chk.url&&<TouchableOpacity accessibilityRole="button" accessibilityLabel="Open check in GitHub" onPress={()=>openLink(chk.url)} style={styles.shareBtn}><Icon name="open-outline" size={18} color={colors.textSecondary}/></TouchableOpacity>}
                     </View>
                   ))}
                 </View>

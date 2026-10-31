@@ -110,11 +110,10 @@ export function Sidebar() {
         <Icon name="shield-checkmark-outline" size={18} color={colors.brandLight}/>
         <Text style={[typography.footnote,{color:colors.textSecondary,flex:1}]}>Review here. Take action in GitHub.</Text>
       </View>
-      <Link href="/(tabs)/settings" asChild><Pressable accessibilityRole="link" accessibilityLabel="Account settings" style={StyleSheet.flatten([styles.account,{borderTopColor:colors.border}])}>
+      <View accessibilityLabel="Signed-in account" style={StyleSheet.flatten([styles.account,{borderTopColor:colors.border}])}>
         <View style={[styles.avatar,{backgroundColor:colors.brandSubtle}]}><Icon name="person-outline" size={20} color={colors.brandLight}/></View>
         <View style={{flex:1,minWidth:0}}><Text style={[typography.subhead,{color:colors.text}]} numberOfLines={1}>{user?.name || user?.login || 'Your account'}</Text><Text style={[typography.caption,{color:colors.textSecondary}]}>{isDemo?'Demo workspace':'Personal workspace'}</Text></View>
-        <Icon name="chevron-forward" size={16} color={colors.textMuted}/>
-      </Pressable></Link>
+      </View>
     </View>
   );
 }
