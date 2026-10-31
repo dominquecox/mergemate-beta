@@ -36,7 +36,7 @@ export default function NotificationsScreen() {
     <View style={[styles.root, { backgroundColor: colors.background }]}>
       <Header
         title="Notifications"
-        rightAction={
+        rightAction={items.some((item) => !item.read) ? (
           <TouchableOpacity
             onPress={markAllRead}
             style={styles.markReadBtn}
@@ -45,7 +45,7 @@ export default function NotificationsScreen() {
           >
             <Text style={[typography.subhead, { color: colors.brandLight, fontWeight: "600" }]}>Mark all read</Text>
           </TouchableOpacity>
-        }
+        ) : undefined}
       />
 
       {/* Filter Chips */}
