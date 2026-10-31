@@ -6,6 +6,11 @@ import { MockApiClient } from "../src/api/mock";
 import { MemoryTokenStore } from "./helpers";
 
 describe("API base URL from the environment", () => {
+  it("allows exactly /__api only in development", () => {
+    expect(normalizeBaseUrl("/__api", true)).toBe("/__api");
+    expect(normalizeBaseUrl("/__api/", true)).toBeNull();
+    expect(normalizeBaseUrl("/__api", false)).toBeNull();
+  });
   it("falls back to sample data in a development build when it is not set", () => {
     expect(resolveApiConfig(undefined, true)).toEqual({ kind: "mock" });
     expect(resolveApiConfig("", true)).toEqual({ kind: "mock" });
@@ -79,5 +84,26 @@ describe("choosing the client", () => {
     expect(() => client.setUnauthorizedHandler(() => undefined)).not.toThrow();
     const failure = await createUnconfiguredClient().getMe().catch((e) => e);
     expect(failure.message).toMatch(/isn't connected/i);
+  });
+});
+
+describe("SEC-013 build check", () => {
+  const dev: Record<string, string | undefined> = { EXPO_PUBLIC_API_BASE_URL: "https://api-dev.mergemate.dev", EXPO_PUBLIC_CF_ACCESS_CLIENT_ID: "id", EXPO_PUBLIC_CF_ACCESS_CLIENT_SECRET: "secret" };
+  it("allows service-token values in a native dev build", async () => {
+    const { assertAccessTokenAllowed } = await import("../app.config");
+    expect(() => assertAccessTokenAllowed(dev, ["expo", "start"])).not.toThrow();
+  });
+  it("refuses them for any web export, even against the dev API", async () => {
+    const { assertAccessTokenAllowed } = await import("../app.config");
+    for (const argv of [["expo", "export", "-p", "web"], ["expo", "export", "--platform", "web"], ["expo", "export", "--platform=web"], ["expo", "start", "--web"]]) {
+      expect(() => assertAccessTokenAllowed(dev, argv)).toThrow(/native development/);
+    }
+    expect(() => assertAccessTokenAllowed({ ...dev, EXPO_PLATFORM: "web" }, ["expo"])).toThrow();
+    expect(() => assertAccessTokenAllowed({ ...dev, EXPO_PUBLIC_CF_ACCESS_CLIENT_SECRET: "", EXPO_PUBLIC_CF_ACCESS_CLIENT_ID: "id" }, ["expo", "export", "-p", "web"])).toThrow();
+  });
+  it("still refuses prod and proxy API bases", async () => {
+    const { assertAccessTokenAllowed } = await import("../app.config");
+    expect(() => assertAccessTokenAllowed({ ...dev, EXPO_PUBLIC_API_BASE_URL: "https://api.mergemate.dev" }, ["expo"])).toThrow();
+    expect(() => assertAccessTokenAllowed({ ...dev, EXPO_PUBLIC_API_BASE_URL: "/__api" }, ["expo"])).toThrow();
   });
 });

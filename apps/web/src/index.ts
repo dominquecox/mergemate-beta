@@ -16,6 +16,10 @@ export interface Env {
   ANDROID_SHA256_FINGERPRINTS?: string;
   /** Actual application-identifier entitlement (Apple prefix + bundle identifier), never a signing key. */
   IOS_APP_ID?: string;
+  DEV_API_PROXY?: string;
+  DEV_API?: Fetcher;
+  CF_ACCESS_CLIENT_ID?: string;
+  CF_ACCESS_CLIENT_SECRET?: string;
 }
 
 export const ANDROID_PACKAGE_PROD = "dev.mergemate.app";
@@ -66,11 +70,12 @@ const STATIC_HEADERS: Record<string, string> = {
  * Cloudflare Web Analytics (auto-injected at the edge, kept on by the owner) needs its beacon script and report host.
  */
 export function buildCsp(apiOrigin: string): string {
+  const connectApi = apiOrigin === "https://api-dev.mergemate.dev" ? "" : apiOrigin;
   return [
     "default-src 'self'",
     "script-src 'self' https://challenges.cloudflare.com https://static.cloudflareinsights.com",
     "frame-src https://challenges.cloudflare.com",
-    `connect-src 'self' blob: ${apiOrigin} https://cloudflareinsights.com`,
+    `connect-src 'self' blob: ${connectApi} https://cloudflareinsights.com`,
     "img-src 'self' data: blob: https://avatars.githubusercontent.com",
     "style-src 'self' 'unsafe-inline'",
     "font-src 'self' data:",
@@ -124,6 +129,12 @@ export default {
       return new Response("Misconfigured", { status: 500, headers: { ...STATIC_HEADERS, "Cache-Control": "no-store" } });
     }
     const csp = buildCsp(apiOrigin);
+
+    const requestPathname = new URL(request.url).pathname;
+    if (requestPathname === "/__api" || requestPathname.startsWith("/__api/")) {
+      const { devApiProxy } = await import("./devApiProxy");
+      return devApiProxy(request, env);
+    }
 
     if (request.method !== "GET" && request.method !== "HEAD") {
       return withHeaders(new Response("Method Not Allowed", { status: 405, headers: { Allow: "GET, HEAD" } }), csp, {
