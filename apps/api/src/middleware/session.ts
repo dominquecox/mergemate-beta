@@ -20,7 +20,7 @@ const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
 const DEMO_WRITES = new Set(["/v1/auth/logout"]);
 // Fixture-only AI endpoints: demo sessions get pre-generated results here and their
 // handlers return before any provider or data call, so no live call is possible.
-const DEMO_FIXTURE_POSTS = [/^\/v1\/prs\/[^/]+\/[^/]+\/\d+\/(summary|risk)$/];
+const DEMO_FIXTURE_POSTS = [/^\/v1\/prs\/[^/]+\/[^/]+\/\d+\/(summary|risk|plan|ask)$/];
 
 const limitIp = (c: Context<AppEnv>) =>
   limit(c, { scope: "ip", key: clientIp(c) });

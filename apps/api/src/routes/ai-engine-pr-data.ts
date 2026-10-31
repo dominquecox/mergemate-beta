@@ -112,6 +112,24 @@ export const FIXTURE_SUMMARY = {
   coverage: { analyzedFiles: 1, skippedFiles: 0, truncatedFiles: 0 },
 };
 
+export const FIXTURE_PLAN = {
+  readingOrder: [
+    { file: "src/sync.ts", why: "The retry loop is the whole change; check the attempt count and the delay." },
+    { file: "test/sync.test.ts", why: "Confirms the failure path is covered." },
+  ],
+  verify: ["The retry stops after 3 attempts.", "A permanent error is not retried forever.", "The test fails without the change."],
+  draftComment: "Thanks for the retry. Could you confirm a permanent error stops after the third attempt and is logged once? Otherwise this looks good to me.",
+  coverage: { analyzedFiles: 1, skippedFiles: 0, truncatedFiles: 0 },
+  model: "sample:demo",
+};
+
+export const FIXTURE_ANSWER = {
+  answer: "The change wraps the nightly sync in a loop of 3 attempts, so a transient error no longer fails the whole run.",
+  citations: [{ file: "src/sync.ts" }],
+  coverage: { analyzedFiles: 1, skippedFiles: 0, truncatedFiles: 0 },
+  model: "sample:demo",
+};
+
 export const FIXTURE_RISK = {
   level: "low",
   reasons: ["No risk signals: small change with tests and passing checks."],

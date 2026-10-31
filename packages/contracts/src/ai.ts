@@ -163,3 +163,46 @@ export const AiPreferenceUpdate=z.discriminatedUnion('action',[
  z.object({action:z.literal('summaries'),enabled:z.boolean(),expectedRevision:z.string().min(1).max(128)}).strict(),
 ]);
 export type AiPreferenceUpdate=z.infer<typeof AiPreferenceUpdate>;
+
+/** The model that produced an AI result, as `provider:model`. Shown to the user; never a secret. */
+export const AiModelLabel = z.string().min(1).max(120);
+export type AiModelLabel = z.infer<typeof AiModelLabel>;
+
+/** One file in the suggested reading order, with the reason to read it at that point. */
+export const ReviewPlanFile = z.object({
+  file: z.string().trim().min(1).max(300),
+  why: z.string().trim().min(1).max(300),
+});
+export type ReviewPlanFile = z.infer<typeof ReviewPlanFile>;
+
+/** Exact shape the model must return for a review plan. Files outside the PR are dropped server-side. */
+export const ModelReviewPlan = z.object({
+  readingOrder: z.array(ReviewPlanFile).max(12),
+  verify: z.array(z.string().trim().min(1).max(240)).max(8),
+  draftComment: z.string().trim().min(1).max(1500),
+});
+export type ModelReviewPlan = z.infer<typeof ModelReviewPlan>;
+
+/** Review plan for the human reviewer. The draft comment is for copying; MergeMate never posts it. */
+export const ReviewPlan = ModelReviewPlan.extend({
+  coverage: AnalysisCoverage,
+  model: AiModelLabel.optional(),
+});
+export type ReviewPlan = z.infer<typeof ReviewPlan>;
+
+/** A question about one pull request. */
+export const PrQuestion = z.object({ question: z.string().trim().min(3).max(300) }).strict();
+export type PrQuestion = z.infer<typeof PrQuestion>;
+
+/** Exact shape the model must return for an answer. Citations outside the PR are dropped server-side. */
+export const ModelPrAnswer = z.object({
+  answer: z.string().trim().min(1).max(3000),
+  citations: z.array(z.object({ file: z.string().trim().min(1).max(300) })).max(8).default([]),
+});
+export type ModelPrAnswer = z.infer<typeof ModelPrAnswer>;
+
+export const PrAnswer = ModelPrAnswer.extend({
+  coverage: AnalysisCoverage,
+  model: AiModelLabel.optional(),
+});
+export type PrAnswer = z.infer<typeof PrAnswer>;
