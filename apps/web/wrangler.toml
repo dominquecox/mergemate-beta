@@ -34,8 +34,13 @@ not_found_handling = "single-page-application"
 
 [env.dev.vars]
 API_ORIGIN = "https://api-dev.mergemate.dev"
+DEV_API_PROXY = "1"
 ANDROID_SHA256_FINGERPRINTS = ""
 IOS_APP_ID = ""
+
+[[env.dev.services]]
+binding = "DEV_API"
+service = "mergemate-api-dev"
 
 # Production: app.mergemate.dev. API_ORIGIN feeds the CSP connect-src and must be the origin the export was built
 # against (EXPO_PUBLIC_API_BASE_URL=https://api.mergemate.dev); the headers and CSP are the same code as dev. The

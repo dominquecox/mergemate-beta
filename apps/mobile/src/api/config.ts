@@ -16,6 +16,7 @@ const LOCAL_HOST = /^(localhost|127\.0\.0\.1|\[::1\]|10\.\d+\.\d+\.\d+|192\.168\
 
 /** Returns a clean origin (no path, no trailing slash) or null when the value is not acceptable. */
 export function normalizeBaseUrl(raw: string, allowInsecureLocal: boolean): string | null {
+  if (raw.trim() === "/__api") return allowInsecureLocal ? "/__api" : null;
   let url: URL;
   try {
     url = new URL(raw.trim());

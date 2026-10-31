@@ -103,6 +103,14 @@ export abstract class HttpTransport {
 
       if(authed && !opts.allowStaleSession && generation!==this.sessionGeneration)throw new ApiClientError("unauthorized",messageForCode("unauthorized"));
       const headers: Record<string, string> = { accept: "application/json" };
+      if (!this.web && this.baseUrl === "https://api-dev.mergemate.dev") {
+        const id = process.env.EXPO_PUBLIC_CF_ACCESS_CLIENT_ID?.trim();
+        const secret = process.env.EXPO_PUBLIC_CF_ACCESS_CLIENT_SECRET?.trim();
+        if (id && secret) {
+          headers["CF-Access-Client-Id"] = id;
+          headers["CF-Access-Client-Secret"] = secret;
+        }
+      }
       let body: BodyInit | undefined;
       if(opts.audio){headers["content-type"]="audio/wav";body=opts.audio;}else if (opts.form) {
         body = opts.form;

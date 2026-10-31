@@ -10,6 +10,29 @@ const native = (handler: Parameters<typeof makeClient>[0], token: string | null 
   makeClient(handler, { platform: "native", token });
 
 describe("HttpApiClient on native (bearer session)", () => {
+  it("adds Access headers only for native hosted-dev requests", async () => {
+    vi.stubEnv("EXPO_PUBLIC_CF_ACCESS_CLIENT_ID", "fake-client-id");
+    vi.stubEnv("EXPO_PUBLIC_CF_ACCESS_CLIENT_SECRET", "fake-client-secret");
+    const { client, calls } = makeClient(() => new Response(null, { status: 204 }), {
+      platform: "native", token: TOKEN_1, baseUrl: "https://api-dev.mergemate.dev",
+    });
+    await client.markNotificationDone(NOTIF_ID);
+    expect(calls[0]?.headers["CF-Access-Client-Id"]).toBe("fake-client-id");
+    expect(calls[0]?.headers["CF-Access-Client-Secret"]).toBe("fake-client-secret");
+    vi.unstubAllEnvs();
+  });
+
+  it("does not add Access headers to production native requests", async () => {
+    vi.stubEnv("EXPO_PUBLIC_CF_ACCESS_CLIENT_ID", "fake-client-id");
+    vi.stubEnv("EXPO_PUBLIC_CF_ACCESS_CLIENT_SECRET", "fake-client-secret");
+    const { client, calls } = makeClient(() => new Response(null, { status: 204 }), {
+      platform: "native", token: TOKEN_1, baseUrl: "https://api.mergemate.dev",
+    });
+    await client.markNotificationDone(NOTIF_ID);
+    expect(calls[0]?.headers["CF-Access-Client-Id"]).toBeUndefined();
+    expect(calls[0]?.headers["CF-Access-Client-Secret"]).toBeUndefined();
+    vi.unstubAllEnvs();
+  });
   it("sends the stored token as a Bearer header, without cookies or CSRF", async () => {
     const { client, calls } = native(() => new Response(null, { status: 204 }));
     await client.markNotificationDone(NOTIF_ID);

@@ -33,6 +33,26 @@ function env(apiOrigin = "https://api-dev.mergemate.dev"): Env {
   return { ASSETS: assets(), API_ORIGIN: apiOrigin };
 }
 
+it("returns 404 for the proxy when the dev flag is absent", async () => {
+  const res = await get("/__api/health");
+  expect(res.status).toBe(404);
+});
+
+it("uses the dev binding and strips browser Access credentials", async () => {
+  let seen: Request | undefined;
+  const binding = { fetch: async (req: Request) => {
+    seen = req;
+    return new Response("ok", { headers: { "set-cookie": "sid=x; Domain=api.example; Path=/auth", "access-control-allow-origin": "*" } });
+  } } as Fetcher;
+  const res = await get("/__api/v1/health", { ...env(), DEV_API_PROXY: "1", DEV_API: binding }, { headers: { "CF-Access-Client-Id": "forged", Cookie: "CF_Authorization=bad; sid=ok" } });
+  expect(res.status).toBe(200);
+  expect(seen?.url).toBe("https://api-dev.mergemate.dev/v1/health");
+  expect(seen?.headers.has("CF-Access-Client-Id")).toBe(false);
+  expect(seen?.headers.get("cookie")).toBe("sid=ok");
+  expect(res.headers.get("access-control-allow-origin")).toBeNull();
+  expect(res.headers.get("set-cookie")).toContain("Path=/__api/auth");
+});
+
 const get = (path: string, e: Env = env(), init?: RequestInit) => worker.fetch(new Request(`https://dev.mergemate.dev${path}`, init), e);
 
 function expectSecurityHeaders(res: Response, apiOrigin = "https://api-dev.mergemate.dev") {
@@ -150,7 +170,8 @@ describe("CSP", () => {
     ["http://localhost:8787"],
   ])("limits connect-src to self and %s", async (origin) => {
     const res = await get("/", env(origin));
-    expect(res.headers.get("Content-Security-Policy")).toContain(`connect-src 'self' blob: ${origin} https://cloudflareinsights.com;`);
+    const expectedApi = origin === "https://api-dev.mergemate.dev" ? "" : origin;
+    expect(res.headers.get("Content-Security-Policy")).toContain(`connect-src 'self' blob: ${expectedApi} https://cloudflareinsights.com;`);
     expectSecurityHeaders(res, origin);
   });
 

@@ -6,6 +6,11 @@ import { MockApiClient } from "../src/api/mock";
 import { MemoryTokenStore } from "./helpers";
 
 describe("API base URL from the environment", () => {
+  it("allows exactly /__api only in development", () => {
+    expect(normalizeBaseUrl("/__api", true)).toBe("/__api");
+    expect(normalizeBaseUrl("/__api/", true)).toBeNull();
+    expect(normalizeBaseUrl("/__api", false)).toBeNull();
+  });
   it("falls back to sample data in a development build when it is not set", () => {
     expect(resolveApiConfig(undefined, true)).toEqual({ kind: "mock" });
     expect(resolveApiConfig("", true)).toEqual({ kind: "mock" });

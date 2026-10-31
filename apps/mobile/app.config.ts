@@ -13,6 +13,12 @@ export function resolveAppName(variant = process.env.APP_VARIANT): string {
 }
 
 export default ({ config }: ConfigContext): ExpoConfig => {
+  const accessId = process.env.EXPO_PUBLIC_CF_ACCESS_CLIENT_ID?.trim();
+  const accessSecret = process.env.EXPO_PUBLIC_CF_ACCESS_CLIENT_SECRET?.trim();
+  const apiBase = process.env.EXPO_PUBLIC_API_BASE_URL?.trim() ?? "";
+  if ((accessId || accessSecret) && (apiBase === "/__api" || !apiBase.includes("api-dev.mergemate.dev"))) {
+    throw new Error("CF Access service-token variables are allowed only in native development/preview builds.");
+  }
   const variant = process.env.APP_VARIANT;
   const base = appJson.expo as unknown as ExpoConfig;
   const host = variant === "development" ? "dev.mergemate.dev" : "app.mergemate.dev";
