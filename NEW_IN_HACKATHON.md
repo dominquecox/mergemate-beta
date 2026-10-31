@@ -6,7 +6,7 @@ What was built for the Meta Global AI Developer Hackathon build window (Oct 27 t
 git log origin/development --first-parent --since='2026-10-27T00:00:00-04:00' --until='2026-11-05T00:00:00-04:00'
 ```
 
-- Snapshot: `development` at `1035e5f`, 2026-10-30. 50 first-parent entries (PR merges) from `595473b` (2026-10-27) to `1035e5f` (2026-10-30). It will be refreshed once more on Nov 4 before submission.
+- Snapshot: `development` at `c21736b`, 2026-10-30 (ET). 63 first-parent entries (PR merges) from `595473b` (2026-10-27) to `c21736b`. It will be refreshed once more on Nov 4 before submission.
 - Dates are committer dates in ET. SHAs are the commit that landed on `development` (the merge commit for "Merge pull request" entries, the squashed commit otherwise).
 - Nothing here is invented: if it is not in the log, it is not listed.
 - MergeMate stays read-only by design; none of these changes add a write path to GitHub.
@@ -39,6 +39,12 @@ Grouped from the log below. PR numbers point to the rows.
 - Private notes with bounded voice capture and transcript review (J-006).
 - AI consent store with truthful consent screen and revocation (J-020).
 - Account deletion with durable leases and local data erasure (J-005).
+
+**Reviewer co-pilot (read-only, Meta-driven)**
+- Review plan: reading order with a reason per file, a verify-before-approving checklist, and a draft comment you copy (never posted): #156 (MM-073).
+- Ask this PR: answers grounded in the PR, with citations limited to its real files: #156 (MM-074).
+- Model label on every AI result and an AI engine card in Settings that shows which model serves which job: #156 (MM-075).
+- One control per job across the web app, with no duplicate actions: #155, #158 (MM-076).
 
 **Demo-path UI polish**
 - Onboarding fit, flat AI summary and AI loading skeleton: #143.
@@ -112,3 +118,16 @@ Chronological, oldest first. The Muse-authored row above is the only one not dra
 | 2026-10-30 | #141 | `2c2a975` | feat(api): feed Clef-flash into quality classifierScore (MM-062) |
 | 2026-10-30 | #142 | `ddf98ab` | feat(api): Highlight runs SAM 3.1 then Muse Spark behind MODEL_ROUTE_SEGMENT (MM-063) |
 | 2026-10-30 | #143 | `1035e5f` | feat(web): polish demo path: onboarding fit, flat AI summary, AI loading skeleton (MM-064) |
+| 2026-10-30 | #144 | `c086221` | docs: add NEW_IN_HACKATHON.md from git history since Oct 27 (MM-067) |
+| 2026-10-30 | #145 | `9d0ecf7` | chore(MM-068): allowlist public test vectors in gitleaks config |
+| 2026-10-30 | #146 | `eb86806` | fix(web): load fonts from assets/fonts so scoped @ paths stop redirect-looping |
+| 2026-10-30 | #148 | `9aa7485` | fix(web): ship /privacy /terms /support as static HTML |
+| 2026-10-30 | #150 | `de7aa25` | feat(demo): realistic sample PRs for every inbox item |
+| 2026-10-30 | #151 | `3f23d3b` | chore(api): route Clef-flash and SAM 3.1 on dev only |
+| 2026-10-30 | #152 | `311b101` | fix(web): paint tab and auth scenes with the theme background so dark reload never shows light grey |
+| 2026-10-30 | #153 | `69049ad` | Settings: AI summaries is a dependent child of AI processing |
+| 2026-10-30 | #154 | `acb7c2e` | Highlight: one upload control, results only after analysis, clearer disabled Analyze |
+| 2026-10-30 | #155 | `5a82365` | UI: one control per job (hide Skip on the last onboarding step, single step label, no duplicate desktop actions) (MM-076) |
+| 2026-10-30 | #156 | `2485dba` | feat: review plan, ask this PR and AI engine provenance UI (MM-073, MM-074, MM-075) |
+| 2026-10-30 | #157 | `4b79604` | Add MIT LICENSE and point SECURITY.md to private vulnerability reporting |
+| 2026-10-30 | #158 | `c21736b` | UI: single Highlight title, Mark all read only with unread items, one Triage counter (MM-076) |
