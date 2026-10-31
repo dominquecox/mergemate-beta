@@ -23,7 +23,7 @@ import { Header } from "../../../../src/components/Header";
 import { StatusPill } from "../../../../src/components/StatusPill";
 import { RiskBadge } from "../../../../src/components/RiskBadge";
 import { riskAssessmentText } from "../../../../src/api/mappers";
-import { riskBanner } from "../../../../src/workspace/risk";
+import { riskBanner, riskEvidence } from "../../../../src/workspace/risk";
 import { AIBlock, AIBlockSkeleton } from "../../../../src/components/AIBlock";
 import { Button } from "../../../../src/components/Button";
 import { EmptyState } from "../../../../src/components/EmptyState";
@@ -248,14 +248,14 @@ function PrWorkspace({owner,repo,number}:{owner:string;repo:string;number:string
               <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.lg, marginTop: spacing.sm }]}>
                 <View style={[styles.riskHeader,{flexWrap:"wrap",gap:8}]}>
                   <Text style={[typography.headline, { color: colors.text }]} accessibilityRole="header">
-                    Risk Assessment
+                    Why this risk
                   </Text>
                   <RiskBadge level={detail.risk.level} secretWarning={detail.secretWarning} />
                 </View>
 
                 <View style={{ marginTop: spacing.sm }}>
-                  {detail.risk.reasons.map((reason: string, idx: number) => (
-                    <View key={idx} style={styles.reasonRow}>
+                  {riskEvidence(detail.risk, detail.files, detail.checks).map(({ reason, file, check }, idx) => (
+                    <View key={idx} style={[styles.reasonRow,{flexWrap:"wrap"}]} testID="risk-reason">
                       <Icon
                         name="ellipse"
                         size={8}
@@ -263,6 +263,8 @@ function PrWorkspace({owner,repo,number}:{owner:string;repo:string;number:string
                         style={styles.reasonDot}
                       />
                       <Text style={[typography.body, { color: colors.text, flex: 1 }]}>{reason}</Text>
+                      {!!file&&<TouchableOpacity accessibilityRole="button" accessibilityLabel={`Open ${file}, the file behind this reason`} onPress={()=>jumpToFile(file)} style={{minHeight:44,justifyContent:"center",paddingLeft:16,width:"100%"}}><Text style={[typography.footnote,{color:colors.brandLight,textDecorationLine:"underline"}]} numberOfLines={1}>Because of {file}</Text></TouchableOpacity>}
+                      {!!check&&<Text style={[typography.footnote,{color:colors.textSecondary,paddingLeft:16,width:"100%"}]}>Failing check: {check}</Text>}
                     </View>
                   ))}
                 </View>
