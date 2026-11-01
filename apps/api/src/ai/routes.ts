@@ -59,6 +59,7 @@ const PROFILE_DEFAULTS: Record<AiProfile, Partial<Record<AiTask, string>>> = {
  * No contributor models: they may use prompts for training, and user code must never reach them.
  */
 const ALLOWED_ROUTES: readonly AllowedRoute[] = [
+  { provider:"workers-ai", modelId:"@cf/meta/llama-3.2-11b-vision-instruct", tasks:["highlight"], maxInputChars:50000 },
   // Muse Spark on Meta Model API (Responses API): text and image input.
   { provider: "meta", modelId: "muse-spark-1.2", tasks: [...TEXT_TASKS, "highlight"], maxInputChars: 190_000 },
   { provider: "meta", modelId: "muse-spark-1.3", tasks: [...TEXT_TASKS, "highlight"], maxInputChars: 190_000 },

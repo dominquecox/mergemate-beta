@@ -78,6 +78,8 @@ export interface ApiClient {
   snoozeNotification(id: string, until: string): Promise<void>;
   restoreNotification(id: string): Promise<void>;
 
+  getPrVisualAsset(owner:string,repo:string,number:number,path:string,side:"before"|"after",headSha?:string,signal?:AbortSignal):Promise<import("@mergemate/contracts").PrVisualAsset>;
+
   // Pull Requests
   getPrFilePage(owner: string, repo: string, number: number, cursor?:string|null,options?:WorkspaceRead):Promise<WorkspacePage<import('../types').PrFile>>;
   getPrCommentPage(owner: string, repo: string, number: number, cursor?:string|null,options?:WorkspaceRead):Promise<WorkspacePage<import('../types').PrComment>>;

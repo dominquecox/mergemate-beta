@@ -1,3 +1,4 @@
+import {UiSegment} from "@mergemate/contracts";
 import type { HighlightRegion } from "@mergemate/contracts";
 import { recordAiCall } from "../ai/metrics";
 import { createModelProvider } from "../ai/provider";
@@ -81,3 +82,12 @@ export const segmentScreenshot = async (args: {
     return null;
   }
 };
+
+/** Do not trust a model's compliance assertion; recompute it from its reported sizes. */
+export function normalizeUiSegments(values:readonly UiSegment[]|undefined):UiSegment[]{
+ return (values??[]).slice(0,20).flatMap((value,index)=>{
+  const parsed=UiSegment.safeParse(value);if(!parsed.success)return [];
+  const s=parsed.data,compliant=s.touchTargetSizePt.width>=44&&s.touchTargetSizePt.height>=44;
+  return [{...s,id:`ui-${index+1}`,touchTargetCompliant:compliant,...(!compliant?{higViolation:'Estimated touch target below 44pt; verify actual rendered hit area.'}:{higViolation:undefined})}];
+ });
+}

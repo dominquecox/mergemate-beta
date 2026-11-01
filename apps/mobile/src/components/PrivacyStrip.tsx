@@ -17,6 +17,7 @@ export function PrivacyStrip({ onOpenSettings }: { onOpenSettings: () => void })
         aria-expanded={open}
         onPress={() => setOpen((v) => !v)}
         style={{
+          minHeight:44,minWidth:44,
           flexDirection: "row",
           alignItems: "center",
           gap: 6,

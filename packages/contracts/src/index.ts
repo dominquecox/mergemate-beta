@@ -11,3 +11,5 @@ export * from './meta-key';
 export * from './flags';
 export * from "./notes";
 export * from "./search";
+
+export * from "./visual";

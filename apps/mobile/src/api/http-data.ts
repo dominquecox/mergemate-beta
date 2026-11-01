@@ -1,3 +1,4 @@
+import {PrVisualAsset} from "@mergemate/contracts";
 import { PrSearchFilters, PrSearchPage } from '@mergemate/contracts';
 import type { WorkspaceRead } from './client';
 import { PrCheck as PrCheckSchema } from '@mergemate/contracts';
@@ -12,6 +13,8 @@ import { AI_TIMEOUT_MS, enc, prPath } from "./http-types";
 import { HttpSession } from "./http-session";
 
 export abstract class HttpData extends HttpSession {
+  getPrVisualAsset(owner:string,repo:string,number:number,path:string,side:"before"|"after",headSha?:string,signal?:AbortSignal){const q=new URLSearchParams({path,side,...(headSha?{headSha}:{})});return this.request({path:prPath(owner,repo,number)+"/visual?"+q.toString(),schema:PrVisualAsset,signal});}
+
   // ---------------------------------------------------------------------------------------------
   // AI consent
   // ---------------------------------------------------------------------------------------------

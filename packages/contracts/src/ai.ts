@@ -109,9 +109,19 @@ export const HighlightRegion = z
   .refine((box) => box.xMax > box.xMin && box.yMax > box.yMin, { message: "empty box" });
 export type HighlightRegion = z.infer<typeof HighlightRegion>;
 
+/** Coordinates are normalized [ymin, xmin, ymax, xmax]; dimensions are model estimates in points. */
+export const UiSegment = z.object({
+  id:z.string().min(1).max(80), label:z.string().trim().min(1).max(120),
+  bbox:z.tuple([z.number().min(0).max(1),z.number().min(0).max(1),z.number().min(0).max(1),z.number().min(0).max(1)]),
+  touchTargetSizePt:z.object({width:z.number().positive().max(10000),height:z.number().positive().max(10000)}),
+  touchTargetCompliant:z.boolean(), higViolation:z.string().max(300).optional(),
+}).refine(s=>s.bbox[2]>s.bbox[0]&&s.bbox[3]>s.bbox[1],{message:'empty segment'});
+export type UiSegment=z.infer<typeof UiSegment>;
+
 /** Highlight result. The request id matches the `x-request-id` response header. */
 export const HighlightResult = z.object({
   insight: z.string().trim().min(1).max(8000),
+  segments:z.array(UiSegment).max(20).optional(),
   regions: z.array(HighlightRegion).max(20).default([]),
   requestId: z.string().min(1),
 });
@@ -142,6 +152,7 @@ export type ModelRisk = z.infer<typeof ModelRisk>;
 /** Exact shape the vision model must return for a highlight. */
 export const ModelHighlight = z.object({
   explanation: z.string().trim().min(1).max(8000),
+  segments:z.array(UiSegment).max(20).optional(),
   regions: z.array(HighlightRegion).max(20).default([]),
 });
 export type ModelHighlight = z.infer<typeof ModelHighlight>;

@@ -1,3 +1,7 @@
+import {PrRiskPanel} from "../../../../src/components/PrRiskPanel";
+import {PrSecretBanner} from "../../../../src/components/PrSecretBanner";
+import {ExecutiveActionBar} from "../../../../src/components/ExecutiveActionBar";
+import {PrVisualDiffSection} from "../../../../src/components/PrVisualDiffSection";
 import {PrivateNotes} from "../../../../src/components/PrivateNotes";
 import {useAuth} from '../../../../src/context/AuthContext';
 import {usePrWorkspace} from '../../../../src/hooks/usePrWorkspace';
@@ -13,7 +17,6 @@ import { SummarySection, ExecutiveSummaryText } from "../../../../src/components
 import { GitMetadataCard } from "../../../../src/components/GitMetadataCard";
 import React, { useState, useEffect, useRef } from "react";
 import { View, ScrollView, TouchableOpacity, TextInput, StyleSheet, Linking, Share, Platform, KeyboardAvoidingView } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAndroidBackHandler } from "../../../../src/platform/android";
 import { Text } from "../../../../src/components/Text";
 import { useLocalSearchParams, useRouter } from "expo-router";
@@ -24,8 +27,7 @@ import { useConsent } from "../../../../src/context/ConsentContext";
 import { Header } from "../../../../src/components/Header";
 import { StatusPill } from "../../../../src/components/StatusPill";
 import { RiskBadge } from "../../../../src/components/RiskBadge";
-import { riskAssessmentText } from "../../../../src/api/mappers";
-import { riskBanner, riskEvidence, riskiestFile } from "../../../../src/workspace/risk";
+import { riskBanner, riskiestFile } from "../../../../src/workspace/risk";
 import { detectAgentProvenance } from "../../../../src/workspace/provenance";
 import { getExecutiveVerdict } from "../../../../src/workspace/executiveVerdict";
 import { ExecutiveVerdictCard } from "../../../../src/components/ExecutiveVerdictCard";
@@ -62,8 +64,7 @@ function PrWorkspace({owner,repo,number}:{owner:string;repo:string;number:string
   useEffect(()=>{setExpandedFiles([]);setCollapsedThreads([]);},[detail?.headSha]);
   useEffect(()=>{if(!detail||isLoading)return;const frame=requestAnimationFrame(()=>scroll.current?.scrollTo({y:scrollOffset.current,animated:false}));return()=>cancelAnimationFrame(frame);},[isLoading]);
   const [showNoteInput, setShowNoteInput] = useState(false),[noteFocus,setNoteFocus]=useState(0),noteY=useRef(0);
-  const insets = useSafeAreaInsets();
-  const bottomInset = Platform.OS === "web" ? 0 : insets.bottom;
+
 
   useAndroidBackHandler(() => {
     if (showNoteInput) {
@@ -128,12 +129,12 @@ function PrWorkspace({owner,repo,number}:{owner:string;repo:string;number:string
         />
       ) : (
         <>
-          <ScrollView testID="pr-workspace-scroll" ref={scroll} onScroll={event=>{scrollOffset.current=event.nativeEvent.contentOffset.y;}} scrollEventThrottle={16} contentContainerStyle={{ padding:isDesktop?24:spacing.base, paddingBottom:120 }}>
+          <ScrollView testID="pr-workspace-scroll" ref={scroll} onScroll={event=>{scrollOffset.current=event.nativeEvent.contentOffset.y;}} scrollEventThrottle={16} contentContainerStyle={{ padding:isDesktop?24:spacing.base, paddingBottom:24 }}>
             <ReadoutControls label="Pull request summary" sentences={narrationSentences([...(detail.summary?[detail.summary.whatChanged,detail.summary.whyItMatters,...detail.summary.suggestedFocus]:[]),...(detail.risk?[`Risk level: ${detail.risk.level}.`,...detail.risk.reasons]:[])])}/>
 
             <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
               <PrivacyStrip onOpenSettings={()=>router.push("/(tabs)/settings")}/>
-              <TouchableOpacity onPress={()=>void loadPr()} disabled={isRefreshing} accessibilityRole="button" accessibilityLabel="Refresh workspace" accessibilityState={{busy:isRefreshing,disabled:isRefreshing}} style={{flexDirection:"row",alignItems:"center",gap:6,minHeight:32,paddingHorizontal:4}}><Icon name="refresh-outline" size={13} color={colors.textMuted}/><Text style={[typography.caption,{color:colors.textMuted}]}>{isRefreshing?"Refreshing...":"Refresh"}</Text></TouchableOpacity>
+              <TouchableOpacity onPress={()=>void loadPr()} disabled={isRefreshing} accessibilityRole="button" accessibilityLabel="Refresh workspace" accessibilityState={{busy:isRefreshing,disabled:isRefreshing}} style={{flexDirection:"row",alignItems:"center",gap:6,minHeight:44,minWidth:44,paddingHorizontal:4}}><Icon name="refresh-outline" size={13} color={colors.textMuted}/><Text style={[typography.caption,{color:colors.textMuted}]}>{isRefreshing?"Refreshing...":"Refresh"}</Text></TouchableOpacity>
             </View>
             {!!(error||linkError)&&<Text accessibilityRole="alert" style={{color:colors.riskHigh,padding:12}}>{error??linkError}</Text>}
             {isDemo&&tour==="1"&&!tourClosed&&<DemoTour onClose={()=>setTourClosed(true)}/>}
@@ -173,44 +174,7 @@ function PrWorkspace({owner,repo,number}:{owner:string;repo:string;number:string
               />
             </View>
 
-            {/* US-25: Secret Leak Warning Banner */}
-            {detail.secretWarning && (
-              <View
-                style={[
-                  styles.secretBanner,
-                  {
-                    backgroundColor: colors.secretWarningBg,
-                    borderColor: colors.secretWarning,
-                    borderRadius: radius.md,
-                    marginTop: spacing.sm,
-                  },
-                ]}
-                accessibilityRole="alert"
-              >
-                <View style={styles.secretTitleRow}>
-                  <Icon name="warning" size={18} color={colors.secretWarning} />
-                  <Text style={[typography.headline, { color: colors.secretWarning, fontWeight: "700" }]}>
-                    POSSIBLE SECRET DETECTED
-                  </Text>
-                </View>
-                <Text style={[typography.footnote, { color: colors.text, marginTop: 4, lineHeight: 18 }]}>
-                  Pattern matched {detail.secretWarning.rule} at {detail.secretWarning.file}:
-                  {detail.secretWarning.line}. Raw secret values are always masked and never sent to AI.
-                </Text>
-                <View style={[styles.codeBox, { backgroundColor: "rgba(0,0,0,0.45)", borderRadius: radius.sm, marginTop: 6 }]}>
-                  <Text style={[typography.code, { color: "#FEE2E2" }]}>
-                    {detail.secretWarning.maskedSnippet}
-                  </Text>
-                </View>
-                {(detail.risk?.secretFindings?.length ?? 0) > 1 && (
-                  <Text style={[typography.footnote, { color: colors.text, marginTop: 6 }]} selectable>
-                    Also at {detail.risk!.secretFindings!.slice(1, 6).map((finding) => `${finding.file}:${finding.line}`).join(", ")}
-                    {detail.risk!.secretFindings!.length > 6 ? ` and ${detail.risk!.secretFindings!.length - 6} more` : ""}.
-                  </Text>
-                )}
-              </View>
-            )}
-
+            <PrSecretBanner detail={detail}/>
             {/* 5-Second Executive Verdict & Agent Provenance Hero */}
             {(() => {
               const provenance = detectAgentProvenance({
@@ -439,116 +403,14 @@ function PrWorkspace({owner,repo,number}:{owner:string;repo:string;number:string
                   </View>
 
                   <View style={isDesktop ? { flex: 1, minWidth: 0 } : undefined}>
-                    {/* Risk Assessment Card (US-10) */}
-                    {detail.risk && (
-                      <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.lg, marginTop: spacing.sm }]}>
-                        <View style={[styles.riskHeader, { flexWrap: "wrap", gap: 8 }]}>
-                          <Text style={[typography.headline, { color: colors.text }]} accessibilityRole="header">
-                            Why this risk
-                          </Text>
-                          <RiskBadge level={detail.risk.level} secretWarning={detail.secretWarning} />
-                        </View>
-
-                        <View style={{ marginTop: spacing.sm, gap: 8 }}>
-                          {riskEvidence(detail.risk, detail.files, detail.checks)
-                            .filter((item, _, all) => all.length === 1 || !item.reason.startsWith("No rule-based risk signals"))
-                            .slice(0, 3)
-                            .map(({ reason, file, check }, idx) => {
-                              const cleanReason = reason.replace(/^[\s•\-*]+/, "").trim();
-                              const isHigh = detail.risk!.level === "high";
-                              const isMedium = detail.risk!.level === "medium";
-                              const badgeBg = isHigh ? colors.riskHighBg : isMedium ? colors.riskMediumBg : colors.riskLowBg;
-                              const badgeColor = isHigh ? colors.riskHigh : isMedium ? colors.riskMedium : colors.riskLow;
-                              const iconName = isHigh ? "alert-circle" : isMedium ? "warning" : "checkmark-circle";
-                              return (
-                                <View
-                                  key={idx}
-                                  style={{
-                                    flexDirection: "row",
-                                    alignItems: "flex-start",
-                                    gap: 10,
-                                    paddingVertical: 10,
-                                    paddingHorizontal: 12,
-                                    backgroundColor: colors.surfaceElevated,
-                                    borderRadius: radius.md,
-                                    borderWidth: 1,
-                                    borderColor: colors.border,
-                                  }}
-                                  testID="risk-reason"
-                                >
-                                  <View
-                                    style={{
-                                      width: 22,
-                                      height: 22,
-                                      borderRadius: 11,
-                                      backgroundColor: badgeBg,
-                                      alignItems: "center",
-                                      justifyContent: "center",
-                                      marginTop: 1,
-                                    }}
-                                  >
-                                    <Icon name={iconName} size={14} color={badgeColor} />
-                                  </View>
-                                  <View style={{ flex: 1 }}>
-                                    <Text style={[typography.callout, { color: colors.text, lineHeight: 20 }]}>
-                                      {cleanReason}
-                                    </Text>
-                                    {!!file && (
-                                      <TouchableOpacity
-                                        accessibilityRole="button"
-                                        accessibilityLabel={`Open ${file}, the file behind this reason`}
-                                        onPress={() => jumpToFile(file)}
-                                        style={{ minHeight: 32, justifyContent: "center", marginTop: 4 }}
-                                      >
-                                        <Text style={[typography.caption, { color: colors.brandLight, fontWeight: "600" }]} numberOfLines={1}>
-                                          View {file} ↗
-                                        </Text>
-                                      </TouchableOpacity>
-                                    )}
-                                    {!!check && (
-                                      <Text style={[typography.caption, { color: colors.riskHigh, marginTop: 4 }]}>
-                                        Failing check: {check}
-                                      </Text>
-                                    )}
-                                  </View>
-                                </View>
-                              );
-                            })}
-                        </View>
-
-                        {detail.risk.quality?.needsCloserLook && (
-                          <View
-                            style={{
-                              flexDirection: "row",
-                              alignItems: "center",
-                              gap: 8,
-                              paddingVertical: 8,
-                              paddingHorizontal: 12,
-                              backgroundColor: colors.surfaceElevated,
-                              borderRadius: radius.md,
-                              borderWidth: 1,
-                              borderColor: colors.border,
-                              marginTop: 8,
-                            }}
-                          >
-                            <Icon name="eye-outline" size={16} color={colors.textSecondary} />
-                            <Text style={[typography.footnote, { color: colors.textSecondary, flex: 1 }]}>
-                              {detail.risk.quality.reasons.join(" · ")}
-                            </Text>
-                          </View>
-                        )}
-
-                        <TouchableOpacity accessibilityRole="button" accessibilityLabel="How this was assessed" accessibilityState={{ expanded: assessmentOpen }} aria-expanded={assessmentOpen} onPress={() => setAssessmentOpen((open) => !open)} style={{ flexDirection: "row", alignItems: "center", gap: 8, minHeight: 44, padding: 12, marginTop: 12, backgroundColor: colors.surfaceElevated, borderRadius: 12 }}><Icon name="information-circle-outline" size={18} color={colors.brandLight} /><Text style={[typography.footnote, { color: colors.textSecondary, flex: 1 }]}>How this was assessed</Text><Icon name={assessmentOpen ? "chevron-up" : "chevron-down"} size={16} color={colors.textSecondary} /></TouchableOpacity>
-                        {assessmentOpen && <Text style={[typography.footnote, { color: colors.textSecondary, padding: 12 }]}>{riskAssessmentText(detail.risk.assessedBy)}</Text>}
-                      </View>
-                    )}
-
+                    <PrRiskPanel detail={detail} assessmentOpen={assessmentOpen} setAssessmentOpen={setAssessmentOpen} jumpToFile={jumpToFile}/>
                     {renderChecksCard()}
                   </View>
                 </View>
               );
             })()}
 
+            <PrVisualDiffSection detail={detail}/>
             {/* Changed Files List */}
             <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.lg, marginTop: spacing.sm }]}>
               <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
@@ -626,26 +488,7 @@ function PrWorkspace({owner,repo,number}:{owner:string;repo:string;number:string
             {showNoteInput && <View onLayout={event=>{noteY.current=event.nativeEvent.layout.y;if(noteFocus>0)scroll.current?.scrollTo({y:Math.max(0,noteY.current-16),animated:true});}}><PrivateNotes focusRequest={noteFocus} onClose={()=>setShowNoteInput(false)} context={{kind:'pr',repo:`${owner}/${repo}`,number:Number(number)}}/></View>}
           </ScrollView>
 
-          {/* Bottom Bar: Open in GitHub and Add note. STRICTLY NO MERGE, APPROVE, OR COMMENT CONTROLS ON GITHUB (US-12) */}
-          <View style={[styles.bottomBar, { backgroundColor: colors.surface, borderTopColor: colors.border, paddingBottom: 16 + bottomInset }]}>
-            <Button
-              title="Add Note"
-              onPress={() => {
-                setShowNoteInput(true);
-                setNoteFocus((n) => n + 1);
-                if (showNoteInput) scroll.current?.scrollTo({ y: Math.max(0, noteY.current - 16), animated: true });
-              }}
-              variant="secondary"
-              style={{ flex: 1 }}
-            />
-            <Button
-              title="Open in GitHub ↗"
-              onPress={openInGitHub}
-              disabled={!detail.htmlUrl}
-              variant="primary"
-              style={{ flex: 2 }}
-            />
-          </View>
+          <ExecutiveActionBar detail={detail} onOpenGitHub={openInGitHub} onAddNote={()=>{setShowNoteInput(true);setNoteFocus(n=>n+1);if(showNoteInput)scroll.current?.scrollTo({y:Math.max(0,noteY.current-16),animated:true});}}/>
         </>
       )}
     </KeyboardAvoidingView>
