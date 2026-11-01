@@ -82,9 +82,11 @@ export default function HighlightScreen() {
     finally{if(version===sequence.current){lock.current=false;pending.current=null;setIsAnalyzing(false);}}
   };
 
-  if(!flags.highlight||flagBlocked)return <View style={[styles.root,{backgroundColor:colors.background}]}><Header title="Screenshot Insight" showBack/><EmptyState icon="image-outline" title="Screenshot highlight is unavailable" message="This feature isn’t enabled. You can keep reviewing pull requests from Inbox."/></View>;
-
+  // Canned samples never upload images or call a model; live feature switches
+  // still gate the authenticated upload flow below.
   if(isDemo)return <View style={[styles.root,{backgroundColor:colors.background}]}><Header title="Screenshot Insight" showBack/><DemoHighlightGallery/></View>;
+
+  if(!flags.highlight||flagBlocked)return <View style={[styles.root,{backgroundColor:colors.background}]}><Header title="Screenshot Insight" showBack/><EmptyState icon="image-outline" title="Screenshot highlight is unavailable" message="This feature isn’t enabled. You can keep reviewing pull requests from Inbox."/></View>;
 
   if(!aiConsentGranted)return <View style={[styles.root,{backgroundColor:colors.background}]}><Header title="Screenshot Insight" showBack/><EmptyState icon="shield-checkmark-outline" title={isDemo?"Screenshots are unavailable in demo mode":"AI consent is required"} message={isDemo?"Sign in with GitHub to analyze your own screenshots. Nothing is uploaded in the demo.":"Your screenshot is shared with the configured AI provider only after you choose to analyze it."} {...(isDemo?{}:{actionTitle:"Open Settings",onAction:()=>router.push('/settings')})}/></View>;
 
