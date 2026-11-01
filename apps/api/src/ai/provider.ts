@@ -203,7 +203,11 @@ const completeWithWorkersAi = async (
       ]
     : request.prompt;
   const traits = workersAiTraits(config.modelId);
-  const inputs = {
+  const legacyVision=config.modelId==="@cf/meta/llama-3.2-11b-vision-instruct";
+  const inputs = legacyVision && request.image ? {
+    image:Array.from(Uint8Array.from(atob(request.image.dataUrl.split(",")[1]??""),c=>c.charCodeAt(0))),
+    prompt:`${request.system}\n${request.prompt}`,max_tokens:request.maxOutputTokens,
+  } : {
     messages: [
       { role: "system", content: request.system },
       { role: "user", content: userContent },

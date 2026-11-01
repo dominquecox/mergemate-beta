@@ -1,3 +1,4 @@
+import {prVisual} from "./routes/pr-visual";
 import {searchPrs} from './routes/search';
 import { Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
@@ -75,6 +76,7 @@ export const createApp = (deps: Deps = defaultDeps) => {
   app.route("/v1", push);
   app.route("/v1", billingWebhooks);
   app.route("/v1", github);
+  app.route("/v1", prVisual);
   app.route("/v1", notifications);
   app.route("/v1", notes);
   app.route("/v1", searchPrs);

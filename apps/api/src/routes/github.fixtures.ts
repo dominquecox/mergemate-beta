@@ -88,8 +88,9 @@ export const DEMO_PRS: PrDetail[] = [
   pr("acme-demo/storefront", 318, "Lazy-load product images below the fold", "kim-frontend", at("2026-10-26T13:05:00Z"), {
     additions: 46,
     deletions: 12,
-    changedFiles: 2,
+    changedFiles: 3,
     files: [
+      { path: "assets/product-grid.png", status: "modified", additions: 0, deletions: 0 },
       { path: "components/ProductGrid.tsx", status: "modified", additions: 40, deletions: 10 },
       { path: "components/Image.tsx", status: "modified", additions: 6, deletions: 2 },
     ],
