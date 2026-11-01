@@ -84,6 +84,19 @@ export function seedNotifications(): Notification[] {
       read: false,
     },
     {
+      id: "notif_hero_sam",
+      kind: "review",
+      repo: "dominquecox/mergemate",
+      number: 9,
+      title: "Mobile UI: checkout sheet layout and tap targets (#9)",
+      author: "claude-bot",
+      status: "open",
+      risk: "medium",
+      summaryLine: "Visual UI update with screenshot assets; Meta SAM-3.1 inspection recommended.",
+      updatedAt: new Date(Date.now() - 1800000).toISOString(),
+      read: false,
+    },
+    {
       id: "notif_2",
       kind: "mine",
       repo: "dominquecox/mergemate",
@@ -387,6 +400,47 @@ function seedHeroPrDetails(): Record<string, PrDetail> {
         rule: "stripe-api-key",
       },
     },
+    "dominquecox/mergemate/9": {
+      owner: "dominquecox",
+      repo: "mergemate",
+      number: 9,
+      title: "Mobile UI: checkout sheet layout and tap targets",
+      author: "claude-bot",
+      authorAvatar: "https://avatars.githubusercontent.com/u/92395929?v=4",
+      status: "open",
+      headBranch: "claude/checkout-tap-targets",
+      baseBranch: "development",
+      createdAt: new Date(Date.now() - 3600000).toISOString(),
+      updatedAt: new Date(Date.now() - 1800000).toISOString(),
+      additions: 52,
+      deletions: 14,
+      changedFilesCount: 2,
+      htmlUrl: "https://github.com/dominquecox/mergemate/pull/9",
+      checks: [
+        { id: "c1", name: "typecheck", status: "completed", conclusion: "success" },
+        { id: "c2", name: "lint", status: "completed", conclusion: "success" },
+        { id: "c3", name: "vitest (24 tests)", status: "completed", conclusion: "success" },
+      ],
+      files: [
+        { filename: "apps/mobile/assets/checkout-screen.png", status: "modified", additions: 0, deletions: 0 },
+        { filename: "apps/mobile/app/checkout.tsx", status: "modified", additions: 52, deletions: 14 },
+      ],
+      comments: [],
+      summary: {
+        whatChanged: "Updates checkout modal layout, button styling, and spacing for 393px viewports with screenshot asset attached.",
+        whyItMatters: "Modifies the primary checkout touch target on mobile devices; requires visual verification against Apple HIG.",
+        suggestedFocus: ["apps/mobile/assets/checkout-screen.png", "apps/mobile/app/checkout.tsx"],
+        coverage: { analyzedFiles: 2, skippedFiles: 0, truncatedFiles: 0 },
+      },
+      risk: {
+        level: "medium",
+        reasons: [
+          "Contains mobile screenshot asset requiring visual UI audit",
+          "Touch target requires Apple HIG tap target verification",
+        ],
+        coverage: { analyzedFiles: 2, skippedFiles: 0, truncatedFiles: 0 },
+      },
+    },
   };
 }
 
@@ -396,6 +450,11 @@ export function seedTriageQueue(): TriageItem[] {
       prRef: "dominquecox/mergemate#7",
       lane: "needs_you",
       reason: "Requested your review on the API scaffold and contracts.",
+    },
+    {
+      prRef: "dominquecox/mergemate#9",
+      lane: "needs_you",
+      reason: "Visual UI change with screenshot asset; ready for Meta SAM-3.1 tap-target audit.",
     },
     {
       prRef: "ploonu-llc/typepress#412",
