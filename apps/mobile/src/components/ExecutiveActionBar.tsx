@@ -18,13 +18,13 @@ export function verdictMessage(detail:PrDetail){
 export function ExecutiveActionBar({detail,onOpenGitHub,onAddNote}:{detail:PrDetail;onOpenGitHub:()=>void;onAddNote:()=>void}){
  const {colors}=useTheme(),insets=useSafeAreaInsets(),verdict=getExecutiveVerdict(detail);
  const [confirm,setConfirm]=useState(false),[notice,setNotice]=useState('');
- useEffect(()=>{setConfirm(false);setNotice('');},[detail.headSha]);
+ useEffect(()=>{setConfirm(false);setNotice('');},[detail.headSha,verdict.level,detail.status]);
  const low=verdict.level==='safe',blocked=verdict.level==='blocked',tone=low?colors.riskLow:blocked?colors.riskHigh:colors.riskMedium;
  const copy=async()=>{try{if(!await Clipboard.setStringAsync(verdictMessage(detail)))throw new Error("Clipboard unavailable");triggerAndroidHaptic();setNotice(blocked?'Risk breakdown copied. Share it with a senior reviewer.':'Desktop review brief copied.');}catch{setNotice('Clipboard unavailable. Use Share Verdict instead.');}};
  const primary=async()=>{if(low){setConfirm(true);return;}if(blocked){await copy();return;}
   try{await api.setTriageChoice(`${detail.owner}/${detail.repo}#${detail.number}`,'needs_you');triggerAndroidHaptic();setNotice('Queued for desktop review in Needs you. GitHub is unchanged.');}catch{setNotice('Could not queue this review. Try again or Share Verdict.');}
  };
- const share=async()=>{try{await Share.share({message:verdictMessage(detail)});}catch{setNotice('Sharing unavailable. Try copying the review brief.');}};
+ const share=async()=>{try{await Share.share({message:verdictMessage(detail)});}catch{await copy();}};
  return <View testID="executive-action-bar" style={{backgroundColor:colors.surface,borderTopWidth:1,borderTopColor:colors.border,padding:12,paddingBottom:12+insets.bottom,gap:8}}>
   {!!notice&&<Text accessibilityLiveRegion="polite" style={{color:colors.textSecondary}}>{notice}</Text>}
   <View style={{flexDirection:'row',flexWrap:'wrap',gap:8}}>
