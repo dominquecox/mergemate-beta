@@ -1,3 +1,4 @@
+import {SwipeTriageCard} from "../../src/components/SwipeTriageCard";
 import { useRouter } from "expo-router";
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { View, StyleSheet, TouchableOpacity, ScrollView, Platform } from "react-native";
@@ -22,7 +23,8 @@ import { getExecutiveVerdict } from "../../src/workspace/executiveVerdict";
 
 export default function TriageScreen() {
   const router=useRouter();
-  const lock=useRef(false);
+  const lock=useRef(false),gesture=useRef(false);
+  const [gesturing,setGesturing]=useState(false);
   const [saving,setSaving]=useState(false);
   const { colors, typography, spacing, radius } = useTheme();
 
@@ -53,7 +55,7 @@ export default function TriageScreen() {
   }, [loadQueue]);
 
   const handleDecision = async (lane: TriageLane) => {
-    if (queue.length === 0 || lock.current) return;
+    if (queue.length === 0 || lock.current) return false;
     triggerAndroidHaptic();
     lock.current=true;setSaving(true);
     const current = queue[0];
@@ -61,9 +63,11 @@ export default function TriageScreen() {
       await api.setTriageChoice(current.prRef, lane);
       setUndoStack((prev) => [current, ...prev]);
       setQueue((prev) => prev.slice(1));
+      return true;
     } catch (e) {
 
       setError(toUserMessage(e, "Couldn't save your choice."));
+      return false;
     } finally {lock.current=false;setSaving(false);}
   };
 
@@ -85,6 +89,7 @@ export default function TriageScreen() {
   useEffect(() => {
     if (Platform.OS !== "web") return;
     const onKeyDown = (e: KeyboardEvent) => {
+      if(gesture.current)return;
       const target = e.target as HTMLElement | null;
       if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA")) return;
       if (e.key === "1" || e.key === "ArrowLeft") {
@@ -144,7 +149,7 @@ export default function TriageScreen() {
     <View style={[styles.root, { backgroundColor: colors.background }]}>
       <Header
         title="Triage Deck"
-        rightAction={<View style={{flexDirection:"row",alignItems:"center",gap:12}}><Text style={[typography.code,{color:colors.textSecondary,fontSize:11}]}>{processedCount} of {total}</Text>{undoStack.length>0 && <TouchableOpacity disabled={saving} onPress={handleUndo} style={styles.undoBtn} accessibilityRole="button" accessibilityLabel="Undo last triage choice"><Icon name="arrow-undo-outline" size={20} color={colors.brandLight}/></TouchableOpacity>}</View>}
+        rightAction={<View style={{flexDirection:"row",alignItems:"center",gap:12}}><Text style={[typography.code,{color:colors.textSecondary,fontSize:11}]}>{processedCount} of {total}</Text>{undoStack.length>0 && <TouchableOpacity disabled={saving||gesturing} onPress={handleUndo} style={styles.undoBtn} accessibilityRole="button" accessibilityLabel="Undo last triage choice"><Icon name="arrow-undo-outline" size={20} color={colors.brandLight}/></TouchableOpacity>}</View>}
         footer={<View style={{paddingHorizontal:16,paddingBottom:8}}><View style={[styles.progressTrack,{backgroundColor:colors.surfaceElevated}]} accessibilityRole="progressbar" accessibilityLabel="Triage progress" accessibilityValue={{min:0,max:total||1,now:processedCount}}><View style={[styles.progressBar,{backgroundColor:colors.brand,width:`${progressPercent}%`}]}/></View></View>}
       />
 
@@ -176,7 +181,7 @@ export default function TriageScreen() {
             {!!error && <Text accessibilityRole="alert" style={[typography.footnote,{color:colors.riskHigh}]}>{error}</Text>}
             <View style={{height:12,marginHorizontal:24,backgroundColor:colors.surfaceElevated,borderRadius:16}}/>
             <View style={{height:12,marginHorizontal:12,marginTop:-4,backgroundColor:colors.surfaceSecondary,borderRadius:16}}/>
-            <TouchableOpacity style={styles.cardBtn} disabled={saving} onPress={()=>{const [fullRepo="owner/repo",num="1"]=currentItem.prRef.split("#");const [owner="owner",repo="repo"]=fullRepo.split("/");router.push(`/pr/${owner}/${repo}/${num}`);}} accessibilityRole="button" accessibilityLabel={`Open pull request ${currentItem.title ?? currentItem.prRef}`}><Section style={{padding:16}}>
+            <SwipeTriageCard key={currentItem.prRef} disabled={saving} onDecision={handleDecision} onInteraction={busy=>{gesture.current=busy;setGesturing(busy);}}><TouchableOpacity style={styles.cardBtn} disabled={saving} onPress={()=>{if(gesture.current)return;const [fullRepo="owner/repo",num="1"]=currentItem.prRef.split("#");const [owner="owner",repo="repo"]=fullRepo.split("/");router.push(`/pr/${owner}/${repo}/${num}`);}} accessibilityRole="button" accessibilityLabel={`Open pull request ${currentItem.title ?? currentItem.prRef}`}><Section style={{padding:16}}>
               <View style={{flexDirection:"row",gap:8,alignItems:"center",justifyContent:"space-between",flexWrap:"wrap"}}>
                 <Text style={[typography.code,{color:colors.textSecondary,fontSize:11}]}>{currentItem.prRef}</Text>
                 <View style={{flexDirection:"row",alignItems:"center",gap:6}}>
@@ -202,9 +207,9 @@ export default function TriageScreen() {
                 {detail?<><Text style={[typography.code,{color:colors.riskLow,fontSize:11}]}>+{detail.additions}</Text><Text style={[typography.code,{color:colors.riskHigh,fontSize:11}]}>-{detail.deletions}</Text><Text style={[typography.code,{color:colors.textSecondary,fontSize:11}]}>{detail.changedFilesCount} files</Text></>:<Text style={[typography.caption,{color:colors.textSecondary}]}>{metadata?.ref===currentItem.prRef && metadata.failed?'Diff unavailable':'Loading details…'}</Text>}
                 <View style={{flexDirection:"row",alignItems:"center",gap:4,backgroundColor:ciPassed?colors.riskLowBg:ciFailed?colors.riskHighBg:colors.surfaceElevated,borderRadius:9999,paddingHorizontal:8,paddingVertical:4,marginLeft:"auto"}}><Icon name={ciPassed?'checkmark-circle-outline':ciFailed?'close-circle-outline':'time-outline'} size={14} color={ciPassed?colors.riskLow:ciFailed?colors.riskHigh:colors.textSecondary}/><Text style={[typography.caption,{color:ciPassed?colors.riskLow:ciFailed?colors.riskHigh:colors.textSecondary}]}>{ciLabel}</Text></View>
               </View>
-            </Section></TouchableOpacity>
+            </Section></TouchableOpacity></SwipeTriageCard>
             <View style={{flexDirection:"row",justifyContent:"space-around",gap:12,marginTop:28}}>
-              {([{lane:"ignore",label:"Ignore",icon:"close",color:colors.textSecondary},{lane:"fyi",label:"FYI · Later",icon:"time-outline",color:colors.riskMedium},{lane:"needs_you",label:"Needs you",icon:"flash",color:colors.brandLight}] as const).map(action=><TouchableOpacity key={action.lane} disabled={saving} accessibilityState={{disabled:saving,busy:saving}} onPress={()=>handleDecision(action.lane)} accessibilityRole="button" accessibilityLabel={action.label} style={{alignItems:"center",gap:10,minWidth:80,minHeight:84}}><View style={{width:56,height:56,borderRadius:28,backgroundColor:colors.surfaceElevated,borderWidth:1,borderColor:colors.border,alignItems:"center",justifyContent:"center"}}><Icon name={action.icon} size={24} color={action.color}/></View><Text style={[typography.caption,{color:action.color}]}>{action.label}</Text></TouchableOpacity>)}
+              {([{lane:"ignore",label:"Ignore",icon:"close",color:colors.textSecondary},{lane:"fyi",label:"FYI · Later",icon:"time-outline",color:colors.riskMedium},{lane:"needs_you",label:"Needs you",icon:"flash",color:colors.brandLight}] as const).map(action=><TouchableOpacity key={action.lane} disabled={saving||gesturing} accessibilityState={{disabled:saving,busy:saving}} onPress={()=>handleDecision(action.lane)} accessibilityRole="button" accessibilityLabel={action.label} style={{alignItems:"center",gap:10,minWidth:80,minHeight:84}}><View style={{width:56,height:56,borderRadius:28,backgroundColor:colors.surfaceElevated,borderWidth:1,borderColor:colors.border,alignItems:"center",justifyContent:"center"}}><Icon name={action.icon} size={24} color={action.color}/></View><Text style={[typography.caption,{color:action.color}]}>{action.label}</Text></TouchableOpacity>)}
             </View>
             <Text style={[typography.footnote,{color:colors.textSecondary,textAlign:"center",marginTop:16}]}>Your choices organize MergeMate. They never change the pull request on GitHub.</Text>
             <Text style={[typography.caption,{color:colors.textMuted,textAlign:"center",marginTop:10}]}>Desktop hotkeys: 1 Ignore · 2 FYI · 3 Needs you · Z Undo</Text>
