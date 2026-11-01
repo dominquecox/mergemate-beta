@@ -162,10 +162,10 @@ export default function TriageScreen() {
               {total > 0 ? `You've triaged all ${total} pull requests before stepping into the office.` : "No pull requests waiting to be triaged."}
             </Text>
             <View style={{flexDirection:"row",gap:12,marginTop:24}}>
-              <TouchableOpacity onPress={()=>router.push("/(tabs)/inbox")} style={{backgroundColor:colors.brand,paddingHorizontal:20,paddingVertical:12,borderRadius:radius.md}} accessibilityRole="button" accessibilityLabel="Open Inbox">
+              <TouchableOpacity onPress={()=>router.push("/(tabs)/inbox")} style={[styles.completionBtn,{backgroundColor:colors.brand,borderRadius:radius.md}]} accessibilityRole="button" accessibilityLabel="Open Inbox">
                 <Text style={[typography.subhead,{color:"#FFFFFF",fontWeight:"600"}]}>View Inbox</Text>
               </TouchableOpacity>
-              <TouchableOpacity onPress={loadQueue} style={{backgroundColor:colors.surfaceElevated,borderWidth:1,borderColor:colors.border,paddingHorizontal:20,paddingVertical:12,borderRadius:radius.md}} accessibilityRole="button" accessibilityLabel="Reload Deck">
+              <TouchableOpacity onPress={loadQueue} style={[styles.completionBtn,{backgroundColor:colors.surfaceElevated,borderWidth:1,borderColor:colors.border,borderRadius:radius.md}]} accessibilityRole="button" accessibilityLabel="Reload Deck">
                 <Text style={[typography.subhead,{color:colors.text,fontWeight:"600"}]}>Reload Deck</Text>
               </TouchableOpacity>
             </View>
@@ -176,7 +176,7 @@ export default function TriageScreen() {
             {!!error && <Text accessibilityRole="alert" style={[typography.footnote,{color:colors.riskHigh}]}>{error}</Text>}
             <View style={{height:12,marginHorizontal:24,backgroundColor:colors.surfaceElevated,borderRadius:16}}/>
             <View style={{height:12,marginHorizontal:12,marginTop:-4,backgroundColor:colors.surfaceSecondary,borderRadius:16}}/>
-            <TouchableOpacity disabled={saving} onPress={()=>{const [fullRepo="owner/repo",num="1"]=currentItem.prRef.split("#");const [owner="owner",repo="repo"]=fullRepo.split("/");router.push(`/pr/${owner}/${repo}/${num}`);}} accessibilityRole="button" accessibilityLabel={`Open pull request ${currentItem.title ?? currentItem.prRef}`}><Section style={{padding:16}}>
+            <TouchableOpacity style={styles.cardBtn} disabled={saving} onPress={()=>{const [fullRepo="owner/repo",num="1"]=currentItem.prRef.split("#");const [owner="owner",repo="repo"]=fullRepo.split("/");router.push(`/pr/${owner}/${repo}/${num}`);}} accessibilityRole="button" accessibilityLabel={`Open pull request ${currentItem.title ?? currentItem.prRef}`}><Section style={{padding:16}}>
               <View style={{flexDirection:"row",gap:8,alignItems:"center",justifyContent:"space-between",flexWrap:"wrap"}}>
                 <Text style={[typography.code,{color:colors.textSecondary,fontSize:11}]}>{currentItem.prRef}</Text>
                 <View style={{flexDirection:"row",alignItems:"center",gap:6}}>
@@ -217,5 +217,7 @@ export default function TriageScreen() {
 
 const styles=StyleSheet.create({
   root:{flex:1},undoBtn:{minHeight:44,minWidth:44,alignItems:'center',justifyContent:'center'},
+  cardBtn:{minHeight:44,minWidth:44},
+  completionBtn:{minHeight:44,minWidth:44,paddingHorizontal:20,paddingVertical:12,alignItems:'center',justifyContent:'center'},
   progressTrack:{height:4,width:'100%',borderRadius:4,overflow:'hidden'},progressBar:{height:'100%'},
 });
