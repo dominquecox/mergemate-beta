@@ -4,7 +4,8 @@ import {normalizeHighlight} from './normalize';
 import {IMAGE_MAX_BYTES,inspectImage,stripPngMetadata} from './validate';
 /** Conservative static SVG subset: reject active content, CSS, external resources and entities. */
 export function staticSvg(bytes:Uint8Array):string{
- let text:string;try{text=new TextDecoder('utf-8',{fatal:true}).decode(bytes);}catch{throw new ApiError('validation_failed','Invalid SVG image.');}
+ let text:string;try{text=new TextDecoder().decode(bytes);}catch{throw new ApiError('validation_failed','Invalid SVG image.');}
+ if(text.includes('\uFFFD'))throw new ApiError('validation_failed','Invalid SVG encoding.');
  const tags=[...text.matchAll(/<\/?\s*([\w:-]+)/g)].map(x=>x[1]?.toLowerCase());
  const allowed=new Set(['svg','g','path','rect','circle','ellipse','line','polyline','polygon','title','desc']);
  if(!/^\s*<svg\b/i.test(text)||tags.some(tag=>!tag||!allowed.has(tag))||/&|<!|<\?|\bon[\w]+\s*=|\b(?:href|src|style)\s*=|url\s*\(|javascript:|data:/i.test(text))throw new ApiError('validation_failed','Use a static SVG without scripts, styles or external resources.');
