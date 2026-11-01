@@ -1,3 +1,4 @@
+import {demoVisualAsset} from "../workspace/visual";
 import type {PrSearchFilters,PrSearchPage} from '@mergemate/contracts';
 import {disabledFeatureFlags} from "./feature-flags";
 import { ApiClientError, messageForCode } from "./errors";
@@ -39,6 +40,8 @@ import {
 } from "../types";
 
 export class MockApiClient implements ApiClient {
+  async getPrVisualAsset(_owner:string,_repo:string,_number:number,path:string,side:"before"|"after"){return demoVisualAsset(path,side);}
+
   /** Sample-data search: the same filters as the API, applied to the sample pull requests. */
   async searchPrs(filters:PrSearchFilters,_cursor?:string|null,_signal?:AbortSignal):Promise<PrSearchPage>{
     const terms=filters.query.toLowerCase().split(/\s+/).filter(Boolean);

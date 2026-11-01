@@ -16,6 +16,10 @@ const makeRisk = (level: PrRisk["level"], reasons: string[]): PrRisk => ({
 });
 
 describe("getExecutiveVerdict", () => {
+  it("requires desktop review for absent risk or incomplete checks",()=>{
+    expect(getExecutiveVerdict({}).level).toBe("caution");
+    expect(getExecutiveVerdict({risk:makeRisk("low",["Docs"]),checks:[{id:"1",name:"CI",status:"in_progress",conclusion:"pending"}]}).level).toBe("caution");
+  });
   it("flags secret exposure as blocked high risk", () => {
     const secretWarning: SecretLeakWarning = {
       file: "config/stripe.ts",

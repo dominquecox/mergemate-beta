@@ -1,3 +1,5 @@
+import {PrAssetInspection} from "../src/components/PrAssetInspection";
+import {useLocalSearchParams} from "expo-router";
 import { DemoHighlightGallery } from "../src/components/DemoHighlightGallery";
 import {PrivateNotes} from "../src/components/PrivateNotes";
 import {useFocusEffect,useRouter} from "expo-router";
@@ -27,6 +29,7 @@ const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp"];
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 
 export default function HighlightScreen() {
+  const context=useLocalSearchParams<{owner?:string;repo?:string;number?:string;asset?:string;headSha?:string}>();
   const { colors, typography, spacing, radius } = useTheme();
 
   const flags=useFeatureFlags();const {aiConsentGranted}=useConsent(),{isDemo,user}=useAuth();const router=useRouter();
@@ -81,6 +84,8 @@ export default function HighlightScreen() {
     }catch(e){if(version===sequence.current)setError(toUserMessage(e,"Could not analyze this screenshot. Check AI consent or try again."));}
     finally{if(version===sequence.current){lock.current=false;pending.current=null;setIsAnalyzing(false);}}
   };
+
+  if(context.owner&&context.repo&&context.number&&context.asset&&/^[-A-Za-z0-9_.]{1,100}$/.test(context.owner)&&/^[-A-Za-z0-9_.]{1,100}$/.test(context.repo)&&/^[1-9]\d{0,9}$/.test(context.number)&&user)return <PrAssetInspection owner={context.owner} repo={context.repo} number={context.number} asset={context.asset} {...(context.headSha?{headSha:context.headSha}:{})}/>;
 
   // Canned samples never upload images or call a model; live feature switches
   // still gate the authenticated upload flow below.

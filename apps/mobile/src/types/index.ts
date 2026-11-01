@@ -175,6 +175,7 @@ export interface HighlightRegion {
 }
 
 export interface HighlightResult {
+  segments?:import("@mergemate/contracts").UiSegment[];
   insight: string;
   regions: HighlightRegion[];
   requestId: string;

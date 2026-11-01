@@ -89,6 +89,10 @@ export function getExecutiveVerdict(params: {
     };
   }
 
+  if(!risk || !checks.length || risk.coverage.skippedFiles>0 || risk.coverage.truncatedFiles>0 || checks.some(c=>c.status!=="completed"||!["success","neutral","skipped"].includes(c.conclusion))){
+    return {level:"caution",headline:"REVIEW ON DESKTOP · EVIDENCE INCOMPLETE",summary:"Risk assessment or required check results are incomplete.",reasons:["Verify the latest revision and checks before deciding"],tone:"yellow",iconName:"warning"};
+  }
+
   // 5. Safe: Pure docs, tests, type hardening, or verified low risk
   const topReason = risk?.reasons[0]?.trim() || "Low blast radius change.";
   return {
