@@ -25,7 +25,10 @@ import { Header } from "../../../../src/components/Header";
 import { StatusPill } from "../../../../src/components/StatusPill";
 import { RiskBadge } from "../../../../src/components/RiskBadge";
 import { riskAssessmentText } from "../../../../src/api/mappers";
-import { riskBanner, riskEvidence } from "../../../../src/workspace/risk";
+import { riskBanner, riskEvidence, riskiestFile } from "../../../../src/workspace/risk";
+import { detectAgentProvenance } from "../../../../src/workspace/provenance";
+import { getExecutiveVerdict } from "../../../../src/workspace/executiveVerdict";
+import { ExecutiveVerdictCard } from "../../../../src/components/ExecutiveVerdictCard";
 import { AIBlock, AIBlockSkeleton } from "../../../../src/components/AIBlock";
 import { Button } from "../../../../src/components/Button";
 import { EmptyState } from "../../../../src/components/EmptyState";
@@ -134,7 +137,6 @@ function PrWorkspace({owner,repo,number}:{owner:string;repo:string;number:string
             </View>
             {!!(error||linkError)&&<Text accessibilityRole="alert" style={{color:colors.riskHigh,padding:12}}>{error??linkError}</Text>}
             {isDemo&&tour==="1"&&!tourClosed&&<DemoTour onClose={()=>setTourClosed(true)}/>}
-            {(()=>{const banner=riskBanner(detail.risk,detail.files);if(!banner||banner.level==="low")return null;const tone=banner.level==="high"?colors.riskHigh:colors.riskMedium,bg=banner.level==="high"?colors.riskHighBg:colors.riskMediumBg;return <View testID="risk-banner" style={{flexDirection:"row",alignItems:"center",flexWrap:"wrap",gap:8,padding:12,marginBottom:spacing.sm,borderRadius:radius.lg,backgroundColor:bg}}><Icon name="alert-circle" size={16} color={tone}/><Text style={[typography.subhead,{color:tone,flex:1,minWidth:200}]}>{banner.text}</Text>{!!banner.file&&<TouchableOpacity accessibilityRole="button" accessibilityLabel={`Jump to riskiest file ${banner.file}`} onPress={()=>jumpToFile(banner.file!)} style={{minHeight:44,justifyContent:"center",paddingHorizontal:8}}><Text style={[typography.footnote,{color:tone,fontWeight:"600",textDecorationLine:"underline"}]} numberOfLines={1}>Jump to {banner.file}</Text></TouchableOpacity>}</View>;})()}
             {/* Unified Modern PR Header Surface */}
             <View style={[styles.headerCard, { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.lg, padding: 16 }]}>
               <View style={styles.topRow}>
@@ -208,6 +210,37 @@ function PrWorkspace({owner,repo,number}:{owner:string;repo:string;number:string
                 )}
               </View>
             )}
+
+            {/* 5-Second Executive Verdict & Agent Provenance Hero */}
+            {(() => {
+              const provenance = detectAgentProvenance({
+                author: detail.author,
+                headBranch: detail.headBranch,
+                title: detail.title,
+              });
+              const verdict = getExecutiveVerdict({
+                risk: detail.risk,
+                files: detail.files,
+                checks: detail.checks,
+                secretWarning: detail.secretWarning,
+                changedFilesCount: detail.changedFilesCount,
+              });
+              const hasVisualAssets = (detail.files ?? []).some((f) =>
+                /\.(png|jpe?g|webp|svg|gif)$/i.test(f.filename)
+              );
+              const riskiest = detail.files ? riskiestFile(detail.files)?.filename : null;
+
+              return (
+                <ExecutiveVerdictCard
+                  verdict={verdict}
+                  provenance={provenance}
+                  hasVisualAssets={hasVisualAssets}
+                  onOpenVisualAudit={() => router.push("/highlight")}
+                  riskiestFile={riskiest}
+                  onJumpToFile={(file) => jumpToFile(file)}
+                />
+              );
+            })()}
 
             {(() => {
               const hasAiInsights = Boolean(detail.summary || detail.risk || detail.secretWarning || detail.aiNotice);

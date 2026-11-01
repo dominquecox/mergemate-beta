@@ -23,13 +23,13 @@ export const DEMO_HIGHLIGHT_SAMPLES: readonly DemoHighlightSample[] = [
   },
   {
     id: "screenshot-settings-toggle",
-    title: "Settings screen after the change",
+    title: "Mobile settings regression (Meta SAM Audit)",
     kind: "Screenshot",
-    excerpt: "Settings > AI choices\n[on] AI summaries\n[on] Include screenshots in analysis\n(no confirmation text shown)",
-    insight: "The new screenshot toggle is on by default and has no explanation, which conflicts with the rule that AI runs only after the user agrees.",
+    excerpt: "Settings > AI choices (393px mobile viewport)\n[ Screenshot Toggle: 32pt height ]\n[ AI summary toggle: default on without prompt ]",
+    insight: "Meta SAM-3.1 segmented 3 interactive regions. Llama Vision flagged an Apple HIG violation: the toggle touch area is 32pt (minimum 44pt), and defaults to on without confirmation.",
     areas: [
-      { label: "Default on", comment: "Screenshot analysis should start off until the user agrees." },
-      { label: "Missing explanation", comment: "Say what is shared with the model before the switch is flipped." },
+      { label: "Tap target violation (<44pt)", comment: "Toggle hit target is 32pt, below Apple touch guidelines." },
+      { label: "Unconfirmed AI choice", comment: "Screenshot analysis should start off until explicitly confirmed." },
     ],
   },
   {
