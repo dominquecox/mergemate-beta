@@ -6,10 +6,45 @@ What was built for the Meta Global AI Developer Hackathon build window (Oct 27 t
 git log origin/development --first-parent --since='2026-10-27T00:00:00-04:00' --until='2026-11-05T00:00:00-04:00'
 ```
 
-- Snapshot: `development` at `274002c`, 2026-10-30 (ET). 72 first-parent entries (PR merges) from `595473b` (2026-10-27) to `274002c`. It will be refreshed once more on Nov 4 before submission.
+- Historical full-log snapshot: `development` at `274002c`, 2026-10-30 (ET). 72 first-parent entries (PR merges) from `595473b` (2026-10-27) to `274002c`. The table remains that historical snapshot; the Lane D addendum below verifies #188 and #189 at base `9b21c21` on November 1. Refresh the complete log before submission on November 4.
 - Dates are committer dates in ET. SHAs are the commit that landed on `development` (the merge commit for "Merge pull request" entries, the squashed commit otherwise).
 - Nothing here is invented: if it is not in the log, it is not listed.
 - MergeMate stays read-only by design; none of these changes add a write path to GitHub.
+
+## Lane D submission packaging (November 1, 2026)
+
+**Value proposition:** MergeMate is the PR gatekeeper for tech leads shipping with AI agents. Where GitHub Mobile provides mobile GitHub access and Copilot helps explain code, this demo centers the decision a lead needs before opening a laptop: “Can I safely ship this right now?” A verdict directs attention; it never approves, merges, or certifies a change as safe.
+
+The three differentiators are the **5-Second Executive Verdict**, **Visual UI Inspection with Meta SAM-3.1 and vision**, and the **60-Second Swipe Triage Deck** with desktop keys **1 / 2 / 3 / Z**. The time labels are workflow goals, not measured benchmarks. Agent provenance adds context to the decision, using heuristic metadata detection rather than verified attribution.
+
+Verified additions to the historical log:
+
+| PR | Landed SHA | Delivered behavior |
+| --- | --- | --- |
+| #188 | `7d987cb` | Deterministic verdict hero, agent provenance badge and canned visual audit example. |
+| #189 | `9b21c21` | Card-level verdict and provenance, desktop triage shortcuts, completion screen and sample PR 9. |
+
+### Three-minute submission script
+
+Rehearse to the time cues below, leaving the final seconds of each segment for the demonstrated action. Target audience: startup-track judges; deadline November 4, 2026, 9 PM Eastern. The spoken script is finalized for this pack; a recording and submission are separate steps.
+
+| Time | Screen / action | Spoken narration |
+| --- | --- | --- |
+| 0:00–0:25 | Open the sample inbox on an iPhone-sized viewport. | “AI agents can open pull requests faster than a tech lead can review them. Your phone lights up with another change, but the answer is buried in 800 lines of code. Copilot can explain a diff. GitHub Mobile brings the repository to your phone. MergeMate focuses on your next decision: can I safely ship this right now without opening my laptop?” |
+| 0:25–0:55 | Open sample PR 7, low-risk Worker scaffold. Show the Executive Verdict and agent provenance. | “This is MergeMate, our PR gatekeeper for teams building with AI agents. Start with this low-risk scaffold change. The executive verdict gives a low-risk signal with its reasons. The agent badge shows likely provenance, so I know where the change came from. Meta AI helps explain the PR; deterministic rules combine risk, sensitive paths, reported check failures and secret warnings into the verdict. The human still decides.” |
+| 0:55–1:25 | Open sample PR 412. Show the red verdict and jump to the sensitive file. | “Now compare this Auth and Stripe change. A reassuring summary is not enough when a mistake could affect sessions or payments. MergeMate puts the high-risk verdict first and takes me to the sensitive file. I can move this review to my desktop instead of guessing on my phone. The product stays read-only: no merge, approval or comment is sent to GitHub.” |
+| 1:25–2:00 | Open sample PR 9 and its Visual UI Audit entry. Show the labeled Highlight screenshot sample. | “Code is only half the story when the change is visual. This mobile UI pull request points me to Highlight. In the configured live path, Meta SAM-3.1 locates screenshot regions before vision analysis explains what needs attention. We want to catch problems like touch targets below 44 points and clipped layouts. This labeled example is canned demo data, not a live model response. A screenshot finding guides inspection; it does not prove the actual touch area.” |
+| 2:00–2:35 | Open Triage Deck. Use 1, 2, 3 and Z; show the completion screen after the final choice. | “Finally, I can sort the backlog in a short triage session. Ignore the low-priority item, keep another for later, and mark the risky change as needing me. On desktop, one, two and three make those choices; Z undoes the last one. The verdict stays visible on each card. These choices organize my MergeMate queue and never change a pull request on GitHub.” |
+| 2:35–3:00 | Finish on the verdict or completed deck, with MergeMate branding. | “We built MergeMate for the lead who is accountable for an increasing stream of agent-written code. Understand risk in five seconds, inspect the UI, and organize the queue in sixty. This walkthrough used sample data with no model calls. Live AI requires consent and configured access. MergeMate brings the review decision into your pocket while keeping the shipping decision in your hands.” |
+
+### Demo and model disclosures
+
+- Golden path: **PR 7 → PR 412 → PR 9 → Triage Deck**. PR 7 is a Worker scaffold in the checked-in fixture, not a docs-only change; the narration follows the actual sample. Enter sample/demo mode explicitly. Samples and Highlight results are prerecorded data in code: no uploads or model requests happen in demo mode.
+- Live Highlight is separate: it requires user consent, the enabled Highlight flag, provider access and an uploaded image. When configured, SAM-3.1 segments regions and the configured vision route explains them. Provider fallback can change the serving model; show the returned model label rather than attributing every result to a fixed model. The canned screenshot's model wording is not evidence of a live call.
+- Inspect the PR 9 visual entry before recording; if Highlight is unavailable, use the labeled sample screen and retain the spoken sample disclosure. Do not enable live flags or claim a live audit for this submission-pack task.
+- A screenshot alone cannot certify a 44pt touch target, clipping behavior, accessibility conformance or safe code. Verify source sizing and the rendered interaction. “Safe to Ship” is a prioritization label, including when evidence is incomplete, not a substitute for review and tests.
+- Touch-target scope for this pack: both ExecutiveVerdictCard actions and every direct triage button have explicit minimum dimensions of at least 44pt. Decorative badges and icons are not controls. Existing mobile layout tests enforce vector icons instead of emoji in app/ and src/.
+- No new model integration, GitHub write permission, cloud flag, deployment, store build or submission is performed by this packaging change.
 
 ## Muse-authored change
 
@@ -43,7 +78,7 @@ Grouped from the log below. PR numbers point to the rows.
 **Reviewer co-pilot (read-only, Meta-driven)**
 - Review plan: reading order with a reason per file, a verify-before-approving checklist, and a draft comment you copy (never posted): #156 (MM-073).
 - Ask this PR: answers grounded in the PR, with citations limited to its real files: #156 (MM-074).
-- Model label on every AI result and an AI engine card in Settings that shows which model serves which job: #156 (MM-075).
+- Model labels on AI results and the original Settings engine card: #156 (MM-075). The internal engine card was subsequently removed from user Settings in #187 (`920b09f`).
 - One control per job across the web app, with no duplicate actions: #155, #158 (MM-076).
 
 **Demo-path UI polish**

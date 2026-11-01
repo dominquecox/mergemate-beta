@@ -1,6 +1,6 @@
 # MergeMate
 
-**Code review that fits in your pocket.** MergeMate connects to GitHub, finds the pull requests that need you, and uses Meta's Muse Spark model to explain each one: what changed, why it matters, how risky it is, and where to look first. On iPhone and the web.
+**The PR gatekeeper for teams shipping with AI agents.** MergeMate helps tech leads decide what needs their attention from an iPhone or the web: a five-second executive verdict, screenshot inspection with Meta AI, and a swipe triage deck. It organizes review and explains risk; the human keeps the shipping decision.
 
 Built by [Ploonu LLC](https://mergemate.dev) for the Meta Global AI Developer Hackathon.
 
@@ -10,6 +10,28 @@ Built by [Ploonu LLC](https://mergemate.dev) for the Meta Global AI Developer Ha
 - **Swipe triage** to sort a backlog into Needs you, FYI and Ignore.
 - **Highlight**: upload a screenshot of a failing build or a bug and get the important parts explained.
 - **Try the demo** with sample data, no account needed.
+
+## Why MergeMate
+
+Copilot helps explain a code diff, and GitHub Mobile brings GitHub to a phone. MergeMate focuses on the tech lead facing a queue of agent-authored pull requests: **“Can I safely ship this right now without opening my laptop?”** Its answer is a review signal, never an approval or a guarantee.
+
+| Review moment | MergeMate's focus |
+| --- | --- |
+| Five seconds to decide where to look | Executive Verdict: Safe to Ship, Review on Desktop, or High Risk / Blocked, with reasons and a jump to the sensitive file. Verdict rules combine reported risk, sensitive paths, check failures and secret warnings; the verdict itself is deterministic. |
+| A mobile UI change to inspect | Highlight can use Meta SAM-3.1 to locate screenshot regions before vision analysis explains potential small touch targets and clipping. Human inspection verifies actual dimensions and behavior. |
+| Sixty seconds to sort the queue | Triage Deck: Ignore, FYI or Needs you, with desktop keys **1**, **2**, **3** and **Z** to undo. Choices organize MergeMate; they never change GitHub. |
+
+Agent provenance identifies likely agent-authored PRs from branch/author metadata and available trailers. It is a heuristic label, not an authorship attestation. Five and sixty seconds describe the intended interaction, not measured performance benchmarks or guarantees. This positioning describes MergeMate's workflow, not an exhaustive comparison of competing products.
+
+## Three-minute hackathon pitch
+
+**Hook:** AI agents can open pull requests faster than a tech lead can review them. Reading 800 lines on an iPhone is not a useful way to catch up. MergeMate turns that queue into a short decision: inspect here, review on desktop, or move on.
+
+**Demo:** follow sample PR **7** (low-risk scaffold), **412** (Auth/Stripe risk), then **9** (visual UI audit). Show the verdict and agent label, inspect the risky file, demonstrate the labeled screenshot sample, and finish by sorting the deck with **1 / 2 / 3 / Z**. All samples are canned; they make no model calls. Live Highlight requires consent, its feature flag and configured providers.
+
+**Close:** “MergeMate is the review gatekeeper for teams building with AI agents: understand risk in five seconds, inspect the UI, and organize the queue in sixty. Your code stays under your control.”
+
+The [final timed narration and demo cues](NEW_IN_HACKATHON.md#three-minute-submission-script) cover the full three minutes, with model and demo disclosures. Startup-track submission deadline: **November 4, 2026, 9 PM Eastern**.
 
 ## Trust
 - **Read-only.** MergeMate never merges, approves, comments on or changes anything in GitHub.
