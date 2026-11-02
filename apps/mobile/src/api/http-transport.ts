@@ -1,3 +1,4 @@
+import {GetRetryQueue} from "./retry-queue";
 import { FeatureFlagCache } from "./feature-flags";
 import { z } from "zod";
 import { RequestCache } from "./request-cache";
@@ -26,13 +27,14 @@ export abstract class HttpTransport {
   protected csrfLoading: Promise<string> | null = null;
   protected refreshing: Promise<Session> | null = null;
   protected settingsCache: UserSettings | null = null;
+  protected retries = new GetRetryQueue();
   protected reads = new RequestCache();
   protected actions = new RequestCache();
 
   invalidateSession():void{++this.sessionGeneration;this.clearCache();setInMemoryCsrfToken(null);this.csrfLoading=null;}
   invalidateInbox():void {this.reads.invalidate('inbox:');}
   invalidateCache(): void { this.featureFlags.clear(); this.reads.invalidate(); }
-  clearCache(): void { this.featureFlags.clear(); this.reads.clear(); this.actions.clear(); this.settingsCache = null; this.repoPrivacy.clear(); }
+  clearCache(): void { this.retries.clear(); this.featureFlags.clear(); this.reads.clear(); this.actions.clear(); this.settingsCache = null; this.repoPrivacy.clear(); }
   protected repoPrivacy = new Map<string, boolean>();
 
   constructor(options: HttpApiClientOptions) {
@@ -67,7 +69,8 @@ export abstract class HttpTransport {
   }
 
   protected async readRequest<T = void>(opts: RequestOptions<T>): Promise<T> {
-    const res = await this.exchange(opts);
+    const retryable = (opts.method??'GET')==='GET' && !opts.probe && !opts.sessionMutation;
+    const res = retryable ? await this.retries.run(signal=>this.exchange({...opts,signal}),opts.signal) : await this.exchange(opts);
     if (!opts.schema) return undefined as T;
     let json: unknown;
     try {

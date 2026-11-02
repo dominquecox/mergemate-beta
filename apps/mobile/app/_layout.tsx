@@ -1,3 +1,4 @@
+import {OfflineBanner} from "../src/components/OfflineBanner";
 import {usePushLinks} from "../src/push/usePushLinks";
 import {useReducedMotion} from "../src/hooks/useReducedMotion";
 import {ReadoutProvider} from "../src/readout/ReadoutContext";
@@ -97,6 +98,7 @@ function AppContent() {
   const bannersAbove = Platform.OS === "web" && !isPhoneFrame;
   const banners = (
     <>
+      <OfflineBanner />
       <SampleDataBanner />
       <DemoBanner />
     </>
