@@ -13,6 +13,10 @@ test('restores all real migrations offline and rejects missing schema or malicio
   const sql=db.prepare("SELECT sql FROM sqlite_schema WHERE sql IS NOT NULL AND name NOT LIKE 'sqlite_%' ORDER BY rowid").all().map(row=>row.sql+';').join('\n');
   const dump=join(dir,'dump.sql');writeFileSync(dump,sql);
   assert.equal(verifyDump(dump).restored,true);
+  const snapshot=join(dir,'source.sqlite');db.exec("VACUUM INTO '"+snapshot.replaceAll("'","''")+"'");
+  assert.equal(verifyDump(dump,snapshot).sourceCompared,true);
+  writeFileSync(dump,sql+"\nINSERT INTO activity_audit VALUES('extra','acme/app',1,'review',NULL,'2026-11-01T00:00:00Z');");assert.throws(()=>verifyDump(dump,snapshot));
+  writeFileSync(dump,"VACUUM INTO '/tmp/unwanted-backup.sqlite';");assert.throws(()=>verifyDump(dump));
   writeFileSync(dump,'CREATE TABLE wrong(id TEXT);');assert.throws(()=>verifyDump(dump));
   writeFileSync(dump,"ATTACH '/tmp/elsewhere' AS other;");assert.throws(()=>verifyDump(dump));
  }finally{db.close();rmSync(dir,{recursive:true,force:true});}
