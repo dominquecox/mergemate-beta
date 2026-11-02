@@ -12,5 +12,6 @@ export function pushPrPath(data: unknown): `/pr/${string}/${string}/${number}` |
   }
   if (typeof repo !== 'string' || !/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(repo)
     || repo.split('/').some(p => /^\.+$/.test(p)) || typeof number !== 'number' || !Number.isSafeInteger(number) || number < 1) return null;
-  return `/pr/${repo}/${number}`;
+  const [owner='',name=''] = repo.split('/');
+  return `/pr/${owner}/${name}/${number}`;
 }

@@ -5,7 +5,7 @@ import {Text} from './Text';
 import {Button} from './Button';
 import {useTheme} from '../context/ThemeContext';
 
-export function QuietHoursEditor({value,disabled,onSave}:{value:Settings['quietHours'];disabled:boolean;onSave:(value:QuietHours)=>Promise<void>}) {
+export function QuietHoursEditor({value,disabled,onSave}:{value:Settings['quietHours'];disabled:boolean;onSave:(value:QuietHours)=>Promise<boolean>}) {
  const {colors}=useTheme();
  const [start,setStart]=useState(value?.start??'22:00'),[end,setEnd]=useState(value?.end??'07:00');
  const [zone,setZone]=useState(value?.timeZone??Intl.DateTimeFormat().resolvedOptions().timeZone??'UTC');
@@ -16,7 +16,7 @@ export function QuietHoursEditor({value,disabled,onSave}:{value:Settings['quietH
   const parsed=QuietHours.safeParse({start,end,timeZone:zone.trim()});
   if(!parsed.success){setError('Use different HH:MM times and a valid IANA time zone.');return;}
   setBusy(true);setError(null);
-  try{await onSave(parsed.data);}catch{setError('Schedule could not be saved. Try again.');}finally{setBusy(false);}
+  try{if(!await onSave(parsed.data))setError('Schedule could not be saved. Try again.');}catch{setError('Schedule could not be saved. Try again.');}finally{setBusy(false);}
  };
  return <View style={{padding:16,gap:10}}>
   <Text style={{color:colors.textSecondary}}>Local clock times; overnight schedules and daylight saving are supported. Inbox items still arrive while alerts are quiet.</Text>
