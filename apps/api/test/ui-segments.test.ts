@@ -9,7 +9,7 @@ import {fakeAi,mockTransport,validModelEnv} from './helpers';
 const region={id:'a',label:'Toggle',bbox:[0.2,0.1,0.3,0.2] as [number,number,number,number],touchTargetSizePt:{width:32,height:48},touchTargetCompliant:true};
 describe('UI segment evidence contract',()=>{
  it('returns normalized UI metrics through the authenticated consent-gated API',async()=>{
-  const ctx=testContext({...validModelEnv(),MODEL_ROUTE_HIGHLIGHT:'meta:muse-spark-1.2',MODEL_ROUTE_SEGMENT:undefined,IMAGES:fixtureImages()});ctx.kv.set('flags:v1',JSON.stringify({highlight:true}));
+  const ctx=testContext({...validModelEnv(),MODEL_ROUTE_HIGHLIGHT:'meta:muse-spark-1.2',IMAGES:fixtureImages()});ctx.kv.set('flags:v1',JSON.stringify({highlight:true}));
   ctx.net.on('POST','https://api.meta.ai/v1/responses',()=>json({object:'response',output:[{type:'message',content:[{type:'output_text',text:JSON.stringify({explanation:'Toggle needs review.',segments:[region]})}]}]}));
   const call=appFor(ctx),{headers}=await signIn(ctx,'ios');
   await call('/v1/consent',{method:'PUT',headers:{...headers,'content-type':'application/json'},body:JSON.stringify({ai:{granted:true,version:'1'}})});

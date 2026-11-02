@@ -1,3 +1,6 @@
+import {scanAgentGuardrails} from '../workspace/agentGuardrails';
+import {AgentGuardrailAlert} from './AgentGuardrailAlert';
+import type {PrFile} from '../types';
 import React from "react";
 import { View, StyleSheet, TouchableOpacity } from "react-native";
 import { Text } from "./Text";
@@ -8,6 +11,8 @@ import type { AgentProvenance } from "../workspace/provenance";
 
 interface ExecutiveVerdictCardProps {
   verdict: ExecutiveVerdict;
+  files?:readonly PrFile[];
+  totalFiles?:number;
   provenance?: AgentProvenance;
   hasVisualAssets?: boolean;
   onOpenVisualAudit?: () => void;
@@ -16,7 +21,9 @@ interface ExecutiveVerdictCardProps {
 }
 
 export function ExecutiveVerdictCard({
-  verdict,
+  verdict:receivedVerdict,
+  files=[],
+  totalFiles,
   provenance,
   hasVisualAssets,
   onOpenVisualAudit,
@@ -24,6 +31,8 @@ export function ExecutiveVerdictCard({
   onJumpToFile,
 }: ExecutiveVerdictCardProps) {
   const { colors, typography, radius, spacing } = useTheme();
+  const findings=scanAgentGuardrails(files),high=findings.some(f=>f.severity==='high');
+  const verdict:ExecutiveVerdict=high&&receivedVerdict.level!=='blocked'?{...receivedVerdict,level:'blocked',tone:'red',headline:'BLOCKED · AGENT GUARDRAILS ALERT'}:findings.length&&receivedVerdict.level==='safe'?{...receivedVerdict,level:'caution',tone:'yellow',headline:'CAUTION · AGENT GUARDRAILS ALERT'}:receivedVerdict;
 
   const isGreen = verdict.tone === "green";
   const isYellow = verdict.tone === "yellow";
@@ -86,6 +95,7 @@ export function ExecutiveVerdictCard({
         </View>
       )}
 
+      <AgentGuardrailAlert files={files} agentAuthored={!!provenance?.isAgentAuthored} {...(totalFiles===undefined?{}:{total:totalFiles})}/>
       {/* Verdict Header Row */}
       <View style={styles.verdictHeader}>
         <View

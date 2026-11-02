@@ -1,3 +1,4 @@
+import {scanAgentGuardrails} from './agentGuardrails';
 import type { PrCheck, PrFile, PrRisk, SecretLeakWarning } from "../types";
 import type { IconName } from "../components/Icon";
 import { riskiestFile } from "./risk";
@@ -23,6 +24,9 @@ export function getExecutiveVerdict(params: {
   changedFilesCount?: number;
 }): ExecutiveVerdict {
   const { risk, files = [], checks = [], secretWarning } = params;
+
+  const findings=scanAgentGuardrails(files);
+  if(findings.some(f=>f.severity==='high'))return {level:'blocked',headline:'BLOCKED · AGENT GUARDRAILS ALERT',summary:'Potential security guard or permission regression detected.',reasons:findings.filter(f=>f.severity==='high').slice(0,2).map(f=>`${f.file}: ${f.message}`),tone:'red',iconName:'shield-outline'};
 
   // 1. Critical: Secret leak detected
   if (secretWarning) {
@@ -92,6 +96,8 @@ export function getExecutiveVerdict(params: {
   if(!risk || !checks.length || risk.coverage.skippedFiles>0 || risk.coverage.truncatedFiles>0 || checks.some(c=>c.status!=="completed"||!["success","neutral","skipped"].includes(c.conclusion))){
     return {level:"caution",headline:"REVIEW ON DESKTOP · EVIDENCE INCOMPLETE",summary:"Risk assessment or required check results are incomplete.",reasons:["Verify the latest revision and checks before deciding"],tone:"yellow",iconName:"warning"};
   }
+
+  if(findings.length)return {level:'caution',headline:'REVIEW ON DESKTOP · AGENT GUARDRAILS',summary:'Potential dependency or mock regression needs review.',reasons:findings.slice(0,2).map(f=>`${f.file}: ${f.message}`),tone:'yellow',iconName:'warning'};
 
   // 5. Safe: Pure docs, tests, type hardening, or verified low risk
   const topReason = risk?.reasons[0]?.trim() || "Low blast radius change.";

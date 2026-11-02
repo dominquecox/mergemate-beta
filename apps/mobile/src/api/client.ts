@@ -78,6 +78,7 @@ export interface ApiClient {
   snoozeNotification(id: string, until: string): Promise<void>;
   restoreNotification(id: string): Promise<void>;
 
+  getPrDependencies(owner:string,repo:string,number:number,headSha?:string,signal?:AbortSignal):Promise<import("@mergemate/contracts").DependencyContext>;
   getPrVisualAsset(owner:string,repo:string,number:number,path:string,side:"before"|"after",headSha?:string,signal?:AbortSignal):Promise<import("@mergemate/contracts").PrVisualAsset>;
 
   // Pull Requests

@@ -86,6 +86,7 @@ export interface PrCheck {
 }
 
 export interface PrFile {
+  dependencyNames?:readonly string[];
   filename: string;
   status: "added" | "modified" | "removed" | "renamed" | "copied" | "changed" | "unknown";
   previousPath?:string;
@@ -175,6 +176,7 @@ export interface HighlightRegion {
 }
 
 export interface HighlightResult {
+  telemetry?:import("@mergemate/contracts").ModelTelemetry;
   segments?:import("@mergemate/contracts").UiSegment[];
   insight: string;
   regions: HighlightRegion[];
