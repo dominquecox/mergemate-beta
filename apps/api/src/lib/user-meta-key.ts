@@ -1,3 +1,4 @@
+import {readBoundedBody} from "./bounded-body";
 import { requireBinding } from '../config';
 import type { Deps, Env } from '../env';
 import { ApiError } from '../errors';
@@ -36,7 +37,7 @@ export async function verifyMetaKey(env: Env,deps: Deps,key: string) {
   }
   // A token-limited response may have no visible text. A valid Responses envelope
   // confirms authentication without requiring more billable output.
-  const body=await response.json().catch(()=>null) as {object?:unknown}|null;
+  const body=await readBoundedBody(response,16*1024).then(bytes=>JSON.parse(new TextDecoder().decode(bytes)) as {object?:unknown}).catch(()=>null);
   if(body?.object!=='response')throw new ApiError('upstream_unavailable','The Meta key could not be checked. Try again.');
 }
 
