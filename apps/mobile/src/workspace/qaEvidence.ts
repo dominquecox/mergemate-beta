@@ -27,3 +27,8 @@ export function checkDuration(check: PrCheck): string | null {
   if (!Number.isFinite(start) || !Number.isFinite(end) || end < start) return null;
   return `${Math.round((end - start) / 1000)}s`;
 }
+
+export function desktopQaCommand(repository: string, number: number, headSha?: string): string | null {
+  if (repository.toLowerCase() !== 'dominquecox/mergemate' || !Number.isSafeInteger(number) || number < 1 || number > 2147483647 || !headSha || !/^[a-f0-9]{40}$/.test(headSha)) return null;
+  return `npm run qa:run -- --pr ${number} --head ${headSha}`;
+}

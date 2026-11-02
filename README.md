@@ -7,6 +7,7 @@ Built by [Ploonu LLC](https://mergemate.dev) for the Meta Global AI Developer Ha
 ## What it does
 - **One inbox** for review requests, mentions and your own pull requests, each with a short AI summary and a risk rating.
 - **AI summaries and risk ratings** powered by Meta's Muse Spark through the Meta Model API.
+- **QA evidence** distinguishes commit-matched GitHub runs from legacy statuses and inspects explicitly scoped local browser reports. See [execution evidence](docs/QA_EVIDENCE.md).
 - **Swipe triage** to sort a backlog into Needs you, FYI and Ignore.
 - **Highlight**: upload a screenshot of a failing build or a bug and get the important parts explained.
 - **Try the demo** with sample data, no account needed.

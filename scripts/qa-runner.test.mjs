@@ -25,6 +25,7 @@ test('real child process outcomes retain failures/timeouts and bounded logs',asy
   const opts={file:process.execPath,cwd:dir,env:process.env};
   const success=await runStep({...opts,args:['-e','console.log("fixture")'],logPath:join(dir,'pass.log')});assert.equal(success.status,'passed');assert.equal(success.exitCode,0);assert.equal((await readFile(join(dir,'pass.log'),'utf8')).trim(),'fixture');
   const failure=await runStep({...opts,args:['-e','process.exit(7)'],logPath:join(dir,'fail.log')});assert.equal(failure.status,'failed');assert.equal(failure.exitCode,7);
+  const signal=await runStep({...opts,args:['-e',"process.kill(process.pid,'SIGTERM')"],logPath:join(dir,'signal.log')});assert.equal(signal.status,'failed');assert.equal(signal.exitCode,null);
   const timeout=await runStep({...opts,args:['-e','setInterval(()=>{},1000)'],logPath:join(dir,'timeout.log'),timeoutMs:50});assert.equal(timeout.status,'timed_out');assert.equal(timeout.exitCode,null);
   const flood=await runStep({...opts,args:['-e','console.log("x".repeat(10000))'],logPath:join(dir,'flood.log'),maxOutput:100});assert.equal(flood.status,'output_limit');
   const controller=new AbortController();setTimeout(()=>controller.abort(),50);const cancelled=await runStep({...opts,args:['-e','setInterval(()=>{},1000)'],logPath:join(dir,'cancel.log'),signal:controller.signal});assert.equal(cancelled.status,'cancelled');assert.equal(cancelled.exitCode,null);

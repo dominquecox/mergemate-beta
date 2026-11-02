@@ -13,6 +13,8 @@ gh pr view NUMBER --repo dominquecox/mergemate --json headRefOid
 npm run qa:run -- --pr NUMBER --head FULL_COMMIT_SHA
 ```
 
+For this trusted repository, the PR card also offers **Copy desktop QA command** with the exact PR/head. Run the copied command only in the matching reviewed checkout. Copy failures are shown explicitly.
+
 The command checks local HEAD, origin, cleanliness and the GitHub PR identity. It builds the web app with same-origin fixture transport, then executes the committed mobile-polish and session-lifecycle browser journeys. Commands are a fixed allowlist; no command, model output or script path from a submitted report/PR body is executed. Ignored dotenv files and inherited public client credentials are excluded from the fixture export. No live GitHub sign-in, model request, native build, deployment, workflow or remote migration is triggered.
 
 Each run gets a private temporary folder containing `report.json`, bounded per-suite logs and screenshots under `artifacts/`. The command prints its location. Report metadata includes exact PR/head, actual suite outcomes/exit codes and durations, scope, and screenshot byte lengths/SHA256. Artifact symlinks, excessive counts/sizes and checkout/PR changes during execution fail closed; incomplete suites are not passing. Timeout, cancellation and output-limit outcomes retain distinct labels. A nonzero exit remains nonzero. A per-checkout lock rejects concurrent runs. Logs and screenshots are never uploaded automatically; keep them private and inspect them before sharing.

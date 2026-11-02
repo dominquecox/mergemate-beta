@@ -212,7 +212,7 @@ function PrWorkspace({owner,repo,number}:{owner:string;repo:string;number:string
             {(() => {
               const hasAiInsights = Boolean(detail.summary || detail.risk || detail.secretWarning || detail.aiNotice);
 
-              const renderChecksCard = () => <QaEvidenceCard repository={`${owner}/${repo}`} number={Number(number)} headSha={detail.headSha} checks={detail.checks} sample={isDemo} cursor={checkCursor} busy={pageBusy.checks} error={pageError.checks} capped={capped.checks} onLoadMore={() => loadPage("checks")} onOpen={url => void openLink(url)}/>;
+              const renderChecksCard = () => <QaEvidenceCard key={detail.headSha??"unknown"} repository={`${owner}/${repo}`} number={Number(number)} headSha={detail.headSha} checks={detail.checks} sample={isDemo} cursor={checkCursor} busy={pageBusy.checks} error={pageError.checks} capped={capped.checks} onLoadMore={() => loadPage("checks")} onOpen={url => void openLink(url)}/>;
 
               if (!hasAiInsights) {
                 const hasBlast = Boolean(detail.files && detail.files.length > 0);

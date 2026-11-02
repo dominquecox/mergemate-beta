@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { inspectQaReport, checkEvidence, checkDuration } from '../src/workspace/qaEvidence';
+import { inspectQaReport, checkEvidence, checkDuration, desktopQaCommand } from '../src/workspace/qaEvidence';
 import { getExecutiveVerdict } from '../src/workspace/executiveVerdict';
 import { mapCheck } from '../src/api/mappers';
 const sha = 'a'.repeat(40), now = Date.parse('2026-11-02T20:00:00Z');
@@ -7,6 +7,10 @@ const context = { repository: 'acme/app', number: 7, headSha: sha };
 const receipt = () => ({ version: 1, runId: 'fa4f05e6-1456-4ffd-a5d0-7e162cd0d908', repository: 'acme/app', pullRequest: 7, headSha: sha, scope: 'browser-fixtures', runner: 'MergeMate local runner', startedAt: '2026-11-02T19:00:00Z', completedAt: '2026-11-02T19:05:00Z', status: 'passed', cleanCheckout: true, suites: ['export-web', 'mobile-polish', 'session-lifecycle'].map(id => ({ id, status: 'passed', exitCode: 0, durationMs: 1000 })), artifacts: [{ name: 'mobile-polish/393.png', sha256: 'b'.repeat(64), bytes: 100 }] });
 const inspect = (value: unknown) => inspectQaReport(JSON.stringify(value), context, now);
 describe('commit-bound QA evidence', () => {
+  it('creates a shell-safe desktop command only for the trusted repo and exact revision', () => {
+    expect(desktopQaCommand('dominquecox/mergemate', 204, sha)).toBe(`npm run qa:run -- --pr 204 --head ${sha}`);
+    for (const args of [['other/repo', 7, sha], ['dominquecox/mergemate', 0, sha], ['dominquecox/mergemate', 1.1, sha], ['dominquecox/mergemate', 7, `${sha};whoami`]] as const) expect(desktopQaCommand(args[0], args[1], args[2])).toBeNull();
+  });
   it('accepts a consistent exact-revision fixture receipt without calling it independent verification', () => { expect(inspect(receipt()).report?.scope).toBe('browser-fixtures'); });
   it('rejects different repository, PR, head and a workspace with unknown head', () => {
     for (const changed of [{ repository: 'other/app' }, { pullRequest: 8 }, { headSha: 'c'.repeat(40) }]) expect(inspect({ ...receipt(), ...changed }).error).toMatch(/different/);
@@ -23,6 +27,7 @@ describe('commit-bound QA evidence', () => {
   it('preserves actual failure and invalidation instead of converting them to a pass', () => {
     const failure = { ...receipt(), status: 'failed', suites: receipt().suites.map((s, i) => i === 1 ? { ...s, status: 'failed', exitCode: 1 } : s) };
     expect(inspect(failure).report?.status).toBe('failed');
+    expect(inspect({...failure,suites:failure.suites.map(s => s.status==='failed'?{...s,exitCode:null}:s)}).report?.status).toBe('failed');
     expect(inspect({ ...receipt(), status: 'invalidated' }).report?.status).toBe('invalidated');
   });
   it('rejects dirty claims, unknown fields, oversized inputs, traversal and duplicate artifacts', () => {

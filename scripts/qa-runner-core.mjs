@@ -26,13 +26,13 @@ export async function runStep({file,args,cwd,env,logPath,timeoutMs=600000,maxOut
   try {
     return await new Promise(resolveResult=>{
       let settled=false;
-      const finish=(exitCode)=>{if(settled)return;settled=true;clearTimeout(timer);resolveResult({status:forced??(exitCode===0?'passed':'failed'),exitCode:forced?null:exitCode??1,durationMs:Date.now()-start});};
+      const finish=(exitCode)=>{if(settled)return;settled=true;clearTimeout(timer);resolveResult({status:forced??(exitCode===0?'passed':'failed'),exitCode:forced?null:Number.isInteger(exitCode)&&exitCode>=0?exitCode:null,durationMs:Date.now()-start});};
       child=spawn(file,args,{cwd,env,stdio:['ignore','pipe','pipe'],shell:false,detached:process.platform!=='win32'});
       const stop=(kind='timed_out')=>{forced??=kind;try {if(process.platform!=='win32')process.kill(-child.pid,'SIGKILL');else child.kill('SIGKILL');}catch{child.kill('SIGKILL');}};
       // Descriptor writes avoid retaining private log text in report memory.
       child.stdout.on('data',chunk=>{output+=chunk.length;if(output>maxOutput)stop('output_limit');else writes=writes.then(()=>handle.write(chunk)).catch(()=>stop('output_limit'));});
       child.stderr.on('data',chunk=>{output+=chunk.length;if(output>maxOutput)stop('output_limit');else writes=writes.then(()=>handle.write(chunk)).catch(()=>stop('output_limit'));});
-      child.on('error',()=>finish(1));child.on('close',code=>finish(code));const abort=()=>stop('cancelled');signal?.addEventListener('abort',abort,{once:true});if(signal?.aborted)abort();child.once('close',()=>signal?.removeEventListener('abort',abort));timer=setTimeout(()=>stop('timed_out'),timeoutMs);
+      child.on('error',()=>finish(null));child.on('close',code=>finish(code));const abort=()=>stop('cancelled');signal?.addEventListener('abort',abort,{once:true});if(signal?.aborted)abort();child.once('close',()=>signal?.removeEventListener('abort',abort));timer=setTimeout(()=>stop('timed_out'),timeoutMs);
     });
   } finally {clearTimeout(timer);await writes;await handle.close();}
 }

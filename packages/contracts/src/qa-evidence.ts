@@ -35,7 +35,7 @@ export const QaReport = z.object({
   if (new Set(r.suites.map(s => s.id)).size !== 3) ctx.addIssue({ code: 'custom', message: 'Duplicate suites' });
   if (new Set(r.artifacts.map(a => a.name)).size !== r.artifacts.length) ctx.addIssue({ code: 'custom', message: 'Duplicate artifacts' });
   for (const s of r.suites) {
-    if ((s.status === 'passed' && s.exitCode !== 0) || (s.status === 'failed' && (s.exitCode === null || s.exitCode === 0)) || (['not_run', 'timed_out', 'cancelled', 'output_limit'].includes(s.status) && s.exitCode !== null))
+    if ((s.status === 'passed' && s.exitCode !== 0) || (s.status === 'failed' && s.exitCode === 0) || (['not_run', 'timed_out', 'cancelled', 'output_limit'].includes(s.status) && s.exitCode !== null))
       ctx.addIssue({ code: 'custom', message: 'Suite result contradicts exit code' });
   }
   if (r.status === 'passed' && (!r.suites.every(s => s.status === 'passed') || !r.artifacts.some(a => a.name.endsWith('.png'))))
