@@ -6,7 +6,7 @@ export interface SpeechDriver {
   pause?():Promise<void>;
   resume?():Promise<void>;
 }
-/** Single owner, sentence-bounded narration. Text and callbacks never leave this device adapter. */
+/** Single owner, sentence-bounded narration. The device adapter owns speech-engine delivery. */
 export class ReadoutController {
   state:ReadoutState='stopped';rate=1;
   private sentences:string[]=[];private position=0;private generation=0;private nativePaused=false;private utterance=0;

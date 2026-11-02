@@ -1,3 +1,4 @@
+import {useNoteKeyboardScroll} from "../../../../src/hooks/useNoteKeyboardScroll";
 import {MetaTelemetryModal} from '../../../../src/components/MetaTelemetryModal';
 import {useAgentGuardrails} from '../../../../src/hooks/useAgentGuardrails';
 import {PrRiskPanel} from "../../../../src/components/PrRiskPanel";
@@ -65,7 +66,8 @@ function PrWorkspace({owner,repo,number}:{owner:string;repo:string;number:string
   const jumpToFile=(name:string)=>{setExpandedFiles(prev=>prev.includes(name)?prev:[...prev,name]);const row=fileRows.current[name],host=scroll.current as unknown as {getInnerViewNode?:()=>unknown}|null;if(!row||!host)return;requestAnimationFrame(()=>{try{row.measureLayout((host.getInnerViewNode?.()??scroll.current) as never,(_x:number,y:number)=>scroll.current?.scrollTo({y:Math.max(0,y-16),animated:true}),()=>{});}catch{/* no measurement support: the file stays expanded in place */}});};
   useEffect(()=>{setExpandedFiles([]);setCollapsedThreads([]);},[detail?.headSha]);
   useEffect(()=>{if(!detail||isLoading)return;const frame=requestAnimationFrame(()=>scroll.current?.scrollTo({y:scrollOffset.current,animated:false}));return()=>cancelAnimationFrame(frame);},[isLoading]);
-  const [showNoteInput, setShowNoteInput] = useState(false),[noteFocus,setNoteFocus]=useState(0),noteY=useRef(0);
+  const [showNoteInput, setShowNoteInput] = useState(false),[noteFocus,setNoteFocus]=useState(0);
+  const noteKeyboard=useNoteKeyboardScroll(scroll,showNoteInput);
 
 
   useAndroidBackHandler(() => {
@@ -131,7 +133,7 @@ function PrWorkspace({owner,repo,number}:{owner:string;repo:string;number:string
         />
       ) : (
         <>
-          <ScrollView testID="pr-workspace-scroll" ref={scroll} onScroll={event=>{scrollOffset.current=event.nativeEvent.contentOffset.y;}} scrollEventThrottle={16} contentContainerStyle={{ padding:isDesktop?24:spacing.base, paddingBottom:24 }}>
+          <ScrollView onContentSizeChange={noteKeyboard.onContentSizeChange} keyboardDismissMode={Platform.OS==="ios"?"interactive":"on-drag"} keyboardShouldPersistTaps="handled" testID="pr-workspace-scroll" ref={scroll} onScroll={event=>{scrollOffset.current=event.nativeEvent.contentOffset.y;}} scrollEventThrottle={16} contentContainerStyle={{ padding:isDesktop?24:spacing.base, paddingBottom:24 }}>
             {!!(error||linkError)&&<Text accessibilityRole="alert" style={{color:colors.riskHigh,padding:12}}>{error??linkError}</Text>}
             {isDemo&&tour==="1"&&!tourClosed&&<DemoTour onClose={()=>setTourClosed(true)}/>}
             {/* Unified Modern PR Header Surface */}
@@ -484,10 +486,10 @@ function PrWorkspace({owner,repo,number}:{owner:string;repo:string;number:string
               {!!pageError.comments && <Text accessibilityRole="alert" style={[typography.footnote, { color: colors.riskHigh, paddingTop: 12 }]}>{pageError.comments}</Text>}
             </View>
 
-            {showNoteInput && <View onLayout={event=>{noteY.current=event.nativeEvent.layout.y;if(noteFocus>0)scroll.current?.scrollTo({y:Math.max(0,noteY.current-16),animated:true});}}><PrivateNotes focusRequest={noteFocus} onClose={()=>setShowNoteInput(false)} context={{kind:'pr',repo:`${owner}/${repo}`,number:Number(number)}}/></View>}
+            {showNoteInput && <View><PrivateNotes onInputFocus={noteKeyboard.onFocus} onInputBlur={noteKeyboard.onBlur} focusRequest={noteFocus} onClose={()=>setShowNoteInput(false)} context={{kind:'pr',repo:`${owner}/${repo}`,number:Number(number)}}/></View>}
           </ScrollView>
 
-          <ExecutiveActionBar detail={{...detail,checkCursor,files:guardrailFiles}} onOpenGitHub={openInGitHub} onAddNote={()=>{setShowNoteInput(true);setNoteFocus(n=>n+1);if(showNoteInput)scroll.current?.scrollTo({y:Math.max(0,noteY.current-16),animated:true});}}/>
+          <ExecutiveActionBar detail={{...detail,checkCursor,files:guardrailFiles}} onOpenGitHub={openInGitHub} onAddNote={()=>{setShowNoteInput(true);setNoteFocus(n=>n+1);if(showNoteInput)noteKeyboard.onFocus();}}/>
         </>
       )}
     </KeyboardAvoidingView>

@@ -12,12 +12,12 @@ import {Button} from './Button';
 import {Text} from './Text';
 import {VoiceNoteRecorder} from './VoiceNoteRecorder';
 
-export function PrivateNotes({context,focusRequest=0,onClose}:{context:NoteContext;focusRequest?:number;onClose?:()=>void}){
+export function PrivateNotes({context,focusRequest=0,onClose,onInputFocus,onInputBlur}:{context:NoteContext;focusRequest?:number;onClose?:()=>void;onInputFocus?:()=>void;onInputBlur?:()=>void}){
  const {user,isDemo}=useAuth();const {colors,typography}=useTheme();
  if(!user || isDemo)return <Text style={[typography.body,{color:colors.textSecondary}]}>Private notes and recording are unavailable in demo mode.</Text>;
- return <NotesWorkspace key={`${user.id}:${noteContextKey(context)}`} context={context} focusRequest={focusRequest} onClose={onClose}/>;
+ return <NotesWorkspace key={`${user.id}:${noteContextKey(context)}`} context={context} focusRequest={focusRequest} onClose={onClose} onInputFocus={onInputFocus} onInputBlur={onInputBlur}/>;
 }
-function NotesWorkspace({context,focusRequest,onClose}:{context:NoteContext;focusRequest:number;onClose?:()=>void}){
+function NotesWorkspace({context,focusRequest,onClose,onInputFocus,onInputBlur}:{context:NoteContext;focusRequest:number;onClose?:()=>void;onInputFocus?:()=>void;onInputBlur?:()=>void}){
  const {colors,typography}=useTheme(),flags=useFeatureFlags();const {aiConsentGranted}=useConsent();
  const [items,setItems]=useState<PrivateNote[]>([]),[text,setText]=useState(''),[loading,setLoading]=useState(true),[busy,setBusy]=useState(false),[error,setError]=useState<string|null>(null),[loaded,setLoaded]=useState(false),[active,setActive]=useState(true),[uncertain,setUncertain]=useState(false),[recording,setRecording]=useState(false);
  const [notice,setNotice]=useState('');const noteInput=useRef<React.ComponentRef<typeof TextInput>|null>(null),focusTranscript=useRef(false);
@@ -45,7 +45,7 @@ function NotesWorkspace({context,focusRequest,onClose}:{context:NoteContext;focu
   {items.map((note,index)=><View key={note.id} style={{gap:6,paddingVertical:8,borderBottomWidth:1,borderColor:colors.border}}><Text selectable style={[typography.body,{color:colors.text}]}>{note.text}</Text><Button title={`Remove note ${index+1}`} variant="ghost" disabled={busy} onPress={()=>remove(note)}/></View>)}
   {flags.voice_notes && aiConsentGranted && !busy && !uncertain && <VoiceNoteRecorder onBusyChange={setRecording} onTranscript={value=>{focusTranscript.current=true;setText(value);setNotice('Transcript ready. Review and edit the text, then choose Save private note.');id.current=Crypto.randomUUID();}}/>}
   {!!notice && <Text accessibilityLiveRegion="polite" style={[typography.body,{color:colors.textSecondary}]}>{notice}</Text>}
-  <TextInput ref={noteInput} multiline value={text} onChangeText={setText} maxLength={8000} editable={!busy&&!uncertain&&!recording} accessibilityLabel="Private note text" placeholder="Write a note or review your transcript before saving…" placeholderTextColor={colors.textMuted} style={{minHeight:100,padding:12,color:colors.text,borderColor:colors.border,borderWidth:1,borderRadius:8}}/>
+  <TextInput ref={noteInput} onFocus={onInputFocus} onBlur={onInputBlur} multiline value={text} onChangeText={setText} maxLength={8000} editable={!busy&&!uncertain&&!recording} accessibilityLabel="Private note text" placeholder="Write a note or review your transcript before saving…" placeholderTextColor={colors.textMuted} style={{minHeight:100,maxHeight:160,textAlignVertical:"top",padding:12,color:colors.text,borderColor:colors.border,borderWidth:1,borderRadius:8}}/>
   <Button title="Save private note" onPress={save} loading={busy} disabled={recording||!loaded||!text.trim()||items.length>=100}/>
   {!!text && <Button title="Discard draft note" variant="ghost" disabled={busy||recording} onPress={()=>{setText('');setUncertain(false);id.current=Crypto.randomUUID();}}/>}
  </View>;
