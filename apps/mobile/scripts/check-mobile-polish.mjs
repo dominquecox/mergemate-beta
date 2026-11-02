@@ -4,7 +4,7 @@ import {createServer} from 'node:http';
 import {readFile,mkdir} from 'node:fs/promises';
 import {resolve,dirname,extname,sep} from 'node:path';
 import {fileURLToPath} from 'node:url';
-const root=resolve(dirname(fileURLToPath(import.meta.url)),'../dist'),proof='/tmp/mergemate-mobile-polish';await mkdir(proof,{recursive:true});
+const root=resolve(dirname(fileURLToPath(import.meta.url)),'../dist'),proof=process.env.MM_POLISH_PROOF_DIR??'/tmp/mergemate-mobile-polish';await mkdir(proof,{recursive:true});
 const server=createServer(async(req,res)=>{try{let path=resolve(root,'.'+decodeURIComponent(new URL(req.url,'http://localhost').pathname));if(!path.startsWith(root+sep)){res.writeHead(404).end();return;}let body;try{body=await readFile(path);}catch{path=resolve(root,'index.html');body=await readFile(path);}res.writeHead(200,{'content-type':{'.js':'application/javascript','.css':'text/css','.ttf':'font/ttf','.png':'image/png'}[extname(path)]??'text/html'}).end(body);}catch{res.writeHead(500).end();}});
 await new Promise(r=>server.listen(0,'127.0.0.1',r));const base=`http://127.0.0.1:${server.address().port}`,date='2026-11-02T12:00:00Z',sha='a'.repeat(40);
 const title='Improve the entire authentication interface with a deliberately verbose pull request title that must remain accessible while the Inbox card stays compact';

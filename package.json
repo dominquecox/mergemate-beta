@@ -20,6 +20,7 @@
     "build:web": "./scripts/build-and-log.sh web",
     "check:api": "./scripts/build-and-log.sh api",
     "security:bundles": "node scripts/security-bundles.mjs",
-    "security:secrets": "node scripts/security-secrets.mjs"
+    "security:secrets": "node scripts/security-secrets.mjs",
+    "qa:run": "node scripts/run-qa.mjs"
   }
 }

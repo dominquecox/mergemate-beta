@@ -146,6 +146,7 @@ export default function TriageScreen() {
     title: currentItem?.title ?? detail?.title,
   });
   const verdict = getExecutiveVerdict({
+    headSha: detail?.headSha,
     risk: detail?.risk ?? (risk ? { level: risk, reasons: [currentItem.reason], coverage: { analyzedFiles: 1, skippedFiles: 0, truncatedFiles: 0 } } : undefined),
     files: detail?.files,
     checks: detail?.checks,
