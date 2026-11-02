@@ -10,7 +10,7 @@ export function AgentGuardrailAlert({files,agentAuthored,total}:{files:readonly 
  if(!findings.length&&!agentAuthored)return null;
  const tone=findings.some(f=>f.severity==='high')?colors.riskHigh:findings.length?colors.riskMedium:colors.textSecondary;
  return <View testID="agent-guardrails" style={{borderWidth:1,borderColor:tone,borderRadius:10,padding:12,gap:8,marginTop:12}}>
-  <View style={{flexDirection:'row',gap:8,alignItems:'center'}}><Icon name="shield-checkmark-outline" color={tone}/><Text accessibilityRole="header" style={{color:tone,fontWeight:'700'}}>{findings.length?'Agent Guardrails Alert':'Agent Guardrails · loaded patch checks'}</Text></View>
+  <View style={{flexDirection:'row',gap:8,alignItems:'center'}}><Icon name={findings.length?"shield-outline":"shield-checkmark-outline"} color={tone}/><Text accessibilityRole="header" style={{color:tone,fontWeight:'700'}}>{findings.length?'Agent Guardrails Alert':'Agent Guardrails · loaded patch checks'}</Text></View>
   {findings.slice(0,8).map((finding,index)=><Text key={index} style={{color:colors.text}}>{finding.severity.toUpperCase()} · {finding.file}{finding.line?`:${finding.line}`:''}: {finding.message}</Text>)}
   {findings.length>8&&<Text style={{color:colors.textSecondary}}>{findings.length-8} more findings. Inspect all loaded patches.</Text>}
   {!findings.length&&<Text style={{color:colors.text}}>0 detected mock shortcuts · 0 detected auth guard removals{coverage.dependenciesKnown?' · 0 undeclared imports':' · Dependency scan unavailable'}</Text>}

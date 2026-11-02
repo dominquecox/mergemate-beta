@@ -32,7 +32,7 @@ export function ExecutiveVerdictCard({
 }: ExecutiveVerdictCardProps) {
   const { colors, typography, radius, spacing } = useTheme();
   const findings=scanAgentGuardrails(files),high=findings.some(f=>f.severity==='high');
-  const verdict:ExecutiveVerdict=high&&receivedVerdict.level!=='blocked'?{...receivedVerdict,level:'blocked',tone:'red',headline:'BLOCKED · AGENT GUARDRAILS ALERT'}:findings.length&&receivedVerdict.level==='safe'?{...receivedVerdict,level:'caution',tone:'yellow',headline:'CAUTION · AGENT GUARDRAILS ALERT'}:receivedVerdict;
+  const verdict:ExecutiveVerdict=high&&receivedVerdict.level!=='blocked'?{...receivedVerdict,level:'blocked',tone:'red',headline:'BLOCKED · AGENT GUARDRAILS ALERT',summary:'Security guardrail findings require human review.',reasons:findings.slice(0,2).map(f=>f.message),iconName:'shield-outline'}:findings.length&&receivedVerdict.level==='safe'?{...receivedVerdict,level:'caution',tone:'yellow',headline:'CAUTION · AGENT GUARDRAILS ALERT',summary:'Potential dependency or mock regression needs review.',reasons:findings.slice(0,2).map(f=>f.message),iconName:'warning'}:receivedVerdict;
 
   const isGreen = verdict.tone === "green";
   const isYellow = verdict.tone === "yellow";
