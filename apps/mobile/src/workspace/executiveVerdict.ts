@@ -93,6 +93,17 @@ export function getExecutiveVerdict(params: {
     };
   }
 
+  // Only a fully enumerated, small documentation/scaffold change can waive absent CI.
+  const documentationOnly=files.length>0 && files.length<=8 &&
+    (params.changedFilesCount===undefined || params.changedFilesCount===files.length) &&
+    files.every(f=>/\.(md|mdx|rst|txt)$/i.test(f.filename)||/(^|\/)\.gitkeep$/.test(f.filename)) &&
+    files.every(f=>Number.isFinite(f.additions)&&Number.isFinite(f.deletions)&&f.additions>=0&&f.deletions>=0) &&
+    files.reduce((sum,f)=>sum+f.additions+f.deletions,0)<=80;
+  if(!checks.length && documentationOnly && !findings.length &&
+    (!risk || (risk.level==='low' && risk.coverage.skippedFiles===0 && risk.coverage.truncatedFiles===0))){
+    return {level:'safe',headline:'SAFE TO SHIP · LOW RISK',summary:'Small documentation-only change. No CI required for this review signal.',reasons:['No sensitive or executable files in the complete file list','No CI checks reported; verify repository rules in GitHub'],tone:'green',iconName:'checkmark-circle'};
+  }
+
   if(!risk || !checks.length || risk.coverage.skippedFiles>0 || risk.coverage.truncatedFiles>0 || checks.some(c=>c.status!=="completed"||!["success","neutral","skipped"].includes(c.conclusion))){
     return {level:"caution",headline:"REVIEW ON DESKTOP · EVIDENCE INCOMPLETE",summary:"Risk assessment or required check results are incomplete.",reasons:["Verify the latest revision and checks before deciding"],tone:"yellow",iconName:"warning"};
   }

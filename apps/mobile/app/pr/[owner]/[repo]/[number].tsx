@@ -99,7 +99,7 @@ function PrWorkspace({owner,repo,number}:{owner:string;repo:string;number:string
         onBack={()=>{if(router.canGoBack())router.back();else router.replace("/(tabs)/inbox");}}
         showBack
         rightAction={
-          <TouchableOpacity
+          <View style={{flexDirection:"row",alignItems:"center"}}>{detail&&<AudioCommuteBar sentences={prExecutiveNarration({...detail,files:guardrailFiles})}/>}<TouchableOpacity
             onPress={handleShare}
             accessibilityRole="button"
             accessibilityLabel="Share pull request"
@@ -107,7 +107,7 @@ function PrWorkspace({owner,repo,number}:{owner:string;repo:string;number:string
             style={styles.shareBtn}
           >
             <Icon name="share-outline" size={22} color={colors.textSecondary} />
-          </TouchableOpacity>
+          </TouchableOpacity></View>
         }
       />
 
@@ -133,18 +133,12 @@ function PrWorkspace({owner,repo,number}:{owner:string;repo:string;number:string
       ) : (
         <>
           <ScrollView testID="pr-workspace-scroll" ref={scroll} onScroll={event=>{scrollOffset.current=event.nativeEvent.contentOffset.y;}} scrollEventThrottle={16} contentContainerStyle={{ padding:isDesktop?24:spacing.base, paddingBottom:24 }}>
-            <MetaTelemetryModal telemetry={detail.risk?.telemetry??detail.summary?.telemetry} sample={isDemo}/>
-            <AudioCommuteBar sentences={prExecutiveNarration({...detail,files:guardrailFiles})}/>
-
-            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
-              <PrivacyStrip onOpenSettings={()=>router.push("/(tabs)/settings")}/>
-              <TouchableOpacity onPress={()=>void loadPr()} disabled={isRefreshing} accessibilityRole="button" accessibilityLabel="Refresh workspace" accessibilityState={{busy:isRefreshing,disabled:isRefreshing}} style={{flexDirection:"row",alignItems:"center",gap:6,minHeight:44,minWidth:44,paddingHorizontal:4}}><Icon name="refresh-outline" size={13} color={colors.textMuted}/><Text style={[typography.caption,{color:colors.textMuted}]}>{isRefreshing?"Refreshing...":"Refresh"}</Text></TouchableOpacity>
-            </View>
             {!!(error||linkError)&&<Text accessibilityRole="alert" style={{color:colors.riskHigh,padding:12}}>{error??linkError}</Text>}
             {isDemo&&tour==="1"&&!tourClosed&&<DemoTour onClose={()=>setTourClosed(true)}/>}
             {/* Unified Modern PR Header Surface */}
             <View style={[styles.headerCard, { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.lg, padding: 16 }]}>
               <View style={styles.topRow}>
+                <TouchableOpacity onPress={()=>void loadPr()} disabled={isRefreshing} accessibilityRole="button" accessibilityLabel="Refresh workspace" style={{minHeight:44,minWidth:44,alignItems:"center",justifyContent:"center"}}><Icon name="refresh-outline" size={18} color={colors.textMuted}/></TouchableOpacity>
                 <View style={{ flexDirection: "row", alignItems: "center", gap: 6, flex: 1, minWidth: 0, flexWrap: "wrap" }}>
                   <Icon name="folder-outline" size={13} color={colors.textMuted} />
                   <Text style={[typography.caption, { color: colors.textMuted, fontFamily: typography.code.fontFamily }]} numberOfLines={1}>
@@ -165,6 +159,7 @@ function PrWorkspace({owner,repo,number}:{owner:string;repo:string;number:string
                 {detail.title}
               </Text>
 
+              <MetaTelemetryModal compact telemetry={detail.risk?.telemetry??detail.summary?.telemetry} sample={isDemo}/>
               <GitMetadataCard
                 inline
                 baseBranch={detail.baseBranch}
@@ -178,6 +173,7 @@ function PrWorkspace({owner,repo,number}:{owner:string;repo:string;number:string
               />
             </View>
 
+            <PrivacyStrip onOpenSettings={()=>router.push("/(tabs)/settings")}/>
             <PrSecretBanner detail={detail}/>
             {/* 5-Second Executive Verdict & Agent Provenance Hero */}
             {(() => {

@@ -20,6 +20,18 @@ describe("getExecutiveVerdict", () => {
     expect(getExecutiveVerdict({}).level).toBe("caution");
     expect(getExecutiveVerdict({risk:makeRisk("low",["Docs"]),checks:[{id:"1",name:"CI",status:"in_progress",conclusion:"pending"}]}).level).toBe("caution");
   });
+  it('treats small complete docs without configured CI as low risk',()=>{
+    expect(getExecutiveVerdict({files:[makeFile('README.md',5)],checks:[],changedFilesCount:1}).level).toBe('safe');
+    expect(getExecutiveVerdict({risk:makeRisk('low',['Docs']),files:[makeFile('docs/guide.md',5)],checks:[]}).summary).toContain('No CI required');
+  });
+  it('does not waive absent CI for code, missing files, large churn or incomplete analysis',()=>{
+    for(const params of [
+      {files:[makeFile('src/app.ts',1)]},
+      {files:[makeFile('README.md',5)],changedFilesCount:2},
+      {files:[makeFile('README.md',81)]},
+      {files:[makeFile('README.md',5)],risk:{...makeRisk('low',['Docs']),coverage:{analyzedFiles:1,skippedFiles:1,truncatedFiles:0}}},
+    ])expect(getExecutiveVerdict(params).level).toBe('caution');
+  });
   it("flags secret exposure as blocked high risk", () => {
     const secretWarning: SecretLeakWarning = {
       file: "config/stripe.ts",

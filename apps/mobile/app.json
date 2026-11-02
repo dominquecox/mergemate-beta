@@ -2,7 +2,7 @@
   "expo": {
     "name": "MergeMate",
     "slug": "mergemate",
-    "version": "0.1.0",
+    "version": "0.2.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "scheme": "mergemate",
@@ -19,7 +19,8 @@
       "associatedDomains": [
         "applinks:app.mergemate.dev",
         "applinks:dev.mergemate.dev"
-      ]
+      ],
+      "buildNumber": "1"
     },
     "android": {
       "package": "dev.mergemate.app",
@@ -61,7 +62,8 @@
             "DEFAULT"
           ]
         }
-      ]
+      ],
+      "versionCode": 2
     },
     "web": {
       "bundler": "metro",
