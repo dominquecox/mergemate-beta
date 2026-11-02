@@ -20,7 +20,7 @@ try{browser=await chromium.launch({executablePath:'/usr/bin/chromium',args:['--n
   if(path==='/flags')return reply({voice_readout:true,voice_notes:false,highlight:false});
   if(path==='/consent/preferences')return reply({ai:{granted:true,version:'1',currentVersion:'1'},aiSummaries:true,revision:'fixture'});
   if(path==='/settings'){if(req.method()==='PUT'){saved=req.postDataJSON();settings=saved;}return reply(settings);}
-  if(path==='/billing/plan')return reply({plan:'free',status:'none',trialEligible:false,canManage:false});
+  if(path==='/billing/plan')return reply({plan:'free',status:'none',renewsAt:null,cancelAt:null,trialEligible:false,canManage:false});
   if(path==='/settings/meta-key')return reply({configured:false});
   if(path==='/notifications'){reads++;return reply({items:[{id:'inbox',kind:'review',repo:'acme/app',number:7,title:'Review this change',author:'pr-author',status:'open',updatedAt:new Date().toISOString(),read:false}],nextCursor:null});}
   if(path==='/activity/history')return reply({items:[{id:'audit:7',kind:'review',repo:'acme/app',number:7,title:'Pull request #7',author:'unknown',actor:'event-reviewer',event:'review',status:null,updatedAt:new Date().toISOString(),read:marked}],nextCursor:null});

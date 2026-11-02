@@ -1,4 +1,3 @@
-import {api} from '../api';
 import {watchConnectivity} from '../platform/connectivity';
 import {AppState} from 'react-native';
 import {useCallback,useEffect,useRef,useState} from 'react';
@@ -10,7 +9,8 @@ export function mergePageItems<T extends {id:string}>(items:T[]):T[]{
  for(const item of items){const old=rows.get(item.id);if(old&&'updatedAt'in old&&'updatedAt'in item&&typeof old.updatedAt==='string'&&typeof item.updatedAt==='string'&&Date.parse(old.updatedAt)>Date.parse(item.updatedAt))continue;rows.set(item.id,item);}return [...rows.values()];
 }
 /** One append in flight; reset supersedes it. Revalidation preserves loaded pages for Back. */
-export function usePagedList<T extends {id:string}>(key:string,load:(cursor?:string|null)=>Promise<Page<T>>){
+export function usePagedList<T extends {id:string}>(key:string,load:(cursor?:string|null)=>Promise<Page<T>>,invalidate?:()=>void){
+ const invalidator=useRef(invalidate);invalidator.current=invalidate;
  const loader=useRef(load);loader.current=load;
  const generation=useRef(0),pending=useRef(false),cursor=useRef<string|null>(null),pages=useRef(0);
  const [items,setItems]=useState<T[]>([]),[loading,setLoading]=useState(true),[busy,setBusy]=useState(false),[error,setError]=useState<string|null>(null),[hasMore,setHasMore]=useState(false),[refreshAfterMs,setRefreshAfterMs]=useState<number|null>(null);
@@ -35,7 +35,7 @@ export function usePagedList<T extends {id:string}>(key:string,load:(cursor?:str
  },[]);
  useEffect(()=>{generation.current++;pending.current=false;cursor.current=null;pages.current=0;setItems([]);setLoading(true);setHasMore(false);void fetchPage(true);return()=>{generation.current++;};},[key,fetchPage]);
  useEffect(()=>{
-  const reconnect=()=>{api.invalidateCache();if(!pending.current)void fetchPage(true,true);};
+  const reconnect=()=>{invalidator.current?.();if(!pending.current)void fetchPage(true,true);};
   let previous:boolean|null=null;
   const unwatch=watchConnectivity(state=>{if(previous===false&&state.online===true)reconnect();previous=state.online;});
   const subscription=AppState.addEventListener('change',state=>{if(state==='active')reconnect();});

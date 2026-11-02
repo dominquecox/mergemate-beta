@@ -11,7 +11,7 @@ export function watchConnectivity(listener:(state:ConnectionState)=>void):()=>vo
  }
  const network=require('expo-network') as typeof import('expo-network');
  let active=true;
- const update=(value:import('expo-network').NetworkState)=>{if(active)listener({online:value.isConnected===false||value.isInternetReachable===false?false:value.isInternetReachable===true?true:null});};
+ const update=(value:import('expo-network').NetworkState)=>{if(active)listener({online:value.isConnected===false?false:(value.isInternetReachable??value.isConnected??null)});};
  const subscription=network.addNetworkStateListener(update);
  void network.getNetworkStateAsync().then(update).catch(()=>undefined);
  return()=>{active=false;subscription.remove();};

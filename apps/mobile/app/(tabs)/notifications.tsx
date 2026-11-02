@@ -28,7 +28,7 @@ export default function NotificationsScreen() {
 
   const [history,setHistory]=useState(false);
   const [filter, setFilter] = useState<NotificationFilter>("all");
-  const {items,setItems,loading:isLoading,busy,error,refresh:loadNotifications,more,hasMore} = usePagedList(`activity:${history}:${filter}`, cursor=>history?api.getActivityHistory(filter==='review'?'review':'all',cursor):api.getNotificationPage(filter,cursor));
+  const {items,setItems,loading:isLoading,busy,error,refresh:loadNotifications,more,hasMore} = usePagedList(`activity:${history}:${filter}`, cursor=>history?api.getActivityHistory(filter==='review'?'review':'all',cursor):api.getNotificationPage(filter,cursor),()=>api.invalidateInbox());
 
   const markAllRead = () => {
     setItems((prev) => prev.map((item) => ({ ...item, read: true })));
