@@ -1,4 +1,4 @@
-import {openNativeGithub} from "../auth/native-browser";
+import {openNativeGithub,dismissNativeGithub} from "../auth/native-browser";
 import {SignInCompletions} from "../auth/github-return";
 import { sessionEndedMessage } from "../auth/session-ended";
 import {cancelReadout} from "../readout/active";
@@ -232,7 +232,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return false;
       }
       version=++authVersion.current;
-      return await establish(await api.completeGithubAuth(code,state,pending.verifier),false,version);
+      const ok=await establish(await api.completeGithubAuth(code,state,pending.verifier),false,version);
+      if(ok&&!isWeb)await dismissNativeGithub(Platform.OS==='android'?'android':'ios');
+      return ok;
     } catch (e) {
       if(version===authVersion.current)setError(toUserMessage(e, "Sign-in didn't finish. Try again."));
       return false;

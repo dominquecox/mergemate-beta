@@ -14,8 +14,8 @@ import { validOAuthParams } from "../../src/navigation/links";
 
 /**
  * GitHub sends the person back here with `code` and `state` (or `error` if they said no).
- * Web lands on /auth/callback in the same tab; iOS arrives through the https universal link;
- * Android arrives only through the verified HTTPS App Link.
+ * Web exchanges in its initiating tab. Native uses a browser-session scheme return
+ * or a verified HTTPS App Link; the browser relay never exchanges the native code.
  * The code is posted once with the stored PKCE verifier, then this route is replaced.
  */
 export default function AuthCallbackScreen() {
@@ -43,7 +43,7 @@ export default function AuthCallbackScreen() {
 
     const run = async () => {
       if(relay.current)return;
-      if(!code&&!state&&!errorParam&&session){router.replace('/(tabs)/inbox');return;}
+      if(!code&&!state&&!errorParam&&session&&!(await StorageService.hasPendingSignIn().catch(()=>true))){router.replace('/(tabs)/inbox');return;}
 
       if (errorParam) {
         if(state)await StorageService.takePendingSignIn(Date.now(),state).catch(()=>null);

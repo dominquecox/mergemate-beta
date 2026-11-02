@@ -12,3 +12,11 @@ export async function openNativeGithub(authorizeUrl:string,state:string,open:Ope
  if(!params||params.state!==state)throw new Error('Invalid sign-in return');
  return params;
 }
+
+/** A verified HTTPS App Link can complete before the auth tab receives the scheme return. */
+export async function dismissNativeGithub(platform:'ios'|'android'){
+ try{
+  const browser=require('expo-web-browser') as typeof import('expo-web-browser');
+  if(platform==='ios')browser.dismissAuthSession();else await browser.dismissBrowser();
+ }catch{/* It may already have closed after its scheme return. Authentication has succeeded. */}
+}

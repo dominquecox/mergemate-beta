@@ -27,3 +27,12 @@ it('opens a native auth session with the registered return and validates its res
  expect(await openNativeGithub('https://github.com/login/oauth/authorize','expected',async()=>({type:'cancel'}))).toBeNull();
  await expect(openNativeGithub('https://github.com/login/oauth/authorize','other',browser)).rejects.toThrow('Invalid sign-in return');
 });
+
+import {makeClient,jsonResponse,NOW,USER} from './helpers';
+it.each(['ios','android'] as const)('opts %s into the browser relay and persists one native session credential',async platform=>{
+ const fixture=makeClient(req=>req.path==='/auth/github/start'?jsonResponse({authorizeUrl:'https://github.com/login/oauth/authorize',state:'expected'}):jsonResponse({user:USER,session:{token:'fixture-native-session',expiresAt:NOW}}),{platform:'native',nativePlatform:platform});
+ await fixture.client.startGithubAuth(platform,'c'.repeat(43));expect(fixture.calls[0]?.body).toMatchObject({platform,nativeBrowser:true});
+ const flows=new SignInCompletions(),exchange=()=>fixture.client.completeGithubAuth('code','expected','v'.repeat(43)).then(()=>true);
+ await Promise.all([flows.run('code','expected',exchange),flows.run('code','expected',exchange)]);
+ expect(fixture.store.token).toBe('fixture-native-session');expect(fixture.calls.filter(c=>c.path==='/auth/github/callback')).toHaveLength(1);
+});
