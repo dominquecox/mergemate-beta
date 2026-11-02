@@ -26,7 +26,16 @@ LOG_FILE="$LOG_DIR/build-${TARGET}.log"
 LATEST_LOG="$LOG_DIR/build-latest.log"
 TIMESTAMP="$(date +%Y%m%d_%H%M%S)"
 GIT_SHA="$(git rev-parse --short HEAD 2>/dev/null || echo 'unknown')"
-VERSION="0.2.0"
+VERSION="$(node -p "require('./apps/mobile/app.json').expo.version")"
+
+if [[ "$TARGET" == "ios" || "$TARGET" == "android" ]]; then
+  if [[ -n "$(git status --porcelain --untracked-files=normal)" ]]; then
+    echo "Native release requires a clean checkout so the commit identifies the built source." >&2
+    exit 1
+  fi
+  export EAS_BUILD_GIT_COMMIT_HASH="$(git rev-parse HEAD)"
+  echo "Native build source: $EAS_BUILD_GIT_COMMIT_HASH; EAS remote counter allocates the next build number."
+fi
 
 echo "============================================================"
 echo " Starting MergeMate build/check: [$TARGET]"

@@ -1,7 +1,7 @@
 {
   "cli": {
     "version": ">= 16.0.0",
-    "appVersionSource": "local",
+    "appVersionSource": "remote",
     "promptToConfigurePushNotifications": false
   },
   "build": {
@@ -13,7 +13,8 @@
       "env": {
         "APP_VARIANT": "development",
         "EXPO_PUBLIC_API_BASE_URL": "https://api-dev.mergemate.dev"
-      }
+      },
+      "autoIncrement": true
     },
     "android-preview": {
       "distribution": "internal",
@@ -38,7 +39,8 @@
       "env": {
         "APP_VARIANT": "development",
         "EXPO_PUBLIC_API_BASE_URL": "https://api-dev.mergemate.dev"
-      }
+      },
+      "autoIncrement": true
     },
     "ios-production": {
       "autoIncrement": true,
