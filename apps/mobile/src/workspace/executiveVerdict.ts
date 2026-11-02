@@ -95,7 +95,7 @@ export function getExecutiveVerdict(params: {
 
   // Only a fully enumerated, small documentation/scaffold change can waive absent CI.
   const documentationOnly=files.length>0 && files.length<=8 &&
-    (params.changedFilesCount===undefined || params.changedFilesCount===files.length) &&
+    params.changedFilesCount===files.length &&
     files.every(f=>/\.(md|mdx|rst|txt)$/i.test(f.filename)||/(^|\/)\.gitkeep$/.test(f.filename)) &&
     files.every(f=>Number.isFinite(f.additions)&&Number.isFinite(f.deletions)&&f.additions>=0&&f.deletions>=0) &&
     files.reduce((sum,f)=>sum+f.additions+f.deletions,0)<=80;

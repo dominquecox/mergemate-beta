@@ -22,7 +22,7 @@ describe("getExecutiveVerdict", () => {
   });
   it('treats small complete docs without configured CI as low risk',()=>{
     expect(getExecutiveVerdict({files:[makeFile('README.md',5)],checks:[],changedFilesCount:1}).level).toBe('safe');
-    expect(getExecutiveVerdict({risk:makeRisk('low',['Docs']),files:[makeFile('docs/guide.md',5)],checks:[]}).summary).toContain('No CI required');
+    expect(getExecutiveVerdict({risk:makeRisk('low',['Docs']),files:[makeFile('docs/guide.md',5)],changedFilesCount:1,checks:[]}).summary).toContain('No CI required');
   });
   it('does not waive absent CI for code, missing files, large churn or incomplete analysis',()=>{
     for(const params of [
