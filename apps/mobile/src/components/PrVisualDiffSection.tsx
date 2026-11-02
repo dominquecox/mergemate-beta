@@ -1,3 +1,6 @@
+import {MetaTelemetryModal} from './MetaTelemetryModal';
+import {UiTargetPopover} from './UiTargetPopover';
+import type {ModelTelemetry} from '@mergemate/contracts';
 import React,{useEffect,useRef,useState} from 'react';
 import {Image,Pressable,View} from 'react-native';
 import {useRouter} from 'expo-router';
@@ -18,10 +21,11 @@ export function PrVisualDiffSection({detail,asset,fullScreen=false}:{detail:PrDe
  const files=imageAssets(detail.files),[selected,setSelected]=useState(asset??files[0]?.filename??'');
  const [images,setImages]=useState<Partial<Record<'before'|'after',PrVisualAsset>>>({}),[errors,setErrors]=useState<Partial<Record<'before'|'after',string>>>({});
  const [segments,setSegments]=useState<UiSegment[]>([]),[insight,setInsight]=useState(''),[busy,setBusy]=useState(false),[picked,setPicked]=useState<string|null>(null),[retry,setRetry]=useState(0);
+ const [telemetry,setTelemetry]=useState<ModelTelemetry|undefined>();
  const generation=useRef(0),request=useRef<AbortController|null>(null),analysisRequest=useRef<AbortController|null>(null);
  useEffect(()=>{if(!files.some(f=>f.filename===selected))setSelected(asset??files[0]?.filename??'');},[detail.headSha,asset,files,selected]);
  useEffect(()=>{
-  const version=++generation.current;request.current?.abort();analysisRequest.current?.abort();setImages({});setErrors({});setSegments([]);setInsight('');setPicked(null);setBusy(false);
+  const version=++generation.current;request.current?.abort();analysisRequest.current?.abort();setImages({});setErrors({});setSegments([]);setTelemetry(undefined);setInsight('');setPicked(null);setBusy(false);
   if(!selected)return;
   const controller=new AbortController();request.current=controller;
   for(const side of ['before','after'] as const){
@@ -30,13 +34,13 @@ export function PrVisualDiffSection({detail,asset,fullScreen=false}:{detail:PrDe
   }
   return()=>{generation.current++;controller.abort();analysisRequest.current?.abort();};
  },[selected,detail.owner,detail.repo,detail.number,detail.headSha,isDemo,retry]);
- useEffect(()=>{if(!isDemo&&(!flags.highlight||!aiConsentGranted)){analysisRequest.current?.abort();setSegments([]);setInsight('');setBusy(false);}},[flags.highlight,aiConsentGranted,isDemo]);
+ useEffect(()=>{if(!isDemo&&(!flags.highlight||!aiConsentGranted)){analysisRequest.current?.abort();setSegments([]);setTelemetry(undefined);setInsight('');setBusy(false);}},[flags.highlight,aiConsentGranted,isDemo]);
  const analyze=async()=>{
   if(busy||!images.after)return;
-  if(isDemo){setSegments(demoUiSegments);setInsight('Sample result: the after target is 32pt in this schematic fixture, below 44pt. No model was called.');return;}
+  if(isDemo){setTelemetry(undefined);setSegments(demoUiSegments);setInsight('Sample result: the after target is 32pt in this schematic fixture, below 44pt. No model was called.');return;}
   if(!flags.highlight||!aiConsentGranted)return;
-  const version=generation.current,controller=new AbortController();analysisRequest.current=controller;setBusy(true);
-  try{const result=await api.analyzeHighlight(images.after.dataUrl,'Inspect interactive target sizes and clipping. Report normalized UI segments only when reliable.', 'image/png',controller.signal);if(version===generation.current&&!controller.signal.aborted){setSegments(result.segments??[]);setInsight(result.insight);}}
+  const version=generation.current,controller=new AbortController();analysisRequest.current=controller;setTelemetry(undefined);setBusy(true);
+  try{const result=await api.analyzeHighlight(images.after.dataUrl,'Inspect interactive target sizes and clipping. Report normalized UI segments only when reliable.', 'image/png',controller.signal);if(version===generation.current&&!controller.signal.aborted){setSegments(result.segments??[]);setTelemetry(result.telemetry);setInsight(result.insight);}}
   catch(error){if(version===generation.current&&!controller.signal.aborted)setInsight(toUserMessage(error,'Visual analysis unavailable.'));}
   finally{if(version===generation.current)setBusy(false);}
  };
@@ -52,6 +56,8 @@ export function PrVisualDiffSection({detail,asset,fullScreen=false}:{detail:PrDe
   {!!Object.keys(errors).length&&<Button title="Retry previews" variant="secondary" onPress={()=>setRetry(n=>n+1)}/>}
   <Button title={isDemo?'Show Sample UI Inspection':'Analyze UI Targets'} onPress={analyze} loading={busy} disabled={!images.after||(!isDemo&&(!flags.highlight||!aiConsentGranted))}/>
   {!isDemo&&(!flags.highlight||!aiConsentGranted)&&<Text style={{color:colors.textSecondary}}>Live analysis needs Highlight enabled and AI consent. Asset comparison is read-only.</Text>}
+  <MetaTelemetryModal telemetry={telemetry} sample={isDemo}/>
+  {!!picked&&segments.find(s=>s.id===picked)&&<UiTargetPopover key={picked} segment={segments.find(s=>s.id===picked)!} onClose={()=>setPicked(null)}/>}
   {!!insight&&<Text accessibilityLiveRegion="polite" style={{color:colors.text}}>{insight}</Text>}
   {!!insight&&!segments.length&&<Text style={{color:colors.textSecondary}}>No reliable touch-target metrics were returned. Inspect the image manually.</Text>}
   {segments.map(s=><Pressable key={s.id} accessibilityRole="button" accessibilityLabel={`Inspect ${s.label}`} onPress={()=>setPicked(s.id)} style={{minHeight:44,minWidth:44,padding:12,borderWidth:1,borderColor:s.touchTargetCompliant?colors.border:colors.riskHigh,borderRadius:8}}><Text style={{color:colors.text}}>{s.label}: {s.touchTargetSizePt.width} x {s.touchTargetSizePt.height}pt (estimate){s.touchTargetCompliant?' · Verify actual hit area':' · HIG warning: below 44pt'}</Text>{picked===s.id&&<Text style={{color:colors.textSecondary}}>{s.higViolation??'Verify target dimensions in the rendered interface.'}</Text>}</Pressable>)}
@@ -63,7 +69,7 @@ function VisualAsset({image,segments,picked,onPick}:{image:PrVisualAsset;segment
  return <View onLayout={e=>setWidth(e.nativeEvent.layout.width)} style={{width:'100%',aspectRatio:image.width/image.height,overflow:'hidden',backgroundColor:colors.surfaceElevated}}>
   <Image source={{uri:image.dataUrl}} accessibilityLabel={`${image.side} ${image.path}`} style={{width:'100%',height:'100%'}} resizeMode="contain"/>
   {segments.map(s=>{const [y,x,y2,x2]=s.bbox;return <React.Fragment key={s.id}>
-   <View pointerEvents="none" style={{position:'absolute',left:x*width,top:y*height,width:(x2-x)*width,height:(y2-y)*height,borderWidth:picked===s.id?3:2,borderColor:s.touchTargetCompliant?colors.brand:colors.riskHigh,backgroundColor:s.touchTargetCompliant?'transparent':'rgba(220,38,38,0.22)'}}/>
+   <View pointerEvents="none" style={{position:'absolute',left:x*width,top:y*height,width:(x2-x)*width,height:(y2-y)*height,borderWidth:picked===s.id?3:2,borderColor:s.touchTargetCompliant?colors.riskLow:colors.riskHigh,backgroundColor:s.touchTargetCompliant?'transparent':'rgba(220,38,38,0.22)'}}/>
    <Pressable accessibilityRole="button" accessibilityLabel={`Inspect image region ${s.label}`} onPress={()=>onPick(s.id)} style={{position:'absolute',left:Math.max(0,Math.min(x*width,width-44)),top:Math.max(0,Math.min(y*height,height-44)),minWidth:44,minHeight:44,width:Math.max(44,(x2-x)*width),height:Math.max(44,(y2-y)*height)}}/>
   </React.Fragment>;})}
  </View>;

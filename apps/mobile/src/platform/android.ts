@@ -37,6 +37,12 @@ export function triggerAndroidHaptic(): void {
   }
 }
 
+/** User-initiated clipboard feedback on either native platform; OS settings may suppress it. */
+export function triggerDeviceHaptic():void {
+  if(Platform.OS==='web')return;
+  try{Vibration.vibrate(10);}catch{/* Device feedback is best effort. */}
+}
+
 /**
  * Store policy gate (specs/ANDROID.md "Billing on Android"):
  * In-app Stripe checkout is web-only. Native iOS and Android only open the external web billing page
