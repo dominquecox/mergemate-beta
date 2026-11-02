@@ -4,7 +4,7 @@ import { PrRisk, PrSummary } from "@mergemate/contracts";
 import type { MiddlewareHandler } from "hono";
 import { recordAiCall } from "../ai/metrics";
 import type { AiOutcome } from "../ai/metrics";
-import type { CompletionRequest, ModelProvider, ModelTransport } from "../ai/provider";
+import type { CompletionRequest, CompletionResult, ModelProvider, ModelTransport } from "../ai/provider";
 import type { AiTask } from "../ai/routes";
 import { userModelContext } from "../lib/user-meta-key";
 import type { SessionRecord } from "../lib/sessions";
@@ -186,6 +186,7 @@ export const secondsToMidnight = (): number =>
   );
 
 export interface AiDeps {
+  requestId?:string;
   db: D1Database;
   transport: ModelTransport;
   /** Workers AI binding, injected so tests use a fake. */
@@ -302,20 +303,21 @@ export const runModelTask = async <T>(
   request: CompletionRequest,
   schema: AnswerSchema<T>,
   policy?:AiPolicyFence,
+  onExecution?:(reply:CompletionResult,latencyMs:number)=>void,
 ): Promise<T> => {
   await policy?.assertCurrent();
   const started = Date.now();
+  let reply:CompletionResult|undefined;
   const meter = (outcome: AiOutcome, usage?: { inputTokens: number; outputTokens: number }) =>
     recordAiCall(env.AI_METRICS, {
       task,
-      provider: provider.config.provider,
-      modelId: provider.config.modelId,
+      provider: reply?.provider??provider.config.provider,
+      modelId: reply?.modelId??provider.config.modelId,
       outcome,
       inputTokens: usage?.inputTokens ?? 0,
       outputTokens: usage?.outputTokens ?? 0,
       latencyMs: Date.now() - started,
     });
-  let reply;
   try {
     reply = await provider.complete(request);
     await policy?.assertCurrent();
@@ -337,5 +339,6 @@ export const runModelTask = async <T>(
     throw unusableAnswer(`${task} answer did not match the schema`);
   }
   meter("ok", reply.usage);
+  onExecution?.(reply,Math.max(0,Date.now()-started));
   return parsed.data;
 };

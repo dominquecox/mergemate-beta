@@ -1,3 +1,5 @@
+import {executionTelemetry} from '../ai/execution-telemetry';
+import type {CompletionResult} from '../ai/provider';
 import { ModelRisk, PrRisk } from "@mergemate/contracts";
 import type { AnalysisCoverage } from "@mergemate/contracts";
 import { createModelProvider } from "../ai/provider";
@@ -95,6 +97,7 @@ export const assessPrRisk = async (
       // The fast classifier runs beside the risk model under the same reserved action. It only feeds the quality
       // badge (classifierScore); the rule-based level floor and secret findings are untouched.
       const classifier = classifyPr(model.env, deps.ai, text);
+      let execution:{reply:CompletionResult;latency:number}|undefined;
       const answer = await runModelTask(
         env,
         provider,
@@ -105,7 +108,7 @@ export const assessPrRisk = async (
           maxOutputTokens: RISK_MAX_TOKENS,
           jsonSchema: RISK_JSON_SCHEMA,
         },
-        ModelRisk,stores.policy,
+        ModelRisk,stores.policy,(reply,latency)=>{execution={reply,latency};},
       );
       const { deterministic, rest } = ruleRisk(prData, coverage, await classifier);
       const activeDeterministic = deterministic.reasons.filter(
@@ -114,6 +117,7 @@ export const assessPrRisk = async (
       const combined = (activeDeterministic.length > 0 ? activeDeterministic : answer.reasons.length > 0 ? [] : deterministic.reasons).concat(answer.reasons);
       const reasons = combined.filter((reason, index, all) => all.indexOf(reason) === index).slice(0, 3);
       const result: PrRisk = { level: maxLevel(deterministic.level, answer.level), reasons, ...rest, assessedBy: "rules_and_ai" };
+      if(execution)result.telemetry=executionTelemetry(execution.reply,execution.latency,deps.requestId??crypto.randomUUID(),{task:"risk",modelResult:answer,deterministicFloor:deterministic.level,finalVerdict:result.level,coverage});
       await stores.cache.set(key, userId, result);
       return result;
     });

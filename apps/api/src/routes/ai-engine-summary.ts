@@ -1,3 +1,5 @@
+import {executionTelemetry} from '../ai/execution-telemetry';
+import type {CompletionResult} from '../ai/provider';
 import { ModelSummary, PrSummary } from "@mergemate/contracts";
 import { createModelProvider } from "../ai/provider";
 import { SUMMARY_JSON_SCHEMA } from "../ai/schemas";
@@ -58,6 +60,7 @@ export const generateSummary = async (
   const { context, coverage } = buildDiffContext(data, provider.config.maxInputChars);
   const { text } = redactSecrets(context);
   const { value: body, remaining: left } = await withReservation(stores, limits, userId, limit, async () => {
+    let execution:{reply:CompletionResult;latency:number}|undefined;
     const answer = await runModelTask(
       env,
       provider,
@@ -68,9 +71,9 @@ export const generateSummary = async (
         maxOutputTokens: SUMMARY_MAX_TOKENS,
         jsonSchema: SUMMARY_JSON_SCHEMA,
       },
-      ModelSummary,stores.policy,
+      ModelSummary,stores.policy,(reply,latency)=>{execution={reply,latency};},
     );
-    const result: PrSummary = { ...answer, coverage, model: `${provider.config.provider}:${provider.config.modelId}` };
+    const result: PrSummary = { ...answer, coverage, model: `${execution?.reply.provider??provider.config.provider}:${execution?.reply.modelId??provider.config.modelId}`, ...(execution?{telemetry:executionTelemetry(execution.reply,execution.latency,deps.requestId??crypto.randomUUID(),{task:"summary",coverage,summary:answer})}:{}) };
     await stores.cache.set(key, userId, result);
     return result;
   });
