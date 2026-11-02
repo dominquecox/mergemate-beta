@@ -1,3 +1,4 @@
+import {QuietHoursEditor} from "../../src/components/QuietHoursEditor";
 import {AccessibleSwitch as Switch} from "../../src/components/AccessibleSwitch";
 import { SettingsGroup, SettingsRow } from "../../src/components/SettingsRows";
 import { Avatar } from "../../src/components/Avatar";
@@ -231,6 +232,7 @@ export default function SettingsScreen() {
           <SettingsGroup title="Push notifications & triage">
             {([['review','Review requests','When someone asks for your review'],['mention','Mentions','When someone mentions you'],['mine','My pull requests','Updates to pull requests you opened']] as const).map(([kind,label,hint],index)=><SettingsRow key={kind} first={index===0} label={label} detail={hint} trailing={<Switch value={settings?.notifications[kind] ?? true} onValueChange={value=>{if(settings)void saveSettings({notifications:{...settings.notifications,[kind]:value}});}} disabled={isDemo || !settings || saving || preferenceBusy} accessibilityLabel={label} trackColor={{false:colors.surfaceSecondary,true:colors.brand}} thumbColor="#FFFFFF"/>}/>)}
             <SettingsRow label="Quiet Hours" detail={settings?.quietHours?`${settings.quietHours.start} → ${settings.quietHours.end}`:'22:00 → 08:00 when enabled'} icon="moon-outline" trailing={<Switch value={settings?.quietHours!=null} onValueChange={value=>runPreference(()=>toggleQuietHours(value))} disabled={isDemo || !settings || saving || preferenceBusy} accessibilityLabel="Quiet hours" trackColor={{false:colors.surfaceSecondary,true:colors.brand}} thumbColor="#FFFFFF"/>}/>
+            <QuietHoursEditor value={settings?.quietHours??null} disabled={isDemo||!settings||saving||preferenceBusy} onSave={quietHours=>saveSettings({quietHours})}/>
             {Platform.OS!=='web' && !isDemo && <SettingsRow label="Push on this device" detail="Get a push when a review needs you" trailing={<Switch value={pushOn} onValueChange={value=>runPreference(()=>togglePush(value))} disabled={saving || preferenceBusy} accessibilityLabel="Push notifications on this device" trackColor={{false:colors.surfaceSecondary,true:colors.brand}} thumbColor="#FFFFFF"/>}/>}
             {Platform.OS==='web' && !isDemo && <BrowserNotificationsRow onNotice={setNotice}/>}
           </SettingsGroup>
