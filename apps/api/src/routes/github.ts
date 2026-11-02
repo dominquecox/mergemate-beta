@@ -103,6 +103,10 @@ interface GhFile {
 }
 
 interface GhCheckRun {
+  head_sha?:string;
+  started_at?:string|null;
+  completed_at?:string|null;
+  app?:{name?:string}|null;
   id?:number;
   name: string;
   status: "queued" | "in_progress" | "completed" | string;
@@ -179,8 +183,9 @@ const STATUS_STATE: Record<GhStatus["state"], CheckState> = {
 };
 
 const httpsUrl=(value:string|null)=>{try{const url=new URL(value??'');return url.protocol==='https:'&&!url.username&&!url.password&&(url.hostname==='github.com'||url.hostname.endsWith('.github.com'))?{url:url.toString()}:{};}catch{return {};}};
-const runCheck=(run:GhCheckRun,index:number):PrCheck=>({id:`run:${run.id??`${run.name}:${index}`}`,name:run.name,state:checkRunState(run),...httpsUrl(run.html_url)});
-const statusCheck=(status:GhStatus):PrCheck=>({id:`status:${status.context}`,name:status.context,state:STATUS_STATE[status.state],...httpsUrl(status.target_url)});
+const checkTime=(value:string|null|undefined)=>typeof value==="string"&&Number.isFinite(Date.parse(value))?new Date(value).toISOString():undefined;
+const runCheck=(run:GhCheckRun,index:number):PrCheck=>({source:"check_run",...(run.head_sha&&/^[a-f0-9]{40}$/.test(run.head_sha)?{headSha:run.head_sha}:{}),...(run.app?.name?.trim()?{provider:run.app.name.replace(/[\p{Cc}\p{Cf}]/gu," ").trim().slice(0,120)}:{}),...(checkTime(run.started_at)?{startedAt:checkTime(run.started_at)}:{}),...(checkTime(run.completed_at)?{completedAt:checkTime(run.completed_at)}:{}),id:`run:${run.id??`${run.name}:${index}`}`,name:run.name,state:checkRunState(run),...httpsUrl(run.html_url)});
+const statusCheck=(status:GhStatus):PrCheck=>({source:"status",id:`status:${status.context}`,name:status.context,state:STATUS_STATE[status.state],...httpsUrl(status.target_url)});
 export function workspaceFile(file:GhFile,cap=true){
  const patch=cap?file.patch?.slice(0,65536):file.patch;let adds=0,deletes=0,inHunk=false;
  for(const line of (patch??'').split('\n')){if(/^@@ -\d+(?:,\d+)? \+\d+(?:,\d+)? @@/.test(line))inHunk=true;else if(inHunk&&line.startsWith('+'))adds++;else if(inHunk&&line.startsWith('-'))deletes++;}

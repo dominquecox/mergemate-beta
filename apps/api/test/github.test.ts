@@ -134,7 +134,7 @@ describe("GET /v1/prs/:owner/:repo/:number", () => {
       ])
       .on("GET", `${GH}/repos/acme/api/commits/abc123/check-runs`, {
         check_runs: [
-          { name: "build", status: "completed", conclusion: "success", html_url: "https://github.com/acme/api/runs/1" },
+          { name: "build", status: "completed", conclusion: "success", html_url: "https://github.com/acme/api/runs/1", head_sha: "a".repeat(40), started_at: "2026-10-26T10:00:00Z", completed_at: "2026-10-26T10:00:12Z", app: {name:"QA\nrunner"} },
           { name: "test", status: "completed", conclusion: "timed_out", html_url: null },
           { name: "lint", status: "in_progress", conclusion: null, html_url: null },
         ],
@@ -165,6 +165,17 @@ describe("GET /v1/prs/:owner/:repo/:number", () => {
     expect((await call('/v1/prs/acme/api/7/pages/comments?cursor=other:1',{headers})).status).toBe(422);
   });
 
+  it('preserves check-run head/provider/timing on paged reads without claiming legacy statuses executed',async()=>{
+    const ctx=testContext();const {headers}=await signIn(ctx);mockPr(ctx);
+    const response=await appFor(ctx)('/v1/prs/acme/api/7/pages/checks',{headers});
+    expect(response.status).toBe(200);
+    const page=await response.json() as {items:PrDetail['checks']};
+    expect(page.items[0]).toMatchObject({source:'check_run',headSha:'a'.repeat(40),provider:'QA runner',startedAt:'2026-10-26T10:00:00.000Z',completedAt:'2026-10-26T10:00:12.000Z'});
+    expect(page.items[1]?.headSha).toBeUndefined();
+    expect(page.items[3]).toMatchObject({source:'status',state:'queued'});
+    expect(page.items[3]?.headSha).toBeUndefined();
+  });
+
   it("returns header data, files, checks and threads using the user's own token", async () => {
     const ctx = testContext();
     const { headers } = await signIn(ctx);
@@ -176,10 +187,10 @@ describe("GET /v1/prs/:owner/:repo/:number", () => {
     expect(pr.files[0]).toMatchObject({ path: "src/cache.ts", patch: "@@ +1 @@" });
     expect(pr.files[1]?.patch).toBeUndefined();
     expect(pr.checks).toEqual([
-      { id:"run:build:0",name: "build", state: "success", url: "https://github.com/acme/api/runs/1" },
-      { id:"run:test:1",name: "test", state: "failure" },
-      { id:"run:lint:2",name: "lint", state: "in_progress" },
-      { id:"status:deploy/preview",name: "deploy/preview", state: "queued" },
+      { source:"check_run",id:"run:build:0",name: "build", state: "success", url: "https://github.com/acme/api/runs/1",headSha:"a".repeat(40),provider:"QA runner",startedAt:"2026-10-26T10:00:00.000Z",completedAt:"2026-10-26T10:00:12.000Z" },
+      { source:"check_run",id:"run:test:1",name: "test", state: "failure" },
+      { source:"check_run",id:"run:lint:2",name: "lint", state: "in_progress" },
+      { source:"status",id:"status:deploy/preview",name: "deploy/preview", state: "queued" },
     ]);
     expect(pr.threads.map((t) => [t.id, t.path, t.comments.length])).toEqual([
       ["conversation", null, 1],

@@ -95,6 +95,11 @@ export const PrCheck = z.object({
   name: z.string(),
   state: CheckState,
   url: z.url().optional(),
+  source: z.enum(['check_run', 'status']).optional(),
+  headSha: z.string().regex(/^[a-f0-9]{40}$/).optional(),
+  provider: z.string().min(1).max(120).optional(),
+  startedAt: IsoDateTime.optional(),
+  completedAt: IsoDateTime.optional(),
 });
 export type PrCheck = z.infer<typeof PrCheck>;
 
