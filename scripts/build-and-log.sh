@@ -10,6 +10,12 @@ set -o pipefail
 TARGET="${1:-ios}"
 shift || true
 
+# Environment defaults for mobile builds
+export ANDROID_HOME="${ANDROID_HOME:-$HOME/code/.android-sdk}"
+if [[ -d "$ANDROID_HOME/platform-tools" ]]; then
+  export PATH="$ANDROID_HOME/platform-tools:$PATH"
+fi
+
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO_ROOT"
 
