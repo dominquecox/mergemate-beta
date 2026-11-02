@@ -164,7 +164,7 @@ function InboxWorkspace({initialFilter}:{initialFilter:NotificationFilter}) {
         {(["all", "review", "mentions", "mine"] as NotificationFilter[]).map((tab) => {
           const isSelected = filter === tab;
           let label = "All";
-          if (tab === "review") label = "Needs my review";
+          if (tab === "review") label = "Review";
           if (tab === "mentions") label = "Mentions";
           if (tab === "mine") label = "Mine";
 
@@ -182,10 +182,10 @@ function InboxWorkspace({initialFilter}:{initialFilter:NotificationFilter}) {
                 },
               ]}
               accessibilityRole="tab"
-              accessibilityLabel={`${label} pull requests`}
+              accessibilityLabel={tab === "review" ? "Needs review pull requests" : `${label} pull requests`}
               accessibilityState={{ selected: isSelected }}
             >
-              <Text
+              <Text numberOfLines={1} ellipsizeMode="tail"
                 style={[
                   typography.subhead,
                   {
@@ -318,7 +318,7 @@ function InboxWorkspace({initialFilter}:{initialFilter:NotificationFilter}) {
                     </View>
                   </View>
 
-                  <Text style={[typography.headline, { color: colors.text, marginTop: 4 }]} numberOfLines={2}>
+                  <Text style={[typography.subhead, { color: colors.text, fontWeight:"600", marginTop: 4 }]} numberOfLines={1} ellipsizeMode="tail" accessibilityLabel={item.title}>
                     {item.title}
                   </Text>
 
