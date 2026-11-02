@@ -10,7 +10,7 @@ describe("verified native incoming links",()=>{
     }
   });
   it.each([
-    "mergemate://auth/callback?code=abc&state=xyz", "/auth/callback?code=abc&state=xyz",
+    "mergemate://wrong/callback?code=abc&state=xyz", "/auth/callback?code=abc&state=xyz",
     "https://evil.example/auth/callback?code=abc&state=xyz", "javascript:alert(1)",
     "https://app.mergemate.dev.evil.example/auth/callback?code=a&state=b",
     "https://user@app.mergemate.dev/auth/callback?code=a&state=b",
@@ -22,6 +22,10 @@ describe("verified native incoming links",()=>{
     "https://app.mergemate.dev/pr/acme/api/0", "https://app.mergemate.dev/unknown",
   ])("rejects unsafe link %s",raw=>{
     expect(isVerifiedCallbackUrl(raw)).toBe(false); expect(nativeLinkPath(raw)).toBe("/(auth)/sign-in");
+  });
+  it('accepts only the exact registered native callback and scoped HTTPS relay',()=>{
+    for(const url of ['mergemate://auth/callback?code=abc&state=xyz','https://dev.mergemate.dev/auth/callback?native=1&code=abc&state=xyz'])expect(nativeLinkPath(url)).toContain('/auth/callback?');
+    for(const url of ['mergemate://auth/callback?code=a&state=b&redirect=evil','mergemate://auth/callback?code=a&state=b&native=2','mergemate://user@auth/callback?code=a&state=b'])expect(isVerifiedCallbackUrl(url)).toBe(false);
   });
   it("rejects duplicate/array callback params rather than picking the first",()=>{
     expect(validOAuthParams({code:["a","b"],state:"s"})).toBe(false);

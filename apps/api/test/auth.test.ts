@@ -23,11 +23,11 @@ describe("POST /v1/auth/github/start", () => {
     expect(rows).toEqual([{ expires_at: "2026-10-27T12:10:00.000Z" }]);
   });
 
-  it("uses the https universal link for iOS, never a custom scheme", async () => {
+  it("uses the HTTPS native relay for iOS while keeping GitHub on its registered host", async () => {
     const ctx = testContext();
     const res = await appFor(ctx)("/v1/auth/github/start", post({ codeChallenge: verifierPair().challenge, platform: "ios" }));
     const url = new URL(((await res.json()) as { authorizeUrl: string }).authorizeUrl);
-    expect(url.searchParams.get("redirect_uri")).toBe("https://dev.mergemate.dev/auth/callback");
+    expect(url.searchParams.get("redirect_uri")).toBe("https://dev.mergemate.dev/auth/callback?native=1");
   });
 
   it("refuses a web origin outside the allowlist for the environment", async () => {
@@ -55,7 +55,7 @@ describe("POST /v1/auth/github/callback", () => {
     const exchange = ctx.net.calls.find((c) => c.url === "https://github.com/login/oauth/access_token");
     expect(JSON.parse(exchange?.body ?? "{}")).toMatchObject({
       code: "test-code",
-      redirect_uri: "https://dev.mergemate.dev/auth/callback",
+      redirect_uri: "https://dev.mergemate.dev/auth/callback?native=1",
     });
 
     const sessions = ctx.db.rows<{ token_hash: string }>("SELECT token_hash FROM sessions");

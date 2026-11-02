@@ -1,9 +1,11 @@
+import {openNativeGithub} from "../auth/native-browser";
+import {SignInCompletions} from "../auth/github-return";
 import { sessionEndedMessage } from "../auth/session-ended";
 import {cancelReadout} from "../readout/active";
 import {hideSessionForPageCache,revealSessionAfterCheck} from "../auth/page-session";
 import {onSessionChange,hasPendingLogout,notifySessionChange,type SessionChange} from "../auth/session-events";
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from "react";
-import { Linking, Platform } from "react-native";
+import { Platform } from "react-native";
 import { User, Session } from "../types";
 import { StorageService } from "../storage";
 import { api } from "../api";
@@ -45,7 +47,7 @@ async function openAuthorizeUrl(url: string): Promise<void> {
     window.location.assign(url);
     return;
   }
-  await Linking.openURL(url);
+  throw new Error("Native authorization requires a browser auth session.");
 }
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -64,6 +66,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   demoRef.current = isDemo;
   // Set once a sign-in completes, so a slower start-up check cannot overwrite it.
   const authVersion=useRef(0);
+  const completions=useRef(new SignInCompletions());
 
   const clearLocalSession=useCallback(async(version:number)=>{
     if(version!==authVersion.current)return;
@@ -117,6 +120,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(()=>{
     const changed=(kind:SessionChange)=>{
+      completions.current.clear();
       cancelReadout();
     cancelPushRegistration();
       ++authVersion.current;api.invalidateSession();setIsLoading(kind!=='signed-out');setUser(null);setSession(null);setIsDemo(false);
@@ -135,6 +139,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     api.setUnauthorizedHandler(() => {
       if (!signedInRef.current) return;
       const wasDemo = demoRef.current;
+      completions.current.clear();
       cancelReadout();
     cancelPushRegistration();
       ++authVersion.current;setIsLoading(false);
@@ -174,6 +179,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signInWithGithub = async (_platform: "ios" | "android" | "web"): Promise<SignInResult> => {
     cancelPushRegistration();
+    completions.current.clear();
     const version=++authVersion.current;let redirected=false;
     setIsLoading(true);
     setError(null);
@@ -191,6 +197,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (!validGitHubAuthorizeUrl(authorizeUrl, state, challenge)) throw new Error("Invalid sign-in destination");
       await StorageService.setPendingSignIn({ state, verifier, createdAt: Date.now() });
       if(version!==authVersion.current)return "failed";
+      if(!isWeb){
+        const callback=await openNativeGithub(authorizeUrl,state);
+        if(!callback){
+          if(version===authVersion.current){await StorageService.takePendingSignIn(Date.now(),state);setError('Sign-in was cancelled.');}
+          return 'failed';
+        }
+        if(callback.error){if(version!==authVersion.current)return 'failed';await StorageService.takePendingSignIn(Date.now(),state);setError('Sign-in was cancelled.');return 'failed';}
+        if(!callback.code || (version!==authVersion.current&&!completions.current.has(callback.code,state)))return 'failed';
+        return await completeGithubSignIn(callback.code,state)?'signed_in':'failed';
+      }
       await openAuthorizeUrl(authorizeUrl);redirected=true;
       return "redirected";
     } catch (e) {
@@ -202,9 +218,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const completeGithubSignIn = async (code: string, state: string): Promise<boolean> => {
+  const completeGithubSignIn = (code: string, state: string): Promise<boolean> => completions.current.run(code,state,async()=>{
     cancelPushRegistration();
-    const version=++authVersion.current;
+    let version=authVersion.current;
     setIsLoading(true);
     setError(null);
     try {
@@ -215,6 +231,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setError("That sign-in link has expired. Start again.");
         return false;
       }
+      version=++authVersion.current;
       return await establish(await api.completeGithubAuth(code,state,pending.verifier),false,version);
     } catch (e) {
       if(version===authVersion.current)setError(toUserMessage(e, "Sign-in didn't finish. Try again."));
@@ -222,9 +239,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } finally {
       if(version===authVersion.current)setIsLoading(false);
     }
-  };
+  });
 
   const startDemo = async (): Promise<boolean> => {
+    completions.current.clear();
     cancelPushRegistration();
     const version=++authVersion.current;
     setIsLoading(true);
@@ -241,6 +259,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const signOut = async () => {
+    completions.current.clear();
     cancelReadout();
     cancelPushRegistration();
     const version=++authVersion.current;setError(null);setUser(null);setSession(null);setIsDemo(false);
@@ -259,6 +278,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const deleteAccount = async () => {
+    completions.current.clear();
     cancelReadout();
     cancelPushRegistration();
     const version=++authVersion.current;

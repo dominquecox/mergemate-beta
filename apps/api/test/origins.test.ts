@@ -42,12 +42,12 @@ describe("CORS origins per environment", () => {
 });
 
 describe("sign-in callbacks per environment", () => {
-  it("production web and iOS both use the app origin callback", async () => {
+  it("production web and native use the app origin with native relay scoping", async () => {
     const ctx = prod();
     expect(callbackUrl(ctx.env, "web")).toBe(`${APP}/auth/callback`);
-    expect(callbackUrl(ctx.env, "ios")).toBe(`${APP}/auth/callback`);
+    expect(callbackUrl(ctx.env, "ios")).toBe(`${APP}/auth/callback?native=1`);
     expect(await authorizeRedirect(ctx, "web")).toBe(`${APP}/auth/callback`);
-    expect(await authorizeRedirect(ctx, "ios")).toBe(`${APP}/auth/callback`);
+    expect(await authorizeRedirect(ctx, "ios")).toBe(`${APP}/auth/callback?native=1`);
   });
 
   it("production refuses the marketing site as the web origin", () => {
@@ -56,7 +56,7 @@ describe("sign-in callbacks per environment", () => {
   });
 
   it("development callbacks are unchanged", async () => {
-    expect(callbackUrl(dev().env, "ios")).toBe(`${DEV}/auth/callback`);
+    expect(callbackUrl(dev().env, "ios")).toBe(`${DEV}/auth/callback?native=1`);
     expect(callbackUrl(dev().env, "web")).toBe(`${DEV}/auth/callback`);
     expect(callbackUrl(dev({ WEB_ORIGIN: LOCAL }).env, "web")).toBe(`${LOCAL}/auth/callback`);
     expect(await authorizeRedirect(dev({ WEB_ORIGIN: LOCAL }), "ios")).toBe(`${DEV}/auth/callback`);

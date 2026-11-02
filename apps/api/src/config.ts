@@ -50,7 +50,7 @@ export const siteOrigin = (env: Env) => {
 };
 
 export const callbackUrl = (env: Env, platform: Platform) =>
-  platform === "web" ? `${webOrigin(env)}/auth/callback` : IOS_CALLBACKS[appEnv(env)];
+  platform === "web" ? `${webOrigin(env)}/auth/callback` : `${IOS_CALLBACKS[appEnv(env)]}?native=1`;
 
 export const requireVar = (
   env: Env,
