@@ -22,7 +22,7 @@ await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
 const port=server.address().port;
 let browser;
 try{
- browser=await chromium.launch({headless:true,executablePath:'/usr/bin/chromium',args:['--no-sandbox']});const base=`http://127.0.0.1:${port}`;
+ browser=await chromium.launch({headless:true,executablePath:process.env.CHROMIUM_PATH??(process.platform==='darwin'?'/Applications/Google Chrome.app/Contents/MacOS/Google Chrome':'/usr/bin/chromium'),args:['--no-sandbox']});const base=`http://127.0.0.1:${port}`;
  for(const width of [393,1440]){
   let signedIn=false,current='one',nextAccount='one',stateCount=0,callbackCount=0,activeRefresh=0,maxRefresh=0,refreshDelay=40,offlineLogout=false;const states=new Map();const errors=[];
   const context=await browser.newContext({viewport:{width,height:1000},serviceWorkers:'block'});

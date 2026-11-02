@@ -9,8 +9,8 @@ import { Button } from './Button';
 import { Icon } from './Icon';
 import { checkDuration, checkEvidence, desktopQaCommand, inspectQaReport, QA_REPORT_MAX_BYTES } from '../workspace/qaEvidence';
 
-export function QaEvidenceCard({ repository, number, headSha, checks, sample, cursor, busy, error, capped, onLoadMore, onOpen }: {
-  repository: string; number: number; headSha?: string; checks: PrCheck[]; sample: boolean;
+export function QaEvidenceCard({ repository, number, headSha, checks, sample, runnable, cursor, busy, error, capped, onLoadMore, onOpen }: {
+  repository: string; number: number; headSha?: string; checks: PrCheck[]; sample: boolean; runnable: boolean;
   cursor: string | null; busy: boolean; error: string | null; capped: boolean; onLoadMore: () => void; onOpen: (url: string) => void;
 }) {
   const { colors, typography, radius } = useTheme();
@@ -20,7 +20,7 @@ export function QaEvidenceCard({ repository, number, headSha, checks, sample, cu
   useEffect(() => { const timer = setInterval(() => setNow(Date.now()), 60000); return () => clearInterval(timer); }, []);
   const inspected = report ? inspectQaReport(JSON.stringify(report), { repository, number, headSha }, now) : undefined;
   const visibleReport = inspected?.report;
-  const command = desktopQaCommand(repository, number, headSha);
+  const command = runnable ? desktopQaCommand(repository, number, headSha) : null;
   const [copyNotice, setCopyNotice] = useState('');
   useEffect(() => setCopyNotice(''), [repository, number, headSha]);
   const copyCommand = async () => { try { if (command) { const copied = await Clipboard.setStringAsync(command); if (!copied) throw new Error('Clipboard unavailable'); setCopyNotice('QA command copied. Run it in the clean checkout for this commit.'); } } catch { setCopyNotice('Clipboard unavailable. Use the QA runner instructions on desktop.'); } };

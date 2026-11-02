@@ -4,7 +4,7 @@ MergeMate combines PR risk context with execution evidence. The QA Evidence card
 
 ## Local browser runner
 
-The runner is operator-invoked, not a cloud service or a GitHub Actions workflow. Use a trusted, reviewed checkout of the private MergeMate working repository, Node22.18+ or24 (native TypeScript stripping), installed locked dependencies, GitHub CLI read access, and Chromium at `/usr/bin/chromium` for the supplied harnesses. Configure a compatible Chromium path in the harness when running on another machine. Do not run unreviewed PR code or dependency hooks merely because a PR exists.
+The runner is operator-invoked, not a cloud service or a GitHub Actions workflow. Use a trusted, reviewed checkout of the private MergeMate working repository, Node22.18+ or24 (native TypeScript stripping), installed locked dependencies, GitHub CLI read access, and an installed Chromium-compatible browser. The supplied harnesses default to `/usr/bin/chromium` on Linux and Google Chrome at `/Applications/Google Chrome.app/Contents/MacOS/Google Chrome` on macOS. Set `CHROMIUM_PATH` to a different trusted browser executable when needed; no test-source edit is required. Do not run unreviewed PR code or dependency hooks merely because a PR exists.
 
 The checkout must be clean and exactly match the open PR's full head SHA. Forks, other repositories and public copies are rejected. Read the actual PR revision first, then run from the repository root:
 

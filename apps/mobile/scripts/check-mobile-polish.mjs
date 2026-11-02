@@ -10,7 +10,7 @@ await new Promise(r=>server.listen(0,'127.0.0.1',r));const base=`http://127.0.0.
 const title='Improve the entire authentication interface with a deliberately verbose pull request title that must remain accessible while the Inbox card stays compact';
 const glyphs=JSON.parse(await readFile(resolve(root,'../../../node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/glyphmaps/Ionicons.json'),'utf8'));
 let browser;
-try{browser=await chromium.launch({executablePath:'/usr/bin/chromium',args:['--no-sandbox']});for(const width of [360,393,1440]){
+try{browser=await chromium.launch({executablePath:process.env.CHROMIUM_PATH??(process.platform==='darwin'?'/Applications/Google Chrome.app/Contents/MacOS/Google Chrome':'/usr/bin/chromium'),args:['--no-sandbox']});for(const width of [360,393,1440]){
  const context=await browser.newContext({viewport:{width,height:850},serviceWorkers:'block'});await context.addInitScript(()=>{window.SpeechSynthesisUtterance=class{constructor(text){this.text=text;}};Object.defineProperty(window,'speechSynthesis',{value:{getVoices:()=>[{localService:true,name:'Fixture',voiceURI:'fixture',lang:'en-US'}],speak:()=>{},cancel:()=>{},pause:()=>{},resume:()=>{}}});});const page=await context.newPage();page.setDefaultTimeout(20000);const errors=[];page.on('pageerror',e=>errors.push(e.message));let saved=false;
  await context.route('**/*',async route=>{
   const req=route.request(),url=new URL(req.url());if(url.protocol==='data:')return route.continue();if(url.origin!==base)return route.abort();if(!url.pathname.startsWith('/__api/v1'))return route.continue();
