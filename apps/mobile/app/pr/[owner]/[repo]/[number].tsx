@@ -185,7 +185,7 @@ function PrWorkspace({owner,repo,number}:{owner:string;repo:string;number:string
               const verdict = getExecutiveVerdict({
                 risk: detail.risk,
                 files: guardrailFiles,
-                checks: detail.checks,
+                checks: detail.checks, checkCursor,
                 secretWarning: detail.secretWarning,
                 changedFilesCount: detail.changedFilesCount,
               });
@@ -489,7 +489,7 @@ function PrWorkspace({owner,repo,number}:{owner:string;repo:string;number:string
             {showNoteInput && <View onLayout={event=>{noteY.current=event.nativeEvent.layout.y;if(noteFocus>0)scroll.current?.scrollTo({y:Math.max(0,noteY.current-16),animated:true});}}><PrivateNotes focusRequest={noteFocus} onClose={()=>setShowNoteInput(false)} context={{kind:'pr',repo:`${owner}/${repo}`,number:Number(number)}}/></View>}
           </ScrollView>
 
-          <ExecutiveActionBar detail={{...detail,files:guardrailFiles}} onOpenGitHub={openInGitHub} onAddNote={()=>{setShowNoteInput(true);setNoteFocus(n=>n+1);if(showNoteInput)scroll.current?.scrollTo({y:Math.max(0,noteY.current-16),animated:true});}}/>
+          <ExecutiveActionBar detail={{...detail,checkCursor,files:guardrailFiles}} onOpenGitHub={openInGitHub} onAddNote={()=>{setShowNoteInput(true);setNoteFocus(n=>n+1);if(showNoteInput)scroll.current?.scrollTo({y:Math.max(0,noteY.current-16),animated:true});}}/>
         </>
       )}
     </KeyboardAvoidingView>

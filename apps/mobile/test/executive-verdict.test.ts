@@ -29,6 +29,7 @@ describe("getExecutiveVerdict", () => {
       {files:[makeFile('src/app.ts',1)]},
       {files:[makeFile('README.md',5)],changedFilesCount:2},
       {files:[makeFile('README.md',81)]},
+      {files:[makeFile('README.md',5)],changedFilesCount:1,checkCursor:'checks:2'},
       {files:[makeFile('README.md',5)],risk:{...makeRisk('low',['Docs']),coverage:{analyzedFiles:1,skippedFiles:1,truncatedFiles:0}}},
     ])expect(getExecutiveVerdict(params).level).toBe('caution');
   });
