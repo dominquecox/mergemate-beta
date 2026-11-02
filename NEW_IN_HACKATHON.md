@@ -11,6 +11,12 @@ git log origin/development --first-parent --since='2026-10-27T00:00:00-04:00' --
 - Nothing here is invented: if it is not in the log, it is not listed.
 - MergeMate stays read-only by design; none of these changes add a write path to GitHub.
 
+## Execution-backed QA implementation — November 2
+
+PR #204 adds current-head GitHub check-run provenance (provider/timing/source), a QA evidence inspector, and a private operator-run browser QA command. Reports are tied to an actual open private PR/head and include bounded step results and screenshot hashes. Stale/missing execution heads are not counted as current runs. Local reports are user-supplied, kept in screen memory, labeled browser-fixture scope and cannot upgrade the executive verdict or remove security findings. Desktop commands can be copied for the trusted repository.
+
+The operator explicitly invokes the runner in a clean reviewed checkout; it does not execute arbitrary PR code from the API, enable workflows, generate tests autonomously or certify live/native behavior. Source implementation and local verification do not establish deployment. See docs/QA_EVIDENCE.md for exact reproduction and limits.
+
 ## Lane D submission packaging (November 1, 2026)
 
 **Value proposition:** MergeMate is the PR gatekeeper for tech leads shipping with AI agents. Where GitHub Mobile provides mobile GitHub access and Copilot helps explain code, this demo centers the decision a lead needs before opening a laptop: “Can I safely ship this right now?” A verdict directs attention; it never approves, merges, or certifies a change as safe.

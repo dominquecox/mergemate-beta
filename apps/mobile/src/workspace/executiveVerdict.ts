@@ -17,6 +17,7 @@ export interface ExecutiveVerdict {
 const SENSITIVE_PATHS = /(auth|login|session|password|payment|billing|stripe|migrat)/i;
 
 export function getExecutiveVerdict(params: {
+  headSha?: string;
   risk?: PrRisk;
   files?: readonly PrFile[];
   checks?: readonly PrCheck[];
@@ -105,7 +106,7 @@ export function getExecutiveVerdict(params: {
     return {level:'safe',headline:'SAFE TO SHIP · LOW RISK',summary:'Small documentation-only change. No CI required for this review signal.',reasons:['No sensitive or executable files in the complete file list','No CI checks reported; verify repository rules in GitHub'],tone:'green',iconName:'checkmark-circle'};
   }
 
-  if(params.checkCursor || !risk || !checks.length || risk.coverage.skippedFiles>0 || risk.coverage.truncatedFiles>0 || checks.some(c=>c.status!=="completed"||!["success","neutral","skipped"].includes(c.conclusion))){
+  if((params.headSha && checks.some(c=>c.source==="check_run"&&c.headSha!==params.headSha)) || params.checkCursor || !risk || !checks.length || risk.coverage.skippedFiles>0 || risk.coverage.truncatedFiles>0 || checks.some(c=>c.status!=="completed"||!["success","neutral","skipped"].includes(c.conclusion))){
     return {level:"caution",headline:"REVIEW ON DESKTOP · EVIDENCE INCOMPLETE",summary:"Risk assessment or required check results are incomplete.",reasons:["Verify the latest revision and checks before deciding"],tone:"yellow",iconName:"warning"};
   }
 

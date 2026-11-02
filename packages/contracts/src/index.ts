@@ -17,3 +17,5 @@ export * from "./visual";
 export * from './guardrails';
 
 export * from './model-telemetry';
+
+export * from "./qa-evidence";

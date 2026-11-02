@@ -4,13 +4,13 @@ import {createServer} from 'node:http';
 import {readFile,mkdir} from 'node:fs/promises';
 import {resolve,dirname,extname,sep} from 'node:path';
 import {fileURLToPath} from 'node:url';
-const root=resolve(dirname(fileURLToPath(import.meta.url)),'../dist'),proof='/tmp/mergemate-mobile-polish';await mkdir(proof,{recursive:true});
+const root=resolve(dirname(fileURLToPath(import.meta.url)),'../dist'),proof=process.env.MM_POLISH_PROOF_DIR??'/tmp/mergemate-mobile-polish';await mkdir(proof,{recursive:true});
 const server=createServer(async(req,res)=>{try{let path=resolve(root,'.'+decodeURIComponent(new URL(req.url,'http://localhost').pathname));if(!path.startsWith(root+sep)){res.writeHead(404).end();return;}let body;try{body=await readFile(path);}catch{path=resolve(root,'index.html');body=await readFile(path);}res.writeHead(200,{'content-type':{'.js':'application/javascript','.css':'text/css','.ttf':'font/ttf','.png':'image/png'}[extname(path)]??'text/html'}).end(body);}catch{res.writeHead(500).end();}});
 await new Promise(r=>server.listen(0,'127.0.0.1',r));const base=`http://127.0.0.1:${server.address().port}`,date='2026-11-02T12:00:00Z',sha='a'.repeat(40);
 const title='Improve the entire authentication interface with a deliberately verbose pull request title that must remain accessible while the Inbox card stays compact';
 const glyphs=JSON.parse(await readFile(resolve(root,'../../../node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/glyphmaps/Ionicons.json'),'utf8'));
 let browser;
-try{browser=await chromium.launch({executablePath:'/usr/bin/chromium',args:['--no-sandbox']});for(const width of [360,393,1440]){
+try{browser=await chromium.launch({executablePath:process.env.CHROMIUM_PATH??(process.platform==='darwin'?'/Applications/Google Chrome.app/Contents/MacOS/Google Chrome':'/usr/bin/chromium'),args:['--no-sandbox']});for(const width of [360,393,1440]){
  const context=await browser.newContext({viewport:{width,height:850},serviceWorkers:'block'});await context.addInitScript(()=>{window.SpeechSynthesisUtterance=class{constructor(text){this.text=text;}};Object.defineProperty(window,'speechSynthesis',{value:{getVoices:()=>[{localService:true,name:'Fixture',voiceURI:'fixture',lang:'en-US'}],speak:()=>{},cancel:()=>{},pause:()=>{},resume:()=>{}}});});const page=await context.newPage();page.setDefaultTimeout(20000);const errors=[];page.on('pageerror',e=>errors.push(e.message));let saved=false;
  await context.route('**/*',async route=>{
   const req=route.request(),url=new URL(req.url());if(url.protocol==='data:')return route.continue();if(url.origin!==base)return route.abort();if(!url.pathname.startsWith('/__api/v1'))return route.continue();
