@@ -18,10 +18,10 @@ test('restores all real migrations offline and rejects missing schema or malicio
  }finally{db.close();rmSync(dir,{recursive:true,force:true});}
 });
 test('preflight fails closed on stale, wrong-account, missing-migration and missing-secret evidence without leaking values',()=>{
- const env={APP_ENV:'development',WEB_ORIGIN:'https://dev.mergemate.dev',SITE_ORIGIN:'https://dev.mergemate.dev',MODEL_BASE_URL:'https://api.meta.ai/v1'};
+ const env={CLOUDFLARE_ACCOUNT_ID:'a'.repeat(32),APP_ENV:'development',WEB_ORIGIN:'https://dev.mergemate.dev',SITE_ORIGIN:'https://dev.mergemate.dev',MODEL_BASE_URL:'https://api.meta.ai/v1'};
  const secrets=['GITHUB_APP_CLIENT_SECRET','GITHUB_WEBHOOK_SECRET','TOKEN_ENCRYPTION_KEY','TURNSTILE_SECRET_KEY','MODEL_API_KEY'];for(const name of secrets)env[name]='fixture-sensitive-value';
  for(const task of ['SUMMARY','RISK','TRIAGE','HIGHLIGHT'])env[`MODEL_ROUTE_${task}`]='meta:muse-spark-1.2';
- const now=Date.now(),snapshot={version:1,observedAt:new Date(now).toISOString(),environment:'development',worker:'mergemate-api-dev',bindings:['DB','AI','IMAGES','TOKEN_REFRESHER','RATE_ADMISSION','GITHUB_EVENTS','POSTS'],secrets,appliedMigrations:migrationFiles(),backup:{restored:true,sourceCompared:true,integrity:'ok',foreignKeys:'ok',schema:'ok'}};
+ const now=Date.now(),snapshot={version:1,accountId:'a'.repeat(32),observedAt:new Date(now).toISOString(),environment:'development',worker:'mergemate-api-dev',bindings:['DB','AI','IMAGES','TOKEN_REFRESHER','RATE_ADMISSION','GITHUB_EVENTS','POSTS'],secrets,appliedMigrations:migrationFiles(),backup:{restored:true,sourceCompared:true,integrity:'ok',foreignKeys:'ok',schema:'ok'}};
  assert.equal(preflight(snapshot,env,now).ok,true);
  for(const patch of [{observedAt:'2000-01-01'}, {worker:'elsewhere'}, {appliedMigrations:[]}, {secrets:[]}])assert.equal(preflight({...snapshot,...patch},env,now).ok,false);
  assert.equal(JSON.stringify(preflight(snapshot,env,now)).includes('fixture-sensitive-value'),false);

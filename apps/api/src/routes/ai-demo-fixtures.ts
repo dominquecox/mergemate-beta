@@ -5,7 +5,7 @@ import type { PrRefParts } from "./ai-engine-pr-data";
 const cov = (analyzedFiles: number) => ({ analyzedFiles, skippedFiles: 0, truncatedFiles: 0 });
 
 export interface DemoAi {
-  summary: typeof FIXTURE_SUMMARY;
+  summary: typeof FIXTURE_SUMMARY & {model?:string};
   risk: typeof FIXTURE_RISK;
   plan: typeof FIXTURE_PLAN;
   answer: typeof FIXTURE_ANSWER;
@@ -105,4 +105,7 @@ const PER_PR: Record<string, DemoAi> = {
   },
 };
 
-export const demoAiFor = (ref: PrRefParts): DemoAi => PER_PR[prRefString(ref)] ?? DEFAULT;
+export const demoAiFor = (ref: PrRefParts): DemoAi => {
+ const sample=PER_PR[prRefString(ref)]??DEFAULT;
+ return {...sample,summary:{...sample.summary,model:'sample:demo'}};
+};

@@ -10,6 +10,7 @@ export function preflight(snapshot,env=process.env,now=Date.now()){
  check('snapshot-version',snapshot?.version===1);
  check('snapshot-current',Number.isFinite(Date.parse(snapshot?.observedAt))&&now-Date.parse(snapshot.observedAt)>=0&&now-Date.parse(snapshot.observedAt)<=15*60000);
  check('environment-matches',snapshot?.environment===env.APP_ENV&&['development','production'].includes(env.APP_ENV));
+ check('account-matches',/^[a-f0-9]{32}$/.test(env.CLOUDFLARE_ACCOUNT_ID??'')&&snapshot?.accountId===env.CLOUDFLARE_ACCOUNT_ID);
  check('worker-identity',typeof snapshot?.worker==='string'&&snapshot.worker===(env.APP_ENV==='production'?'mergemate-api':'mergemate-api-dev'));
  for(const name of REQUIRED_BINDINGS)check(`binding:${name}`,snapshot?.bindings?.includes(name));
  for(const name of REQUIRED_SECRETS)check(`secret:${name}`,typeof env[name]==='string'&&env[name].trim().length>0&&snapshot?.secrets?.includes(name));

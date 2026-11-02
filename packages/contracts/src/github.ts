@@ -22,7 +22,7 @@ export const Notification = z.object({
   author: z.string(),
   actor: z.string().nullable().optional(),
   event: z.string().optional(),
-  status: PrStatus,
+  status: PrStatus.nullable(),
   risk: RiskLevel.optional(),
   summaryLine: z.string().optional(),
   updatedAt: IsoDateTime,

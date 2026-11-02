@@ -122,7 +122,7 @@ export default function NotificationsScreen() {
                     <Text style={[typography.body,{color:colors.text,marginTop:8}]}><Text style={{fontWeight:"600"}}>{item.event?(item.actor?`@${item.actor}`:"Actor unavailable"):`@${item.author}`}</Text> {item.event?`· ${item.event} event`:activityAction(item.kind)}</Text>
                     <Text style={[typography.headline,{color:colors.text,marginTop:4}]}>{item.title}</Text>
                     {!!item.summaryLine && <Text style={[typography.footnote,{color:colors.textSecondary,marginTop:8}]}>{item.summaryLine}</Text>}
-                    <View style={{flexDirection:"row",gap:8,alignItems:"center",flexWrap:"wrap",marginTop:12}}>{!item.event&&<StatusPill status={item.status}/>}{item.risk && <RiskBadge level={item.risk} compact/>}</View>
+                    <View style={{flexDirection:"row",gap:8,alignItems:"center",flexWrap:"wrap",marginTop:12}}>{item.status&&!item.event&&<StatusPill status={item.status}/>}{item.risk && <RiskBadge level={item.risk} compact/>}</View>
                   </View>
                   <Icon name="chevron-forward" size={16} color={colors.textMuted}/>
                 </View>

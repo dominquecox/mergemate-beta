@@ -34,7 +34,7 @@ export function verifyDump(dumpPath,sourcePath){
    for(const table of schema(expected).filter(r=>r.type==='table'))if(dataSignature(source,table.name)!==dataSignature(restored,table.name))throw new Error('restore-content');
   }
   const now=new Date().toISOString(),old=new Date(Date.now()-7*86400000).toISOString();
-  const stale=restored.prepare("SELECT count(*) AS count FROM sessions WHERE expires_at<=? OR last_seen_at<=?").get(now,new Date(Date.now()-30*86400000).toISOString()).count;
+  const stale=restored.prepare("SELECT count(*) AS count FROM sessions WHERE expires_at<=? OR last_seen_at<=?").get(now,new Date(Date.now()-7*86400000).toISOString()).count;
   const tombstones=restored.prepare("SELECT count(*) AS count FROM account_deletions WHERE state='completed' AND completed_at<=?").get(old).count;
   return {...result,restored:true,sourceCompared:!!sourcePath,retention:{expiredSessions:Number(stale),expiredDeletionReceipts:Number(tombstones),reviewRequired:Number(stale)+Number(tombstones)>0}};
  }finally{source?.close();restored.close();expected.close();}

@@ -24,7 +24,9 @@ const revokeCount=(ctx:TestContext)=>ctx.net.calls.filter(c=>c.method==='DELETE'
 async function seedOwned(ctx:TestContext,userId:string){
  const stamp=ctx.time.now().toISOString();const session=ctx.db.rows<{token_hash:string}>('SELECT token_hash FROM sessions WHERE user_id=?',userId)[0]?.token_hash;
  if(typeof session!=='string')throw new Error('Session fixture missing');
+ ctx.db.sqlite.prepare('INSERT INTO activity_audit VALUES(?,?,?,?,?,?)').run(userId+':event','fixture/repo',1,'review','reviewer',stamp);
  const statements:[string,unknown[]][]=[
+  ['INSERT INTO activity_read VALUES(?,?)',[userId,userId+':event']],
   ['INSERT INTO billing_accounts(user_id,updated_at)VALUES(?,?)',[userId,stamp]],
   ['INSERT INTO repo_watch VALUES(?,?,?,?,?)',[userId,'repo','fixture/repo',1,stamp]],
   ['INSERT INTO notification_state VALUES(?,?,?,?,?,?)',[userId,'item',null,null,stamp,'operation']],

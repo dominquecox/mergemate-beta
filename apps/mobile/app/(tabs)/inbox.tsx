@@ -313,7 +313,7 @@ function InboxWorkspace({initialFilter}:{initialFilter:NotificationFilter}) {
                       </Text>
                     </View>
                     <View style={styles.badgeGroup}>
-                      <StatusPill status={item.status} />
+                      {item.status&&<StatusPill status={item.status} />}
                       {item.risk && <RiskBadge level={item.risk} compact />}
                     </View>
                   </View>

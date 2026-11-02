@@ -11,7 +11,7 @@ import {githubGet} from '../lib/github';
 export const activityHistory=new Hono<AppEnv>().get('/activity/history',async c=>{
  const session=c.get('session');if(session.demo)return c.json({items:[],nextCursor:null});
  const uid=session.userId;if(!uid)throw new ApiError('unauthorized','Sign in.');
- const filter=c.req.query('filter')??'all';if(!['all','review','mentions','mine'].includes(filter))throw new ApiError('validation_failed','Invalid filter.');
+ const filter=c.req.query('filter')??'all';if(!['all','review'].includes(filter))throw new ApiError('validation_failed','Invalid filter.');
  const scope=await sha256Hex(JSON.stringify([uid,filter]));let until=c.get('deps').now().toISOString(),at:string|null=null,id='';
  const raw=c.req.query('cursor');if(raw){try{if(raw.length>512)throw new Error();const v=JSON.parse(atob(raw.replace(/-/g,'+').replace(/_/g,'/'))) as {scope:string;until:string;at:string;id:string};if(v.scope!==scope||!Number.isFinite(Date.parse(v.until))||!Number.isFinite(Date.parse(v.at))||typeof v.id!=='string'||v.id.length>100||Date.parse(v.until)>Date.parse(until))throw new Error();until=v.until;at=v.at;id=v.id;}catch{throw new ApiError('validation_failed','Invalid history cursor.');}}
  await refreshRepoAccess(c,uid);
@@ -24,7 +24,7 @@ export const activityHistory=new Hono<AppEnv>().get('/activity/history',async c=
  AND NOT EXISTS(SELECT 1 FROM repo_watch w WHERE w.user_id=?1 AND w.full_name=a.repo_full_name COLLATE NOCASE AND w.watching=0)
  ORDER BY a.received_at DESC,a.id ASC LIMIT 51`).bind(uid,until,new Date(Date.parse(until)-7*86400000).toISOString(),at,id,filter).all<{id:string;repo_full_name:string;number:number;event:string;actor:string|null;received_at:string;is_read:number}>();
  const page=rows.results.slice(0,50),last=page.at(-1);
- return c.json({items:page.map(row=>({id:row.id,repo:row.repo_full_name,number:row.number,title:`Pull request #${row.number}`,author:'unknown',actor:row.actor,event:row.event,kind:row.event==='review'?'review' as const:'mine' as const,status:'open' as const,updatedAt:row.received_at,read:!!row.is_read})),nextCursor:rows.results.length>50&&last?base64url(new TextEncoder().encode(JSON.stringify({scope,until,at:last.received_at,id:last.id}))):null});
+ return c.json({items:page.map(row=>({id:row.id,repo:row.repo_full_name,number:row.number,title:`Pull request #${row.number}`,author:'unknown',actor:row.actor,event:row.event,kind:row.event==='review'?'review' as const:'mine' as const,status:null,updatedAt:row.received_at,read:!!row.is_read})),nextCursor:rows.results.length>50&&last?base64url(new TextEncoder().encode(JSON.stringify({scope,until,at:last.received_at,id:last.id}))):null});
 }).post('/activity/history/:id/read',async c=>{
  const uid=c.get('session').userId;if(!uid||c.get('session').demo)throw new ApiError('forbidden','Sign in.');
  const id=c.req.param('id');if(id.length>100)throw new ApiError('validation_failed','Invalid event.');
