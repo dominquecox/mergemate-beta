@@ -1,6 +1,6 @@
 import {api} from "../api";
 import React,{useEffect,useState} from 'react';
-import {Modal,Share,View} from 'react-native';
+import {Modal,Share,View,TouchableOpacity} from 'react-native';
 import * as Clipboard from 'expo-clipboard';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import type {PrDetail} from '../types';
@@ -10,6 +10,7 @@ import {detectBlastRadius} from '../workspace/blastRadius';
 import {triggerAndroidHaptic} from '../platform/android';
 import {Button} from './Button';
 import {Text} from './Text';
+import {Icon} from './Icon';
 
 export function verdictMessage(detail:PrDetail){
  const verdict=getExecutiveVerdict(detail);
@@ -27,11 +28,9 @@ export function ExecutiveActionBar({detail,onOpenGitHub,onAddNote}:{detail:PrDet
  const share=async()=>{try{await Share.share({message:verdictMessage(detail)});}catch{await copy();}};
  return <View testID="executive-action-bar" style={{backgroundColor:colors.surface,borderTopWidth:1,borderTopColor:colors.border,padding:12,paddingBottom:12+insets.bottom,gap:8}}>
   {!!notice&&<Text accessibilityLiveRegion="polite" style={{color:colors.textSecondary}}>{notice}</Text>}
-  <View style={{flexDirection:'row',flexWrap:'wrap',gap:8}}>
-   <Button title={low?'Approve & Ship':blocked?'Request Senior Review':'Queue for Desktop'} onPress={primary} style={{flexGrow:1,minWidth:160,backgroundColor:tone}} textStyle={{color:colors.background}}/>
-   <Button title="Share Verdict" onPress={share} variant="secondary"/>
-   <Button title="Add Note" onPress={onAddNote} variant="ghost"/>
-   {!low&&<Button title="Open in GitHub" onPress={onOpenGitHub} variant="ghost"/>}
+  <View style={{flexDirection:'row',alignItems:'center',gap:8}}>
+   <TouchableOpacity accessibilityRole="button" accessibilityLabel={low?'Approve & Ship':blocked?'Request Senior Review':'Queue for Desktop'} onPress={()=>void primary()} style={{flex:1,minWidth:44,minHeight:44,borderRadius:24,backgroundColor:tone,paddingHorizontal:12,paddingVertical:10,alignItems:'center',justifyContent:'center'}}><Text numberOfLines={2} style={{fontWeight:'700',fontSize:14,lineHeight:18,color:colors.background,textAlign:'center'}}>{low?'Approve & Ship':blocked?'Senior Review':'Queue for Desktop'}</Text></TouchableOpacity>
+   {([{name:'share-outline',label:'Share Verdict',action:share},{name:'create-outline',label:'Add Note',action:onAddNote},{name:'logo-github',label:'Open in GitHub',action:onOpenGitHub}] as const).map(item=><TouchableOpacity key={item.name} accessibilityRole="button" accessibilityLabel={item.label} onPress={()=>void item.action()} style={{width:44,height:44,borderRadius:22,alignItems:'center',justifyContent:'center',backgroundColor:colors.surfaceElevated}}><Icon name={item.name} size={20} color={colors.textSecondary}/></TouchableOpacity>)}
   </View>
   <Modal visible={confirm} transparent animationType="slide" onRequestClose={()=>setConfirm(false)}>
    <View style={{flex:1,justifyContent:'flex-end',backgroundColor:'rgba(0,0,0,0.6)'}}>

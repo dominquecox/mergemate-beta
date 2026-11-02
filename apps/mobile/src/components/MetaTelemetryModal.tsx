@@ -1,5 +1,5 @@
 import React,{useEffect,useState} from 'react';
-import {Modal,ScrollView,View} from 'react-native';
+import {Modal,ScrollView,View,TouchableOpacity} from 'react-native';
 import type {ModelTelemetry} from '@mergemate/contracts';
 import {useTheme} from '../context/ThemeContext';
 import {telemetryLabel,telemetryResponse} from '../workspace/metaTelemetry';
@@ -7,10 +7,12 @@ import {Button} from './Button';
 import {Icon} from './Icon';
 import {Text} from './Text';
 /** Correlated, server-observed execution evidence. Samples and unknown precision are never presented as live proof. */
-export function MetaTelemetryModal({telemetry,sample=false}:{telemetry?:ModelTelemetry;sample?:boolean}){
+export function MetaTelemetryModal({telemetry,sample=false,compact=false}:{telemetry?:ModelTelemetry;sample?:boolean;compact?:boolean}){
  const {colors}=useTheme(),[open,setOpen]=useState(false),available=!!telemetry&&!sample;
  useEffect(()=>{setOpen(false);},[telemetry?.requestId,sample]);
- return <View style={{marginVertical:8}}><Button title={telemetryLabel(telemetry,sample)} icon={<Icon name="pulse-outline" color={colors.brandLight}/>} onPress={()=>setOpen(true)} variant="secondary" textStyle={{flexShrink:1}}/>
+ if(!available)return null;
+ const model=telemetry.modelId.includes('llama-3.2')?'Meta Llama 3.2 Vision':telemetry.modelId.includes('llama-3.3')?'Meta Llama 3.3':telemetry.modelId.split('/').at(-1)??'Meta model';
+ return <View style={{marginTop:compact?8:0,alignSelf:'flex-start',maxWidth:'100%'}}><TouchableOpacity accessibilityRole="button" accessibilityLabel={telemetryLabel(telemetry,sample)} onPress={()=>setOpen(true)} style={{minHeight:44,minWidth:44,maxWidth:'100%',flexDirection:'row',alignItems:'center',gap:6,paddingHorizontal:10,borderRadius:22,backgroundColor:colors.surfaceElevated}}><Icon name="flash-outline" size={14} color={colors.brandLight}/><Text numberOfLines={1} style={{color:colors.textSecondary,flexShrink:1,fontSize:12}}>{model} ({telemetry.latencyMs}ms)</Text></TouchableOpacity>
   <Modal visible={open} transparent animationType="fade" onRequestClose={()=>setOpen(false)}>
    <View style={{flex:1,justifyContent:'center',padding:20,backgroundColor:'rgba(0,0,0,0.65)'}}>
     <View accessibilityViewIsModal style={{maxHeight:'90%',padding:20,borderRadius:20,backgroundColor:colors.surface,gap:12}}>

@@ -24,14 +24,12 @@ export function PrivacyStrip({ onOpenSettings }: { onOpenSettings: () => void })
           paddingHorizontal: 10,
           paddingVertical: 6,
           borderRadius: radius.full,
-          backgroundColor: colors.surfaceElevated,
-          borderWidth: 1,
-          borderColor: colors.border,
+
           alignSelf: "flex-start",
         }}
       >
         <Icon name="lock-closed" size={12} color={colors.riskLow} />
-        <Text style={[typography.caption, { color: colors.textSecondary }]}>Read-only: MergeMate cannot merge, approve or comment</Text>
+        <Text style={[typography.caption, { color: colors.textSecondary }]}>Read-only · You stay in control</Text>
         <Icon name={open ? "chevron-up" : "chevron-down"} size={13} color={colors.textSecondary} />
       </TouchableOpacity>
       {open && (
