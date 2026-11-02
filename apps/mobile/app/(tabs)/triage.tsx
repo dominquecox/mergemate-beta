@@ -1,3 +1,7 @@
+import {AudioCommuteBar} from '../../src/components/AudioCommuteBar';
+import {ExecutiveBriefExport} from '../../src/components/ExecutiveBriefExport';
+import {triageExecutiveNarration} from '../../src/readout/narration';
+import type {ExecutiveBriefEntry} from '../../src/workspace/executiveExport';
 import {SwipeTriageCard} from "../../src/components/SwipeTriageCard";
 import { useRouter } from "expo-router";
 import React, { useState, useEffect, useCallback, useRef } from "react";
@@ -28,6 +32,7 @@ export default function TriageScreen() {
   const [saving,setSaving]=useState(false);
   const { colors, typography, spacing, radius } = useTheme();
 
+  const [reviewed,setReviewed]=useState<ExecutiveBriefEntry[]>([]),[completedAt,setCompletedAt]=useState<number|null>(null),startedAt=useRef(Date.now());
   const [inbox,setInbox]=useState<Notification[]>([]);
   const [metadata,setMetadata]=useState<{ref:string;detail?:PrDetail;failed?:boolean}|null>(null);
   const [queue, setQueue] = useState<TriageItem[]>([]);
@@ -42,7 +47,7 @@ export default function TriageScreen() {
       const [items,notifications] = await Promise.all([api.getTriageQueue(),api.getNotifications("all").catch(()=>[])]);
       setInbox(notifications);
       setQueue(items);
-      setUndoStack([]);
+      setUndoStack([]);setReviewed([]);setCompletedAt(null);startedAt.current=Date.now();
     } catch (e) {
       setError(toUserMessage(e, "We couldn't load your triage deck right now. Please try again."));
     } finally {
@@ -55,12 +60,15 @@ export default function TriageScreen() {
   }, [loadQueue]);
 
   const handleDecision = async (lane: TriageLane) => {
-    if (queue.length === 0 || lock.current) return false;
+    if (isLoading || queue.length === 0 || lock.current) return false;
     triggerAndroidHaptic();
     lock.current=true;setSaving(true);
     const current = queue[0];
     try {
       await api.setTriageChoice(current.prRef, lane);
+      setError(null);
+      setReviewed(prev=>[...prev,{prRef:current.prRef,title:current.title??detail?.title??notification?.title??'Title unavailable',agent:provenance.agentName??author??'Author unavailable',level:verdict.level,reason:verdict.summary,lane}]);
+      if(queue.length===1)setCompletedAt(Date.now());
       setUndoStack((prev) => [current, ...prev]);
       setQueue((prev) => prev.slice(1));
       return true;
@@ -72,10 +80,10 @@ export default function TriageScreen() {
   };
 
   const handleUndo = async () => {
-    if(!undoStack.length || lock.current)return;
+    if(isLoading || !undoStack.length || lock.current)return;
     lock.current=true;setSaving(true);
     const [last,...rest]=undoStack;
-    try { await api.undoTriageChoice(last.prRef); setQueue(prev=>[last,...prev]);setUndoStack(rest); }
+    try { await api.undoTriageChoice(last.prRef);setError(null); setQueue(prev=>[last,...prev]);setUndoStack(rest);setReviewed(old=>old.filter(entry=>entry.prRef!==last.prRef));setCompletedAt(null); }
     catch(e){setError(toUserMessage(e,"Couldn't undo that choice."));}
     finally{lock.current=false;setSaving(false);}
   };
@@ -153,9 +161,10 @@ export default function TriageScreen() {
         footer={<View style={{paddingHorizontal:16,paddingBottom:8}}><View style={[styles.progressTrack,{backgroundColor:colors.surfaceElevated}]} accessibilityRole="progressbar" accessibilityLabel="Triage progress" accessibilityValue={{min:0,max:total||1,now:processedCount}}><View style={[styles.progressBar,{backgroundColor:colors.brand,width:`${progressPercent}%`}]}/></View></View>}
       />
 
+      <AudioCommuteBar sentences={triageExecutiveNarration(queue.map(item=>{const note=inbox.find(n=>`${n.repo}#${n.number}`===item.prRef),agent=detectAgentProvenance({author:note?.author??item.author});return {prRef:item.prRef,title:item.title??note?.title??'Title unavailable',agent:agent.agentName??note?.author??'Author unavailable',level:item.prRef===currentItem?.prRef?verdict.level:note?.risk==='high'?'blocked':note?.risk==='low'?'safe':'caution'};}))}/>
       <ScrollView contentContainerStyle={{padding:16,paddingBottom:32,flexGrow:1}}>
 
-        {isLoading ? <LoadingState title="Loading triage deck..." message="Sorting your pull requests by review priority."/> : error && !currentItem ? <ErrorState title="Could not load triage deck" message={error} onRetry={loadQueue}/> : !currentItem ? (
+        {isLoading ? <LoadingState title="Loading triage deck..." message="Sorting your pull requests by review priority."/> : error && !currentItem && !reviewed.length ? <ErrorState title="Could not load triage deck" message={error} onRetry={loadQueue}/> : !currentItem ? (
           <View style={{alignItems:"center",justifyContent:"center",paddingVertical:48,paddingHorizontal:24}}>
             <View style={{width:64,height:64,borderRadius:32,backgroundColor:colors.riskLowBg,alignItems:"center",justifyContent:"center",marginBottom:16}}>
               <Icon name="checkmark-done" size={32} color={colors.riskLow}/>
@@ -166,6 +175,8 @@ export default function TriageScreen() {
             <Text style={[typography.body,{color:colors.textSecondary,textAlign:"center",marginTop:8,maxWidth:360}]}>
               {total > 0 ? `You've triaged all ${total} pull requests before stepping into the office.` : "No pull requests waiting to be triaged."}
             </Text>
+            {!!error&&<Text accessibilityRole="alert" style={{color:colors.riskHigh}}>{error}</Text>}
+            <ExecutiveBriefExport entries={reviewed} elapsed={Math.max(0,((completedAt??startedAt.current)-startedAt.current)/1000)}/>
             <View style={{flexDirection:"row",gap:12,marginTop:24}}>
               <TouchableOpacity onPress={()=>router.push("/(tabs)/inbox")} style={[styles.completionBtn,{backgroundColor:colors.brand,borderRadius:radius.md}]} accessibilityRole="button" accessibilityLabel="Open Inbox">
                 <Text style={[typography.subhead,{color:"#FFFFFF",fontWeight:"600"}]}>View Inbox</Text>
