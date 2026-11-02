@@ -1,3 +1,4 @@
+import {ModelTelemetry} from './model-telemetry';
 import { z } from "zod";
 import { IsoDateTime, PrRef, RiskLevel } from "./common";
 
@@ -14,6 +15,7 @@ export const AiModelLabel = z.string().min(1).max(120);
 export type AiModelLabel = z.infer<typeof AiModelLabel>;
 
 export const PrSummary = z.object({
+  telemetry:ModelTelemetry.optional(),
   whatChanged: z.string(),
   whyItMatters: z.string(),
   suggestedFocus: z.array(z.string()),
@@ -39,6 +41,7 @@ export const QualityCheck = z.object({
 export type QualityCheck = z.infer<typeof QualityCheck>;
 
 export const PrRisk = z.object({
+  telemetry:ModelTelemetry.optional(),
   level: RiskLevel,
   reasons: z.array(z.string()).min(1),
   coverage: AnalysisCoverage,
@@ -120,6 +123,7 @@ export type UiSegment=z.infer<typeof UiSegment>;
 
 /** Highlight result. The request id matches the `x-request-id` response header. */
 export const HighlightResult = z.object({
+  telemetry:ModelTelemetry.optional(),
   insight: z.string().trim().min(1).max(8000),
   segments:z.array(UiSegment).max(20).optional(),
   regions: z.array(HighlightRegion).max(20).default([]),

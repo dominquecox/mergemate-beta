@@ -13,3 +13,7 @@ export * from "./notes";
 export * from "./search";
 
 export * from "./visual";
+
+export * from './guardrails';
+
+export * from './model-telemetry';

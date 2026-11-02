@@ -1,3 +1,4 @@
+import {MetaTelemetryModal} from '../src/components/MetaTelemetryModal';
 import {PrAssetInspection} from "../src/components/PrAssetInspection";
 import {useLocalSearchParams} from "expo-router";
 import { DemoHighlightGallery } from "../src/components/DemoHighlightGallery";
@@ -191,6 +192,7 @@ export default function HighlightScreen() {
                   AI Visual Insight
                 </Text>
               </View>
+              <MetaTelemetryModal telemetry={result.telemetry} sample={isDemo}/>
               <Text style={[typography.body, { color: colors.text, marginTop: 6, lineHeight: 22 }]}>
                 {result.insight}
               </Text>

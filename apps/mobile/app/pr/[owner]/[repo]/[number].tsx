@@ -1,3 +1,5 @@
+import {MetaTelemetryModal} from '../../../../src/components/MetaTelemetryModal';
+import {useAgentGuardrails} from '../../../../src/hooks/useAgentGuardrails';
 import {PrRiskPanel} from "../../../../src/components/PrRiskPanel";
 import {PrSecretBanner} from "../../../../src/components/PrSecretBanner";
 import {ExecutiveActionBar} from "../../../../src/components/ExecutiveActionBar";
@@ -7,8 +9,8 @@ import {useAuth} from '../../../../src/context/AuthContext';
 import {usePrWorkspace} from '../../../../src/hooks/usePrWorkspace';
 import {discussionGroups} from '../../../../src/workspace/state';
 import {githubUrl} from '../../../../src/api/urls';
-import {ReadoutControls} from "../../../../src/components/ReadoutControls";
-import {narrationSentences} from "../../../../src/readout/text";
+import {AudioCommuteBar} from "../../../../src/components/AudioCommuteBar";
+import {prExecutiveNarration} from "../../../../src/readout/narration";
 import { Avatar } from "../../../../src/components/Avatar";
 import { relativeTime } from "../../../../src/format/activity";
 import { AskPrCard, ReviewPlanCard } from "../../../../src/components/ReviewCopilot";
@@ -58,6 +60,7 @@ function PrWorkspace({owner,repo,number}:{owner:string;repo:string;number:string
   const [assessmentOpen,setAssessmentOpen]=useState(false);
   const [expandedFiles,setExpandedFiles]=useState<string[]>([]);
   const {detail,isLoading,isRefreshing,error,loadPr,loadPage,pageBusy,pageError,capped,fileCursor,commentCursor,checkCursor,retryAi,aiRetrying}=usePrWorkspace(owner,repo,Number(number),aiConsentGranted&&aiSummaries);
+  const guardrailFiles=useAgentGuardrails(detail);
   const [fileWrap,setFileWrap]=useState<Record<string,boolean>>({}),[collapsedThreads,setCollapsedThreads]=useState<string[]>([]),[linkError,setLinkError]=useState<string|null>(null);
   const scroll=useRef<React.ComponentRef<typeof ScrollView>>(null),scrollOffset=useRef(0),fileRows=useRef<Record<string,React.ComponentRef<typeof View>|null>>({});
   const jumpToFile=(name:string)=>{setExpandedFiles(prev=>prev.includes(name)?prev:[...prev,name]);const row=fileRows.current[name],host=scroll.current as unknown as {getInnerViewNode?:()=>unknown}|null;if(!row||!host)return;requestAnimationFrame(()=>{try{row.measureLayout((host.getInnerViewNode?.()??scroll.current) as never,(_x:number,y:number)=>scroll.current?.scrollTo({y:Math.max(0,y-16),animated:true}),()=>{});}catch{/* no measurement support: the file stays expanded in place */}});};
@@ -130,7 +133,8 @@ function PrWorkspace({owner,repo,number}:{owner:string;repo:string;number:string
       ) : (
         <>
           <ScrollView testID="pr-workspace-scroll" ref={scroll} onScroll={event=>{scrollOffset.current=event.nativeEvent.contentOffset.y;}} scrollEventThrottle={16} contentContainerStyle={{ padding:isDesktop?24:spacing.base, paddingBottom:24 }}>
-            <ReadoutControls label="Pull request summary" sentences={narrationSentences([...(detail.summary?[detail.summary.whatChanged,detail.summary.whyItMatters,...detail.summary.suggestedFocus]:[]),...(detail.risk?[`Risk level: ${detail.risk.level}.`,...detail.risk.reasons]:[])])}/>
+            <MetaTelemetryModal telemetry={detail.risk?.telemetry??detail.summary?.telemetry} sample={isDemo}/>
+            <AudioCommuteBar sentences={prExecutiveNarration({...detail,files:guardrailFiles})}/>
 
             <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
               <PrivacyStrip onOpenSettings={()=>router.push("/(tabs)/settings")}/>
@@ -184,7 +188,7 @@ function PrWorkspace({owner,repo,number}:{owner:string;repo:string;number:string
               });
               const verdict = getExecutiveVerdict({
                 risk: detail.risk,
-                files: detail.files,
+                files: guardrailFiles,
                 checks: detail.checks,
                 secretWarning: detail.secretWarning,
                 changedFilesCount: detail.changedFilesCount,
@@ -197,6 +201,7 @@ function PrWorkspace({owner,repo,number}:{owner:string;repo:string;number:string
               return (
                 <ExecutiveVerdictCard
                   verdict={verdict}
+                  files={guardrailFiles} totalFiles={detail.changedFilesCount}
                   provenance={provenance}
                   hasVisualAssets={hasVisualAssets}
                   onOpenVisualAudit={() => router.push("/highlight")}
@@ -488,7 +493,7 @@ function PrWorkspace({owner,repo,number}:{owner:string;repo:string;number:string
             {showNoteInput && <View onLayout={event=>{noteY.current=event.nativeEvent.layout.y;if(noteFocus>0)scroll.current?.scrollTo({y:Math.max(0,noteY.current-16),animated:true});}}><PrivateNotes focusRequest={noteFocus} onClose={()=>setShowNoteInput(false)} context={{kind:'pr',repo:`${owner}/${repo}`,number:Number(number)}}/></View>}
           </ScrollView>
 
-          <ExecutiveActionBar detail={detail} onOpenGitHub={openInGitHub} onAddNote={()=>{setShowNoteInput(true);setNoteFocus(n=>n+1);if(showNoteInput)scroll.current?.scrollTo({y:Math.max(0,noteY.current-16),animated:true});}}/>
+          <ExecutiveActionBar detail={{...detail,files:guardrailFiles}} onOpenGitHub={openInGitHub} onAddNote={()=>{setShowNoteInput(true);setNoteFocus(n=>n+1);if(showNoteInput)scroll.current?.scrollTo({y:Math.max(0,noteY.current-16),animated:true});}}/>
         </>
       )}
     </KeyboardAvoidingView>

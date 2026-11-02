@@ -160,6 +160,7 @@ export function mapPostSummary(post: PostSummary | Post): PublicPost {
 export function mapHighlight(result: ContractHighlightResult): HighlightResult {
   return {
     insight: result.insight,
+    ...(result.telemetry?{telemetry:result.telemetry}:{}),
     ...(result.segments?{segments:result.segments}:{}),
     requestId: result.requestId,
     regions: result.regions.map((box, index) => ({

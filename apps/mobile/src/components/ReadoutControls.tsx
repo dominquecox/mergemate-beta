@@ -17,7 +17,7 @@ export function ReadoutControls({sentences,label}:{sentences:string[];label:stri
   const playing=state==='playing',paused=state==='paused';
   const toggleLabel=`${playing?'Pause':paused?'Resume':'Play'} ${label}`;
   const hint=state==='unavailable'?'No installed local voice is available. Install a device voice, then try Play again.':state==='error'?'Readout stopped. Try Play again.':sentences.length===0?'No safe plain text is available to read.':paused?'Paused. On devices without pause support, Resume repeats the current sentence.':playing?'Reading with a local device voice.':'';
-  const chip={minHeight:32,minWidth:32,paddingHorizontal:8,alignItems:'center' as const,justifyContent:'center' as const,borderRadius:16,flexDirection:'row' as const,gap:4};
+  const chip={minHeight:44,minWidth:44,paddingHorizontal:8,alignItems:'center' as const,justifyContent:'center' as const,borderRadius:16,flexDirection:'row' as const,gap:4};
   return <View style={{marginHorizontal:16,marginVertical:8,paddingVertical:6,paddingLeft:12,paddingRight:8,borderColor:colors.border,borderWidth:1,borderRadius:12,gap:4}} accessibilityLabel={label}>
     <View style={{flexDirection:'row',alignItems:'center',gap:8}}>
       <Pressable accessibilityRole="button" accessibilityLabel={toggleLabel} disabled={!playing&&sentences.length===0} onPress={()=>playing?controller.pause():controller.play(sentences)} hitSlop={6} style={({pressed})=>[chip,{backgroundColor:colors.brandSubtle,opacity:(!playing&&sentences.length===0)?0.5:pressed?0.8:1}]}>

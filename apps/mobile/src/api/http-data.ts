@@ -1,3 +1,4 @@
+import {DependencyContext} from '@mergemate/contracts';
 import {PrVisualAsset} from "@mergemate/contracts";
 import { PrSearchFilters, PrSearchPage } from '@mergemate/contracts';
 import type { WorkspaceRead } from './client';
@@ -13,6 +14,7 @@ import { AI_TIMEOUT_MS, enc, prPath } from "./http-types";
 import { HttpSession } from "./http-session";
 
 export abstract class HttpData extends HttpSession {
+  getPrDependencies(owner:string,repo:string,number:number,headSha?:string,signal?:AbortSignal){return this.request({path:prPath(owner,repo,number)+"/dependencies"+(headSha?"?headSha="+enc(headSha):""),schema:DependencyContext,signal});}
   getPrVisualAsset(owner:string,repo:string,number:number,path:string,side:"before"|"after",headSha?:string,signal?:AbortSignal){const q=new URLSearchParams({path,side,...(headSha?{headSha}:{})});return this.request({path:prPath(owner,repo,number)+"/visual?"+q.toString(),schema:PrVisualAsset,signal});}
 
   // ---------------------------------------------------------------------------------------------

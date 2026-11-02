@@ -49,6 +49,7 @@ export const createAiRouter = (deps: AiRouterDeps = {}) => {
   const aiDeps = (c: Context<AppEnv>): AiDeps => {
     const requestDeps = c.get("deps");
     return {
+      requestId:c.get("requestId"),
       db: requireBinding(c.env, "DB"),
       transport: deps.transport ?? createFetchTransport(requestDeps.fetch),
       ai: deps.ai ?? c.env.AI,

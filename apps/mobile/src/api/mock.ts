@@ -40,6 +40,7 @@ import {
 } from "../types";
 
 export class MockApiClient implements ApiClient {
+  async getPrDependencies(){return {headSha:'a'.repeat(40),manifests:[{directory:'',names:['react','react-native','expo','hono','zod','@mergemate/contracts']}],unavailable:[]};}
   async getPrVisualAsset(_owner:string,_repo:string,_number:number,path:string,side:"before"|"after"){return demoVisualAsset(path,side);}
 
   /** Sample-data search: the same filters as the API, applied to the sample pull requests. */

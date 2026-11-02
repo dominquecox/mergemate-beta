@@ -1,3 +1,6 @@
+import {executionTelemetry} from '../ai/execution-telemetry';
+import {redactSecrets} from './ai-engine-scan';
+import type {CompletionResult} from '../ai/provider';
 import { normalizeHighlight } from "../images/normalize";
 import { HighlightResult, ModelHighlight } from "@mergemate/contracts";
 import { createModelProvider } from "../ai/provider";
@@ -80,22 +83,24 @@ export const analyzeHighlight = async (args: {
       // Step 1: SAM boxes the regions. null (SAM failed) drops back to the single Muse call; [] (nothing found) is reported honestly.
       const boxes = segmentEnv ? await segmentScreenshot({ env: segmentEnv, transport, dataUrl, ...(args.signal ? { signal: args.signal } : {}) }) : null;
       // Step 2: Muse explains the image with the boxes attached.
+      let execution:{reply:CompletionResult;latency:number}|undefined;
       const answer = await runModelTask(
         env,
         provider,
         "highlight",
         {
           system: boxes === null ? HIGHLIGHT_SYSTEM : boxes.length > 0 ? HIGHLIGHT_SYSTEM_WITH_BOXES : HIGHLIGHT_SYSTEM_NO_BOXES,
-          prompt: buildHighlightPrompt(note, boxes ?? undefined),
+          prompt: buildHighlightPrompt(redactSecrets(note).text, boxes ?? undefined),
           maxOutputTokens: HIGHLIGHT_MAX_TOKENS,
           image: { dataUrl },
           ...(args.signal?{signal:args.signal}:{}),
         },
-        ModelHighlight,stores.policy,
+        ModelHighlight,stores.policy,(reply,latency)=>{execution={reply,latency};},
       );
       // Measured boxes replace Muse's estimates whenever SAM ran; Muse-only keeps its own approximate regions.
       const segments=normalizeUiSegments(answer.segments);
-      const result: HighlightResult = { ...(segments.length?{segments}:{}), insight: answer.explanation, regions: boxes === null ? answer.regions : boxes, requestId };
+      const telemetry=execution?executionTelemetry(execution.reply,execution.latency,requestId,{regions:answer.regions,segments}):undefined;
+      const result: HighlightResult = { ...(telemetry?{telemetry}:{}), ...(segments.length?{segments}:{}), insight: answer.explanation, regions: boxes === null ? answer.regions : boxes, requestId };
       return result;
     });
     return { body, limit, remaining: left };
