@@ -1,3 +1,4 @@
+import {activityDay} from "../../src/format/activityDays";
 import { Avatar } from "../../src/components/Avatar";
 import { relativeTime, activityAction } from "../../src/format/activity";
 import React, { useState } from "react";
@@ -110,7 +111,7 @@ export default function NotificationsScreen() {
           contentContainerStyle={{padding:isDesktop?24:16,paddingBottom:48}}
           onEndReached={()=>{if(!error)void more();}} onEndReachedThreshold={0.4}
           ListFooterComponent={hasMore?<TouchableOpacity disabled={busy} onPress={()=>void more()} style={{minHeight:44,padding:16}} accessibilityRole="button"><Text style={{color:colors.brandLight}}>{busy?'Loading…':'Load more activity'}</Text></TouchableOpacity>:undefined}
-          renderItem={({item,index})=>{const day=new Date(item.updatedAt).toLocaleDateString();const previous=items[index-1];const showDay=!previous || new Date(previous.updatedAt).toLocaleDateString()!==day;return <View>{showDay && <Text accessibilityRole="header" style={[typography.subhead,{color:colors.text,marginTop:20,marginBottom:12}]}>{day===new Date().toLocaleDateString()?'Today':day}</Text>}<Pressable key={item.id} accessibilityRole="button" accessibilityLabel={`Review ${item.title}`} onPress={()=>{const [owner="owner",repo="repo"]=item.repo.split("/");router.push(`/pr/${owner}/${repo}/${item.number}`);}} android_ripple={androidRipple()} style={({pressed})=>[{backgroundColor:item.read?colors.surface:colors.surfaceElevated,padding:16,borderTopWidth:1,borderTopColor:colors.border},pressed && {opacity:0.88}]}>
+          renderItem={({item,index})=>{const day=activityDay(item.updatedAt);const previous=items[index-1];const showDay=!previous || activityDay(previous.updatedAt)!==day;return <View>{showDay && <Text accessibilityRole="header" style={[typography.subhead,{color:colors.text,marginTop:20,marginBottom:12}]}>{day}</Text>}<Pressable key={item.id} accessibilityRole="button" accessibilityLabel={`Review ${item.title}`} onPress={()=>{setItems(rows=>rows.map(row=>row.id===item.id?{...row,read:true}:row));const [owner="owner",repo="repo"]=item.repo.split("/");router.push(`/pr/${owner}/${repo}/${item.number}`);}} android_ripple={androidRipple()} style={({pressed})=>[{backgroundColor:item.read?colors.surface:colors.surfaceElevated,padding:16,borderTopWidth:1,borderTopColor:colors.border},pressed && {opacity:0.88}]}>
                 <View style={{flexDirection:"row",gap:12,alignItems:"flex-start"}}>
                   <Avatar login={item.author} size={32}/>
                   <View style={{flex:1,minWidth:0}}>
@@ -140,6 +141,7 @@ const styles = StyleSheet.create({
   },
   markReadBtn: {
     minHeight: 44,
+    minWidth: 44,
     paddingHorizontal: 8,
     alignItems: "flex-end",
     justifyContent: "center",
