@@ -173,6 +173,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const signInWithGithub = async (_platform: "ios" | "android" | "web"): Promise<SignInResult> => {
+    cancelPushRegistration();
     const version=++authVersion.current;let redirected=false;
     setIsLoading(true);
     setError(null);
@@ -202,6 +203,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const completeGithubSignIn = async (code: string, state: string): Promise<boolean> => {
+    cancelPushRegistration();
     const version=++authVersion.current;
     setIsLoading(true);
     setError(null);
@@ -223,6 +225,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const startDemo = async (): Promise<boolean> => {
+    cancelPushRegistration();
     const version=++authVersion.current;
     setIsLoading(true);
     setError(null);

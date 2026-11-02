@@ -1,3 +1,4 @@
+import {api} from '../api';
 import {watchConnectivity} from '../platform/connectivity';
 import {AppState} from 'react-native';
 import {useCallback,useEffect,useRef,useState} from 'react';
@@ -34,7 +35,7 @@ export function usePagedList<T extends {id:string}>(key:string,load:(cursor?:str
  },[]);
  useEffect(()=>{generation.current++;pending.current=false;cursor.current=null;pages.current=0;setItems([]);setLoading(true);setHasMore(false);void fetchPage(true);return()=>{generation.current++;};},[key,fetchPage]);
  useEffect(()=>{
-  const reconnect=()=>{if(!pending.current)void fetchPage(true,true);};
+  const reconnect=()=>{api.invalidateCache();if(!pending.current)void fetchPage(true,true);};
   let previous:boolean|null=null;
   const unwatch=watchConnectivity(state=>{if(previous===false&&state.online===true)reconnect();previous=state.online;});
   const subscription=AppState.addEventListener('change',state=>{if(state==='active')reconnect();});

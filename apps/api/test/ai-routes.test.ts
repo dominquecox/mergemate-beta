@@ -126,7 +126,7 @@ describe("AI summary and risk routes", () => {
   });
 
   it("keeps demo fixtures shape-valid", () => {
-    expect(PrSummary.parse(FIXTURE_SUMMARY)).toEqual({...FIXTURE_SUMMARY,model:'sample:demo'});
+    expect(PrSummary.parse(FIXTURE_SUMMARY)).toEqual(FIXTURE_SUMMARY);
     expect(PrRisk.parse(FIXTURE_RISK)).toEqual(FIXTURE_RISK);
   });
 });

@@ -1,3 +1,5 @@
+import {api} from '../api';
+import {refreshPushRegistration} from './registration';
 import { useEffect } from 'react';
 import { Platform } from 'react-native';
 import { useRouter } from 'expo-router';
@@ -21,7 +23,8 @@ export function usePushLinks(identity: string | undefined) {
       if (path) router.push(path);
     };
     const subscription = notifications.addNotificationResponseReceivedListener(open);
+    const tokens=notifications.addPushTokenListener(()=>{if(active)void refreshPushRegistration(api).catch(()=>undefined);});
     void notifications.getLastNotificationResponseAsync().then(open).catch(() => undefined);
-    return () => { active = false; subscription.remove(); };
+    return () => { active = false; subscription.remove(); tokens.remove(); };
   }, [identity, router]);
 }
