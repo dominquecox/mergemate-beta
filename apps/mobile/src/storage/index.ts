@@ -196,6 +196,17 @@ export const StorageService = {
     });
   },
 
+  /** A callback without parameters may restore a verified session only when no new intent is pending. */
+  async hasPendingSignIn(now=Date.now()):Promise<boolean>{
+    return pendingOperation(async()=>{
+      const storage=Platform.OS==='web'?getSessionOnlyStorage():null;
+      let raw:string|null;
+      if(Platform.OS==='web')raw=storage?storage.getItem(PENDING_SIGN_IN_KEY):memoryStorage.get(PENDING_SIGN_IN_KEY)??null;
+      else{try{raw=await SecureStore.getItemAsync(PENDING_SIGN_IN_KEY);}catch{throw storageUnavailable();}}
+      try{const value:unknown=raw?JSON.parse(raw):null;return isPendingSignIn(value)&&value.createdAt<=now&&now-value.createdAt<=PENDING_SIGN_IN_TTL_MS;}catch{return false;}
+    });
+  },
+
   /** Reads and deletes the pending sign-in so a callback can be used once. Null when missing or too old. */
   async takePendingSignIn(now=Date.now(),expectedState?:string):Promise<PendingSignIn|null>{
     return pendingOperation(async()=>{

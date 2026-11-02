@@ -1,6 +1,6 @@
 # Authentication lifecycle (J-003)
 
-Web uses a Secure, HttpOnly, SameSite=Lax __Host cookie and matching CSRF for writes. iOS and Android use bearer credentials held only in native SecureStore. Android is explicit in the API platform contract; both native platforms keep the fixed HTTPS callback allowlist. No custom-scheme fallback or GitHub permission expansion is added.
+Web uses a Secure, HttpOnly, SameSite=Lax __Host cookie and matching CSRF for writes. iOS and Android use bearer credentials held only in native SecureStore. Android is explicit in the API platform contract; both native platforms keep the fixed HTTPS callback allowlist. MM-086 adds a PKCE-protected browser-session return fallback described below; GitHub permissions are unchanged.
 
 ## Session rotation and revocation
 
@@ -56,3 +56,17 @@ the owner merged production VAPID PR124 (9efb08b) and readout PR120 (34912e7). T
 Combined source checks:511 API,286 mobile,23 web and22 contracts (842 total), typecheck/lint; session and readout browser suites; web/iOS/Android JS exports; dev API deployment dry run; changed-commit redacted secret scan0. Browser speech/GitHub/API transports are mocked. The Android native module is unchanged from the module/AAR and full arm64 debug APK compilation verified for merged PR120; no repeat native compilation is claimed here. Device audio remains a release gate.
 
 Migration0012 is still unapplied remotely. the owner's final merge and the existing dev API/web release runner apply pending dev migrations before API deployment and then ship the web app; independent exact-head review precedes merge. Do not deploy this source before0012 is applied. Production release is a separate gate.
+
+## MM-086 native browser return and web callback recovery
+
+New installed clients request `nativeBrowser: true` when starting OAuth. GitHub still returns to the environment's fixed HTTPS callback, with `?native=1`. Older clients omit the capability and retain their existing callback. Web cannot request the native capability. Server-side pending state determines cookie versus bearer transport; the marker never selects session transport.
+
+Native opens GitHub with expo-web-browser's authentication session (ASWebAuthenticationSession on iOS, browser auth tab on Android). If the HTTPS association opens the app, the verified callback completes and closes any leftover browser. Otherwise the web callback relays only code/state (or denial/state) to the registered `mergemate://auth/callback` route. An Open MergeMate button supports a browser that requires a user gesture. The relay does not exchange a code or set a session. The PKCE verifier stays in native SecureStore, and the resulting bearer credential is written through the existing secure token store. The exact scheme/host/path and approved HTTPS hosts are validated; arbitrary return URLs, duplicate query keys and mismatched states are rejected.
+
+The native route and browser result can deliver the same callback. One provider-scoped completion promise handles both. Logout, a new login/demo intent, account deletion and session invalidation clear the completion. Generation fences still reject a stale result after a newer intent. Browser dismissal follows successful authenticated completion; cancellation is not reported as a successful login.
+
+Web callback parameters are scrubbed from history. A callback remount with no parameters waits for session restoration and can continue using a verified existing cookie when no newer login is pending. It does not turn a failed PKCE exchange into a success or silently reuse an older account while another login intent is pending.
+
+Validation uses unit/API transports and the real exported SPA at393/1440, including delayed /me, no-parameter callback restoration without another refresh, replay/denial, newer pending state preservation, account switching, two-tab logout/rotation and offline logout recovery. Browser fixtures cannot launch an installed mobile app. Managed desktop Chromium blocks custom-protocol navigation; actual ASWebAuthenticationSession/custom-tab/HTTPS-association delivery and SecureStore on the founder's devices remain owner acceptance.
+
+Release API and web together through the canonical dev API/web release line, then rebuild/install both native clients to include SDK-pinned expo-web-browser58.0.6. Existing expo/expo-modules-core alignment is retained. There is no new migration, GitHub scope, store upload, CI activation or production release. Verify the existing GitHub callback registration accepts the same HTTPS path with the native query marker during the dev device smoke test.

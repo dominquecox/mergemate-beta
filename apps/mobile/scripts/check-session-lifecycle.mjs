@@ -6,7 +6,7 @@ import { readFile, mkdir } from 'node:fs/promises';
 import { dirname, extname, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 const root=resolve(dirname(fileURLToPath(import.meta.url)),'../dist');
-const proof=process.env.MM_SESSION_PROOF_DIR ?? '/private/tmp/mergemate-session-lifecycle';
+const proof=process.env.MM_SESSION_PROOF_DIR ?? '/tmp/mergemate-session-lifecycle';
 await mkdir(proof,{recursive:true});
 const server=createServer(async(req,res)=>{
   try {
@@ -22,7 +22,7 @@ await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
 const port=server.address().port;
 let browser;
 try{
- browser=await chromium.launch({headless:true,channel:'chrome'});const base=`http://127.0.0.1:${port}`;
+ browser=await chromium.launch({headless:true,executablePath:'/usr/bin/chromium',args:['--no-sandbox']});const base=`http://127.0.0.1:${port}`;
  for(const width of [393,1440]){
   let signedIn=false,current='one',nextAccount='one',stateCount=0,callbackCount=0,activeRefresh=0,maxRefresh=0,refreshDelay=40,offlineLogout=false;const states=new Map();const errors=[];
   const context=await browser.newContext({viewport:{width,height:1000},serviceWorkers:'block'});
@@ -33,12 +33,12 @@ try{
    window.SpeechSynthesisUtterance=class{constructor(text){this.text=text;}};
   });
   await context.route('**/*',async route=>{
-   const request=route.request(),url=new URL(request.url());if(url.origin===base||url.protocol==='data:')return route.continue();
+   const request=route.request(),url=new URL(request.url());if((url.origin===base&&!url.pathname.startsWith('/__api/v1'))||url.protocol==='data:')return route.continue();
    if(url.origin==='https://github.com'&&url.pathname==='/login/oauth/authorize')return route.fulfill({status:200,contentType:'text/html',body:'<!doctype html><title>Mock GitHub</title><p>Fixture authorization transport only.</p>'});
-   if(url.origin!=='https://api-dev.mergemate.dev')return route.abort();
+   if(url.origin!=='https://api-dev.mergemate.dev'&&!(url.origin===base&&url.pathname.startsWith('/__api/v1')))return route.abort();
    const headers={'content-type':'application/json','access-control-allow-origin':base,'access-control-allow-credentials':'true','access-control-allow-headers':'content-type,x-csrf-token','access-control-allow-methods':'GET,POST,PUT,DELETE,OPTIONS'};
    const reply=(status,body)=>route.fulfill({status,headers,body:status===204?'':JSON.stringify(body)});const fail=(status,code)=>reply(status,{error:{code,message:'Fixture failure.',requestId:'fixture'}});
-   if(request.method()==='OPTIONS')return reply(204,null);const path=url.pathname.replace('/v1','');
+   if(request.method()==='OPTIONS')return reply(204,null);const path=url.pathname.replace(/^\/(__api\/)?v1/,'');
    const user=()=>({id:`fixture-${current}`,login:`fixture-${current}`,name:`Fixture ${current}`,avatarUrl:base+'/favicon.ico',demo:false});
    if(path==='/auth/github/start'){const body=request.postDataJSON();assert.equal(body.platform,'web');const state=`fixture-state-${++stateCount}`;states.set(state,body.codeChallenge);return reply(200,{state,authorizeUrl:`https://github.com/login/oauth/authorize?state=${state}&code_challenge=${body.codeChallenge}&code_challenge_method=S256`});}
    if(path==='/auth/github/callback'){callbackCount++;const body=request.postDataJSON(),challenge=states.get(body.state);states.delete(body.state);if(!challenge||createHash('sha256').update(body.codeVerifier).digest('base64url')!==challenge)return fail(403,'forbidden');signedIn=true;current=nextAccount;return reply(200,{session:{expiresAt:'2099-01-01T00:00:00.000Z',csrfToken:'fixture-csrf'},user:user()});}
@@ -47,7 +47,7 @@ try{
    if(!signedIn)return fail(401,'unauthorized');
    if(path==='/inbox/preference')return reply(200,{filter:'all'});
    if(path==='/inbox/undo')return reply(200,null);
-   if(path==='/me')return reply(200,user());
+   if(path==='/me'){const observed=user();await new Promise(resolve=>setTimeout(resolve,150));return reply(200,observed);}
    if(path==='/auth/csrf')return reply(200,{csrfToken:'fixture-csrf'});
    if(path==='/auth/refresh'){activeRefresh++;maxRefresh=Math.max(maxRefresh,activeRefresh);await new Promise(resolve=>setTimeout(resolve,refreshDelay));activeRefresh--;return reply(200,{session:{expiresAt:'2099-01-01T00:00:00.000Z',csrfToken:'fixture-csrf'}});}
    if(path==='/me/installations')return reply(200,{items:[{id:'fixture-install',account:'fixture',accountType:'User',status:'active',manageUrl:'https://github.com/settings/installations/1'}],installUrl:'https://github.com/apps/fixture/installations/new'});
@@ -62,6 +62,7 @@ try{
   async function finish(page,state){await page.goto(`${base}/auth/callback?code=fixture-code&state=${state}`);await page.waitForURL('**/inbox');await page.getByText(`Private review for ${current}`,{exact:true}).waitFor();}
   await page.goto(base+'/inbox');await page.waitForURL('**/sign-in');assert.equal(await page.getByText('Private review for one',{exact:true}).count(),0);
   const first=await start(page);await finish(page,first);assert.equal(await page.getByRole('button',{name:'Exit demo mode',exact:true}).count(),0);assert.equal(await page.evaluate(()=>localStorage.getItem('mergemate_demo_session')),'false');
+  await page.goto(base+'/auth/callback');await page.waitForURL('**/inbox');await page.getByText(`Private review for ${current}`,{exact:true}).waitFor();assert.equal(await page.getByText('Could not finish sign-in',{exact:true}).count(),0);
   assert(!(await page.url()).includes('code='));assert.equal(await page.evaluate(()=>sessionStorage.getItem('mergemate_pending_sign_in')),null);await page.screenshot({path:`${proof}/signed-in-${width}.png`,fullPage:true});
   await page.goto(`${base}/auth/callback?code=fixture-code&state=${first}`);await page.waitForURL('**/sign-in');assert.equal(callbackCount,1);
   const denied=await start(page);await page.goto(`${base}/auth/callback?error=access_denied&state=${denied}&error_description=Fixture-denial`);await page.waitForURL('**/sign-in');assert.equal(await page.evaluate(()=>sessionStorage.getItem('mergemate_pending_sign_in')),null);assert.equal(callbackCount,1);
@@ -69,7 +70,7 @@ try{
   const other=await context.newPage();other.setDefaultTimeout(15000);other.on('pageerror',error=>errors.push(error.message));await page.waitForTimeout(200);maxRefresh=0;refreshDelay=120;
   await Promise.all([page.goto(base+'/inbox'),other.goto(base+'/inbox')]);await Promise.all([page.getByText('Private review for one',{exact:true}).waitFor(),other.getByText('Private review for one',{exact:true}).waitFor()]);await page.waitForTimeout(300);assert.equal(maxRefresh,1);
   await other.getByRole('button',{name:'Play Inbox overview',exact:true}).click();await other.getByText('Reading with a local device voice.',{exact:true}).waitFor();const beforeSwitch=await other.evaluate(()=>window.__speech.cancelled);
-  nextAccount='two';const switched=await start(page);await page.goto(`${base}/auth/callback?code=fixture-code&state=${first}`);await page.waitForURL('**/sign-in');assert.equal(await page.evaluate(()=>JSON.parse(sessionStorage.getItem('mergemate_pending_sign_in')).state),switched);await finish(page,switched);await other.getByText('Private review for two',{exact:true}).waitFor();assert.equal(await other.getByText('Private review for one',{exact:true}).count(),0);assert((await other.evaluate(()=>window.__speech.cancelled))>beforeSwitch);
+  nextAccount='two';const switched=await start(page);await page.goto(base+'/auth/callback');await page.waitForURL('**/sign-in');assert.equal(await page.evaluate(()=>JSON.parse(sessionStorage.getItem('mergemate_pending_sign_in')).state),switched);await page.goto(`${base}/auth/callback?code=fixture-code&state=${first}`);await page.waitForURL('**/sign-in');assert.equal(await page.evaluate(()=>JSON.parse(sessionStorage.getItem('mergemate_pending_sign_in')).state),switched);await finish(page,switched);await other.getByText('Private review for two',{exact:true}).waitFor();assert.equal(await other.getByText('Private review for one',{exact:true}).count(),0);assert((await other.evaluate(()=>window.__speech.cancelled))>beforeSwitch);
   await other.getByRole('button',{name:'Play Inbox overview',exact:true}).click();await other.getByText('Reading with a local device voice.',{exact:true}).waitFor();const beforeLogout=await other.evaluate(()=>window.__speech.cancelled);
   await page.goto(base+'/settings');await page.getByRole('button',{name:'Sign Out',exact:true}).click();await page.waitForURL('**/sign-in');await other.waitForURL('**/sign-in');assert((await other.evaluate(()=>window.__speech.cancelled))>beforeLogout);assert.equal(await other.getByText('Private review for two',{exact:true}).count(),0);await page.goBack();await page.waitForTimeout(200);await page.waitForURL('**/sign-in');await page.getByRole('button',{name:'Continue with GitHub',exact:true}).waitFor();assert.equal(await page.getByText('Private review for two',{exact:true}).count(),0);
   nextAccount='one';const again=await start(page);await finish(page,again);offlineLogout=true;await page.goto(base+'/settings');await page.getByRole('button',{name:'Sign Out',exact:true}).click();await page.waitForURL('**/sign-in');assert.equal(await page.evaluate(()=>localStorage.getItem('mergemate_logout_pending')),'1');await page.reload();await page.getByRole('button',{name:'Finish signing out',exact:true}).waitFor();assert.equal(await page.getByText('Private review for one',{exact:true}).count(),0);assert(signedIn,'fixture keeps server cookie alive to test blocked restoration');

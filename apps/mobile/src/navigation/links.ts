@@ -5,14 +5,16 @@ export function validOAuthParams(params: {code?: unknown; state?: unknown; error
   return value(params.code) && value(params.state);
 }
 
-/** Only HTTPS on approved hosts may deliver authorization codes to native. */
+/** HTTPS associations and the exact registered browser-session return route. PKCE still authorizes exchange. */
 export function isVerifiedCallbackUrl(raw: string): boolean {
   if(raw.length>4096)return false;
   try {
     const url = new URL(raw);
-    if (!origins.has(url.origin) || url.username || url.password || url.hash || url.pathname !== "/auth/callback") return false;
+    const registeredScheme=url.protocol==='mergemate:' && url.hostname==='auth' && !url.port && url.pathname==='/callback';
+    if ((!registeredScheme && (!origins.has(url.origin) || url.pathname!=="/auth/callback")) || url.username || url.password || url.hash) return false;
+    if(url.searchParams.has('native') && url.searchParams.get('native')!=='1')return false;
     const keys = [...url.searchParams.keys()];
-    const allowed=url.searchParams.has("error")?["error","state","error_description","error_uri"]:["code","state"];
+    const allowed=url.searchParams.has("error")?["error","state","error_description","error_uri","native"]:["code","state","native"];
     if (keys.some(key => !allowed.includes(key)) || keys.length !== new Set(keys).size) return false;
     return validOAuthParams(Object.fromEntries(url.searchParams));
   } catch { return false; }
@@ -23,8 +25,8 @@ export function nativeLinkPath(raw: string): string {
   if(raw.length>4096)return "/(auth)/sign-in";
   try {
     const url = new URL(raw);
+    if (isVerifiedCallbackUrl(raw)) return "/auth/callback" + url.search;
     if (!origins.has(url.origin) || url.username || url.password || url.hash) return "/(auth)/sign-in";
-    if (isVerifiedCallbackUrl(raw)) return url.pathname + url.search;
     if (url.search || url.pathname.includes("%")) return "/(auth)/sign-in";
     if (/^\/pr\/[A-Za-z0-9][A-Za-z0-9-]{0,38}\/[A-Za-z0-9_][A-Za-z0-9_.-]{0,99}\/[1-9][0-9]{0,9}$/.test(url.pathname)) return url.pathname;
     if (["/", "/inbox", "/notifications", "/triage", "/settings"].includes(url.pathname)) return url.pathname;

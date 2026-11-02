@@ -72,7 +72,7 @@ export const auth = new Hono<AppEnv>()
     const body = await parseBody(c, AuthStartRequest);
     const db = requireBinding(c.env, "DB");
     const now = c.get("deps").now();
-    const redirectUri = callbackUrl(c.env, body.platform);
+    const redirectUri = callbackUrl(c.env, body.platform, body.nativeBrowser===true);
     const clientId = requireVar(c.env, "GITHUB_APP_CLIENT_ID");
     const state = randomToken();
 

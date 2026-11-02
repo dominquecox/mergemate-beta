@@ -23,7 +23,7 @@ describe("POST /v1/auth/github/start", () => {
     expect(rows).toEqual([{ expires_at: "2026-10-27T12:10:00.000Z" }]);
   });
 
-  it("uses the https universal link for iOS, never a custom scheme", async () => {
+  it("uses the HTTPS native relay for iOS while keeping GitHub on its registered host", async () => {
     const ctx = testContext();
     const res = await appFor(ctx)("/v1/auth/github/start", post({ codeChallenge: verifierPair().challenge, platform: "ios" }));
     const url = new URL(((await res.json()) as { authorizeUrl: string }).authorizeUrl);
@@ -309,4 +309,23 @@ describe("CORS", () => {
     expect(res.status).toBe(204);
     expect(res.headers.get("access-control-allow-headers")).toContain("x-csrf-token");
   });
+});
+
+// The installed app opts in; older binaries retain their existing HTTPS callback.
+describe('MM086 native browser relay',()=>{
+ it.each(['ios','android'] as const)('returns %s over HTTPS relay and exchanges only for a native bearer session',async platform=>{
+  const ctx=testContext(),pair=verifierPair(),call=appFor(ctx);
+  const start=await call('/v1/auth/github/start',post({platform,codeChallenge:pair.challenge,nativeBrowser:true}));
+  const body=await start.json() as {authorizeUrl:string;state:string};
+  expect(new URL(body.authorizeUrl).searchParams.get('redirect_uri')).toBe('https://dev.mergemate.dev/auth/callback?native=1');
+  ctx.net.on('POST','https://github.com/login/oauth/access_token',tokenResponse()).on('GET','https://api.github.com/user',ghUser);
+  const returned=await call('/v1/auth/github/callback',post({code:'test-code',state:body.state,codeVerifier:pair.verifier}));
+  expect(returned.status).toBe(200);expect(returned.headers.get('set-cookie')).toBeNull();
+  const result=await returned.json() as {session:{token?:string;csrfToken?:string}};
+  expect(result.session.token).toBeTruthy();expect(result.session.csrfToken).toBeUndefined();
+  expect(ctx.net.calls.find(c=>c.url==='https://github.com/login/oauth/access_token')?.body).toContain('auth/callback?native=1');
+ });
+ it('rejects native relay selection for web transport',async()=>{
+  const ctx=testContext();expect((await appFor(ctx)('/v1/auth/github/start',post({platform:'web',codeChallenge:verifierPair().challenge,nativeBrowser:true}))).status).toBe(422);
+ });
 });

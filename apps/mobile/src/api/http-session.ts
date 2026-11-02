@@ -40,7 +40,7 @@ export abstract class HttpSession extends HttpTransport {
       method: "POST",
       path: "/auth/github/start",
       auth: false,
-      body: { codeChallenge, platform },
+      body: { codeChallenge, platform, ...(platform!=="web"?{nativeBrowser:true}:{}) },
       schema: AuthStartResponse,
     });
     // Only ever send the person to GitHub's own authorize page.

@@ -42,7 +42,7 @@ describe("CORS origins per environment", () => {
 });
 
 describe("sign-in callbacks per environment", () => {
-  it("production web and iOS both use the app origin callback", async () => {
+  it("production web and native use the app origin with native relay scoping", async () => {
     const ctx = prod();
     expect(callbackUrl(ctx.env, "web")).toBe(`${APP}/auth/callback`);
     expect(callbackUrl(ctx.env, "ios")).toBe(`${APP}/auth/callback`);

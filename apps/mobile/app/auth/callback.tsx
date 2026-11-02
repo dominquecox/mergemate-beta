@@ -1,3 +1,5 @@
+import {NativeAuthRelay} from "../../src/components/NativeAuthRelay";
+import {nativeAuthReturn} from "../../src/auth/github-return";
 import {StorageService} from "../../src/storage";
 import React, { useEffect, useRef, useState } from "react";
 import { View, StyleSheet, Platform } from "react-native";
@@ -12,21 +14,25 @@ import { validOAuthParams } from "../../src/navigation/links";
 
 /**
  * GitHub sends the person back here with `code` and `state` (or `error` if they said no).
- * Web lands on /auth/callback in the same tab; iOS arrives through the https universal link;
- * Android arrives only through the verified HTTPS App Link.
+ * Web exchanges in its initiating tab. Native uses a browser-session scheme return
+ * or a verified HTTPS App Link; the browser relay never exchanges the native code.
  * The code is posted once with the stored PKCE verifier, then this route is replaced.
  */
 export default function AuthCallbackScreen() {
   const router = useRouter();
   const { colors } = useTheme();
-  const { completeGithubSignIn, setError } = useAuth();
-  const params = useLocalSearchParams<{ code?: string | string[]; state?: string | string[]; error?: string | string[] }>();
+  const { completeGithubSignIn, setError, session, isLoading } = useAuth();
+  const params = useLocalSearchParams<{ code?: string | string[]; state?: string | string[]; error?: string | string[]; native?:string|string[] }>();
   const started = useRef(false);
+  const relay=useRef<string|null>(null);
+  if(Platform.OS==='web'&&params.native==='1'&&!relay.current)relay.current=nativeAuthReturn(params);
   const [localError, setLocalError] = useState<string | null>(null);
   const [missingParams, setMissingParams] = useState(false);
 
   useEffect(() => {
     if (started.current) return;
+    // A remount after URL scrubbing must let the active session settle first.
+    if(!params.code&&!params.error&&!relay.current&&isLoading)return;
     started.current = true;
 
     const code = typeof params.code === "string" ? params.code : undefined;
@@ -36,6 +42,9 @@ export default function AuthCallbackScreen() {
     if(Platform.OS==="web" && typeof window!=="undefined")window.history.replaceState(window.history.state,"",window.location.pathname);
 
     const run = async () => {
+      if(relay.current)return;
+      if(!code&&!state&&!errorParam&&session&&!(await StorageService.hasPendingSignIn().catch(()=>true))){router.replace('/(tabs)/inbox');return;}
+
       if (errorParam) {
         if(state)await StorageService.takePendingSignIn(Date.now(),state).catch(()=>null);
         setError("Sign-in was cancelled.");
@@ -64,12 +73,12 @@ export default function AuthCallbackScreen() {
         router.replace("/(tabs)/inbox");
       }
     };
-    run();
-  }, [params.code, params.state, params.error, completeGithubSignIn, setError, router]);
+    void run();
+  }, [params.code, params.state, params.error, completeGithubSignIn, setError, router, isLoading, session, params.native]);
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      {localError ? (
+      {relay.current ? <NativeAuthRelay url={relay.current}/> : localError ? (
         <ErrorState
           title="Could not finish sign-in"
           message={localError}

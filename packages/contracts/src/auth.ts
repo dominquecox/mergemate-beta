@@ -33,7 +33,8 @@ export type Session = z.infer<typeof Session>;
 export const AuthStartRequest = z.object({
   codeChallenge: z.string().regex(/^[A-Za-z0-9_-]{43}$/),
   platform: Platform,
-});
+  nativeBrowser: z.literal(true).optional(),
+}).refine(value=>!value.nativeBrowser||value.platform!=='web','Native browser return is only available to installed apps.');
 export type AuthStartRequest = z.infer<typeof AuthStartRequest>;
 
 export const AuthStartResponse = z.object({

@@ -16,7 +16,7 @@ const SITE_ORIGINS: Record<AppEnvName, readonly string[]> = {
   production: ["https://mergemate.dev"],
 };
 
-// Native apps return through verified HTTPS Universal/App Links, never a custom scheme.
+// GitHub returns over HTTPS. A fixed marker selects browser-to-native PKCE relay when App Links do not open.
 const IOS_CALLBACKS: Record<AppEnvName, string> = {
   development: "https://dev.mergemate.dev/auth/callback",
   production: "https://app.mergemate.dev/auth/callback",
@@ -49,8 +49,8 @@ export const siteOrigin = (env: Env) => {
   return origin;
 };
 
-export const callbackUrl = (env: Env, platform: Platform) =>
-  platform === "web" ? `${webOrigin(env)}/auth/callback` : IOS_CALLBACKS[appEnv(env)];
+export const callbackUrl = (env: Env, platform: Platform, nativeBrowser=false) =>
+  platform === "web" ? `${webOrigin(env)}/auth/callback` : `${IOS_CALLBACKS[appEnv(env)]}${nativeBrowser?"?native=1":""}`;
 
 export const requireVar = (
   env: Env,
