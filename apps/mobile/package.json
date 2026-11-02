@@ -15,7 +15,6 @@
     "build:ios": "../../scripts/build-and-log.sh ios",
     "build:android": "../../scripts/build-and-log.sh android",
     "android": "expo start --android",
-    "eas-build-post-install": "node scripts/build-receipt.mjs",
     "eas-build-on-success": "node scripts/build-receipt.mjs"
   },
   "dependencies": {

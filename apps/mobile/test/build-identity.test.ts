@@ -28,6 +28,8 @@ describe("installed build identity", () => {
   it("uses remote atomic counters and increments both dev profiles on each invocation", () => {
     const config = JSON.parse(readFileSync(new URL("../eas.json", import.meta.url), "utf8"));
     expect(config.cli.appVersionSource).toBe("remote");
+    const pkg = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8"));
+    expect(pkg.scripts["eas-build-on-success"]).toBe("node scripts/build-receipt.mjs");
     for (const profile of ["ios-dev", "android-dev"]) expect(config.build[profile].autoIncrement).toBe(true);
   });
   it("prints generated native numbers for consecutive allocations, not app.json seeds", () => {

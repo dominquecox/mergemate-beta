@@ -10,7 +10,7 @@ Owner-only prerequisite before the first MM-088 build: inspect the authorized pr
 
 Settings → **About MergeMate** shows `Version`, `Build number`, and the full `Source commit`. Version/build come from `expo-application` reading the installed binary, not app.json, filenames, telemetry run IDs or API state. Commit is embedded in Expo config from `EAS_BUILD_GIT_COMMIT_HASH` (with Git HEAD fallback during config evaluation). A missing value says Unavailable; web says Not a native build. A fresh owner native build is required to add this native dependency/UI; this does not retrofit the installed0559750 binaries or enable OTA updates.
 
-The native wrapper rejects dirty/untracked source and exports full HEAD so the source receipt identifies the actual checkout. EAS post-install and success hooks print `MergeMate native receipt: platform=… version=… build=… commit=…`; build numbers are read from the generated native project after prebuild, not stale local seeds. Receipt extraction fails if the generated identity cannot be determined. Retain the successful receipt plus the EAS artifact path/checksum; a printed pre-build receipt alone is not installation or build-success evidence.
+The native wrapper rejects dirty/untracked source and exports full HEAD so the source receipt identifies the actual checkout. The EAS success hook prints `MergeMate native receipt: platform=… version=… build=… commit=…`; build numbers are read from the generated native project after prebuild, not stale local seeds. Receipt extraction fails if the generated identity cannot be determined. Retain the successful receipt plus the EAS artifact path/checksum; this successful build receipt is not evidence of installation.
 
 `ios-dev` is an internally distributed signed device build (.ipa), not an App Store submission. `android-dev` builds an internal APK. Both target api-dev.mergemate.dev. These builds contain expo-network and expo-clipboard; older native clients cannot validate the new native functionality.
 
@@ -65,3 +65,5 @@ the release script mergemate dev web --dry-run && the release script mergemate d
 ```
 
 Verify dev web health, current deployed SHA, signed-in393px/desktop PR review and an installed PWA after the release. Record actual receipts. This command releases dev web only; it does not migrate databases or release API/site/production. Live Meta inference, physical devices and final hackathon submission remain separate acceptance gates.
+
+Remote version semantics: https://docs.expo.dev/build-reference/app-versions/ . Success-hook semantics: https://docs.expo.dev/build-reference/npm-hooks/ . The receipt runs after successful compilation so it reads the final generated native values, after remote version injection.
