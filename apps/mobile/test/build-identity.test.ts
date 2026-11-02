@@ -2,9 +2,9 @@ import { describe, expect, it, vi } from "vitest";
 import { readFileSync, mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { URL } from "node:url";
 import { buildIdentityRows } from "../src/config/buildIdentity";
 // Native-project parsing is exercised with fixtures, never a native build.
-// @ts-expect-error JavaScript operator hook is tested directly.
 import { nativeBuildNumber, printReceipt } from "../scripts/build-receipt.mjs";
 import { resolveBuildCommit } from "../app.config";
 
@@ -42,7 +42,7 @@ describe("installed build identity", () => {
         writeFileSync(path.join(root, "ios/MergeMate.xcodeproj/project.pbxproj"), `CURRENT_PROJECT_VERSION = ${number};`);
         for (const platform of ["ios", "android"]) {
           expect(nativeBuildNumber(root, platform)).toBe(String(number));
-          printReceipt(root, platform, { EAS_BUILD_GIT_COMMIT_HASH: commit });
+          printReceipt(root, platform, { ...process.env, EAS_BUILD_GIT_COMMIT_HASH: commit });
           expect(log).toHaveBeenLastCalledWith(`MergeMate native receipt: platform=${platform} version=0.2.0 build=${number} commit=${commit}`);
         }
       }
