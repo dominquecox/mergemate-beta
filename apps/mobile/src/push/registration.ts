@@ -2,6 +2,10 @@ import { createDeviceId } from "../auth/pkce";
 import type { ApiClient } from "../api/client";
 import { StorageService } from "../storage";
 
+let registrationGeneration = 0;
+/** Fence asynchronous permission/token completions before changing identities. */
+export function cancelPushRegistration(): void { registrationGeneration++; }
+
 export type PushResult = "registered" | "denied" | "unavailable";
 
 /** Android 8+ notification channel required before Android 13+ POST_NOTIFICATIONS prompt (specs/ANDROID.md). */
@@ -74,6 +78,7 @@ export async function registerPush(
   options: { prompt: boolean },
   device: PushDevice = expoPushDevice(),
 ): Promise<PushResult> {
+  const generation = registrationGeneration;
   if (!device.isNative || !device.projectId) return "unavailable";
   await device.ensureNotificationChannel?.();
   let permission = await device.getPermission();
@@ -81,13 +86,17 @@ export async function registerPush(
   if (permission !== "granted") return "denied";
 
   const token = await device.getExpoPushToken(device.projectId);
-  await api.registerPushToken(await ensureDeviceId(device), token);
+  const deviceId = await ensureDeviceId(device);
+  if (generation !== registrationGeneration) return "unavailable";
+  await api.registerPushToken(deviceId, token);
+  if (generation !== registrationGeneration) return "unavailable";
   await StorageService.setPushEnabled(true);
   return "registered";
 }
 
 /** Removes this device's registration. The server also drops it on logout and account deletion. */
 export async function unregisterPush(api: ApiClient): Promise<void> {
+  cancelPushRegistration();
   const deviceId = await StorageService.getDeviceId();
   await StorageService.setPushEnabled(false);
   if (deviceId) await api.unregisterPushToken(deviceId);

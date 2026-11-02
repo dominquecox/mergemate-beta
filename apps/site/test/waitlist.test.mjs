@@ -38,6 +38,7 @@ before(async () => {
   }));
   db = await mf.getD1Database('DB');
   await db.prepare(await readFile(`${root}migrations/0001_waitlist.sql`, 'utf8')).run();
+  await db.prepare(await readFile(`${root}migrations/0002_referral_hash.sql`, 'utf8')).run();
   const worker = (await import(`data:text/javascript;base64,${Buffer.from(bundle.outputFiles[0].text).toString('base64')}`)).default;
   const counters = new Map();
   const env = {
@@ -206,4 +207,15 @@ it('preserves public post URLs with fixed-target redirects and leaves waitlist r
   }
   const bad=await dispatch(origin+'/news/bad%2Fslug');assert.equal(bad.status,404);
   const home=await dispatch(origin+'/');assert.equal(home.status,200);assert.match(await home.text(),/waitlist/i);
+});
+
+it('hashes bounded referral codes without changing duplicate responses', async () => {
+  const first=await post({email:'referral@example.com',referralCode:'campaign_2026'});
+  assert.equal(first.status,200);
+  const row=await db.prepare("SELECT referral_hash FROM waitlist WHERE email=?").bind('referral@example.com').first();
+  assert.match(row.referral_hash,/^[a-f0-9]{64}$/);
+  assert.notEqual(row.referral_hash,'campaign_2026');
+  assert.equal((await post({email:'referral@example.com',referralCode:'other'})).status,200);
+  assert.deepEqual(await db.prepare("SELECT referral_hash FROM waitlist WHERE email=?").bind('referral@example.com').first(),row);
+  assert.equal((await post({referralCode:'bad code'})).status,400);
 });

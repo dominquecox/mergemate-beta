@@ -171,8 +171,8 @@ const unavailable = (logDetail?: string) =>
 const failureDetail = (config: ModelConfig, error: unknown): string =>
   `${config.provider}:${config.modelId} ${error instanceof Error ? `${error.name}: ${error.message}` : "unknown error"}`.slice(0, 200);
 
-const asCount = (value: unknown): number =>
-  typeof value === "number" && Number.isFinite(value) && value >= 0 ? value : 0;
+const asCount = (value: unknown): value is number =>
+  typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
 
 interface WorkersAiResult {
   response?: unknown;
@@ -236,8 +236,8 @@ const completeWithWorkersAi = async (
         : typeof chat === "string"
           ? chat
           : "";
-  const usage = result?.usage
-    ? { inputTokens: asCount(result.usage.prompt_tokens), outputTokens: asCount(result.usage.completion_tokens) }
+  const usage = result?.usage && asCount(result.usage.prompt_tokens) && asCount(result.usage.completion_tokens)
+    ? { inputTokens: result.usage.prompt_tokens, outputTokens: result.usage.completion_tokens }
     : undefined;
   return usage ? { text, usage } : { text };
 };

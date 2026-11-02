@@ -62,7 +62,7 @@ describe("AI summary and risk routes", () => {
     const headers = await demoHeaders(ctx);
     const summary = await call("/v1/prs/octo/demo/7/summary", { method: "POST", headers });
     expect(summary.status).toBe(200);
-    expect(PrSummary.parse(await summary.json())).toEqual(FIXTURE_SUMMARY);
+    expect(PrSummary.parse(await summary.json())).toEqual({...FIXTURE_SUMMARY,model:'sample:demo'});
     expect(summary.headers.get("x-actions-limit")).toBe("30");
     expect(summary.headers.get("x-actions-remaining")).toBe("30");
     const risk = await call("/v1/prs/octo/demo/7/risk", { method: "POST", headers });

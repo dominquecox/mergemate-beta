@@ -17,6 +17,7 @@ import { push } from './routes/push';
 import { billing } from "./routes/billing";
 import { billingWebhooks } from "./routes/billing-webhooks";
 import { account } from "./routes/account";
+import {activityHistory} from "./routes/activity-history";
 import { activity } from "./routes/activity";
 import { createAiRouter } from "./routes/ai";
 import { aiEngine } from "./routes/ai-engine-info";
@@ -83,6 +84,7 @@ export const createApp = (deps: Deps = defaultDeps) => {
   app.route("/v1", notes);
   app.route("/v1", searchPrs);
   app.route("/v1", telemetry);
+  app.route("/v1", activityHistory);
   app.route("/v1", activity);
   app.route("/v1", publicContent);
   app.route("/v1", webhooks);

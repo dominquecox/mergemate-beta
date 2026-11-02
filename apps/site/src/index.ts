@@ -98,6 +98,7 @@ async function signup(request: Request, env: Env, ctx: ExecutionContext): Promis
   if (!record(body) || typeof body.email !== 'string') return error('invalid_email', 400);
   const email = body.email.trim().toLowerCase();
   if (email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || Array.from(email).some(character => character.charCodeAt(0) < 32 || character.charCodeAt(0) === 127)) return error('invalid_email', 400);
+  if (body.referralCode !== undefined && (typeof body.referralCode !== 'string' || !/^[A-Za-z0-9_-]{1,64}$/.test(body.referralCode))) return error('invalid_referral', 400);
   if (body.source !== undefined && body.source !== 'hero' && body.source !== 'footer') return error('invalid_source', 400);
   if (typeof body.turnstileToken !== 'string' || !body.turnstileToken || body.turnstileToken.length > 2048) return error('invalid_challenge', 400);
   if (!env.TURNSTILE_SECRET_KEY || !env.RESEND_API_KEY || env.EMAIL_FROM !== 'mergemate@ploonu.com') return error('unavailable', 503);
@@ -108,8 +109,8 @@ async function signup(request: Request, env: Env, ctx: ExecutionContext): Promis
   const id = crypto.randomUUID();
   const token = removalToken();
   // A single atomic insert selects the email sender, including simultaneous duplicate requests.
-  const inserted = await env.DB.prepare('INSERT INTO waitlist (id, email, source, remove_token_hash) VALUES (?, ?, ?, ?) ON CONFLICT(email) DO NOTHING RETURNING id')
-    .bind(id, email, body.source ?? 'hero', await sha256(token)).first<{ id: string }>();
+  const inserted = await env.DB.prepare('INSERT INTO waitlist (id, email, source, remove_token_hash, referral_hash) VALUES (?, ?, ?, ?, ?) ON CONFLICT(email) DO NOTHING RETURNING id')
+    .bind(id, email, body.source ?? 'hero', await sha256(token), typeof body.referralCode==='string' ? await sha256(`mergemate-referral:${body.referralCode}`) : null).first<{ id: string }>();
   if (inserted) ctx.waitUntil(sendConfirmation(env, id, email, token).catch(() => { console.error('{"event":"waitlist_email_status_failed"}'); }));
   return json({ ok: true });
 }

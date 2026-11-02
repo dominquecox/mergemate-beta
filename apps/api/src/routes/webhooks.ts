@@ -49,7 +49,9 @@ export const webhooks = new Hono<AppEnv>().post("/webhooks/github", async (c) =>
     // Re-enqueue pending deliveries; consumers and push claims tolerate duplicates.
   }
 
-  const message: GitHubEventMessage = { deliveryId, event, receivedAt, data };
+  const sender = (payload as {sender?:{login?:unknown}})?.sender?.login;
+  const actor = typeof sender==='string' && /^[A-Za-z0-9_-]{1,100}$/.test(sender) ? sender : undefined;
+  const message: GitHubEventMessage = { deliveryId, event, receivedAt, data, ...(actor?{actor}:{}) };
   try {
     await queue.send(message);
     await db.prepare("UPDATE github_deliveries SET queued=1 WHERE delivery_id=?").bind(deliveryId).run();

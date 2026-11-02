@@ -52,6 +52,7 @@ export interface RepoRef {
 }
 
 export interface GitHubEventMessage {
+  actor?: string | undefined;
   deliveryId: string;
   event: string;
   receivedAt: string;
@@ -61,6 +62,7 @@ export interface GitHubEventMessage {
 
 const reference = z.object({ id: z.string(), fullName: z.string() });
 const messageSchema = z.object({
+  actor: z.string().regex(/^[A-Za-z0-9_-]{1,100}$/).optional(),
   deliveryId: z.string().min(1).max(64), event: z.string().max(255), receivedAt: z.iso.datetime(),
   data: z.discriminatedUnion("kind", [
     z.object({ kind: z.literal("installation"), action: z.string(), installationId: z.string(), account: z.object({ login: z.string(), type: z.string() }), repos: z.array(reference).max(1000) }),
@@ -216,7 +218,8 @@ export const applyGitHubEvent = async (db: D1Database, message: GitHubEventMessa
       return;
     }
     case "pr":
-      await db.batch(data.numbers.map((n) => upsertActivity(db, data.repo, n, data.installationId, data.headSha, data.event, at)));
+      await db.batch(data.numbers.flatMap((n) => [upsertActivity(db, data.repo, n, data.installationId, data.headSha, data.event, at),
+        db.prepare('INSERT INTO activity_audit(id,repo_full_name,number,event,actor,received_at) VALUES(?,?,?,?,?,?) ON CONFLICT(id) DO NOTHING').bind(`${message.deliveryId}:${n}`,data.repo,n,data.event,message.actor??null,at)]));
       return;
     case "status":
       await db

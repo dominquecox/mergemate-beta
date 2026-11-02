@@ -36,6 +36,8 @@ export interface ApiClient {
   invalidateInbox():void;
   clearCache(): void;
   invalidateSession(): void;
+  getActivityHistory(filter?: 'all'|'review',cursor?:string|null): Promise<{items:Notification[];nextCursor:string|null}>;
+  markActivityRead(id:string):Promise<void>;
   getNotificationPage(filter?: NotificationFilter, cursor?: string | null, search?: string): Promise<{items: Notification[]; nextCursor: string | null;serverTime?:string;refreshAt?:string|null}>;
   searchPrs(filters:PrSearchFilters,cursor?:string|null,signal?:AbortSignal):Promise<PrSearchPage>;
   getRepoPage(cursor?: string | null): Promise<{items: Repo[]; nextCursor: string | null}>;

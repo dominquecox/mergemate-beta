@@ -49,10 +49,12 @@ export const AI_TIMEOUT_MS = 60_000;
 
 export const SAFE_METHODS = new Set(["GET", "HEAD"]);
 
-export function parseRetryAfter(value: string | null): number | undefined {
+export function parseRetryAfter(value: string | null, now = Date.now()): number | undefined {
   if (!value) return undefined;
   const seconds = Number(value);
-  return Number.isFinite(seconds) && seconds > 0 ? Math.ceil(seconds) : undefined;
+  if (Number.isFinite(seconds) && seconds >= 0) return Math.ceil(seconds);
+  const stamp = Date.parse(value);
+  return Number.isFinite(stamp) ? Math.max(0, Math.ceil((stamp-now)/1000)) : undefined;
 }
 
 export const enc = encodeURIComponent;
