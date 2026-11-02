@@ -18,6 +18,7 @@ export class GetRetryQueue {
     assert();
     try{const value=await load(controller.signal);assert();return value;}
     catch(error){
+     if(error instanceof ApiClientError && error.code==='unauthorized')throw error;
      assert();
      const retryable=error instanceof ApiClientError&&(error.code==='network'||error.code==='timeout'||error.status===429||error.status===502||error.status===503||error.status===504);
      if(!retryable||attempt>=2)throw error;

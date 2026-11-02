@@ -16,7 +16,7 @@ vi.mock("expo-secure-store", () => ({
 import { Platform } from "react-native";
 import { MockApiClient } from "../src/api/mock";
 import { StorageService, PENDING_SIGN_IN_TTL_MS } from "../src/storage";
-import { refreshPushRegistration, registerPush, unregisterPush, type PushDevice } from "../src/push/registration";
+import { cancelPushRegistration, refreshPushRegistration, registerPush, unregisterPush, type PushDevice } from "../src/push/registration";
 
 const device = (over: Partial<PushDevice> = {}): PushDevice => ({
   isNative: true,
@@ -34,6 +34,13 @@ beforeEach(() => {
 });
 
 describe("push token registration (native)", () => {
+  it("discards a late permission result after an identity transition",async()=>{
+    const api=new MockApiClient(),register=vi.spyOn(api,'registerPushToken');
+    let release!:(value:'granted')=>void;
+    const pending=registerPush(api,{prompt:false},device({getPermission:()=>new Promise(resolve=>{release=resolve;})}));
+    await Promise.resolve();cancelPushRegistration();release('granted');
+    expect(await pending).toBe('unavailable');expect(register).not.toHaveBeenCalled();
+  });
   it("registers an Expo push token with a stable device id", async () => {
     const api = new MockApiClient();
     const register = vi.spyOn(api, "registerPushToken");
