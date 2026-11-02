@@ -14,6 +14,9 @@ import { AI_TIMEOUT_MS, enc, prPath } from "./http-types";
 import { HttpSession } from "./http-session";
 
 export abstract class HttpData extends HttpSession {
+  getActivityHistory(filter:'all'|'review'='all',cursor?:string|null){const q=new URLSearchParams({filter,...(cursor?{cursor}:{})});return this.request({path:'/activity/history?'+q.toString(),schema:NotificationPage});}
+  async markActivityRead(id:string){await this.request({method:'POST',path:'/activity/history/'+enc(id)+'/read'});}
+
   getPrDependencies(owner:string,repo:string,number:number,headSha?:string,signal?:AbortSignal){return this.request({path:prPath(owner,repo,number)+"/dependencies"+(headSha?"?headSha="+enc(headSha):""),schema:DependencyContext,signal});}
   getPrVisualAsset(owner:string,repo:string,number:number,path:string,side:"before"|"after",headSha?:string,signal?:AbortSignal){const q=new URLSearchParams({path,side,...(headSha?{headSha}:{})});return this.request({path:prPath(owner,repo,number)+"/visual?"+q.toString(),schema:PrVisualAsset,signal});}
 

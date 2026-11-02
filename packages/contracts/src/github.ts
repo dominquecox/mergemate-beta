@@ -20,6 +20,8 @@ export const Notification = z.object({
   title: z.string(),
   /** GitHub login of the pull request author. */
   author: z.string(),
+  actor: z.string().nullable().optional(),
+  event: z.string().optional(),
   status: PrStatus,
   risk: RiskLevel.optional(),
   summaryLine: z.string().optional(),

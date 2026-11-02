@@ -26,8 +26,9 @@ export default function NotificationsScreen() {
   const {isDesktop}=useLayout();
   const router = useRouter();
 
+  const [history,setHistory]=useState(false);
   const [filter, setFilter] = useState<NotificationFilter>("all");
-  const {items,setItems,loading:isLoading,busy,error,refresh:loadNotifications,more,hasMore} = usePagedList(`activity:${filter}`, cursor=>api.getNotificationPage(filter,cursor));
+  const {items,setItems,loading:isLoading,busy,error,refresh:loadNotifications,more,hasMore} = usePagedList(`activity:${history}:${filter}`, cursor=>history?api.getActivityHistory(filter==='review'?'review':'all',cursor):api.getNotificationPage(filter,cursor));
 
   const markAllRead = () => {
     setItems((prev) => prev.map((item) => ({ ...item, read: true })));
@@ -37,7 +38,7 @@ export default function NotificationsScreen() {
     <View style={[styles.root, { backgroundColor: colors.background }]}>
       <Header
         title="Notifications"
-        rightAction={items.some((item) => !item.read) ? (
+        rightAction={!history && items.some((item) => !item.read) ? (
           <TouchableOpacity
             onPress={markAllRead}
             style={styles.markReadBtn}
@@ -49,9 +50,11 @@ export default function NotificationsScreen() {
         ) : undefined}
       />
 
+      <View style={{paddingHorizontal:16,flexDirection:'row',gap:8}}>{[false,true].map(value=><TouchableOpacity key={String(value)} accessibilityRole="button" accessibilityState={{selected:history===value}} onPress={()=>{setHistory(value);setFilter('all');}} style={{minHeight:44,minWidth:44,padding:12}}><Text style={{color:colors.brandLight}}>{value?'Event history':'Open PR inbox'}</Text></TouchableOpacity>)}</View>
+      {history&&<Text style={{padding:16,color:colors.textSecondary}}>Last 7 days of received repository events. Actor is the event sender, not the PR or commit author. Earlier events and current PR status may be unavailable.</Text>}
       {/* Filter Chips */}
       <View style={[styles.chipsRow, { borderBottomColor: colors.border }]} accessibilityRole="tablist">
-        {(["all", "review", "mentions", "mine"] as NotificationFilter[]).map((tab) => {
+        {((history?["all","review"]:["all", "review", "mentions", "mine"]) as NotificationFilter[]).map((tab) => {
           const active = filter === tab;
           let label = "All";
           if (tab === "review") label = "Reviews";
@@ -111,15 +114,15 @@ export default function NotificationsScreen() {
           contentContainerStyle={{padding:isDesktop?24:16,paddingBottom:48}}
           onEndReached={()=>{if(!error)void more();}} onEndReachedThreshold={0.4}
           ListFooterComponent={hasMore?<TouchableOpacity disabled={busy} onPress={()=>void more()} style={{minHeight:44,padding:16}} accessibilityRole="button"><Text style={{color:colors.brandLight}}>{busy?'Loading…':'Load more activity'}</Text></TouchableOpacity>:undefined}
-          renderItem={({item,index})=>{const day=activityDay(item.updatedAt);const previous=items[index-1];const showDay=!previous || activityDay(previous.updatedAt)!==day;return <View>{showDay && <Text accessibilityRole="header" style={[typography.subhead,{color:colors.text,marginTop:20,marginBottom:12}]}>{day}</Text>}<Pressable key={item.id} accessibilityRole="button" accessibilityLabel={`Review ${item.title}`} onPress={()=>{setItems(rows=>rows.map(row=>row.id===item.id?{...row,read:true}:row));const [owner="owner",repo="repo"]=item.repo.split("/");router.push(`/pr/${owner}/${repo}/${item.number}`);}} android_ripple={androidRipple()} style={({pressed})=>[{backgroundColor:item.read?colors.surface:colors.surfaceElevated,padding:16,borderTopWidth:1,borderTopColor:colors.border},pressed && {opacity:0.88}]}>
+          renderItem={({item,index})=>{const day=activityDay(item.updatedAt);const previous=items[index-1];const showDay=!previous || activityDay(previous.updatedAt)!==day;return <View>{showDay && <Text accessibilityRole="header" style={[typography.subhead,{color:colors.text,marginTop:20,marginBottom:12}]}>{day}</Text>}<Pressable key={item.id} accessibilityRole="button" accessibilityLabel={`Review ${item.title}`} onPress={()=>{if(history)void api.markActivityRead(item.id).then(()=>setItems(rows=>rows.map(row=>row.id===item.id?{...row,read:true}:row))).catch(()=>undefined);else setItems(rows=>rows.map(row=>row.id===item.id?{...row,read:true}:row));const [owner="owner",repo="repo"]=item.repo.split("/");router.push(`/pr/${owner}/${repo}/${item.number}`);}} android_ripple={androidRipple()} style={({pressed})=>[{backgroundColor:item.read?colors.surface:colors.surfaceElevated,padding:16,borderTopWidth:1,borderTopColor:colors.border},pressed && {opacity:0.88}]}>
                 <View style={{flexDirection:"row",gap:12,alignItems:"flex-start"}}>
-                  <Avatar login={item.author} size={32}/>
+                  <Avatar login={item.actor??item.author} size={32}/>
                   <View style={{flex:1,minWidth:0}}>
                     <View style={{flexDirection:"row",alignItems:"flex-start",gap:8}}><Text style={[typography.code,{color:colors.textSecondary,fontSize:11,flex:1}]}>{item.repo} · #{item.number}</Text><Text style={[typography.caption,{color:colors.textSecondary}]}>{relativeTime(item.updatedAt)}</Text>{!item.read && <View accessibilityLabel="Unread" style={{width:6,height:6,borderRadius:3,backgroundColor:colors.brandLight,marginTop:5}}/>}</View>
-                    <Text style={[typography.body,{color:colors.text,marginTop:8}]}><Text style={{fontWeight:"600"}}>@{item.author}</Text> {activityAction(item.kind)}</Text>
+                    <Text style={[typography.body,{color:colors.text,marginTop:8}]}><Text style={{fontWeight:"600"}}>{item.event?(item.actor?`@${item.actor}`:"Actor unavailable"):`@${item.author}`}</Text> {item.event?`· ${item.event} event`:activityAction(item.kind)}</Text>
                     <Text style={[typography.headline,{color:colors.text,marginTop:4}]}>{item.title}</Text>
                     {!!item.summaryLine && <Text style={[typography.footnote,{color:colors.textSecondary,marginTop:8}]}>{item.summaryLine}</Text>}
-                    <View style={{flexDirection:"row",gap:8,alignItems:"center",flexWrap:"wrap",marginTop:12}}><StatusPill status={item.status}/>{item.risk && <RiskBadge level={item.risk} compact/>}</View>
+                    <View style={{flexDirection:"row",gap:8,alignItems:"center",flexWrap:"wrap",marginTop:12}}>{!item.event&&<StatusPill status={item.status}/>}{item.risk && <RiskBadge level={item.risk} compact/>}</View>
                   </View>
                   <Icon name="chevron-forward" size={16} color={colors.textMuted}/>
                 </View>
