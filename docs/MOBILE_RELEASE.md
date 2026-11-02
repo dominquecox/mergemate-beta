@@ -19,17 +19,30 @@ Owner-operated on the owner's Mac. This pack prepares source and commands; it do
 - Reach the Access-gated dev API through approved device/browser access. Never embed Cloudflare service credentials in EXPO_PUBLIC variables or a shipped app.
 - Check API/migration compatibility first. MM085 API0017 and site0002 were source-only at engineering handoff; verify actual deployment/migration receipts with the operator. This pack neither applies migrations nor overrides their approval process.
 
-## Exact owner local build commands
+## Exact owner local build commands (with automated logging & build-host mesh sync)
 
-After fetching the desired development commit and installing dependencies:
+After fetching the desired development commit and installing dependencies, run the unified build runner from monorepo root (or `apps/mobile`). It automatically captures all terminal output to a local log file, syncs the log to `build-host:~/build-mirror/build_logs/`, and records the build run into `build-host:~/build-mirror/builds.db` (`build_runs` table) so all agents across the mesh can inspect it:
 
 ```bash
-cd ~/code/mergemate/apps/mobile && npx eas build --platform ios --local --profile ios-dev
+cd ~/code/mergemate && ./scripts/build-and-log.sh ios
 ```
 
 ```bash
-cd ~/code/mergemate/apps/mobile && npx eas build --platform android --local --profile android-dev
+cd ~/code/mergemate && ./scripts/build-and-log.sh android
 ```
+
+Or for web (PWA export) and API checks:
+```bash
+cd ~/code/mergemate && ./scripts/build-and-log.sh web
+cd ~/code/mergemate && ./scripts/build-and-log.sh api
+```
+
+*(Alternatively, direct EAS commands: `cd apps/mobile && eas build --platform ios --local --profile ios-dev`)*
+
+### Where logs are accessible to agents:
+- **Local Machine**: `logs/build-ios.log`, `logs/build-android.log`, `logs/build-web.log`, `logs/build-api.log`
+- **build host Mesh**: `ssh build-host 'cat ~/build-mirror/build_logs/mergemate-ios-latest.log'` (or `mergemate-android-latest.log`)
+- **build host DB**: Recorded in `build_runs` table in `~/build-mirror/builds.db` on `build-host` (accessible via `GET https://build-host:8443/api/builds` or python)
 
 Retain the build log, exact source SHA, artifact location, checksum and version/build values. Install the IPA through the team's authorized internal-device workflow and the APK on a physical Android device. Do not run eas submit, an App Store/TestFlight upload, or a production profile as part of these commands.
 

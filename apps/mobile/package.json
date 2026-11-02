@@ -12,6 +12,8 @@
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "test": "vitest run",
+    "build:ios": "../../scripts/build-and-log.sh ios",
+    "build:android": "../../scripts/build-and-log.sh android",
     "android": "expo start --android"
   },
   "dependencies": {

@@ -24,6 +24,9 @@ node_modules/
 dist/
 build/
 coverage/
+*.ipa
+*.apk
+*.aab
 .expo/
 .expo-shared/
 web-build/

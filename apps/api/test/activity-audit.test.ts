@@ -13,7 +13,11 @@ describe('access-scoped content-free activity audit',()=>{
   const res=await call('/v1/activity/history',{headers});expect(res.status).toBe(200);
   const body=await res.json() as {items:{id:string;actor:string;read:boolean}[]};expect(body.items).toHaveLength(1);expect(body.items[0]).toMatchObject({actor:'reviewer',read:false});
   ctx.net.on('GET','https://api.github.com/repos/acme/api/pulls/7',{number:7});
-  const id=body.items[0]!.id;expect((await call('/v1/activity/history/'+encodeURIComponent(id)+'/read',{method:'POST',headers})).status).toBe(204);
+  const firstItem = body.items[0];
+  expect(firstItem).toBeDefined();
+  if (!firstItem) throw new Error('missing item');
+  const id = firstItem.id;
+  expect((await call('/v1/activity/history/'+encodeURIComponent(id)+'/read',{method:'POST',headers})).status).toBe(204);
   expect(ctx.db.rows('SELECT user_id,event_id FROM activity_read')).toEqual([{user_id:userId,event_id:id}]);
   const reread=await (await call('/v1/activity/history',{headers})).json() as {items:{read:boolean}[]};expect(reread.items[0]?.read).toBe(true);
  });

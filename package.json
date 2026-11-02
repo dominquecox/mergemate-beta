@@ -15,6 +15,10 @@
     "lint": "npm run lint --workspaces --if-present",
     "test": "npm run test --workspaces --if-present",
     "check": "npm run typecheck && npm run lint && npm run test",
+    "build:ios": "./scripts/build-and-log.sh ios",
+    "build:android": "./scripts/build-and-log.sh android",
+    "build:web": "./scripts/build-and-log.sh web",
+    "check:api": "./scripts/build-and-log.sh api",
     "security:bundles": "node scripts/security-bundles.mjs",
     "security:secrets": "node scripts/security-secrets.mjs"
   }
