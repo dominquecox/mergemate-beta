@@ -10,7 +10,7 @@ import { api } from "../api";
 import { ApiClientError, toUserMessage, messageForCode } from "../api/errors";
 import { createPkcePair } from "../auth/pkce";
 import { validGitHubAuthorizeUrl } from "../navigation/links";
-import { refreshPushRegistration } from "../push/registration";
+import { cancelPushRegistration, refreshPushRegistration } from "../push/registration";
 import { dropWebPush, refreshWebPush } from "../push/web";
 
 export type SignInResult = "signed_in" | "redirected" | "failed";
@@ -118,6 +118,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(()=>{
     const changed=(kind:SessionChange)=>{
       cancelReadout();
+    cancelPushRegistration();
       ++authVersion.current;api.invalidateSession();setIsLoading(kind!=='signed-out');setUser(null);setSession(null);setIsDemo(false);
       if(kind!=='signed-out')void initAuth(false);
     };
@@ -135,6 +136,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (!signedInRef.current) return;
       const wasDemo = demoRef.current;
       cancelReadout();
+    cancelPushRegistration();
       ++authVersion.current;setIsLoading(false);
       setUser(null);
       setSession(null);
@@ -237,6 +239,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signOut = async () => {
     cancelReadout();
+    cancelPushRegistration();
     const version=++authVersion.current;setError(null);setUser(null);setSession(null);setIsDemo(false);
     setIsLoading(true);
     try {
@@ -254,6 +257,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const deleteAccount = async () => {
     cancelReadout();
+    cancelPushRegistration();
     const version=++authVersion.current;
     setIsLoading(true);
     try {
