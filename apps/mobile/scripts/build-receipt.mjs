@@ -1,4 +1,4 @@
-import { readFileSync, readdirSync } from 'node:fs';
+import { readFileSync, readdirSync, existsSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
@@ -10,12 +10,29 @@ export function nativeBuildNumber(root, platform) {
     const match = gradle.match(/\bversionCode\s+(\d+)/);
     if (match) return match[1];
   } else if (platform === 'ios') {
-    for (const entry of readdirSync(path.join(root, 'ios'))) {
-      if (!entry.endsWith('.xcodeproj')) continue;
-      const project = readFileSync(path.join(root, 'ios', entry, 'project.pbxproj'), 'utf8');
-      const values = [...project.matchAll(/CURRENT_PROJECT_VERSION\s*=\s*"?([\d.]+)"?\s*;/g)].map(match => match[1]);
-      if (values.length && new Set(values).size === 1) return values[0];
+    const ios = path.join(root, 'ios');
+    const versions = [];
+    let usesProjectVersion = false;
+    for (const entry of readdirSync(ios, { withFileTypes: true })) {
+      if (!entry.isDirectory() || entry.name === 'Pods') continue;
+      const plist = path.join(ios, entry.name, 'Info.plist');
+      if (!existsSync(plist)) continue;
+      const xml = readFileSync(plist, 'utf8');
+      const value = xml.match(/<key>CFBundleVersion<\/key>\s*<(?:string|integer)>([^<]+)<\/(?:string|integer)>/)?.[1];
+      if (value && /^\d+(?:\.\d+){0,2}$/.test(value)) versions.push(value);
+      else if (value === '$(CURRENT_PROJECT_VERSION)') usesProjectVersion = true;
+      else throw new Error('Cannot read generated iOS CFBundleVersion');
     }
+    // Expo normally writes the allocated number directly into Info.plist.
+    // Only resolve the Xcode setting when the plist explicitly references it.
+    if (usesProjectVersion) {
+      for (const entry of readdirSync(ios)) {
+        if (!entry.endsWith('.xcodeproj')) continue;
+        const project = readFileSync(path.join(ios, entry, 'project.pbxproj'), 'utf8');
+        versions.push(...[...project.matchAll(/CURRENT_PROJECT_VERSION\s*=\s*"?([\d.]+)"?\s*;/g)].map(match => match[1]));
+      }
+    }
+    if (versions.length && new Set(versions).size === 1) return versions[0];
   }
   throw new Error(`Cannot identify generated ${platform} build number; retain native build logs for investigation`);
 }

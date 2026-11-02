@@ -36,16 +36,22 @@ describe("installed build identity", () => {
     try {
       mkdirSync(path.join(root, "android/app"), { recursive: true });
       mkdirSync(path.join(root, "ios/MergeMate.xcodeproj"), { recursive: true });
+      mkdirSync(path.join(root, "ios/MergeMate"), { recursive: true });
       writeFileSync(path.join(root, "app.json"), JSON.stringify({ expo: { version: "0.2.0", ios: { buildNumber: "1" } } }));
       for (const number of [24, 25]) {
         writeFileSync(path.join(root, "android/app/build.gradle"), `versionCode ${number}`);
-        writeFileSync(path.join(root, "ios/MergeMate.xcodeproj/project.pbxproj"), `CURRENT_PROJECT_VERSION = ${number};`);
+        writeFileSync(path.join(root, "ios/MergeMate.xcodeproj/project.pbxproj"), "CURRENT_PROJECT_VERSION = 1;");
+        writeFileSync(path.join(root, "ios/MergeMate/Info.plist"), `<plist><dict><key>CFBundleVersion</key><string>${number}</string></dict></plist>`);
         for (const platform of ["ios", "android"]) {
           expect(nativeBuildNumber(root, platform)).toBe(String(number));
           printReceipt(root, platform, { ...process.env, EAS_BUILD_GIT_COMMIT_HASH: commit });
           expect(log).toHaveBeenLastCalledWith(`MergeMate native receipt: platform=${platform} version=0.2.0 build=${number} commit=${commit}`);
         }
       }
+      writeFileSync(path.join(root, "ios/MergeMate/Info.plist"), '<plist><dict><key>CFBundleVersion</key><string>$(CURRENT_PROJECT_VERSION)</string></dict></plist>');
+      expect(nativeBuildNumber(root, "ios")).toBe("1");
+      writeFileSync(path.join(root, "ios/MergeMate/Info.plist"), '<plist><dict><key>CFBundleVersion</key><string>unknown</string></dict></plist>');
+      expect(() => nativeBuildNumber(root, "ios")).toThrow();
       expect(() => nativeBuildNumber(root, "unknown")).toThrow();
     } finally { log.mockRestore(); rmSync(root, { recursive: true, force: true }); }
   });
