@@ -72,9 +72,10 @@ export const auth = new Hono<AppEnv>()
     const body = await parseBody(c, AuthStartRequest);
     const db = requireBinding(c.env, "DB");
     const now = c.get("deps").now();
-    const redirectUri = callbackUrl(c.env, body.platform, body.nativeBrowser===true);
+    const redirectUri = callbackUrl(c.env, body.platform);
     const clientId = requireVar(c.env, "GITHUB_APP_CLIENT_ID");
-    const state = randomToken();
+    const rawState = randomToken();
+    const state = body.nativeBrowser === true || body.platform !== "web" ? `n_${rawState}` : rawState;
 
     await db.batch([
       db.prepare("DELETE FROM oauth_states WHERE expires_at <= ?").bind(now.toISOString()),

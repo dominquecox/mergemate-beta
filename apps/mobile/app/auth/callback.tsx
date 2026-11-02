@@ -25,7 +25,9 @@ export default function AuthCallbackScreen() {
   const params = useLocalSearchParams<{ code?: string | string[]; state?: string | string[]; error?: string | string[]; native?:string|string[] }>();
   const started = useRef(false);
   const relay=useRef<string|null>(null);
-  if(Platform.OS==='web'&&params.native==='1'&&!relay.current)relay.current=nativeAuthReturn(params);
+  const stateParam = typeof params.state === 'string' ? params.state : undefined;
+  const isNative = params.native === '1' || (stateParam !== undefined && stateParam.startsWith('n_'));
+  if(Platform.OS==='web'&&isNative&&!relay.current)relay.current=nativeAuthReturn(params);
   const [localError, setLocalError] = useState<string | null>(null);
   const [missingParams, setMissingParams] = useState(false);
 

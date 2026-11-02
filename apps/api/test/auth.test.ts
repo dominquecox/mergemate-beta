@@ -317,13 +317,14 @@ describe('MM086 native browser relay',()=>{
   const ctx=testContext(),pair=verifierPair(),call=appFor(ctx);
   const start=await call('/v1/auth/github/start',post({platform,codeChallenge:pair.challenge,nativeBrowser:true}));
   const body=await start.json() as {authorizeUrl:string;state:string};
-  expect(new URL(body.authorizeUrl).searchParams.get('redirect_uri')).toBe('https://dev.mergemate.dev/auth/callback?native=1');
+  expect(new URL(body.authorizeUrl).searchParams.get('redirect_uri')).toBe('https://dev.mergemate.dev/auth/callback');
+  expect(body.state.startsWith('n_')).toBe(true);
   ctx.net.on('POST','https://github.com/login/oauth/access_token',tokenResponse()).on('GET','https://api.github.com/user',ghUser);
   const returned=await call('/v1/auth/github/callback',post({code:'test-code',state:body.state,codeVerifier:pair.verifier}));
   expect(returned.status).toBe(200);expect(returned.headers.get('set-cookie')).toBeNull();
   const result=await returned.json() as {session:{token?:string;csrfToken?:string}};
   expect(result.session.token).toBeTruthy();expect(result.session.csrfToken).toBeUndefined();
-  expect(ctx.net.calls.find(c=>c.url==='https://github.com/login/oauth/access_token')?.body).toContain('auth/callback?native=1');
+  expect(ctx.net.calls.find(c=>c.url==='https://github.com/login/oauth/access_token')?.body).toContain('auth/callback');
  });
  it('rejects native relay selection for web transport',async()=>{
   const ctx=testContext();expect((await appFor(ctx)('/v1/auth/github/start',post({platform:'web',codeChallenge:verifierPair().challenge,nativeBrowser:true}))).status).toBe(422);
