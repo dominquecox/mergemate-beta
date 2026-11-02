@@ -32,7 +32,7 @@ export const SECRET_PLACEHOLDER = "•••••••• value hidden: never 
 
 export function mapCheck(check: ContractPrDetail["checks"][number], index: number): PrCheck {
   const state: CheckState = check.state;
-  const base = { id:check.id??`${index}:${check.name}`,name:check.name,...(githubUrl(check.url)?{url:githubUrl(check.url)??undefined}:{}) };
+  const base = { source:check.source,headSha:check.headSha,provider:check.provider,startedAt:check.startedAt,completedAt:check.completedAt,id:check.id??`${index}:${check.name}`,name:check.name,...(githubUrl(check.url)?{url:githubUrl(check.url)??undefined}:{}) };
   switch (state) {
     case "success":
       return { ...base, status: "completed", conclusion: "success" };

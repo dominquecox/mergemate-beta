@@ -1,0 +1,36 @@
+import {chromium} from '@playwright/test';
+import assert from 'node:assert/strict';
+import {createServer} from 'node:http';
+import {readFile,mkdir} from 'node:fs/promises';
+import {resolve,dirname,extname,sep} from 'node:path';
+import {fileURLToPath} from 'node:url';
+const root=resolve(dirname(fileURLToPath(import.meta.url)),'../dist'),proof=process.env.MM_QA_PROOF_DIR??'/tmp/mergemate-qa-evidence';await mkdir(proof,{recursive:true});
+const server=createServer(async(req,res)=>{try{let path=resolve(root,'.'+decodeURIComponent(new URL(req.url,'http://localhost').pathname));if(!path.startsWith(root+sep)){res.writeHead(404).end();return;}let body;try{body=await readFile(path);}catch{path=resolve(root,'index.html');body=await readFile(path);}res.writeHead(200,{'content-type':{'.js':'application/javascript','.css':'text/css','.ttf':'font/ttf','.png':'image/png'}[extname(path)]??'text/html'}).end(body);}catch{res.writeHead(500).end();}});
+await new Promise(r=>server.listen(0,'127.0.0.1',r));const base=`http://127.0.0.1:${server.address().port}`,old='a'.repeat(40),newHead='b'.repeat(40),time=new Date().toISOString();
+let browser;
+try{browser=await chromium.launch({executablePath:'/usr/bin/chromium',args:['--no-sandbox']});for(const width of [360,393,1440]){
+ const context=await browser.newContext({viewport:{width,height:900},serviceWorkers:'block'}),page=await context.newPage();page.setDefaultTimeout(20000);const errors=[];page.on('pageerror',e=>errors.push(e.message));let sha=old,mode='mixed',postCount=0;
+ await context.route('**/*',async route=>{
+  const req=route.request(),url=new URL(req.url());if(url.protocol==='data:')return route.continue();if(url.origin!==base)return route.abort();if(!url.pathname.startsWith('/__api/v1'))return route.continue();
+  const path=url.pathname.replace('/__api/v1',''),reply=(body,status=200)=>route.fulfill({status,contentType:'application/json',body:JSON.stringify(body)});
+  if(req.method()!=='GET')postCount++;
+  if(path==='/me')return reply({id:'fixture',login:'fixture',name:'Fixture User',avatarUrl:base+'/favicon.ico',demo:false});
+  if(path==='/auth/refresh')return reply({session:{expiresAt:'2099-01-01T00:00:00Z',csrfToken:'fixture'}});
+  if(path==='/auth/csrf')return reply({csrfToken:'fixture'});
+  if(path==='/flags')return reply({voice_readout:false,voice_notes:false,highlight:false});
+  if(path==='/consent/preferences')return reply({ai:{granted:false,version:null,currentVersion:'1'},aiSummaries:false,revision:'fixture'});
+  if(path==='/notifications')return reply({items:[],nextCursor:null});
+  if(path==='/prs/acme/app/7')return reply({repo:'acme/app',number:7,title:'QA execution evidence fixture',body:'Fixture',author:'fixture',status:'open',baseBranch:'main',headBranch:'feature',headSha:sha,additions:1,deletions:0,changedFiles:1,files:[],checks:[],threads:[],createdAt:time,updatedAt:time,htmlUrl:'https://github.com/acme/app/pull/7',checkCursor:null});
+  if(path.endsWith('/pages/checks'))return reply({items:mode==='empty'?[]:[{id:'run:1',name:'Browser regression',state:'success',source:'check_run',headSha:sha,provider:'Fixture runner',startedAt:'2026-11-02T10:00:00Z',completedAt:'2026-11-02T10:00:12Z',url:'https://github.com/acme/app/actions/runs/1'},{id:'status:1',name:'Legacy status',state:'success',source:'status'},{id:'run:2',name:'Old browser run',state:'success',source:'check_run',headSha:'c'.repeat(40)}],nextCursor:null,headSha:sha});
+  if(path.includes('/pages/'))return reply({items:path.endsWith('/files')?[{path:'README.md',status:'modified',additions:1,deletions:0,patch:'+Docs',patchState:'available'}]:[],nextCursor:null,headSha:sha});
+  if(path.endsWith('/dependencies'))return reply({headSha:sha,manifests:[],unavailable:[]});
+  return reply({error:{code:'not_found',message:'Fixture unavailable',requestId:'fixture'}},404);
+ });
+ await page.goto(base+'/pr/acme/app/7');const card=page.getByTestId('qa-evidence-card');await card.getByText(/1\/1 current-commit runs passed/).waitFor();await card.getByText(/Legacy status report/).waitFor();await card.getByText(/Different commit/).waitFor();await card.getByText(/12s/).first().waitFor();assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
+ const report={version:1,runId:'fa4f05e6-1456-4ffd-a5d0-7e162cd0d908',repository:'acme/app',pullRequest:7,headSha:old,scope:'browser-fixtures',runner:'MergeMate local runner',startedAt:new Date(Date.now()-5000).toISOString(),completedAt:new Date().toISOString(),status:'passed',cleanCheckout:true,suites:['export-web','mobile-polish','session-lifecycle'].map(id=>({id,status:'passed',exitCode:0,durationMs:1000})),artifacts:[{name:'mobile-polish/393.png',sha256:'d'.repeat(64),bytes:100}]};
+ const postBefore=postCount;await card.getByRole('button',{name:'Inspect local QA report'}).click();const input=page.getByRole('textbox',{name:'QA report JSON'});await input.fill(JSON.stringify({...report,headSha:newHead}));await page.getByRole('button',{name:'Inspect report',exact:true}).click();await page.getByRole('alert').filter({hasText:/different repository/}).waitFor();
+ await input.fill(JSON.stringify(report));await page.getByRole('button',{name:'Inspect report',exact:true}).click();const local=page.getByTestId('local-qa-report');await local.getByText('Local report: passed',{exact:true}).waitFor();await local.getByText(/not independently verified/).waitFor();await page.getByText('REVIEW ON DESKTOP · EVIDENCE INCOMPLETE',{exact:true}).waitFor();assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));assert.equal(postCount,postBefore,'Report inspection must not send a write/provider request');await page.screenshot({path:`${proof}/report-${width}.png`,fullPage:true});
+ await card.getByRole('button',{name:'Replace local QA report'}).click();await input.fill(JSON.stringify({...report,status:'failed',suites:report.suites.map((s,i)=>i===1?{...s,status:'failed',exitCode:1}:s)}));await page.getByRole('button',{name:'Inspect report',exact:true}).click();await local.getByText('Local report: failed',{exact:true}).waitFor();
+ sha=newHead;await page.getByRole('button',{name:'Refresh workspace',exact:true}).click();await card.getByText(new RegExp(newHead.slice(0,12))).waitFor();await local.waitFor({state:'hidden'});
+ mode='empty';await page.getByRole('button',{name:'Refresh workspace',exact:true}).click();await card.getByText('No automated checks reported. No QA pass claimed.',{exact:true}).waitFor();await page.screenshot({path:`${proof}/no-checks-${width}.png`,fullPage:true});assert.deepEqual(errors,[]);console.log(`PASS ${width}: current/stale/legacy check provenance, bounded wrong-head rejection, local-only pass/failure report, revision reset, explicit no-check state; fixture API only.`);await context.close();
+}}finally{await browser?.close();await new Promise(r=>server.close(r));}

@@ -1,3 +1,4 @@
+import {QaEvidenceCard} from "../../../../src/components/QaEvidenceCard";
 import {useNoteKeyboardScroll} from "../../../../src/hooks/useNoteKeyboardScroll";
 import {MetaTelemetryModal} from '../../../../src/components/MetaTelemetryModal';
 import {useAgentGuardrails} from '../../../../src/hooks/useAgentGuardrails';
@@ -184,6 +185,7 @@ function PrWorkspace({owner,repo,number}:{owner:string;repo:string;number:string
               });
               const verdict = getExecutiveVerdict({
                 risk: detail.risk,
+                headSha: detail.headSha,
                 files: guardrailFiles,
                 checks: detail.checks, checkCursor,
                 secretWarning: detail.secretWarning,
@@ -210,57 +212,11 @@ function PrWorkspace({owner,repo,number}:{owner:string;repo:string;number:string
             {(() => {
               const hasAiInsights = Boolean(detail.summary || detail.risk || detail.secretWarning || detail.aiNotice);
 
-              const renderChecksCard = () => {
-                if (detail.checks.length === 0 && !checkCursor) return null;
-                return (
-                  <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.lg, marginTop: spacing.sm, padding: 14 }]}>
-                    <Text style={[typography.headline, { color: colors.text, fontSize: 15 }]} accessibilityRole="header">
-                      Checks ({detail.checks.filter((c) => c.conclusion === "success").length}/{detail.checks.length} loaded)
-                    </Text>
-                    {detail.checks.length === 0 ? (
-                      <Text style={[typography.footnote, { color: colors.textMuted, marginTop: spacing.xs }]}>
-                        {checkCursor ? "Checks loading..." : "No status checks reported."}
-                      </Text>
-                    ) : (
-                      <View style={{ marginTop: spacing.xs }}>
-                        {detail.checks.map((chk) => (
-                          <View key={chk.id} style={styles.checkRow}>
-                            <Icon
-                              name={
-                                chk.conclusion === "success"
-                                  ? "checkmark-circle"
-                                  : chk.conclusion === "failure"
-                                    ? "close-circle"
-                                    : "ellipsis-horizontal-circle-outline"
-                              }
-                              size={18}
-                              color={chk.conclusion === "success" ? colors.riskLow : chk.conclusion === "failure" ? colors.riskHigh : colors.textMuted}
-                            />
-                            <Text style={[typography.subhead, { color: colors.text, flex: 1 }]}>{chk.name}</Text>
-                            <Text style={[typography.caption, { color: colors.textMuted }]}>{chk.status === "completed" ? chk.conclusion : chk.status}</Text>
-                            {!!chk.url && (
-                              <TouchableOpacity accessibilityRole="button" accessibilityLabel="Open check in GitHub" onPress={() => openLink(chk.url)} style={styles.shareBtn}>
-                                <Icon name="open-outline" size={18} color={colors.textSecondary} />
-                              </TouchableOpacity>
-                            )}
-                          </View>
-                        ))}
-                      </View>
-                    )}
-                    {!!checkCursor && (
-                      <View style={{ marginTop: 10, alignItems: "center" }}>
-                        <Button title={detail.checks.length ? "Load more checks" : "Load checks"} loading={pageBusy.checks} onPress={() => loadPage("checks")} variant="ghost" style={{ minWidth: 140, alignSelf: "center" }} />
-                      </View>
-                    )}
-                    {!!pageError.checks && <Text accessibilityRole="alert" style={{ color: colors.riskHigh, marginTop: 4 }}>{pageError.checks}</Text>}
-                    {capped.checks && <Text style={{ color: colors.textSecondary, marginTop: 4 }}>Check pagination limit reached. Open this PR in GitHub for the full history.</Text>}
-                  </View>
-                );
-              };
+              const renderChecksCard = () => <QaEvidenceCard repository={`${owner}/${repo}`} number={Number(number)} headSha={detail.headSha} checks={detail.checks} sample={isDemo} cursor={checkCursor} busy={pageBusy.checks} error={pageError.checks} capped={capped.checks} onLoadMore={() => loadPage("checks")} onOpen={url => void openLink(url)}/>;
 
               if (!hasAiInsights) {
                 const hasBlast = Boolean(detail.files && detail.files.length > 0);
-                const hasChecks = detail.checks.length > 0 || Boolean(checkCursor);
+                const hasChecks = true;
                 if (!hasBlast && !hasChecks) return null;
 
                 return (

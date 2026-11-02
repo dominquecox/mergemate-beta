@@ -78,6 +78,11 @@ export interface SecretLeakWarning {
 }
 
 export interface PrCheck {
+  source?: "check_run" | "status";
+  headSha?: string;
+  provider?: string;
+  startedAt?: string;
+  completedAt?: string;
   id: string;
   name: string;
   status: "completed" | "in_progress" | "queued";
