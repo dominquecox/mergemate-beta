@@ -28,7 +28,6 @@ import { aiNoticeAction } from "../../../../src/api/aiRetry";
 import { useConsent } from "../../../../src/context/ConsentContext";
 import { Header } from "../../../../src/components/Header";
 import { StatusPill } from "../../../../src/components/StatusPill";
-import { RiskBadge } from "../../../../src/components/RiskBadge";
 import { riskBanner, riskiestFile } from "../../../../src/workspace/risk";
 import { detectAgentProvenance } from "../../../../src/workspace/provenance";
 import { getExecutiveVerdict } from "../../../../src/workspace/executiveVerdict";
@@ -148,7 +147,6 @@ function PrWorkspace({owner,repo,number}:{owner:string;repo:string;number:string
                 <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
                   <StatusPill status={detail.status} />
                   {detail.mergeState && <MergeStateChip state={detail.mergeState} />}
-                  {detail.risk && <RiskBadge level={detail.risk.level} compact />}
                 </View>
               </View>
 
