@@ -31,13 +31,13 @@ export async function validateDependencyPolicy(root) {
 
 /** Dependency injection makes every host/network/container boundary adversarially testable. */
 export async function executeJob(rawJob, { policy, bridge, github, docker, signal, makeGuard = (job, s) => new LeaseGuard(bridge, job, s), tempRoot = os.tmpdir() }) {
-  const job = validateJob(rawJob, policy), guard = makeGuard(job, signal); let temporary, stage = 'patch', evidence = { baseSha: job.baseSha }, outcome;
+  const job = validateJob(rawJob, policy), guard = makeGuard(job, signal); let temporary, workspace, stage = 'patch', evidence = { baseSha: job.baseSha }, outcome;
   const progress = async (currentStage, extra) => { await guard.assertActive(); await bridge.jobOperation(job, 'report', { status: 'succeeded', stage: currentStage, evidence: { ...evidence, ...extra } }, guard.signal); };
   try {
     await guard.assertActive();
     if (!await docker.available()) throw new AgentError('docker_unavailable', 'The reviewed digest-pinned Docker image is not installed or Docker is unavailable.');
     await github.verifyTarget(job, guard.signal);
-    temporary = await mkdtemp(path.join(tempRoot, 'mergemate-agent-')); const workspace = path.join(temporary, 'workspace'), archive = path.join(temporary, 'source.tar.gz'); await mkdir(workspace, { mode: 0o700 });
+    temporary = await mkdtemp(path.join(tempRoot, 'mergemate-agent-')); workspace = path.join(temporary, 'workspace'); const archive = path.join(temporary, 'source.tar.gz'); await mkdir(workspace, { mode: 0o700 });
     await github.downloadArchive(job, archive, guard.signal); await validateArchive(archive, policy); await guard.assertActive(); await docker.extract(workspace, archive, guard.signal);
     await validateDependencyPolicy(workspace);
     const files = await selectContext(workspace, policy, job.intent); await guard.assertActive();
@@ -69,6 +69,7 @@ export async function executeJob(rawJob, { policy, bridge, github, docker, signa
     try { await bridge.jobOperation(job, 'report', { status, stage, evidence: outcome.evidence }); } catch { outcome.reportAccepted = false; }
   } finally {
     guard.stop();
+    try { if (workspace) await docker.cleanup?.(workspace); } catch { outcome = { status: 'blocked', stage, code: 'container_cleanup_failed', evidence: { ...evidence, summary: 'Container cleanup could not be confirmed; stop this runner.' } }; try { await bridge.jobOperation(job, 'report', outcome); } catch { outcome.reportAccepted = false; } }
     if (temporary) await rm(temporary, { recursive: true, force: true });
   }
   return outcome;

@@ -2,7 +2,7 @@ import { AgentError } from './agent-policy.mjs';
 
 export class WorkflowBridge {
   constructor(policy, token, { fetcher = fetch } = {}) {
-    if (!token || token.length < 24 || /[\r\n]/.test(token)) throw new AgentError('runner_unconfigured', 'Configure the host-only workflow runner credential.');
+    if (!token || token.length < 32 || /[\r\n]/.test(token)) throw new AgentError('runner_unconfigured', 'Configure the host-only workflow runner credential.');
     this.policy = policy; this.token = token; this.fetcher = fetcher;
   }
   async post(route, body, signal) {

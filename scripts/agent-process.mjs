@@ -1,5 +1,9 @@
 import { spawn } from 'node:child_process';
 import { randomUUID, createHash } from 'node:crypto';
+import { writeFile, rm } from 'node:fs/promises';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { sourceManifest } from './agent-manifest.mjs';
 import { AgentError } from './agent-policy.mjs';
 
 /** Never passes repository/model content to a shell. All executable/argv policy is trusted host configuration. */
@@ -26,45 +30,61 @@ export function runBounded(executable, args, { timeoutMs, maxOutputBytes, signal
 
 export class DockerExecutor {
   constructor(policy, { run = runBounded, uid = process.getuid?.() ?? 1000, gid = process.getgid?.() ?? 1000 } = {}) {
-    this.policy = policy; this.run = run; this.uid = uid; this.gid = gid;
+    this.policy = policy; this.run = run; this.uid = uid; this.gid = gid; this.containers = new Map();
     if (uid === 0) throw new AgentError('root_runner', 'Run the coding executor as a non-root host user.');
   }
   async available() {
-    try {
-      const result = await this.run('docker', ['image', 'inspect', this.policy.image], { timeoutMs: 15000, maxOutputBytes: 65536 });
-      return result.exitCode === 0;
-    } catch { return false; }
+    try { return (await this.run('docker', ['image', 'inspect', this.policy.image], { timeoutMs: 15000, maxOutputBytes: 65536 })).exitCode === 0; }
+    catch { return false; }
   }
-  async execute(workspace, command, { archive, install = false, signal } = {}) {
-    const name = `mergemate-agent-${randomUUID()}`;
-    const args = ['run', '--rm', '--name', name, '--read-only', '--cap-drop', 'ALL', '--security-opt', 'no-new-privileges', '--pids-limit', '128', '--memory', `${this.policy.memoryMb}m`, '--cpus', String(this.policy.cpus), '--user', `${this.uid}:${this.gid}`, '--network', install ? 'bridge' : 'none', '--tmpfs', '/tmp:rw,noexec,nosuid,size=512m', '--mount', `type=bind,source=${workspace},target=/workspace`, '--workdir', '/workspace', '--env', 'HOME=/tmp/mergemate-home', '--env', 'npm_config_cache=/tmp/npm-cache', '--env', 'npm_config_update_notifier=false', '--env', 'CI=1'];
-    if (archive) args.push('--mount', `type=bind,source=${archive},target=/input/source.tar.gz,readonly`);
-    args.push(this.policy.image, ...command);
-    let result, failure;
-    try { result = await this.run('docker', args, { timeoutMs: install ? this.policy.installTimeoutMs : this.policy.timeoutMs, maxOutputBytes: this.policy.maxOutputBytes, signal }); }
-    catch (error) { failure = error; }
-    // A killed Docker client can leave a container running: removal is mandatory even after an abort.
-    try { await this.run('docker', ['rm', '--force', name], { timeoutMs: 15000, maxOutputBytes: 16384 }); }
-    catch { throw new AgentError('container_cleanup_failed', 'Could not confirm isolated container cleanup; stop this runner.'); }
-    if (failure) throw failure;
+  limits(name, network = 'none') {
+    return ['--name', name, '--read-only', '--cap-drop', 'ALL', '--security-opt', 'no-new-privileges', '--pids-limit', '128', '--memory', `${this.policy.memoryMb}m`, '--cpus', String(this.policy.cpus), '--user', `${this.uid}:${this.gid}`, '--network', network, '--tmpfs', '/tmp:rw,noexec,nosuid,nodev,size=512m', '--env', 'HOME=/tmp/mergemate-home', '--env', 'npm_config_cache=/tmp/npm-cache', '--env', 'npm_config_update_notifier=false', '--env', 'CI=1'];
+  }
+  async checked(args, { signal, install = false, code = 'container_failed' } = {}) {
+    const result = await this.run('docker', args, { timeoutMs: install ? this.policy.installTimeoutMs : this.policy.timeoutMs, maxOutputBytes: this.policy.maxOutputBytes, signal });
+    if (result.exitCode !== 0) throw Object.assign(new AgentError(code, 'An isolated Docker operation failed.', 'failed'), { evidence: result });
     return result;
   }
+  async remove(name) {
+    try {
+      const result = await this.run('docker', ['rm', '--force', name], { timeoutMs: 15000, maxOutputBytes: 16384 });
+      if (result.exitCode !== 0) throw new Error('Removal was not confirmed');
+    } catch { throw new AgentError('container_cleanup_failed', 'Could not confirm isolated container cleanup; stop this runner.'); }
+  }
   async extract(workspace, archive, signal) {
-    const result = await this.execute(workspace, ['tar', '-xzf', '/input/source.tar.gz', '--strip-components=1', '--no-same-owner', '--no-same-permissions'], { archive, signal });
-    if (result.exitCode !== 0) throw new AgentError('checkout_failed', 'Pinned source could not be extracted inside isolation.');
+    const name = `mergemate-extract-${randomUUID()}`; let failure;
+    try {
+      await this.checked(['run', ...this.limits(name), '--mount', `type=bind,source=${workspace},target=/workspace`, '--mount', `type=bind,source=${archive},target=/input/source.tar.gz,readonly`, '--workdir', '/workspace', this.policy.image, 'tar', '-xzf', '/input/source.tar.gz', '--strip-components=1', '--no-same-owner', '--no-same-permissions'], { signal, code: 'checkout_failed' });
+    } catch (error) { failure = error; }
+    await this.remove(name); if (failure) throw failure;
   }
   async install(workspace, signal) {
-    const result = await this.execute(workspace, ['npm', 'ci', '--ignore-scripts', '--no-audit', '--no-fund', '--registry=https://registry.npmjs.org', '--userconfig=/dev/null', '--globalconfig=/dev/null'], { install: true, signal });
-    if (result.exitCode !== 0) throw new AgentError('dependencies_failed', 'Isolated dependency installation failed.', 'failed');
+    const name = `mergemate-agent-${randomUUID()}`, manifestFile = path.join(path.dirname(workspace), 'source-manifest.json');
+    await writeFile(manifestFile, JSON.stringify(await sourceManifest(workspace, this.policy)), { mode: 0o600, flag: 'wx' });
+    const helper = fileURLToPath(new URL('./agent-container.mjs', import.meta.url));
+    this.containers.set(workspace, { name, manifestFile });
+    await this.checked(['create', ...this.limits(name, 'bridge'), '--tmpfs', `/workspace:rw,nosuid,nodev,mode=1777,size=${this.policy.maxSandboxMb}m`, '--mount', `type=bind,source=${workspace},target=/source,readonly`, '--mount', `type=bind,source=${manifestFile},target=/runner/manifest.json,readonly`, '--mount', `type=bind,source=${helper},target=/runner/helper.mjs,readonly`, '--workdir', '/workspace', this.policy.image, 'node', '-e', 'setInterval(()=>{},2147483647)'], { signal });
+    await this.checked(['start', name], { signal });
+    await this.checked(['exec', name, 'node', '/runner/helper.mjs', 'copy'], { signal });
+    const result = await this.checked(['exec', name, 'npm', 'ci', '--ignore-scripts', '--no-audit', '--no-fund', '--registry=https://registry.npmjs.org', '--userconfig=/dev/null', '--globalconfig=/dev/null'], { signal, install: true, code: 'dependencies_failed' });
+    // No repository code executes until its network is removed. Dependencies were fetched with scripts disabled.
+    await this.checked(['network', 'disconnect', 'bridge', name], { signal, code: 'network_isolation_failed' });
     return { command: 'npm ci --ignore-scripts --no-audit --no-fund', ...result };
   }
   async test(workspace, signal) {
+    const container = this.containers.get(workspace); if (!container) throw new AgentError('container_missing', 'No isolated test workspace exists.');
     const results = [];
     for (const command of this.policy.tests) {
-      if (signal.aborted) throw new AgentError('cancelled', 'Job was cancelled.', 'cancelled');
-      const result = await this.execute(workspace, command, { signal }); results.push({ command: command.join(' '), ...result });
+      if (signal?.aborted) throw new AgentError('cancelled', 'Job was cancelled.', 'cancelled');
+      const result = await this.run('docker', ['exec', container.name, ...command], { timeoutMs: this.policy.timeoutMs, maxOutputBytes: this.policy.maxOutputBytes, signal });
+      results.push({ command: command.join(' '), ...result });
       if (result.exitCode !== 0) throw Object.assign(new AgentError('tests_failed', 'An isolated test command failed; no PR will be created.', 'failed'), { tests: results });
     }
+    await this.checked(['exec', container.name, 'node', '/runner/helper.mjs', 'verify'], { signal, code: 'changed_after_tests' });
     return results;
+  }
+  async cleanup(workspace) {
+    const container = this.containers.get(workspace); if (!container) return;
+    await this.remove(container.name); this.containers.delete(workspace); await rm(container.manifestFile, { force: true });
   }
 }

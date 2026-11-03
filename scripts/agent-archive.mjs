@@ -25,7 +25,7 @@ function paxFields(buffer) {
     const record = buffer.subarray(space + 1, end - 1).toString('utf8'), equals = record.indexOf('=');
     if (equals < 1) throw new AgentError('archive_format', 'Malformed archive metadata value.');
     const key = record.slice(0, equals);
-    if (key === 'linkpath' || key.startsWith('GNU.sparse')) throw new AgentError('archive_link', 'Links and sparse archive entries are not supported.');
+    if (!['path', 'mtime', 'atime', 'ctime', 'uid', 'gid', 'uname', 'gname', 'comment'].includes(key)) throw new AgentError('archive_link', 'Links and sparse archive entries are not supported.');
     output[key] = record.slice(equals + 1); position = end;
   }
   return output;
