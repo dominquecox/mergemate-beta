@@ -8,11 +8,8 @@ import { toUserMessage } from '../api/errors';
 import { StorageService } from '../storage';
 import { onSessionChange } from '../auth/session-events';
 import { WorkflowApiClient } from './api';
-import { isRunActive } from './agent-model';
+import { isRunActive, adoptRunUpdate } from './agent-model';
 
-export function adoptRunUpdate(current: WorkflowRun | null, incoming: WorkflowRun): WorkflowRun {
-  return current?.id === incoming.id && current.revision > incoming.revision ? current : incoming;
-}
 export function useAgentWorkspace(account: string, target: WorkflowTarget | null, isDemo: boolean) {
   const client = useMemo(() => apiMode.kind === 'http' && !isDemo ? new WorkflowApiClient({
     baseUrl: apiMode.baseUrl, platform: Platform.OS === 'web' ? 'web' : 'native', nativePlatform: Platform.OS === 'android' ? 'android' : 'ios',
@@ -28,7 +25,7 @@ export function useAgentWorkspace(account: string, target: WorkflowTarget | null
   const [busy, setBusy] = useState<'plan' | 'start' | 'cancel' | null>(null);
   const [error, setError] = useState('');
   const [refreshKey, setRefreshKey] = useState(0);
-  const generation = useRef(0), alive = useRef(false), actionLock = useRef(false);
+  const generation = useRef(0), alive = useRef(false), actionLock = useRef(false), actionVersion = useRef(0);
   const controllers = useRef(new Set<AbortController>());
   const uncertainStart = useRef<{ fingerprint: string; key: string } | null>(null);
   const selected = useRef(selectedRun); selected.current = selectedRun;
@@ -38,7 +35,7 @@ export function useAgentWorkspace(account: string, target: WorkflowTarget | null
   useEffect(() => {
     alive.current = true; ++generation.current;
     const invalidate = () => {
-      ++generation.current; client?.invalidateSession();
+      ++generation.current; ++actionVersion.current; client?.invalidateSession();
       for (const request of controllers.current) request.abort(); controllers.current.clear();
       actionLock.current = false; uncertainStart.current = null; setBusy(null);
       setCapabilities(null); setRuns([]); setSelectedRun(null); setError('Your session changed. Reopen Agent workflows to continue.');
@@ -86,15 +83,15 @@ export function useAgentWorkspace(account: string, target: WorkflowTarget | null
   }, [client, selectedRun?.id, selectedRun ? isRunActive(selectedRun.status) : false, receive]));
   const generate = async (intent: string, mode: WorkflowDefinition['mode']): Promise<WorkflowDefinition | null> => {
     if (!client || !target || actionLock.current) return null;
-    actionLock.current = true; setBusy('plan'); setError('');
+    actionLock.current = true; const operation = ++actionVersion.current; setBusy('plan'); setError('');
     const epoch = generation.current, request = controller();
     try { const value = await client.plan({ intent, target, mode }, request.signal); return valid(epoch) ? value : null; }
     catch (cause) { if (valid(epoch) && !request.signal.aborted) setError(toUserMessage(cause, 'Could not generate a workflow.')); return null; }
-    finally { done(request); actionLock.current = false; if (valid(epoch)) setBusy(null); }
+    finally { done(request); if (operation === actionVersion.current) { actionLock.current = false; if (valid(epoch)) setBusy(null); } }
   };
   const start = async (definition: WorkflowDefinition, confirmCodeChanges: boolean) => {
     if (!client || actionLock.current) return;
-    actionLock.current = true; setBusy('start'); setError('');
+    actionLock.current = true; const operation = ++actionVersion.current; setBusy('start'); setError('');
     const epoch = generation.current, request = controller();
     const fingerprint = JSON.stringify({ definition, confirmCodeChanges });
     const key = uncertainStart.current?.fingerprint === fingerprint ? uncertainStart.current.key : Crypto.randomUUID();
@@ -103,16 +100,16 @@ export function useAgentWorkspace(account: string, target: WorkflowTarget | null
       const run = await client.start({ definition, idempotencyKey: key, ...(definition.mode === 'code_fix' ? { confirmCodeChanges } : {}) }, request.signal);
       if (valid(epoch)) { uncertainStart.current = null; receive(run); }
     } catch (cause) { if (valid(epoch) && !request.signal.aborted) setError(toUserMessage(cause, 'Could not start the workflow. Retry uses the same request key to avoid duplicate runs.')); }
-    finally { done(request); actionLock.current = false; if (valid(epoch)) setBusy(null); }
+    finally { done(request); if (operation === actionVersion.current) { actionLock.current = false; if (valid(epoch)) setBusy(null); } }
   };
   const cancel = async () => {
     const run = selected.current;
     if (!client || !run || !isRunActive(run.status) || actionLock.current) return;
-    actionLock.current = true; setBusy('cancel'); setError('');
+    actionLock.current = true; const operation = ++actionVersion.current; setBusy('cancel'); setError('');
     const epoch = generation.current, request = controller();
     try { const value = await client.cancel(run.id, request.signal); if (valid(epoch) && selected.current?.id === run.id) receive(value); }
     catch (cause) { if (valid(epoch) && !request.signal.aborted) setError(toUserMessage(cause, 'Could not cancel the run. Its status has not been changed locally.')); }
-    finally { done(request); actionLock.current = false; if (valid(epoch)) setBusy(null); }
+    finally { done(request); if (operation === actionVersion.current) { actionLock.current = false; if (valid(epoch)) setBusy(null); } }
   };
   const selectRun = async (run: WorkflowRun) => {
     setSelectedRun(run); setError('');

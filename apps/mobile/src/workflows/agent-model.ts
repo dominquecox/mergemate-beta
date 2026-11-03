@@ -75,3 +75,8 @@ export function evidenceText(value: unknown, limit = 4000): string {
   try { const text = typeof value === 'string' ? value : JSON.stringify(value, null, 2); return (text ?? '').slice(0, limit); }
   catch { return 'Evidence could not be displayed.'; }
 }
+
+/** The server revision fences stale polling/cancel responses for the same durable run. */
+export function adoptRunUpdate(current: WorkflowRun | null, incoming: WorkflowRun): WorkflowRun {
+  return current?.id === incoming.id && current.revision > incoming.revision ? current : incoming;
+}

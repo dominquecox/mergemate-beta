@@ -1,8 +1,8 @@
 import React, { useMemo, useRef, useState } from 'react';
 import { View, ScrollView, Pressable, TextInput, KeyboardAvoidingView, Platform } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import type { WorkflowDefinition, WorkflowRun } from '@mergemate/contracts';
-import { WorkflowDefinition as DefinitionSchema } from '@mergemate/contracts';
+import type { WorkflowDefinition } from '@mergemate/contracts';
+import { WorkflowDefinition as DefinitionSchema, WorkflowTarget as TargetSchema } from '@mergemate/contracts';
 import { useAuth } from '../src/context/AuthContext';
 import { useConsent } from '../src/context/ConsentContext';
 import { useTheme } from '../src/context/ThemeContext';
@@ -23,7 +23,7 @@ export default function AgentWorkflowsScreen() {
   const params = useLocalSearchParams<{ target?: string; mode?: string }>();
   const target = typeof params.target === 'string' && targetFromUrl(params.target) ? params.target : '';
   const mode: AgentMode = params.mode === 'code_fix' ? 'code_fix' : 'review';
-  return user ? <AgentWorkspace key={user.id} account={user.id} isDemo={isDemo} initialTarget={target} initialMode={mode} /> : <LoadingState title="Checking your session..." message="Workflow runs belong to your account." />;
+  return user ? <AgentWorkspace key={`${user.id}:${target}:${mode}`} account={user.id} isDemo={isDemo} initialTarget={target} initialMode={mode} /> : <LoadingState title="Checking your session..." message="Workflow runs belong to your account." />;
 }
 function AgentWorkspace({ account, isDemo, initialTarget, initialMode }: { account: string; isDemo: boolean; initialTarget: string; initialMode: AgentMode }) {
   const { colors, typography } = useTheme();
@@ -31,13 +31,19 @@ function AgentWorkspace({ account, isDemo, initialTarget, initialMode }: { accou
   const { aiConsentGranted, needsReview, pending: consentPending } = useConsent();
   const router = useRouter();
   const [targetText, setTargetText] = useState(initialTarget);
+  const [baseBranch, setBaseBranch] = useState('');
   const [mode, setMode] = useState<AgentMode>(initialMode);
   const [intent, setIntent] = useState('');
   const [definition, setDefinition] = useState<WorkflowDefinition | null>(null);
   const [confirmCodeChanges, setConfirmCodeChanges] = useState(false);
   const [localError, setLocalError] = useState('');
   const draftVersion = useRef(0);
-  const target = useMemo(() => targetFromUrl(targetText), [targetText]);
+  const target = useMemo(() => {
+    const parsed = targetFromUrl(targetText);
+    if (!parsed) return null;
+    const value = TargetSchema.safeParse({ ...parsed, ...(mode === 'code_fix' && baseBranch.trim() ? { baseBranch: baseBranch.trim() } : {}) });
+    return value.success ? value.data : null;
+  }, [targetText, baseBranch, mode]);
   const workspace = useAgentWorkspace(account, target, isDemo);
   const busy = workspace.busy !== null;
   const consentReady = aiConsentGranted && !needsReview && !consentPending;
@@ -46,7 +52,7 @@ function AgentWorkspace({ account, isDemo, initialTarget, initialMode }: { accou
   const canRun = !!definition && !!target && sameTarget(definition.target, target) && !!capability?.available && workspace.configured && consentReady && (!confirmRequired(definition) || confirmCodeChanges) && !busy;
   const surface = { backgroundColor: colors.surface, borderColor: colors.border, borderWidth: 1, borderRadius: 22, padding: 20 };
   const input = { minHeight: 48, padding: 14, borderRadius: 14, borderWidth: 1, borderColor: colors.borderLight, color: colors.text, backgroundColor: colors.surfaceElevated, fontFamily: typography.body.fontFamily };
-  const resetDraft = () => { draftVersion.current++; setDefinition(null); setConfirmCodeChanges(false); setLocalError(''); workspace.clearError(); };
+  const resetDraft = () => { draftVersion.current++; setDefinition(null); setConfirmCodeChanges(false); setLocalError(''); workspace.clearError(); workspace.clearRun(); };
   const chooseTemplate = (id: string) => {
     if (busy) return;
     const template = AGENT_TEMPLATES.find(value => value.id === id)!;
@@ -60,7 +66,10 @@ function AgentWorkspace({ account, isDemo, initialTarget, initialMode }: { accou
     if (!targetCompatible || !consentReady) return;
     const version = ++draftVersion.current; setLocalError(''); setConfirmCodeChanges(false); workspace.clearRun();
     const value = await workspace.generate(intent.trim(), mode);
-    if (value && version === draftVersion.current) { setDefinition(value); setIntent(value.intent); }
+    if (value && version === draftVersion.current) {
+      if (value.mode !== mode || !target || !sameTarget(value.target, target)) { setLocalError('Generated workflow did not match the requested target and mode. Generate again.'); return; }
+      setDefinition(value); setIntent(value.intent);
+    }
   };
   const changeDefinition = (next: WorkflowDefinition | null) => {
     if (busy) return;
@@ -69,7 +78,7 @@ function AgentWorkspace({ account, isDemo, initialTarget, initialMode }: { accou
   };
   const retry = () => {
     const run = workspace.selectedRun; if (!run || busy) return;
-    const d = run.definition; setTargetText(targetUrl(d)); setMode(d.mode); setIntent(d.intent); setDefinition(d); setConfirmCodeChanges(false); setLocalError(''); workspace.clearRun();
+    const d = run.definition; setTargetText(targetUrl(d)); setBaseBranch(d.target.baseBranch ?? ''); setMode(d.mode); setIntent(d.intent); setDefinition(d); setConfirmCodeChanges(false); setLocalError(''); workspace.clearRun();
   };
   return <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1, backgroundColor: colors.background }}>
     <Header title="Agent workspace" showBack rightAction={<Button title="Refresh" variant="ghost" disabled={busy} onPress={workspace.refresh} />} />
@@ -97,7 +106,7 @@ function AgentWorkspace({ account, isDemo, initialTarget, initialMode }: { accou
             <Text style={[typography.caption, { color: colors.textSecondary }]}>Coding needs a configured isolated executor and repository write authorization. Existing connection scopes are not silently expanded.</Text>
           </View>
           <View style={{ gap: 8 }}><Text accessibilityRole="header" style={[typography.headline, { color: colors.text }]}>Recent runs</Text>
-            {workspace.historyLoading ? <Text style={[typography.footnote, { color: colors.textSecondary }]}>Loading runs...</Text> : workspace.historyError ? <Text accessibilityRole="alert" style={[typography.footnote, { color: colors.riskHigh }]}>{workspace.historyError}</Text> : workspace.runs.length ? workspace.runs.map(run => <Pressable key={run.id} accessibilityRole="button" accessibilityLabel={`Inspect run ${run.definition.name}`} onPress={() => void workspace.selectRun(run)} style={[surface, { minHeight: 64, padding: 14, gap: 5 }]}><Text numberOfLines={2} style={[typography.subhead, { color: colors.text }]}>{run.definition.name}</Text><Text style={[typography.caption, { color: colors.textSecondary }]}>{displayRunStatus(run.status)}</Text></Pressable>) : <Text style={[typography.footnote, { color: colors.textSecondary }]}>No execution receipts loaded yet.</Text>}
+            {workspace.historyLoading ? <Text style={[typography.footnote, { color: colors.textSecondary }]}>Loading runs...</Text> : workspace.historyError ? <Text accessibilityRole="alert" style={[typography.footnote, { color: colors.riskHigh }]}>{workspace.historyError}</Text> : workspace.runs.length ? workspace.runs.map(run => <Pressable key={run.id} accessibilityRole="button" accessibilityLabel={`Inspect run ${run.definition.name}`} disabled={busy} onPress={() => void workspace.selectRun(run)} style={[surface, { minHeight: 64, padding: 14, gap: 5 }]}><Text numberOfLines={2} style={[typography.subhead, { color: colors.text }]}>{run.definition.name}</Text><Text style={[typography.caption, { color: colors.textSecondary }]}>{displayRunStatus(run.status)}</Text></Pressable>) : <Text style={[typography.footnote, { color: colors.textSecondary }]}>No execution receipts loaded yet.</Text>}
           </View>
         </View>
         <View style={{ flex: 1, width: '100%', minWidth: 0, gap: 16 }}>
@@ -108,6 +117,7 @@ function AgentWorkspace({ account, isDemo, initialTarget, initialMode }: { accou
               {(['review','code_fix'] as const).map(value => <Pressable key={value} accessibilityRole="radio" accessibilityLabel={value === 'review' ? 'PR review workflow' : 'Code fix workflow'} accessibilityState={{ checked: mode === value, disabled: busy }} aria-checked={mode === value} disabled={busy} onPress={() => { setMode(value); resetDraft(); }} style={{ flex: 1, minHeight: 48, borderRadius: 12, justifyContent: 'center', alignItems: 'center', backgroundColor: mode === value ? colors.brand : colors.surface }}><Text style={[typography.subhead, { color: mode === value ? '#FFFFFF' : colors.text }]}>{value === 'review' ? 'Review a PR' : 'Prepare a fix'}</Text></Pressable>)}
             </View>
             <TextInput accessibilityLabel="GitHub workflow target URL" value={targetText} editable={!busy} onChangeText={value => { setTargetText(value); resetDraft(); }} maxLength={400} placeholder={mode === 'review' ? 'https://github.com/owner/repo/pull/123' : 'GitHub issue, repository or pull request URL'} placeholderTextColor={colors.textMuted} autoCapitalize="none" autoCorrect={false} keyboardType="url" style={input} />
+            {mode === 'code_fix' && <TextInput accessibilityLabel="Coding base branch (optional)" value={baseBranch} editable={!busy} onChangeText={value => { setBaseBranch(value); resetDraft(); }} maxLength={160} placeholder="Base branch (optional; repository default otherwise)" placeholderTextColor={colors.textMuted} autoCapitalize="none" autoCorrect={false} style={input} />}
             {!!targetText && !target && <Text accessibilityRole="alert" style={[typography.caption, { color: colors.riskHigh }]}>Use a direct HTTPS GitHub repository, issue or PR link without a query or fragment.</Text>}
             {!!target && !targetCompatible && <Text accessibilityRole="alert" style={[typography.caption, { color: colors.riskHigh }]}>Review workflows need a PR. Choose Prepare a fix for an issue or repository task.</Text>}
             <Button title="Generate workflow" loading={workspace.busy === 'plan'} disabled={!workspace.configured || !targetCompatible || intent.trim().length < 3 || !consentReady || busy} onPress={generate} />
@@ -123,7 +133,7 @@ function AgentWorkspace({ account, isDemo, initialTarget, initialMode }: { accou
               <View style={[surface, { padding: 16, gap: 10, opacity: step.enabled ? 1 : 0.65 }]}>
                 <View style={{ flexDirection: 'row', gap: 12, alignItems: 'center' }}><View style={{ width: 44, height: 44, borderRadius: 14, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.surfaceElevated }}><Icon name={AGENT_STEP_META[step.kind].icon as IconName} size={21} color={colors.brandLight} /></View><View style={{ flex: 1 }}><Text style={[typography.subhead, { color: colors.text, fontWeight: '700' }]}>{step.title}</Text><Text style={[typography.footnote, { color: colors.textSecondary, marginTop: 4 }]}>{AGENT_STEP_META[step.kind].detail}</Text></View></View>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                  <Pressable accessibilityRole="checkbox" accessibilityLabel={`Enable ${step.title}`} accessibilityState={{ checked: step.enabled, disabled: busy }} aria-checked={step.enabled} disabled={busy} onPress={() => changeDefinition(toggleAgentStep(definition, step.id))} style={{ minHeight: 44, paddingHorizontal: 8, flexDirection: 'row', alignItems: 'center', gap: 8 }}><Icon name={step.enabled ? 'checkbox' : 'square-outline'} size={21} color={colors.brandLight} /><Text style={[typography.caption, { color: colors.textSecondary }]}>{step.enabled ? 'Enabled' : 'Skipped'}</Text></Pressable>
+                  <Pressable accessibilityRole="checkbox" accessibilityLabel={`Enable ${step.title}`} accessibilityState={{ checked: step.enabled, disabled: busy }} aria-checked={step.enabled} disabled={busy} onPress={() => changeDefinition(toggleAgentStep(definition, step.id))} style={{ minHeight: 44, paddingHorizontal: 8, flexDirection: 'row', alignItems: 'center', gap: 8 }}><Icon name={step.enabled ? 'checkbox' : 'square-outline'} size={21} color={colors.brandLight} /><Text style={[typography.caption, { color: colors.textSecondary }]}>{step.enabled ? 'Enabled' : 'Disabled'}</Text></Pressable>
                   <View style={{ flex: 1 }} />
                   {([-1,1] as const).map(direction => <Pressable key={direction} accessibilityRole="button" accessibilityLabel={`Move ${step.title} ${direction === -1 ? 'up' : 'down'}`} disabled={busy || !moveAgentStep(definition, index, direction)} onPress={() => changeDefinition(moveAgentStep(definition, index, direction))} style={{ width: 44, minHeight: 44, justifyContent: 'center', alignItems: 'center', opacity: busy || !moveAgentStep(definition, index, direction) ? 0.35 : 1 }}><Icon name={direction === -1 ? 'arrow-up-outline' : 'arrow-down-outline'} size={19} color={colors.brandLight} /></Pressable>)}
                 </View>
