@@ -3,6 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { constants } from 'node:fs';
 import { AgentError, validateJob, validateChanges, selectContext, withinWorkspace, sha256, safeRelative } from './agent-policy.mjs';
+import { validateArchive } from './agent-archive.mjs';
 import { LeaseGuard } from './agent-bridge.mjs';
 
 export async function validateDependencyPolicy(root) {
@@ -37,7 +38,7 @@ export async function executeJob(rawJob, { policy, bridge, github, docker, signa
     if (!await docker.available()) throw new AgentError('docker_unavailable', 'The reviewed digest-pinned Docker image is not installed or Docker is unavailable.');
     await github.verifyTarget(job, guard.signal);
     temporary = await mkdtemp(path.join(tempRoot, 'mergemate-agent-')); const workspace = path.join(temporary, 'workspace'), archive = path.join(temporary, 'source.tar.gz'); await mkdir(workspace, { mode: 0o700 });
-    await github.downloadArchive(job, archive, guard.signal); await guard.assertActive(); await docker.extract(workspace, archive, guard.signal);
+    await github.downloadArchive(job, archive, guard.signal); await validateArchive(archive, policy); await guard.assertActive(); await docker.extract(workspace, archive, guard.signal);
     await validateDependencyPolicy(workspace);
     const files = await selectContext(workspace, policy, job.intent); await guard.assertActive();
     const result = await bridge.jobOperation(job, 'patch', { files }, guard.signal);
