@@ -138,7 +138,8 @@ function PrWorkspace({owner,repo,number}:{owner:string;repo:string;number:string
             {!!(error||linkError)&&<Text accessibilityRole="alert" style={{color:colors.riskHigh,padding:12}}>{error??linkError}</Text>}
             {isDemo&&tour==="1"&&!tourClosed&&<DemoTour onClose={()=>setTourClosed(true)}/>}
             {/* Unified Modern PR Header Surface */}
-            <View style={[styles.headerCard, { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.lg, padding: 16 }]}>
+            <View style={[styles.headerCard, { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: 24, padding: 20 }]}>
+              <Text style={[typography.code,{color:colors.brandLight,fontSize:10,letterSpacing:1.2,marginBottom:12}]}>PR WORKSPACE</Text>
               <View style={styles.topRow}>
                 <TouchableOpacity onPress={()=>void loadPr()} disabled={isRefreshing} accessibilityRole="button" accessibilityLabel="Refresh workspace" style={{minHeight:44,minWidth:44,alignItems:"center",justifyContent:"center"}}><Icon name="refresh-outline" size={18} color={colors.textMuted}/></TouchableOpacity>
                 <View style={{ flexDirection: "row", alignItems: "center", gap: 6, flex: 1, minWidth: 0, flexWrap: "wrap" }}>
@@ -154,7 +155,7 @@ function PrWorkspace({owner,repo,number}:{owner:string;repo:string;number:string
               </View>
 
               <Text
-                style={[typography.headline, { color: colors.text, marginTop: 10, fontSize: 18, lineHeight: 24, fontWeight: "700" }]}
+                style={[typography.headline, { color: colors.text, marginTop: 10, fontSize: 22, lineHeight: 28, fontWeight: "700" }]}
                 accessibilityRole="header"
               >
                 {detail.title}
@@ -174,6 +175,7 @@ function PrWorkspace({owner,repo,number}:{owner:string;repo:string;number:string
               />
             </View>
 
+            <TouchableOpacity accessibilityRole="button" accessibilityLabel="Configure an agent workflow for this pull request" onPress={()=>router.push({pathname:'/workflows',params:{target:detail.htmlUrl,mode:'review'}})} style={{minHeight:60,padding:14,borderRadius:18,backgroundColor:colors.brandSubtle,borderWidth:1,borderColor:colors.brandMuted,flexDirection:'row',alignItems:'center',gap:12}}><Icon name="git-network-outline" size={22} color={colors.brandLight}/><View style={{flex:1}}><Text style={[typography.subhead,{color:colors.text,fontWeight:'600'}]}>Put agents on the next step</Text><Text style={[typography.caption,{color:colors.textSecondary,marginTop:3}]}>Configure a workflow with this PR's context</Text></View><Icon name="arrow-forward-outline" size={18} color={colors.brandLight}/></TouchableOpacity>
             <PrivacyStrip onOpenSettings={()=>router.push("/(tabs)/settings")}/>
             <PrSecretBanner detail={detail}/>
             {/* 5-Second Executive Verdict & Agent Provenance Hero */}

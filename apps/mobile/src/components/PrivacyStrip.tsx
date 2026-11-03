@@ -12,7 +12,7 @@ export function PrivacyStrip({ onOpenSettings }: { onOpenSettings: () => void })
     <View testID="privacy-strip" style={{ marginBottom: spacing.xs }}>
       <TouchableOpacity
         accessibilityRole="button"
-        accessibilityLabel="Read-only. MergeMate cannot merge, approve or comment. What we send to the model"
+        accessibilityLabel="Workspace permissions and what we send to the model"
         accessibilityState={{ expanded: open }}
         aria-expanded={open}
         onPress={() => setOpen((v) => !v)}
@@ -29,7 +29,7 @@ export function PrivacyStrip({ onOpenSettings }: { onOpenSettings: () => void })
         }}
       >
         <Icon name="lock-closed" size={12} color={colors.riskLow} />
-        <Text style={[typography.caption, { color: colors.textSecondary }]}>Read-only · You stay in control</Text>
+        <Text style={[typography.caption, { color: colors.textSecondary }]}>Permissions, privacy & agent controls</Text>
         <Icon name={open ? "chevron-up" : "chevron-down"} size={13} color={colors.textSecondary} />
       </TouchableOpacity>
       {open && (

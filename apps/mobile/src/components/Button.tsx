@@ -59,7 +59,7 @@ export function Button({
           backgroundColor: bg,
           borderColor: border,
           borderWidth: variant === "secondary" ? 1 : 0,
-          borderRadius: radius.sm,
+          borderRadius: radius.lg,
           opacity: disabled ? 0.55 : pressed ? 0.85 : 1,
         },
         style,
