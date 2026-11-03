@@ -105,8 +105,12 @@ export function Sidebar() {
           />
         ))}
       </View>
-      <Link href="/workflows" asChild><Pressable accessibilityRole="link" accessibilityLabel="Agent workflows" style={StyleSheet.flatten({ minHeight: 48, marginTop: 16, paddingHorizontal: 12, borderRadius: 14, flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: colors.brandSubtle })}>
-        <Icon name="git-network-outline" size={20} color={colors.brandLight}/><Text style={[typography.subhead,{color:colors.brandLight}]}>Agent workflows</Text>
+      <Link href="/workflows" asChild><Pressable accessibilityRole="link" accessibilityLabel="Agent workflows" style={StyleSheet.flatten({ minHeight: 44, marginTop: 14, paddingHorizontal: 12, borderRadius: 12, borderWidth: 1, borderColor: segments[0] === 'workflows' ? colors.brandLight : colors.brandMuted, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10, backgroundColor: segments[0] === 'workflows' ? colors.brand : colors.brandSubtle })}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+          <Icon name="git-network-outline" size={18} color={segments[0] === 'workflows' ? '#FFFFFF' : colors.brandLight}/>
+          <Text style={[typography.subhead,{color: segments[0] === 'workflows' ? '#FFFFFF' : colors.brandLight, fontWeight: '600'}]}>Agent workflows</Text>
+        </View>
+        <Icon name="add-circle-outline" size={16} color={segments[0] === 'workflows' ? '#FFFFFF' : colors.brandLight}/>
       </Pressable></Link>
       <View style={{flex:1}} />
       <View style={[styles.guard,{borderColor:colors.border}]}>

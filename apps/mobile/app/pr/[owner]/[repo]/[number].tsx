@@ -137,46 +137,51 @@ function PrWorkspace({owner,repo,number}:{owner:string;repo:string;number:string
           <ScrollView onContentSizeChange={noteKeyboard.onContentSizeChange} keyboardDismissMode={Platform.OS==="ios"?"interactive":"on-drag"} keyboardShouldPersistTaps="handled" testID="pr-workspace-scroll" ref={scroll} onScroll={event=>{scrollOffset.current=event.nativeEvent.contentOffset.y;}} scrollEventThrottle={16} contentContainerStyle={{ padding:isDesktop?24:spacing.base, paddingBottom:24 }}>
             {!!(error||linkError)&&<Text accessibilityRole="alert" style={{color:colors.riskHigh,padding:12}}>{error??linkError}</Text>}
             {isDemo&&tour==="1"&&!tourClosed&&<DemoTour onClose={()=>setTourClosed(true)}/>}
-            {/* Unified Modern PR Header Surface */}
-            <View style={[styles.headerCard, { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: 24, padding: 20 }]}>
-              <Text style={[typography.code,{color:colors.brandLight,fontSize:10,letterSpacing:1.2,marginBottom:12}]}>PR WORKSPACE</Text>
-              <View style={styles.topRow}>
-                <TouchableOpacity onPress={()=>void loadPr()} disabled={isRefreshing} accessibilityRole="button" accessibilityLabel="Refresh workspace" style={{minHeight:44,minWidth:44,alignItems:"center",justifyContent:"center"}}><Icon name="refresh-outline" size={18} color={colors.textMuted}/></TouchableOpacity>
-                <View style={{ flexDirection: "row", alignItems: "center", gap: 6, flex: 1, minWidth: 0, flexWrap: "wrap" }}>
-                  <Icon name="folder-outline" size={13} color={colors.textMuted} />
-                  <Text style={[typography.caption, { color: colors.textMuted, fontFamily: typography.code.fontFamily }]} numberOfLines={1}>
-                    {detail.owner}/{detail.repo} · #{detail.number}
-                  </Text>
+            {/* Top Bento Row on Desktop: PR Header + Agent Workflow Dispatch */}
+            <View style={isDesktop ? styles.topBentoHeaderRow : { gap: 10 }}>
+              {/* Unified Modern PR Header Surface */}
+              <View style={[styles.headerCard, { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: 16, padding: 16, flex: isDesktop ? 7 : undefined }]}>
+                <Text style={[typography.code,{color:colors.brandLight,fontSize:10,letterSpacing:1.1,marginBottom:8}]}>PR WORKSPACE</Text>
+                <View style={styles.topRow}>
+                  <TouchableOpacity onPress={()=>void loadPr()} disabled={isRefreshing} accessibilityRole="button" accessibilityLabel="Refresh workspace" style={{minHeight:44,minWidth:44,alignItems:"center",justifyContent:"center"}}><Icon name="refresh-outline" size={18} color={colors.textMuted}/></TouchableOpacity>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 6, flex: 1, minWidth: 0, flexWrap: "wrap" }}>
+                    <Icon name="folder-outline" size={13} color={colors.textMuted} />
+                    <Text style={[typography.caption, { color: colors.textMuted, fontFamily: typography.code.fontFamily }]} numberOfLines={1}>
+                      {detail.owner}/{detail.repo} · #{detail.number}
+                    </Text>
+                  </View>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                    <StatusPill status={detail.status} />
+                    {detail.mergeState && <MergeStateChip state={detail.mergeState} />}
+                  </View>
                 </View>
-                <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-                  <StatusPill status={detail.status} />
-                  {detail.mergeState && <MergeStateChip state={detail.mergeState} />}
-                </View>
+
+                <Text
+                  style={[typography.title2, { color: colors.text, marginTop: 8, fontWeight: "700" }]}
+                  accessibilityRole="header"
+                >
+                  {detail.title}
+                </Text>
+
+                <MetaTelemetryModal compact telemetry={detail.risk?.telemetry??detail.summary?.telemetry} sample={isDemo}/>
+                <GitMetadataCard
+                  inline
+                  baseBranch={detail.baseBranch}
+                  headBranch={detail.headBranch}
+                  headSha={detail.headSha}
+                  author={detail.author}
+                  createdAt={detail.createdAt}
+                  additions={detail.additions}
+                  deletions={detail.deletions}
+                  fileCount={detail.files?.length ?? detail.changedFilesCount}
+                />
               </View>
 
-              <Text
-                style={[typography.headline, { color: colors.text, marginTop: 10, fontSize: 22, lineHeight: 28, fontWeight: "700" }]}
-                accessibilityRole="header"
-              >
-                {detail.title}
-              </Text>
-
-              <MetaTelemetryModal compact telemetry={detail.risk?.telemetry??detail.summary?.telemetry} sample={isDemo}/>
-              <GitMetadataCard
-                inline
-                baseBranch={detail.baseBranch}
-                headBranch={detail.headBranch}
-                headSha={detail.headSha}
-                author={detail.author}
-                createdAt={detail.createdAt}
-                additions={detail.additions}
-                deletions={detail.deletions}
-                fileCount={detail.files?.length ?? detail.changedFilesCount}
-              />
+              <View style={[isDesktop ? { flex: 5, gap: 10 } : { gap: 10 }]}>
+                <TouchableOpacity accessibilityRole="button" accessibilityLabel="Configure an agent workflow for this pull request" onPress={()=>router.push({pathname:'/workflows',params:{target:detail.htmlUrl,mode:'review'}})} style={{minHeight:56,padding:14,borderRadius:16,backgroundColor:colors.brandSubtle,borderWidth:1,borderColor:colors.brandMuted,flexDirection:'row',alignItems:'center',gap:12}}><Icon name="git-network-outline" size={20} color={colors.brandLight}/><View style={{flex:1}}><Text style={[typography.subhead,{color:colors.text,fontWeight:'700'}]}>Put agents on the next step</Text><Text style={[typography.caption,{color:colors.textSecondary,marginTop:2}]}>Configure a workflow with this PR's context</Text></View><Icon name="arrow-forward-outline" size={16} color={colors.brandLight}/></TouchableOpacity>
+                <PrivacyStrip onOpenSettings={()=>router.push("/(tabs)/settings")}/>
+              </View>
             </View>
-
-            <TouchableOpacity accessibilityRole="button" accessibilityLabel="Configure an agent workflow for this pull request" onPress={()=>router.push({pathname:'/workflows',params:{target:detail.htmlUrl,mode:'review'}})} style={{minHeight:60,padding:14,borderRadius:18,backgroundColor:colors.brandSubtle,borderWidth:1,borderColor:colors.brandMuted,flexDirection:'row',alignItems:'center',gap:12}}><Icon name="git-network-outline" size={22} color={colors.brandLight}/><View style={{flex:1}}><Text style={[typography.subhead,{color:colors.text,fontWeight:'600'}]}>Put agents on the next step</Text><Text style={[typography.caption,{color:colors.textSecondary,marginTop:3}]}>Configure a workflow with this PR's context</Text></View><Icon name="arrow-forward-outline" size={18} color={colors.brandLight}/></TouchableOpacity>
-            <PrivacyStrip onOpenSettings={()=>router.push("/(tabs)/settings")}/>
             <PrSecretBanner detail={detail}/>
             {/* 5-Second Executive Verdict & Agent Provenance Hero */}
             {(() => {
@@ -370,8 +375,9 @@ function PrWorkspace({owner,repo,number}:{owner:string;repo:string;number:string
             })()}
 
             <PrVisualDiffSection detail={detail}/>
+            <View style={isDesktop ? styles.bottomBentoGrid : undefined}>
             {/* Changed Files List */}
-            <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.lg, marginTop: spacing.sm }]}>
+            <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.lg, marginTop: spacing.sm, flex: isDesktop ? 1.45 : undefined, minWidth: 0 }]}>
               <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
                 <Text style={[typography.headline, { color: colors.text }]} accessibilityRole="header">
                   Files Changed ({detail.changedFilesCount})
@@ -400,8 +406,8 @@ function PrWorkspace({owner,repo,number}:{owner:string;repo:string;number:string
               ) : (
                 <View style={{ marginTop: spacing.xs }}>
                   {detail.files.map((file) => (
-                    <View testID={`workspace-file-${file.filename}`} ref={(node) => { fileRows.current[file.filename] = node; }} key={file.filename} style={{ marginTop: 12, backgroundColor: colors.surfaceElevated, borderRadius: 8, overflow: "hidden" }}>
-                      <TouchableOpacity accessibilityRole="button" accessibilityLabel={`Toggle diff for ${file.filename}`} accessibilityState={{ expanded: expandedFiles.includes(file.filename) }} aria-expanded={expandedFiles.includes(file.filename)} onPress={() => setExpandedFiles((prev) => prev.includes(file.filename) ? prev.filter((name) => name !== file.filename) : [...prev, file.filename])} style={{ flexDirection: "row", alignItems: "center", padding: 12, gap: 8, minHeight: 48 }}><Icon name={expandedFiles.includes(file.filename) ? "chevron-down" : "chevron-forward"} size={16} color={colors.textSecondary} /><Text style={[typography.code, { color: colors.text, flex: 1 }]}>{file.filename} · {file.status}</Text><Text style={[typography.code, { color: colors.riskLow, fontSize: 11 }]}>+{file.additions}</Text><Text style={[typography.code, { color: colors.riskHigh, fontSize: 11 }]}>-{file.deletions}</Text></TouchableOpacity>
+                    <View testID={`workspace-file-${file.filename}`} ref={(node) => { fileRows.current[file.filename] = node; }} key={file.filename} style={{ marginTop: 10, backgroundColor: colors.surfaceElevated, borderRadius: 10, overflow: "hidden" }}>
+                      <TouchableOpacity accessibilityRole="button" accessibilityLabel={`Toggle diff for ${file.filename}`} accessibilityState={{ expanded: expandedFiles.includes(file.filename) }} aria-expanded={expandedFiles.includes(file.filename)} onPress={() => setExpandedFiles((prev) => prev.includes(file.filename) ? prev.filter((name) => name !== file.filename) : [...prev, file.filename])} style={{ flexDirection: "row", alignItems: "center", padding: 12, gap: 8, minHeight: 44 }}><Icon name={expandedFiles.includes(file.filename) ? "chevron-down" : "chevron-forward"} size={16} color={colors.textSecondary} /><Text style={[typography.code, { color: colors.text, flex: 1 }]}>{file.filename} · {file.status}</Text><Text style={[typography.code, { color: colors.riskLow, fontSize: 11 }]}>+{file.additions}</Text><Text style={[typography.code, { color: colors.riskHigh, fontSize: 11 }]}>-{file.deletions}</Text></TouchableOpacity>
                       {!!file.previousPath && <Text style={{ color: colors.textSecondary, paddingHorizontal: 12 }}>Previously: {file.previousPath}</Text>}
                       {expandedFiles.includes(file.filename) && file.patchState === "partial" && <Text accessibilityRole="alert" style={{ color: colors.textSecondary, padding: 12 }}>Partial patch: this is not the complete diff. Open this PR in GitHub for the full file.</Text>}
                       {expandedFiles.includes(file.filename) && (file.patchSnippet ? <DiffView patch={file.patchSnippet} wrap={Object.prototype.hasOwnProperty.call(fileWrap, file.filename) ? fileWrap[file.filename] ?? true : true} onWrapChange={(wrap) => setFileWrap((old) => ({ ...old, [file.filename]: wrap }))} /> : <Text style={[typography.code, { color: colors.textSecondary, padding: 12, borderTopWidth: 1, borderTopColor: colors.border }]}>Patch unavailable: the file may be binary, empty or too large for GitHub to include. Open this PR in GitHub.</Text>)}
@@ -424,7 +430,7 @@ function PrWorkspace({owner,repo,number}:{owner:string;repo:string;number:string
               {!!pageError.files && <Text accessibilityRole="alert" style={[typography.footnote, { color: colors.riskHigh, padding: 16 }]}>{pageError.files}</Text>}
             </View>
 
-            <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.lg, marginTop: 16 }]}>
+            <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.lg, marginTop: isDesktop ? spacing.sm : 16, flex: isDesktop ? 1 : undefined, minWidth: 0 }]}>
               <Text accessibilityRole="header" style={[typography.headline, { color: colors.text }]}>Conversation</Text>
               {discussionGroups(detail.comments).map((group) => <View key={group.id} style={{ paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: colors.border }}><TouchableOpacity accessibilityRole="button" accessibilityLabel={group.kind === "conversation" ? "Toggle PR conversation" : group.kind === "review-summary" ? `Toggle submitted review by ${group.comments[0]?.author ?? "reviewer"}` : `Toggle review discussion for ${group.path ?? "file unavailable"}${group.line ? ` line ${group.line}` : ""}`} accessibilityState={{ expanded: !collapsedThreads.includes(group.id) }} aria-expanded={!collapsedThreads.includes(group.id)} onPress={() => setCollapsedThreads((old) => old.includes(group.id) ? old.filter((id) => id !== group.id) : [...old, group.id])} style={{ minHeight: 44, justifyContent: "center" }}><Text style={[typography.subhead, { color: colors.text }]}>{group.kind === "conversation" ? "PR conversation" : group.kind === "review-summary" ? `Review: ${(group.reviewState ?? "submitted").toLowerCase().replaceAll("_", " ")}` : `Review discussion · ${group.path ?? "file unavailable"}${group.line ? `:${group.line}` : ""}${group.outdated ? " (outdated)" : ""}`}</Text></TouchableOpacity>{!collapsedThreads.includes(group.id) && group.comments.map((comment) => <View key={comment.id} style={{ paddingVertical: 8 }}><Text style={[typography.footnote, { color: colors.textSecondary }]}>@{comment.author} · {relativeTime(comment.createdAt)}</Text><Text selectable style={[typography.body, { color: colors.text, marginTop: 4 }]}>{comment.body || "No review message."}</Text></View>)}</View>)}
               {commentCursor ? (
@@ -443,6 +449,7 @@ function PrWorkspace({owner,repo,number}:{owner:string;repo:string;number:string
               {capped.comments && <Text style={{ color: colors.textSecondary, marginTop: 8 }}>Discussion pagination limit reached. Open this PR in GitHub for the full history.</Text>}
               {!!pageError.comments && <Text accessibilityRole="alert" style={[typography.footnote, { color: colors.riskHigh, paddingTop: 12 }]}>{pageError.comments}</Text>}
             </View>
+            </View>
 
             {showNoteInput && <View><PrivateNotes onInputFocus={noteKeyboard.onFocus} onInputBlur={noteKeyboard.onBlur} focusRequest={noteFocus} onClose={()=>setShowNoteInput(false)} context={{kind:'pr',repo:`${owner}/${repo}`,number:Number(number)}}/></View>}
           </ScrollView>
@@ -455,7 +462,9 @@ function PrWorkspace({owner,repo,number}:{owner:string;repo:string;number:string
 }
 
 const styles = StyleSheet.create({
+  topBentoHeaderRow: { flexDirection: "row", gap: 16, alignItems: "stretch", marginBottom: 4 },
   analysisGrid: { flexDirection:"row",gap:16,alignItems:"flex-start" },
+  bottomBentoGrid: { flexDirection: "row", gap: 16, alignItems: "flex-start" },
   root: {
     flex: 1,
   },

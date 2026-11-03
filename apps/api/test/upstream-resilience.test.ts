@@ -124,6 +124,20 @@ describe("model provider: what a failure means", () => {
     expect(result.modelId).toBe("@cf/meta/llama-3.3-70b-instruct-fp8-fast");
     expect(ai.runs).toHaveLength(1);
   });
+
+  it("uses bound Workers AI Llama automatically when server MODEL_API_KEY is unset", async () => {
+    const ai = fakeAi(async () => ({ response: '{"whatChanged":"ok"}' }));
+    const transport = mockTransport();
+    const withoutKey = { ...env() };
+    delete withoutKey.MODEL_API_KEY;
+    const provider = createModelProvider(withoutKey, "summary", { transport, ai });
+    const result = await provider.complete(REQUEST);
+    expect(result.text).toBe('{"whatChanged":"ok"}');
+    expect(result.provider).toBe("workers-ai");
+    expect(result.modelId).toBe("@cf/meta/llama-3.3-70b-instruct-fp8-fast");
+    expect(transport.calls).toHaveLength(0);
+    expect(ai.runs).toHaveLength(1);
+  });
 });
 
 describe("GitHub reads: retries and log detail", () => {

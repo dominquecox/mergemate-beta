@@ -50,45 +50,47 @@ export default function NotificationsScreen() {
         ) : undefined}
       />
 
-      <View style={{paddingHorizontal:16,flexDirection:'row',gap:8}}>{[false,true].map(value=><TouchableOpacity key={String(value)} accessibilityRole="button" accessibilityState={{selected:history===value}} onPress={()=>{setHistory(value);setFilter('all');}} style={{minHeight:44,minWidth:44,padding:12}}><Text style={{color:colors.brandLight}}>{value?'Event history':'Open PR inbox'}</Text></TouchableOpacity>)}</View>
-      {history&&<Text style={{padding:16,color:colors.textSecondary}}>Last 7 days of received repository events. Actor is the event sender, not the PR or commit author. Earlier events and current PR status may be unavailable.</Text>}
-      {/* Filter Chips */}
-      <View style={[styles.chipsRow, { borderBottomColor: colors.border }]} accessibilityRole="tablist">
-        {((history?["all","review"]:["all", "review", "mentions", "mine"]) as NotificationFilter[]).map((tab) => {
-          const active = filter === tab;
-          let label = "All";
-          if (tab === "review") label = "Reviews";
-          if (tab === "mentions") label = "Mentions";
-          if (tab === "mine") label = "Mine";
+      <View style={[styles.topBentoControls, isDesktop && { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 24 }]}>
+        <View style={{flexDirection:'row',gap:8}}>{[false,true].map(value=><TouchableOpacity key={String(value)} accessibilityRole="button" accessibilityState={{selected:history===value}} onPress={()=>{setHistory(value);setFilter('all');}} style={[styles.modeToggleBtn, { backgroundColor: history===value ? colors.brandSubtle : colors.surface, borderColor: history===value ? colors.brandMuted : colors.border }]}><Text style={[typography.caption, {color:history===value?colors.brandLight:colors.textSecondary, fontWeight:'600'}]}>{value?'Event history':'Open PR inbox'}</Text></TouchableOpacity>)}</View>
+        {/* Filter Chips */}
+        <View style={styles.chipsRow} accessibilityRole="tablist">
+          {((history?["all","review"]:["all", "review", "mentions", "mine"]) as NotificationFilter[]).map((tab) => {
+            const active = filter === tab;
+            let label = "All";
+            if (tab === "review") label = "Reviews";
+            if (tab === "mentions") label = "Mentions";
+            if (tab === "mine") label = "Mine";
 
-          return (
-            <TouchableOpacity
-              key={tab}
-              onPress={() => setFilter(tab)}
-              style={[
-                styles.chip,
-                {
-                  backgroundColor: active ? colors.brand : colors.surfaceElevated,
-                  borderColor: active ? colors.brand : colors.border,
-                  borderRadius: radius.full,
-                },
-              ]}
-              accessibilityRole="tab"
-              accessibilityLabel={`${label} notifications`}
-              accessibilityState={{ selected: active }}
-            >
-              <Text
+            return (
+              <TouchableOpacity
+                key={tab}
+                onPress={() => setFilter(tab)}
                 style={[
-                  typography.caption,
-                  { color: active ? "#FFFFFF" : colors.textSecondary, fontWeight: "600" },
+                  styles.chip,
+                  {
+                    backgroundColor: active ? colors.brand : colors.surfaceElevated,
+                    borderColor: active ? colors.brand : colors.border,
+                    borderRadius: radius.full,
+                  },
                 ]}
+                accessibilityRole="tab"
+                accessibilityLabel={`${label} notifications`}
+                accessibilityState={{ selected: active }}
               >
-                {label}
-              </Text>
-            </TouchableOpacity>
-          );
-        })}
+                <Text
+                  style={[
+                    typography.caption,
+                    { color: active ? "#FFFFFF" : colors.textSecondary, fontWeight: "600" },
+                  ]}
+                >
+                  {label}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
       </View>
+      {history&&<Text style={{paddingHorizontal:isDesktop?24:16,paddingVertical:8,color:colors.textSecondary,fontSize:12}}>Last 7 days of received repository events. Actor is the event sender, not the PR or commit author. Earlier events and current PR status may be unavailable.</Text>}
 
       {isLoading ? (
         <LoadingState
@@ -114,15 +116,15 @@ export default function NotificationsScreen() {
           contentContainerStyle={{padding:isDesktop?24:16,paddingBottom:48}}
           onEndReached={()=>{if(!error)void more();}} onEndReachedThreshold={0.4}
           ListFooterComponent={hasMore?<TouchableOpacity disabled={busy} onPress={()=>void more()} style={{minHeight:44,padding:16}} accessibilityRole="button"><Text style={{color:colors.brandLight}}>{busy?'Loading…':'Load more activity'}</Text></TouchableOpacity>:undefined}
-          renderItem={({item,index})=>{const day=activityDay(item.updatedAt);const previous=items[index-1];const showDay=!previous || activityDay(previous.updatedAt)!==day;return <View>{showDay && <Text accessibilityRole="header" style={[typography.subhead,{color:colors.text,marginTop:20,marginBottom:12}]}>{day}</Text>}<Pressable key={item.id} accessibilityRole="button" accessibilityLabel={`Review ${item.title}`} onPress={()=>{if(history)void api.markActivityRead(item.id).then(()=>setItems(rows=>rows.map(row=>row.id===item.id?{...row,read:true}:row))).catch(()=>undefined);else setItems(rows=>rows.map(row=>row.id===item.id?{...row,read:true}:row));const [owner="owner",repo="repo"]=item.repo.split("/");router.push(`/pr/${owner}/${repo}/${item.number}`);}} android_ripple={androidRipple()} style={({pressed})=>[{backgroundColor:item.read?colors.surface:colors.surfaceElevated,padding:16,borderTopWidth:1,borderTopColor:colors.border},pressed && {opacity:0.88}]}>
-                <View style={{flexDirection:"row",gap:12,alignItems:"flex-start"}}>
+          renderItem={({item,index})=>{const day=activityDay(item.updatedAt);const previous=items[index-1];const showDay=!previous || activityDay(previous.updatedAt)!==day;return <View>{showDay && <Text accessibilityRole="header" style={[typography.subhead,{color:colors.text,marginTop:index===0?4:16,marginBottom:8,fontWeight:"700"}]}>{day}</Text>}<Pressable key={item.id} accessibilityRole="button" accessibilityLabel={`Review ${item.title}`} onPress={()=>{if(history)void api.markActivityRead(item.id).then(()=>setItems(rows=>rows.map(row=>row.id===item.id?{...row,read:true}:row))).catch(()=>undefined);else setItems(rows=>rows.map(row=>row.id===item.id?{...row,read:true}:row));const [owner="owner",repo="repo"]=item.repo.split("/");router.push(`/pr/${owner}/${repo}/${item.number}`);}} android_ripple={androidRipple()} style={({pressed})=>[{backgroundColor:item.read?colors.surface:colors.surfaceElevated,padding:13,borderRadius:14,borderWidth:1,borderColor:item.read?colors.border:colors.brandMuted,marginBottom:8},pressed && {opacity:0.88}]}>
+                <View style={{flexDirection:"row",gap:10,alignItems:"flex-start"}}>
                   <Avatar login={item.actor??item.author} size={32}/>
                   <View style={{flex:1,minWidth:0}}>
-                    <View style={{flexDirection:"row",alignItems:"flex-start",gap:8}}><Text style={[typography.code,{color:colors.textSecondary,fontSize:11,flex:1}]}>{item.repo} · #{item.number}</Text><Text style={[typography.caption,{color:colors.textSecondary}]}>{relativeTime(item.updatedAt)}</Text>{!item.read && <View accessibilityLabel="Unread" style={{width:6,height:6,borderRadius:3,backgroundColor:colors.brandLight,marginTop:5}}/>}</View>
-                    <Text style={[typography.body,{color:colors.text,marginTop:8}]}><Text style={{fontWeight:"600"}}>{item.event?(item.actor?`@${item.actor}`:"Actor unavailable"):`@${item.author}`}</Text> {item.event?`· ${item.event} event`:activityAction(item.kind)}</Text>
-                    <Text style={[typography.headline,{color:colors.text,marginTop:4}]}>{item.title}</Text>
-                    {!!item.summaryLine && <Text style={[typography.footnote,{color:colors.textSecondary,marginTop:8}]}>{item.summaryLine}</Text>}
-                    <View style={{flexDirection:"row",gap:8,alignItems:"center",flexWrap:"wrap",marginTop:12}}>{item.status&&!item.event&&<StatusPill status={item.status}/>}{item.risk && <RiskBadge level={item.risk} compact/>}</View>
+                    <View style={{flexDirection:"row",alignItems:"center",gap:8}}><Text style={[typography.code,{color:colors.textSecondary,fontSize:11,flex:1}]}>{item.repo} · #{item.number}</Text><Text style={[typography.caption,{color:colors.textSecondary}]}>{relativeTime(item.updatedAt)}</Text>{!item.read && <View accessibilityLabel="Unread" style={{width:6,height:6,borderRadius:3,backgroundColor:colors.brandLight}}/>}</View>
+                    <Text style={[typography.headline,{color:colors.text,marginTop:4}]} numberOfLines={1}>{item.title}</Text>
+                    <Text style={[typography.caption,{color:colors.textSecondary,marginTop:2}]}><Text style={{fontWeight:"600",color:colors.text}}>{item.event?(item.actor?`@${item.actor}`:"Actor unavailable"):`@${item.author}`}</Text> {item.event?`· ${item.event} event`:activityAction(item.kind)}</Text>
+                    {!!item.summaryLine && <Text style={[typography.footnote,{color:colors.textSecondary,marginTop:4}]} numberOfLines={2}>{item.summaryLine}</Text>}
+                    <View style={{flexDirection:"row",gap:8,alignItems:"center",flexWrap:"wrap",marginTop:8}}>{item.status&&!item.event&&<StatusPill status={item.status}/>}{item.risk && <RiskBadge level={item.risk} compact/>}</View>
                   </View>
                   <Icon name="chevron-forward" size={16} color={colors.textMuted}/>
                 </View>
@@ -149,11 +151,23 @@ const styles = StyleSheet.create({
     alignItems: "flex-end",
     justifyContent: "center",
   },
+  topBentoControls: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    gap: 10,
+  },
+  modeToggleBtn: {
+    minHeight: 44,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 10,
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   chipsRow: {
     flexDirection: "row",
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderBottomWidth: 1,
+    flexWrap: "wrap",
     gap: 8,
   },
   chip: {

@@ -1,5 +1,5 @@
-import {useScreenHeading} from "../../src/hooks/useScreenHeading";
-import {hasPendingLogout} from "../../src/auth/session-events";
+import { useScreenHeading } from "../../src/hooks/useScreenHeading";
+import { hasPendingLogout } from "../../src/auth/session-events";
 import React, { useState } from "react";
 import { View, Image, TouchableOpacity, StyleSheet, Platform, ScrollView } from "react-native";
 import { Text } from "../../src/components/Text";
@@ -13,20 +13,21 @@ import { LoadingState } from "../../src/components/LoadingState";
 import { ExperienceIntro, ExperienceSurface, SetupPath } from "../../src/components/ExperienceDesign";
 import { Section, InfoLine } from "../../src/components/ScreenDesign";
 import { Icon } from "../../src/components/Icon";
+import { useLayout } from "../../src/layout/useLayout";
 
 export default function SignInScreen() {
   const router = useRouter();
-  const heading=useScreenHeading();
+  const { isDesktop } = useLayout();
+  const heading = useScreenHeading();
   const { signInWithGithub, startDemo, signOut, isLoading, error, clearError, localCleanupPending, retryLocalCleanup } = useAuth();
-  const { colors, typography, spacing, radius, isDark } = useTheme();
-  const logoutPending=Platform.OS==="web" && hasPendingLogout();
+  const { colors, typography, spacing, isDark } = useTheme();
+  const logoutPending = Platform.OS === "web" && hasPendingLogout();
   const [offlineState, setOfflineState] = useState(false);
   const [lastAttempt, setLastAttempt] = useState<"github" | "demo">("github");
 
   const handleSignIn = async () => {
     setLastAttempt("github");
     clearError();
-    // With the real API this sends the person to GitHub and they come back through /auth/callback.
     const result = await signInWithGithub(Platform.OS === "web" ? "web" : "ios");
     if (result === "signed_in") router.replace("/(tabs)/inbox");
   };
@@ -46,7 +47,7 @@ export default function SignInScreen() {
   };
 
   return (
-    <ScrollView contentContainerStyle={[styles.container, { backgroundColor: colors.background, padding: spacing.xl }]}>
+    <ScrollView contentContainerStyle={[styles.container, { backgroundColor: colors.background, padding: isDesktop ? 28 : 18 }]}>
       <View style={styles.header}>
         <Image
           source={isDark ? require("../../assets/logo-dark.png") : require("../../assets/logo-light.png")}
@@ -55,20 +56,19 @@ export default function SignInScreen() {
           accessibilityRole="image"
           accessibilityLabel="MergeMate"
         />
-        <ExperienceIntro eyebrow="Your connected workspace" title={"Connect the work.\nShape what’s next."} description="Bring your repositories, review context and agent workflows into one considered workspace." headingRef={heading}/>
-        <SetupPath active="connect"/>
-
+        <ExperienceIntro eyebrow="Your connected workspace" title={"Connect the work.\nAutomate what’s next."} description="Bring your repositories, review context, and visual agent workflows into one workspace." headingRef={heading} />
+        <SetupPath active="connect" />
       </View>
 
       {isLoading ? (
         <LoadingState
-          title={logoutPending?"Finishing sign-out...":lastAttempt === "demo" ? "Starting demo mode..." : "Connecting to GitHub..."}
+          title={logoutPending ? "Finishing sign-out..." : lastAttempt === "demo" ? "Starting demo mode..." : "Connecting to GitHub..."}
           message="Setting up your review inbox. This only takes a moment."
         />
       ) : logoutPending ? (
-        <ErrorState title="Sign-out is pending" message={error??"Reconnect to finish signing out of this browser."} onRetry={()=>void signOut()} retryLabel="Finish signing out"/>
+        <ErrorState title="Sign-out is pending" message={error ?? "Reconnect to finish signing out of this browser."} onRetry={() => void signOut()} retryLabel="Finish signing out" />
       ) : localCleanupPending ? (
-        <ErrorState title="Account deleted" message={error??"Clear this browser's site data or this device's app data before signing in again."} onRetry={()=>void retryLocalCleanup()} retryLabel="Clear local data"/>
+        <ErrorState title="Account deleted" message={error ?? "Clear this browser's site data or this device's app data before signing in again."} onRetry={() => void retryLocalCleanup()} retryLabel="Clear local data" />
       ) : error ? (
         <ErrorState
           title="Could not sign you in"
@@ -88,50 +88,52 @@ export default function SignInScreen() {
           }}
         />
       ) : (
-        <ExperienceSurface accent style={[styles.actions, { marginTop: 24 }]}>
-          <Button
-            title="Continue with GitHub"
-            onPress={handleSignIn}
-            loading={isLoading}
-            variant="primary"
-            style={{ width: "100%", borderRadius:16, minHeight:52 }}
-          />
+        <View style={[styles.bentoGrid, isDesktop && styles.bentoGridDesktop]}>
+          <ExperienceSurface accent style={[styles.actions, isDesktop && { flex: 1 }]}>
+            <Button
+              title="Continue with GitHub"
+              onPress={handleSignIn}
+              loading={isLoading}
+              variant="primary"
+              style={{ width: "100%", borderRadius: 14, minHeight: 48 }}
+            />
 
-          <TouchableOpacity
-            onPress={handleDemo}
-            disabled={isLoading}
-            style={[
-              styles.demoBtn,
-              {
-                backgroundColor: colors.surface,
-                borderColor: colors.border,
-                borderRadius: 18,
-                marginTop: spacing.md,
-              },
-            ]}
-            accessibilityRole="button"
-            accessibilityLabel="Try the demo with sample data"
-          >
-            <View style={styles.demoContent}>
-              <View style={[styles.badge, { backgroundColor: colors.demoBadgeBg }]}>
-                <Text style={[typography.caption, { color: colors.demoBadge, fontWeight: "700" }]}>SAMPLE DATA</Text>
+            <TouchableOpacity
+              onPress={handleDemo}
+              disabled={isLoading}
+              style={[
+                styles.demoBtn,
+                {
+                  backgroundColor: colors.surface,
+                  borderColor: colors.border,
+                  borderRadius: 14,
+                  marginTop: spacing.md,
+                },
+              ]}
+              accessibilityRole="button"
+              accessibilityLabel="Try the demo with sample data"
+            >
+              <View style={styles.demoContent}>
+                <View style={[styles.badge, { backgroundColor: colors.demoBadgeBg }]}>
+                  <Text style={[typography.caption, { color: colors.demoBadge, fontWeight: "700" }]}>SAMPLE DATA</Text>
+                </View>
+                <Text style={[typography.headline, { color: colors.text, fontWeight: "600" }]}>
+                  Try the Demo
+                </Text>
+                <Text style={[typography.footnote, { color: colors.textSecondary, textAlign: "left" }]}>
+                  Explore sample repositories, AI summaries, visual agent workflows, and risk triage without connecting GitHub.
+                </Text>
               </View>
-              <Text style={[typography.headline, { color: colors.text, fontWeight: "600" }]}>
-                Try the Demo
-              </Text>
-              <Text style={[typography.footnote, { color: colors.textSecondary, textAlign: "center" }]}>
-                Explore sample repositories, AI summaries, and risk triage without connecting GitHub.
-              </Text>
-            </View>
-          </TouchableOpacity>
-        </ExperienceSurface>
-      )}
+            </TouchableOpacity>
+          </ExperienceSurface>
 
-      <Section title="Connection permissions" icon="shield-checkmark-outline" style={{width:"100%",marginTop:24}}>
-        <InfoLine icon="git-pull-request-outline" title="Pull request context" detail="Read selected diffs, comments and check results from repositories you connect."/>
-        <InfoLine icon="folder-open-outline" title="Repository metadata" detail="Only the repositories you choose on GitHub are available to MergeMate."/>
-        <InfoLine icon="person-outline" title="Permission-aware actions" detail="This connection reads PR context. Merge, approve and close actions currently happen in GitHub."/>
-      </Section>
+          <Section title="Connection permissions" icon="shield-checkmark-outline" style={{ width: "100%", ...(isDesktop ? { flex: 1 } : {}) }}>
+            <InfoLine icon="git-pull-request-outline" title="Pull request context" detail="Read selected diffs, comments and check results from repositories you connect." />
+            <InfoLine icon="folder-open-outline" title="Repository metadata" detail="Only the repositories you choose on GitHub are available to MergeMate." />
+            <InfoLine icon="person-outline" title="Permission-aware actions" detail="Review workflows are read-only. Isolated code-fix workflows publish only draft PRs when you run them." />
+          </Section>
+        </View>
+      )}
 
       <View style={[styles.footer, { marginTop: spacing.xl }]}>
         <View style={styles.privacyRow}>
@@ -190,12 +192,21 @@ const styles = StyleSheet.create({
   },
   header: {
     alignItems: "stretch",
-    gap: 24,
-    marginTop: 8,
+    gap: 18,
+    marginTop: 4,
   },
   logo: {
-    width: 148,
-    height: 36,
+    width: 140,
+    height: 34,
+  },
+  bentoGrid: {
+    gap: 16,
+    marginTop: 18,
+  },
+  bentoGridDesktop: {
+    flexDirection: "row",
+    alignItems: "stretch",
+    gap: 20,
   },
   actions: {
     width: "100%",
@@ -203,9 +214,9 @@ const styles = StyleSheet.create({
   demoBtn: {
     width: "100%",
     minHeight: 44,
-    padding: 16,
+    padding: 14,
     borderWidth: 1,
-    alignItems: "center",
+    alignItems: "flex-start",
   },
   demoContent: {
     alignItems: "flex-start",
@@ -232,6 +243,7 @@ const styles = StyleSheet.create({
   linksRow: {
     flexDirection: "row",
     alignItems: "center",
+    justifyContent: "center",
     gap: 4,
   },
   footerLinkBtn: {

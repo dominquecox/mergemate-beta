@@ -8,8 +8,22 @@ import { actionLimits,gateAction,storesFor,withReservation,runModelTask } from '
 import { redactSecrets } from '../routes/ai-engine-scan';
 import { DATA_NOTICE } from '../routes/ai-engine-model';
 import { ApiError } from '../errors';
-const Plan=z.object({name:z.string().min(1).max(80),steps:z.array(z.enum(['context','checks','risk','summary','review_plan','patch','qa','draft_pr','route'])).min(1).max(9)}).strict();
-const titles:Record<string,string>={context:'Load target context',checks:'Inspect current GitHub checks',risk:'Assess change risk',summary:'Summarize the change',review_plan:'Prepare a review plan',patch:'Prepare a code fix',qa:'Run isolated tests',draft_pr:'Create a draft pull request',route:'Prepare routing handoff'};
+const STEP_KINDS=['context','checks','risk','summary','review_plan','patch','qa','draft_pr','route'] as const;
+type StepKind=(typeof STEP_KINDS)[number];
+const Plan=z.object({name:z.string().min(1).max(80),steps:z.array(z.enum(STEP_KINDS)).min(1).max(9)}).strict();
+const titles:Record<StepKind,string>={context:'Load target context',checks:'Inspect current GitHub checks',risk:'Assess change risk',summary:'Summarize the change',review_plan:'Prepare a review plan',patch:'Prepare a code fix',qa:'Run isolated tests',draft_pr:'Create a draft pull request',route:'Prepare routing handoff'};
+export function normalizeWorkflowSteps(rawSteps:readonly StepKind[],mode:'review'|'code_fix'):StepKind[]{
+ const unique:StepKind[]=['context'];
+ for(const kind of rawSteps)if(!unique.includes(kind))unique.push(kind);
+ if(mode==='review'){
+  const reviewSteps=unique.filter((k):k is StepKind=>k!=='patch'&&k!=='qa'&&k!=='draft_pr');
+  if(reviewSteps.length===1)reviewSteps.push('checks','risk','summary','review_plan');
+  return reviewSteps.slice(0,9);
+ }
+ const analysis=unique.filter(k=>k!=='context'&&k!=='patch'&&k!=='qa'&&k!=='draft_pr'&&k!=='route');
+ const tail:StepKind[]=unique.includes('route')?['patch','qa','draft_pr','route']:['patch','qa','draft_pr'];
+ return (['context',...analysis.slice(0,8-tail.length),...tail] as StepKind[]).slice(0,9);
+}
 async function modelCall<T>(env:Env,deps:Deps,session:SessionRecord,system:string,prompt:string,schema:z.ZodType<T>,maxOutputTokens:number):Promise<{value:T;model:string}>{
  if(!env.DB||!session.userId)throw new ApiError('misconfigured','Workflow storage is not configured.');
  const stores=storesFor(env.DB),limit=await gateAction(stores,actionLimits(env),session,env,'summary');
@@ -20,7 +34,8 @@ async function modelCall<T>(env:Env,deps:Deps,session:SessionRecord,system:strin
 }
 export async function generateWorkflowPlan(env:Env,deps:Deps,session:SessionRecord,input:{intent:string;target:WorkflowTarget;mode:'review'|'code_fix'}){
  const {value:answer}=await modelCall(env,deps,session,'Create an executable GitHub task workflow. Return JSON {name,steps:string[]}. Allowed steps: context,checks,risk,summary,review_plan,route; code_fix mode also requires patch,qa,draft_pr in that order after analysis. Context must be first. Unique steps only. Do not create commands, tools, URLs or claim execution.',JSON.stringify(input),Plan,700);
- const parsed=WorkflowDefinition.safeParse({name:answer.name,intent:input.intent,target:input.target,mode:input.mode,steps:answer.steps.map((kind,index)=>({id:`step-${index+1}`,kind,title:titles[kind],enabled:true}))});
+ const normalizedSteps=normalizeWorkflowSteps(answer.steps,input.mode);
+ const parsed=WorkflowDefinition.safeParse({name:answer.name.trim()||(input.mode==='code_fix'?'Automated Fix & Draft PR':'Automated PR Review'),intent:input.intent,target:input.target,mode:input.mode,steps:normalizedSteps.map((kind,index)=>({id:`step-${index+1}`,kind,title:titles[kind],enabled:true}))});
  if(!parsed.success)throw new ApiError('upstream_unavailable','The model did not produce a valid executable workflow. Try again.');
  return parsed.data;
 }

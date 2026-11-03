@@ -206,8 +206,9 @@ function InboxWorkspace({initialFilter}:{initialFilter:NotificationFilter}) {
           <InboxOverview count={items.length} needsReview={items.filter(item=>item.kind==="review").length}/>
       <ReadoutControls label="Inbox overview" sentences={inboxNarration(items)}/>
 
-      {/* Segmented Filter Control */}
-      <View style={[styles.filterBar, { borderBottomColor: colors.border }, { marginHorizontal:16, borderBottomWidth:0, paddingHorizontal:4, paddingVertical:4, backgroundColor:colors.surfaceElevated, borderRadius:radius.lg }]} accessibilityRole="tablist">
+      {/* Bento Control Bar: Segmented Filter + Repo Grouping + Live Counts */}
+      <View style={{ flexDirection: isDesktop ? "row" : "column", alignItems: isDesktop ? "center" : "stretch", gap: 10, marginBottom: 12 }}>
+      <View style={[styles.filterBar, { flex: isDesktop ? 1 : undefined, borderBottomWidth: 0, paddingHorizontal: 4, paddingVertical: 3, backgroundColor: colors.surface, borderColor: colors.border, borderWidth: 1, borderRadius: radius.md }]} accessibilityRole="tablist">
         {(["all", "review", "mentions", "mine"] as NotificationFilter[]).map((tab) => {
           const isSelected = filter === tab;
           let label = "All";
@@ -225,7 +226,7 @@ function InboxWorkspace({initialFilter}:{initialFilter:NotificationFilter}) {
                 styles.filterTab,
                 {
                   backgroundColor: isSelected ? colors.brandSubtle : "transparent",
-                  borderRadius: radius.md,
+                  borderRadius: radius.sm,
                 },
               ]}
               accessibilityRole="tab"
@@ -234,7 +235,7 @@ function InboxWorkspace({initialFilter}:{initialFilter:NotificationFilter}) {
             >
               <Text numberOfLines={1} ellipsizeMode="tail"
                 style={[
-                  typography.subhead,
+                  typography.caption,
                   {
                     color: isSelected ? colors.brandLight : colors.textSecondary,
                     fontWeight: isSelected ? "700" : "500",
@@ -248,50 +249,50 @@ function InboxWorkspace({initialFilter}:{initialFilter:NotificationFilter}) {
         })}
       </View>
 
-
-          <TouchableOpacity onPress={()=>setGrouped(value=>!value)} accessibilityRole="switch" accessibilityLabel="Group by repository" accessibilityState={{checked:grouped}} style={{alignSelf:'flex-start',flexDirection:'row',alignItems:'center',gap:6,minHeight:44,paddingHorizontal:12,marginBottom:8,borderRadius:radius.md,backgroundColor:grouped?colors.brandSubtle:colors.surfaceElevated}}><Icon name="folder-outline" size={14} color={grouped?colors.brandLight:colors.textSecondary}/><Text style={[typography.footnote,{color:grouped?colors.brandLight:colors.textSecondary,fontWeight:'600'}]}>{grouped?"Grouped by repo":"Group by repo"}</Text></TouchableOpacity>
-          {/* Summary Strip Card */}
-          <View
-            style={[styles.summaryStrip, { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.lg }, { padding:16, marginBottom:16 }]}
-            accessibilityLabel={`Summary: ${items.filter((i) => i.kind === "review").length} needs you, ${items.filter((i) => i.kind === "mention").length} FYI, ${items.filter((i) => i.kind === "mine").length} mine`}
-          >
-            <View style={styles.stripCol}>
-              <Text style={[typography.headline, { color: colors.text }]}>
-                {items.filter((i) => i.kind === "review").length}
-              </Text>
-              <Text style={[typography.caption, { color: colors.textSecondary }]}>Needs you</Text>
-            </View>
-            <View style={styles.stripCol}>
-              <Text style={[typography.headline, { color: colors.text }]}>
-                {items.filter((i) => i.kind === "mention").length}
-              </Text>
-              <Text style={[typography.caption, { color: colors.textSecondary }]}>FYI</Text>
-            </View>
-            <View style={styles.stripCol}>
-              <Text style={[typography.headline, { color: colors.text }]}>
-                {items.filter((i) => i.kind === "mine").length}
-              </Text>
-              <Text style={[typography.caption, { color: colors.textSecondary }]}>Mine</Text>
-            </View>
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+        <TouchableOpacity onPress={()=>setGrouped(value=>!value)} accessibilityRole="switch" accessibilityLabel="Group by repository" accessibilityState={{checked:grouped}} style={{flexDirection:'row',alignItems:'center',gap:6,minHeight:44,paddingHorizontal:12,borderRadius:radius.md,borderWidth:1,borderColor:grouped?colors.brandMuted:colors.border,backgroundColor:grouped?colors.brandSubtle:colors.surface}}><Icon name="folder-outline" size={14} color={grouped?colors.brandLight:colors.textSecondary}/><Text style={[typography.caption,{color:grouped?colors.brandLight:colors.textSecondary,fontWeight:'600'}]}>{grouped?"Grouped by repo":"Group by repo"}</Text></TouchableOpacity>
+        {/* Summary Strip Card */}
+        <View
+          style={[styles.summaryStrip, { flex: 1, minWidth: 210, backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.md, paddingVertical: 8, paddingHorizontal: 12, marginBottom: 0 }]}
+          accessibilityLabel={`Summary: ${items.filter((i) => i.kind === "review").length} needs you, ${items.filter((i) => i.kind === "mention").length} FYI, ${items.filter((i) => i.kind === "mine").length} mine`}
+        >
+          <View style={styles.stripCol}>
+            <Text style={[typography.subhead, { color: colors.brandLight, fontWeight: "700" }]}>
+              {items.filter((i) => i.kind === "review").length}
+            </Text>
+            <Text style={[typography.caption, { color: colors.textSecondary }]}>Needs you</Text>
           </View>
+          <View style={styles.stripCol}>
+            <Text style={[typography.subhead, { color: colors.text, fontWeight: "700" }]}>
+              {items.filter((i) => i.kind === "mention").length}
+            </Text>
+            <Text style={[typography.caption, { color: colors.textSecondary }]}>FYI</Text>
+          </View>
+          <View style={styles.stripCol}>
+            <Text style={[typography.subhead, { color: colors.text, fontWeight: "700" }]}>
+              {items.filter((i) => i.kind === "mine").length}
+            </Text>
+            <Text style={[typography.caption, { color: colors.textSecondary }]}>Mine</Text>
+          </View>
+        </View>
+      </View>
+      </View>
 
 </>}
           ListFooterComponent={hasMore || error?<TouchableOpacity disabled={isRefreshing} onPress={()=>void more()} accessibilityRole="button" style={{padding:16,minHeight:44}}><Text style={{color:colors.brandLight}}>{isRefreshing?'Loading…':error?'Retry loading pull requests':'Load more pull requests'}</Text></TouchableOpacity>:undefined}
-          renderItem={({item:row})=>row.type==='header'?(<View testID={`inbox-repo-${row.repo}`} accessibilityRole="header" accessibilityLabel={`${row.repo}, ${row.count} pull request${row.count===1?'':'s'}`} style={{flexDirection:'row',alignItems:'center',gap:8,marginBottom:12}}><Icon name="folder-outline" size={14} color={colors.textMuted}/><Text style={[typography.subhead,{color:colors.text,fontWeight:'700',flexShrink:1}]}>{row.repo}</Text><Text style={[typography.caption,{color:colors.textSecondary}]}>{row.count}</Text></View>):((item:Notification)=>(
+          renderItem={({item:row})=>row.type==='header'?(<View testID={`inbox-repo-${row.repo}`} accessibilityRole="header" accessibilityLabel={`${row.repo}, ${row.count} pull request${row.count===1?'':'s'}`} style={{flexDirection:'row',alignItems:'center',gap:8,marginBottom:8,marginTop:4}}><Icon name="folder-outline" size={14} color={colors.brandLight}/><Text style={[typography.subhead,{color:colors.text,fontWeight:'700',flexShrink:1}]}>{row.repo}</Text><Text style={[typography.caption,{color:colors.textSecondary}]}>{row.count}</Text></View>):((item:Notification)=>(
               <View
                 key={item.id}
                 style={[
                   styles.itemCard,
                   isDesktop && {flex:1,maxWidth:"50%"},
-
-                  { padding:18, marginBottom:14 },
+                  { padding: 14, marginBottom: 10 },
                   {
                     backgroundColor: colors.surface,
-                    borderColor: colors.border,
-                    borderRadius: 20,
-                    borderLeftColor: item.risk === "high" ? colors.riskHigh : colors.border,
-                    borderLeftWidth: item.risk === "high" ? 4 : 1,
-                    paddingLeft: item.risk === "high" ? 13 : 16,
+                    borderColor: item.risk === "high" ? colors.riskHigh : colors.border,
+                    borderRadius: 14,
+                    borderLeftColor: item.risk === "high" ? colors.riskHigh : colors.brandMuted,
+                    borderLeftWidth: item.risk === "high" ? 3 : 1,
                   },
                 ]}
               >
@@ -302,37 +303,41 @@ function InboxWorkspace({initialFilter}:{initialFilter:NotificationFilter}) {
                   accessibilityRole="button"
                   accessibilityLabel={`Open pull request #${item.number}: ${item.title} in ${item.repo}, ${item.risk || "normal"} risk`}
                 >
-                  <View style={[styles.cardTop,{flexWrap:"wrap",gap:8}]}>
-                    <View style={{flexDirection:"row",alignItems:"center",gap:5,flexShrink:1}}>
-                      <Icon name="git-pull-request-outline" size={13} color={colors.textMuted} />
-                      <Text style={[typography.caption, { color: colors.textMuted, fontFamily: typography.code.fontFamily, flexShrink:1 }]}>
-                        {item.repo} #{item.number}
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+                    <View style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: colors.surfaceElevated, borderWidth: 1, borderColor: colors.border, alignItems: "center", justifyContent: "center" }}>
+                      <Icon name="git-pull-request-outline" size={16} color={colors.brandLight} />
+                    </View>
+                    <View style={{ flex: 1, minWidth: 0 }}>
+                      <View style={[styles.cardTop, { gap: 6 }]}>
+                        <Text style={[typography.caption, { color: colors.textMuted, fontFamily: typography.code.fontFamily, flexShrink: 1 }]} numberOfLines={1}>
+                          {item.repo} #{item.number}
+                        </Text>
+                        <View style={styles.badgeGroup}>
+                          {item.status && <StatusPill status={item.status} />}
+                          {item.risk && <RiskBadge level={item.risk} compact />}
+                        </View>
+                      </View>
+                      <Text style={[typography.subhead, { color: colors.text, fontWeight: "600", marginTop: 2 }]} numberOfLines={1} ellipsizeMode="tail" accessibilityLabel={item.title}>
+                        {item.title}
                       </Text>
                     </View>
-                    <View style={styles.badgeGroup}>
-                      {item.status&&<StatusPill status={item.status} />}
-                      {item.risk && <RiskBadge level={item.risk} compact />}
-                    </View>
+                    <Icon name="chevron-forward" size={16} color={colors.textMuted} />
                   </View>
 
-                  <Text style={[typography.subhead, { color: colors.text, fontWeight:"600", marginTop: 4 }]} numberOfLines={1} ellipsizeMode="tail" accessibilityLabel={item.title}>
-                    {item.title}
-                  </Text>
-
                   {!!item.summaryLine && (
-                    <View style={[styles.summaryRow,{padding:12,backgroundColor:colors.surfaceElevated,borderRadius:radius.sm,marginTop:12}]}>
-                      <Icon name="sparkles" size={12} color={colors.brandLight} style={styles.summaryIcon} />
-                      <Text style={[typography.footnote, { color: colors.textSecondary, flex: 1 }]} numberOfLines={2}>
+                    <View style={[styles.summaryRow,{paddingHorizontal:10,paddingVertical:7,backgroundColor:colors.surfaceElevated,borderRadius:8,marginTop:8}]}>
+                      <Icon name="sparkles" size={11} color={colors.brandLight} style={styles.summaryIcon} />
+                      <Text style={[typography.caption, { color: colors.textSecondary, flex: 1 }]} numberOfLines={1}>
                         {item.summaryLine}
                       </Text>
                     </View>
                   )}
                 </Pressable>
 
-                <View style={[styles.cardBottom,{flexWrap:"wrap",gap:8,borderTopColor:colors.border,marginTop:12,paddingTop:12}]}>
+                <View style={[styles.cardBottom,{flexWrap:"wrap",gap:8,borderTopColor:colors.border,marginTop:8,paddingTop:8}]}>
                   <View style={{flexDirection:"row",alignItems:"center",gap:6,flex:1}}>
-                    <Avatar login={item.author} size={18} />
-                    <Text style={[typography.caption, { color: colors.textMuted }]}>
+                    <Avatar login={item.author} size={16} />
+                    <Text style={[typography.caption, { color: colors.textMuted }]} numberOfLines={1}>
                       @{item.author} · {new Date(item.updatedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
                     </Text>
                   </View>
@@ -340,7 +345,7 @@ function InboxWorkspace({initialFilter}:{initialFilter:NotificationFilter}) {
                   <View style={styles.quickActions}>
                     <TouchableOpacity
                       disabled={acting||isDemo} onPress={() => handleSnooze(item)}
-                      style={[styles.actionBtn, { borderColor: colors.border },{borderRadius:radius.md}]}
+                      style={[styles.actionBtn, { borderColor: colors.border, borderRadius: 8 }]}
                       accessibilityRole="button"
                       accessibilityLabel={`Snooze ${item.title}`}
                     >
@@ -348,11 +353,11 @@ function InboxWorkspace({initialFilter}:{initialFilter:NotificationFilter}) {
                     </TouchableOpacity>
                     <TouchableOpacity
                       disabled={acting||isDemo} onPress={() => handleDone(item)}
-                      style={[styles.actionBtn, { borderColor: colors.border, backgroundColor: colors.surfaceInteractive },{borderRadius:radius.md}]}
+                      style={[styles.actionBtn, { borderColor: colors.brandMuted, backgroundColor: colors.brandSubtle, borderRadius: 8 }]}
                       accessibilityRole="button"
                       accessibilityLabel={`Mark ${item.title} as done`}
                     >
-                      <Text style={[typography.caption, { color: colors.text, fontWeight: "600" }]}>Done</Text>
+                      <Text style={[typography.caption, { color: colors.brandLight, fontWeight: "600" }]}>Done</Text>
                     </TouchableOpacity>
                   </View>
                 </View>

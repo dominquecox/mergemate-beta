@@ -11,31 +11,33 @@ import { OnboardingPreview } from "../../src/components/OnboardingPreview";
 import { ExperienceIntro } from "../../src/components/ExperienceDesign";
 import { Icon } from "../../src/components/Icon";
 import { useAndroidBackHandler } from "../../src/platform/android";
+import { useLayout } from "../../src/layout/useLayout";
 
 const CARDS = [
   {
     step: "01",
-    title: "Less busywork.\nMore momentum.",
+    title: "Automate reviews.\nShip with evidence.",
     subtitle:
-      "One place for your pull requests, AI-assisted review and the workflows that move your work forward.",
+      "One high-density workspace for AI pull request review, visual agent workflows, and real QA evidence.",
   },
   {
     step: "02",
-    title: "Give every change\na clearer path.",
+    title: "Visual workflows\nfrom a single prompt.",
     subtitle:
-      "Bring context, evidence and verification into a connected review flow. See what happened and what needs your attention.",
+      "Describe what you want to automate and inspect an editable node graph for PR risk, QA verification, or draft PR fixes.",
   },
   {
     step: "03",
-    title: "Your workflow.\nYour next move.",
+    title: "Your repositories.\nYour guardrails.",
     subtitle:
-      "Choose your repositories, set your AI preferences and inspect the evidence. Your workspace keeps its controls within reach.",
+      "Choose your repositories, set your AI consent preferences, and inspect every workflow step before taking action.",
   },
 ];
 
 export default function WelcomeScreen() {
   const router = useRouter();
-  const { colors, typography, spacing, radius, isDark } = useTheme();
+  const { isDesktop } = useLayout();
+  const { colors, typography, spacing, isDark } = useTheme();
   const [activeStep, setActiveStep] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -100,7 +102,7 @@ export default function WelcomeScreen() {
   }
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background, padding: spacing.xl }]}>
+    <View style={[styles.container, { backgroundColor: colors.background, padding: isDesktop ? 28 : 18 }]}>
       <View style={styles.topBar}>
         <Image
           source={isDark ? require("../../assets/logo-dark.png") : require("../../assets/logo-light.png")}
@@ -109,32 +111,67 @@ export default function WelcomeScreen() {
           accessibilityRole="image"
           accessibilityLabel="MergeMate"
         />
-        {activeStep < CARDS.length - 1 && <TouchableOpacity
-          onPress={goToSignIn}
-          style={styles.skipBtn}
-          accessibilityRole="button"
-          accessibilityLabel="Skip intro and go to sign in"
-        >
-          <Text style={[typography.subhead, { color: colors.textSecondary, fontWeight: "600" }]}>Skip</Text>
-        </TouchableOpacity>}
+        {activeStep < CARDS.length - 1 && (
+          <TouchableOpacity
+            onPress={goToSignIn}
+            style={styles.skipBtn}
+            accessibilityRole="button"
+            accessibilityLabel="Skip intro and go to sign in"
+          >
+            <Text style={[typography.subhead, { color: colors.textSecondary, fontWeight: "600" }]}>Skip</Text>
+          </TouchableOpacity>
+        )}
       </View>
 
-      <ScrollView style={{flex:1}} contentContainerStyle={{paddingTop:24,paddingBottom:20,gap:22}} showsVerticalScrollIndicator={false}>
-        <ExperienceIntro eyebrow={`Your work, connected · ${card.step} / 03`} title={card.title} description={card.subtitle}/>
-        <OnboardingPreview step={activeStep}/>
-        <View style={{flexDirection:"row",gap:8}}>
-          {(["Overview","Workflows","Your controls"] as const).map((label,index)=><TouchableOpacity key={label} onPress={()=>setActiveStep(index)} accessibilityRole="button" accessibilityLabel={`Explore ${label}`} accessibilityState={{selected:index===activeStep}} aria-pressed={index===activeStep} style={{flex:1,minHeight:44,paddingHorizontal:6,borderRadius:14,backgroundColor:index===activeStep?colors.brandSubtle:colors.surface,alignItems:"center",justifyContent:"center"}}><Text style={[typography.caption,{color:index===activeStep?colors.brandLight:colors.textSecondary,fontSize:11}]}>{label}</Text></TouchableOpacity>)}
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingTop: 18, paddingBottom: 20, gap: 18 }} showsVerticalScrollIndicator={false}>
+        <View style={[styles.bentoMain, isDesktop && styles.bentoMainDesktop]}>
+          <View style={[styles.leftCol, isDesktop && { flex: 5 }]}>
+            <ExperienceIntro eyebrow={`Your work, connected · ${card.step} / 03`} title={card.title} description={card.subtitle} />
+            <View style={{ flexDirection: "row", gap: 8, marginTop: 14 }}>
+              {(["Overview", "Workflows", "Your controls"] as const).map((label, index) => (
+                <TouchableOpacity
+                  key={label}
+                  onPress={() => setActiveStep(index)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Explore ${label}`}
+                  accessibilityState={{ selected: index === activeStep }}
+                  aria-pressed={index === activeStep}
+                  style={{
+                    flex: 1,
+                    minHeight: 44,
+                    paddingHorizontal: 8,
+                    borderRadius: 12,
+                    borderWidth: 1,
+                    borderColor: index === activeStep ? colors.brandMuted : colors.border,
+                    backgroundColor: index === activeStep ? colors.brandSubtle : colors.surface,
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  <Text style={[typography.caption, { color: index === activeStep ? colors.brandLight : colors.textSecondary, fontSize: 11, fontWeight: "600" }]}>
+                    {label}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+          <View style={[styles.rightCol, isDesktop && { flex: 7 }]}>
+            <OnboardingPreview step={activeStep} />
+          </View>
         </View>
       </ScrollView>
 
       <View style={styles.footer}>
-        <View style={{flexDirection:"row",alignItems:"center",gap:7,alignSelf:"flex-start",marginBottom:12}}><Icon name="git-network-outline" size={14} color={colors.brandLight}/><Text style={[typography.caption,{color:colors.textSecondary}]}>Built for the way your team moves.</Text></View>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 7, alignSelf: "flex-start", marginBottom: 10 }}>
+          <Icon name="git-network-outline" size={14} color={colors.brandLight} />
+          <Text style={[typography.caption, { color: colors.textSecondary }]}>Built for the way your team reviews and automates.</Text>
+        </View>
 
         <Button
           title={activeStep === CARDS.length - 1 ? "Get Started" : "Continue"}
           onPress={next}
           variant="primary"
-          style={{ width: "100%", borderRadius: 16, minHeight:52 }}
+          style={{ width: "100%", borderRadius: 14, minHeight: 48 }}
         />
       </View>
     </View>
@@ -142,9 +179,13 @@ export default function WelcomeScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {flex:1,justifyContent:"flex-start"},
-  topBar: {flexDirection:"row",alignItems:"center",justifyContent:"space-between",paddingTop:8,minHeight:52},
-  logo: {width:148,height:36},
-  skipBtn: {minHeight:44,minWidth:56,paddingHorizontal:8,alignItems:"flex-end",justifyContent:"center"},
-  footer: {alignItems:"center",paddingTop:12,paddingBottom:12},
+  container: { flex: 1, justifyContent: "flex-start" },
+  topBar: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingTop: 4, minHeight: 48 },
+  logo: { width: 140, height: 34 },
+  skipBtn: { minHeight: 44, minWidth: 56, paddingHorizontal: 8, alignItems: "flex-end", justifyContent: "center" },
+  bentoMain: { gap: 16 },
+  bentoMainDesktop: { flexDirection: "row", alignItems: "center", gap: 24 },
+  leftCol: { minWidth: 0 },
+  rightCol: { minWidth: 0 },
+  footer: { alignItems: "center", paddingTop: 10, paddingBottom: 8 },
 });

@@ -432,45 +432,52 @@ export const createModelProvider = (env: Env, task: AiTask, deps: ProviderDeps):
   type Send = (request: CompletionRequest) => Promise<{ text: string; usage?: TokenUsage; provider?: ProviderName; modelId?: string }>;
   let send: Send;
   const userOwnedKey = (env as KeyedEnv)[USER_OWNED_KEY] === true;
-  if (config.provider === "meta") {
-    const apiKey = requireApiKey(env);
-    send = async (request) => {
-      try {
-        return await deps.transport.complete({ config, apiKey, request });
-      } catch (err) {
-        // Multi-tier resilience: If Meta is down or rate-limited and Workers AI is bound, failover to Meta Llama on Workers AI.
-        if (
-          deps.ai &&
-          !(err instanceof ApiError && err.code === "misconfigured") &&
-          !(err instanceof UpstreamStatusError && (err.status === 401 || err.status === 403))
-        ) {
-          const fallbackModelId =
-            task === "highlight"
-              ? "@cf/meta/llama-4-scout-17b-16e-instruct"
-              : "@cf/meta/llama-3.3-70b-instruct-fp8-fast";
-          const fallbackConfig: WorkersAiModelConfig = {
-            provider: "workers-ai",
-            modelId: fallbackModelId,
-            maxInputChars: task === "highlight" ? 190_000 : 50_000,
-          };
-          const gatewayId = env.AI_GATEWAY_ID?.trim() || undefined;
-          let fallbackRequest = request;
-          if (request.prompt.length > fallbackConfig.maxInputChars) {
-            fallbackRequest = {
-              ...request,
-              prompt: request.prompt.slice(0, fallbackConfig.maxInputChars),
-            };
-          }
-          const reply = await completeWithWorkersAi(fallbackConfig, deps.ai, gatewayId, fallbackRequest);
-          return {
-            ...reply,
-            provider: "workers-ai",
-            modelId: fallbackConfig.modelId,
-          };
-        }
-        throw err;
-      }
+  const runWorkersAiFallback = async (ai: AiBinding, request: CompletionRequest) => {
+    const fallbackModelId =
+      task === "highlight"
+        ? "@cf/meta/llama-4-scout-17b-16e-instruct"
+        : "@cf/meta/llama-3.3-70b-instruct-fp8-fast";
+    const fallbackConfig: WorkersAiModelConfig = {
+      provider: "workers-ai",
+      modelId: fallbackModelId,
+      maxInputChars: task === "highlight" ? 190_000 : 50_000,
     };
+    const gatewayId = env.AI_GATEWAY_ID?.trim() || undefined;
+    const fallbackRequest =
+      request.prompt.length > fallbackConfig.maxInputChars
+        ? { ...request, prompt: request.prompt.slice(0, fallbackConfig.maxInputChars) }
+        : request;
+    const reply = await completeWithWorkersAi(fallbackConfig, ai, gatewayId, fallbackRequest);
+    return {
+      ...reply,
+      provider: "workers-ai" as const,
+      modelId: fallbackConfig.modelId,
+    };
+  };
+  if (config.provider === "meta") {
+    const hasKey = Boolean(env.MODEL_API_KEY?.trim());
+    if (!hasKey && deps.ai && !userOwnedKey && task !== "segment") {
+      const ai = deps.ai;
+      send = (request) => runWorkersAiFallback(ai, request);
+    } else {
+      const apiKey = requireApiKey(env);
+      send = async (request) => {
+        try {
+          return await deps.transport.complete({ config, apiKey, request });
+        } catch (err) {
+          // Multi-tier resilience: If Meta is unavailable or unconfigured on the server and Workers AI is bound, failover to Meta Llama on Workers AI.
+          if (
+            deps.ai &&
+            !userOwnedKey &&
+            task !== "segment" &&
+            !(err instanceof ApiError && err.code === "misconfigured")
+          ) {
+            return await runWorkersAiFallback(deps.ai, request);
+          }
+          throw err;
+        }
+      };
+    }
   } else {
     const ai = deps.ai;
     if (!ai) throw new ConfigError("AI binding is missing");
