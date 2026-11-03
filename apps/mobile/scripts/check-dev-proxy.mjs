@@ -7,6 +7,11 @@ import { build } from 'esbuild';
 import { chromium } from '@playwright/test';
 
 // Exercises the actual Worker and production export with local fixture upstreams only.
+// Node requires duplex for streaming request bodies; Workers accept the same stream without it.
+const NativeRequest = globalThis.Request;
+globalThis.Request = class WorkerCompatibleRequest extends NativeRequest {
+  constructor(input, init) { super(input, init?.body ? { ...init, duplex: 'half' } : init); }
+};
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
 const dist = path.join(root, 'apps/mobile/dist');
 const bundled = await build({ entryPoints: [path.join(root, 'apps/web/src/index.ts')], bundle: true, write: false, format: 'esm', platform: 'neutral' });
@@ -65,4 +70,4 @@ try {
   console.log('PASS: production bundle /v1/me and auth-start probe use actual same-origin Worker proxy under unchanged CSP');
   console.log('PASS: protected manifest includes existing HttpOnly Access cookie; browser validation does not attempt eval');
   console.log('Fixture-only: no live OAuth, real Access login, model execution or deployment.');
-} finally { if (browser) await browser.close(); server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); }
+} finally { if (browser) await browser.close(); server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); globalThis.Request = NativeRequest; }
