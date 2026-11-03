@@ -2,6 +2,7 @@ import {ApiClientError,messageForCode} from "../api/errors";
 import * as SecureStore from "expo-secure-store";
 import { Platform } from "react-native";
 
+const REVIEW_PLAYBOOK_KEY = "mergemate_review_playbook";
 const LOCAL_CLEANUP_PENDING_KEY = "mergemate_local_cleanup_pending";
 const SESSION_TOKEN_KEY = "mergemate_session_token";
 const AI_CONSENT_KEY = "mergemate_ai_consent";
@@ -57,8 +58,9 @@ function isPendingSignIn(value: unknown): value is PendingSignIn {
 export const StorageService = {
   /** Erase account-owned local data; the caller serializes credentials separately. Theme stays device-owned. */
   async clearAccountData():Promise<void>{
+    await pendingOperations;
     let failed=false;
-    for(const key of [AI_CONSENT_KEY,RECENT_SEARCHES_KEY,DEMO_FLAG_KEY,DEVICE_ID_KEY,PUSH_ENABLED_KEY,'mergemate.webPushUser']){
+    for(const key of [REVIEW_PLAYBOOK_KEY,AI_CONSENT_KEY,RECENT_SEARCHES_KEY,DEMO_FLAG_KEY,DEVICE_ID_KEY,PUSH_ENABLED_KEY,'mergemate.webPushUser']){
       memoryStorage.delete(key);
       try{if(Platform.OS==='web'){if(typeof window!=='undefined')window.localStorage.removeItem(key);}else await SecureStore.deleteItemAsync(key);}
       catch{failed=true;}
@@ -159,6 +161,29 @@ export const StorageService = {
     } catch {
       memoryStorage.set(AI_CONSENT_KEY, val);
     }
+  },
+
+  /** One bounded local preference, account-scoped and erased with account cleanup. */
+  async getReviewPlaybook(account: string): Promise<unknown> {
+    try {
+      const raw = Platform.OS === "web" ? getWebStorage()?.getItem(REVIEW_PLAYBOOK_KEY) : await SecureStore.getItemAsync(REVIEW_PLAYBOOK_KEY);
+      if (!raw) return null;
+      if (raw.length > 1800) throw new Error("Invalid saved playbook");
+      const record = JSON.parse(raw);
+      return record.account === account ? record.playbook : null;
+    } catch { throw new Error("Could not load your local playbook."); }
+  },
+  async setReviewPlaybook(account: string, playbook: unknown): Promise<void> {
+    return pendingOperation(async () => {
+      if (account !== recentAccount) throw new Error("Your account changed. Reopen review playbooks.");
+      const raw = JSON.stringify({ account, playbook });
+      if (raw.length > 1800) throw new Error("Playbook exceeds local storage limit.");
+      if (Platform.OS === "web") {
+        const storage = getWebStorage();
+        if (!storage) throw new Error("Local storage is unavailable.");
+        storage.setItem(REVIEW_PLAYBOOK_KEY, raw);
+      } else await SecureStore.setItemAsync(REVIEW_PLAYBOOK_KEY, raw);
+    });
   },
 
   /** Private query text is session-memory only, never written to browser or native storage. */

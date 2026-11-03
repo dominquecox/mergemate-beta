@@ -1,3 +1,4 @@
+import { InboxOverview } from "../../src/components/InboxOverview";
 import * as Crypto from "expo-crypto";
 import type {InboxReceipt} from "@mergemate/contracts";
 import {useAuth} from "../../src/context/AuthContext";
@@ -128,6 +129,7 @@ function InboxWorkspace({initialFilter}:{initialFilter:NotificationFilter}) {
         title="Inbox"
         rightAction={
           <View style={styles.headerIcons}>
+            <TouchableOpacity onPress={() => router.push("/workflows")} style={styles.iconBtn} accessibilityRole="button" accessibilityLabel="Review playbooks"><Icon name="git-network-outline" size={22} color={colors.brandLight}/></TouchableOpacity>
             <TouchableOpacity
               onPress={onRefresh}
               disabled={isRefreshing}
@@ -157,49 +159,6 @@ function InboxWorkspace({initialFilter}:{initialFilter:NotificationFilter}) {
         }
       />
 
-      <ReadoutControls label="Inbox overview" sentences={inboxNarration(items)}/>
-
-      {/* Segmented Filter Control */}
-      <View style={[styles.filterBar, { borderBottomColor: colors.border }, { marginHorizontal:16, borderBottomWidth:0, paddingHorizontal:4, paddingVertical:4, backgroundColor:colors.surfaceElevated, borderRadius:radius.lg }]} accessibilityRole="tablist">
-        {(["all", "review", "mentions", "mine"] as NotificationFilter[]).map((tab) => {
-          const isSelected = filter === tab;
-          let label = "All";
-          if (tab === "review") label = "Review";
-          if (tab === "mentions") label = "Mentions";
-          if (tab === "mine") label = "Mine";
-
-          return (
-            <TouchableOpacity
-              key={tab}
-              ref={node=>{if(Platform.OS==='web'&&typeof HTMLElement!=='undefined'&&node instanceof HTMLElement){node.tabIndex=isSelected?0:-1;tabNodes.current.set(tab,node);}}}
-              aria-selected={isSelected}
-              onPress={() => selectFilter(tab)}
-              style={[
-                styles.filterTab,
-                {
-                  backgroundColor: isSelected ? colors.brandSubtle : "transparent",
-                  borderRadius: radius.md,
-                },
-              ]}
-              accessibilityRole="tab"
-              accessibilityLabel={tab === "review" ? "Needs review pull requests" : `${label} pull requests`}
-              accessibilityState={{ selected: isSelected }}
-            >
-              <Text numberOfLines={1} ellipsizeMode="tail"
-                style={[
-                  typography.subhead,
-                  {
-                    color: isSelected ? colors.brandLight : colors.textSecondary,
-                    fontWeight: isSelected ? "700" : "500",
-                  },
-                ]}
-              >
-                {label}
-              </Text>
-            </TouchableOpacity>
-          );
-        })}
-      </View>
 
       {(prefSaving||(prefMessage&&prefMessage!=="Filter saved for next time."))&&<Text accessibilityLiveRegion="polite" style={[typography.caption,{color:colors.textSecondary,paddingHorizontal:16}]}>{prefSaving?"Saving filter…":prefMessage}</Text>}
       {prefError&&<View style={{padding:12}}><Text style={[typography.body,{color:colors.textSecondary}]} accessibilityRole="alert">This filter applies here, but could not be saved for next time.</Text><Button title="Retry saving filter" variant="ghost" onPress={()=>persist(filter)}/></View>}
@@ -252,6 +211,52 @@ function InboxWorkspace({initialFilter}:{initialFilter:NotificationFilter}) {
           refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} tintColor={colors.brandLight}/>}
           onEndReached={()=>{if(!error)void more();}} onEndReachedThreshold={0.4}
           ListHeaderComponent={<>
+          <InboxOverview count={items.length} needsReview={items.filter(item=>item.kind==="review").length}/>
+      <ReadoutControls label="Inbox overview" sentences={inboxNarration(items)}/>
+
+      {/* Segmented Filter Control */}
+      <View style={[styles.filterBar, { borderBottomColor: colors.border }, { marginHorizontal:16, borderBottomWidth:0, paddingHorizontal:4, paddingVertical:4, backgroundColor:colors.surfaceElevated, borderRadius:radius.lg }]} accessibilityRole="tablist">
+        {(["all", "review", "mentions", "mine"] as NotificationFilter[]).map((tab) => {
+          const isSelected = filter === tab;
+          let label = "All";
+          if (tab === "review") label = "Review";
+          if (tab === "mentions") label = "Mentions";
+          if (tab === "mine") label = "Mine";
+
+          return (
+            <TouchableOpacity
+              key={tab}
+              ref={node=>{if(Platform.OS==='web'&&typeof HTMLElement!=='undefined'&&node instanceof HTMLElement){node.tabIndex=isSelected?0:-1;tabNodes.current.set(tab,node);}}}
+              aria-selected={isSelected}
+              onPress={() => selectFilter(tab)}
+              style={[
+                styles.filterTab,
+                {
+                  backgroundColor: isSelected ? colors.brandSubtle : "transparent",
+                  borderRadius: radius.md,
+                },
+              ]}
+              accessibilityRole="tab"
+              accessibilityLabel={tab === "review" ? "Needs review pull requests" : `${label} pull requests`}
+              accessibilityState={{ selected: isSelected }}
+            >
+              <Text numberOfLines={1} ellipsizeMode="tail"
+                style={[
+                  typography.subhead,
+                  {
+                    color: isSelected ? colors.brandLight : colors.textSecondary,
+                    fontWeight: isSelected ? "700" : "500",
+                  },
+                ]}
+              >
+                {label}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+
+
           <TouchableOpacity onPress={()=>setGrouped(value=>!value)} accessibilityRole="switch" accessibilityLabel="Group by repository" accessibilityState={{checked:grouped}} style={{alignSelf:'flex-start',flexDirection:'row',alignItems:'center',gap:6,minHeight:44,paddingHorizontal:12,marginBottom:8,borderRadius:radius.md,backgroundColor:grouped?colors.brandSubtle:colors.surfaceElevated}}><Icon name="folder-outline" size={14} color={grouped?colors.brandLight:colors.textSecondary}/><Text style={[typography.footnote,{color:grouped?colors.brandLight:colors.textSecondary,fontWeight:'600'}]}>{grouped?"Grouped by repo":"Group by repo"}</Text></TouchableOpacity>
           {/* Summary Strip Card */}
           <View
@@ -287,11 +292,11 @@ function InboxWorkspace({initialFilter}:{initialFilter:NotificationFilter}) {
                   styles.itemCard,
                   isDesktop && {flex:1,maxWidth:"50%"},
 
-                  { padding:16, marginBottom:16 },
+                  { padding:18, marginBottom:14 },
                   {
                     backgroundColor: colors.surface,
                     borderColor: colors.border,
-                    borderRadius: radius.lg,
+                    borderRadius: 20,
                     borderLeftColor: item.risk === "high" ? colors.riskHigh : colors.border,
                     borderLeftWidth: item.risk === "high" ? 4 : 1,
                     paddingLeft: item.risk === "high" ? 13 : 16,

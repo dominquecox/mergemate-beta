@@ -105,6 +105,9 @@ export function Sidebar() {
           />
         ))}
       </View>
+      <Link href="/workflows" asChild><Pressable accessibilityRole="link" accessibilityLabel="Review playbooks" style={({ pressed }) => ({ minHeight: 48, marginTop: 16, paddingHorizontal: 12, borderRadius: 14, flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: colors.brandSubtle, opacity: pressed ? 0.8 : 1 })}>
+        <Icon name="git-network-outline" size={20} color={colors.brandLight}/><Text style={[typography.subhead,{color:colors.brandLight}]}>Review playbooks</Text>
+      </Pressable></Link>
       <View style={{flex:1}} />
       <View style={[styles.guard,{borderColor:colors.border}]}>
         <Icon name="shield-checkmark-outline" size={18} color={colors.brandLight}/>

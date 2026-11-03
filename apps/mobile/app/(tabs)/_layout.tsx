@@ -25,6 +25,11 @@ export default function TabsLayout() {
           : {
               backgroundColor: colors.surface,
               borderTopColor: colors.border,
+              borderTopWidth: 1,
+              borderRadius: 22,
+              marginHorizontal: 10,
+              marginBottom: Platform.OS === "web" ? 10 : 0,
+              paddingHorizontal: 4,
               // Web needs a little more room: the icon box is taller than the old emoji glyph and would squeeze the label.
               // Android edge-to-edge adds the gesture-bar / 3-button navigation bar bottom inset.
               height: (Platform.OS === "web" ? 72 : 62) + bottomInset,
