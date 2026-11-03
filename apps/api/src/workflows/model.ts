@@ -11,11 +11,11 @@ import { ApiError } from '../errors';
 const Plan=z.object({name:z.string().min(1).max(80),steps:z.array(z.enum(['context','checks','risk','summary','review_plan','patch','qa','draft_pr','route'])).min(1).max(9)}).strict();
 const titles:Record<string,string>={context:'Load target context',checks:'Inspect current GitHub checks',risk:'Assess change risk',summary:'Summarize the change',review_plan:'Prepare a review plan',patch:'Prepare a code fix',qa:'Run isolated tests',draft_pr:'Create a draft pull request',route:'Prepare routing handoff'};
 async function modelCall<T>(env:Env,deps:Deps,session:SessionRecord,system:string,prompt:string,schema:z.ZodType<T>,maxOutputTokens:number):Promise<{value:T;model:string}>{
- if(!env.DB)throw new ApiError('misconfigured','Workflow storage is not configured.');
+ if(!env.DB||!session.userId)throw new ApiError('misconfigured','Workflow storage is not configured.');
  const stores=storesFor(env.DB),limit=await gateAction(stores,actionLimits(env),session,env,'summary');
  const provider=createModelProvider(limit.model.env,'summary',{transport:createFetchTransport(deps.fetch),...(env.AI?{ai:env.AI}:{})});
  let servedModel=`${provider.config.provider}:${provider.config.modelId}`;
- const output=await withReservation(stores,limit.limits,session.userId!,limit.limit,()=>runModelTask(env,provider,'summary',{system:system+' '+DATA_NOTICE,prompt:redactSecrets(prompt).text,maxOutputTokens},schema,stores.policy,(reply)=>{servedModel=`${reply.provider}:${reply.modelId}`;}));
+ const output=await withReservation(stores,limit.limits,session.userId,limit.limit,()=>runModelTask(env,provider,'summary',{system:system+' '+DATA_NOTICE,prompt:redactSecrets(prompt).text,maxOutputTokens},schema,stores.policy,(reply)=>{servedModel=`${reply.provider}:${reply.modelId}`;}));
  return {value:output.value,model:servedModel};
 }
 export async function generateWorkflowPlan(env:Env,deps:Deps,session:SessionRecord,input:{intent:string;target:WorkflowTarget;mode:'review'|'code_fix'}){
