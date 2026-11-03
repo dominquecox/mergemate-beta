@@ -229,6 +229,15 @@ describe("CSP", () => {
     expect(origin("env.production.vars")).toBe("https://api.mergemate.dev");
   });
 
+  it("never enables the dev API proxy or its credentials in production", () => {
+    const toml = readFileSync(new URL("../wrangler.toml", import.meta.url), "utf8");
+    // Every production table, so a later [[env.production.services]] block is caught too.
+    const production = toml.split(/^\[/m).filter((s) => s.replace(/^\[/, "").startsWith("env.production")).join("\n");
+    expect(production).not.toMatch(/DEV_API_PROXY|DEV_API|CF_ACCESS_CLIENT|api-dev\.mergemate\.dev/);
+    const dev = toml.split(/^\[/m).filter((s) => s.replace(/^\[/, "").startsWith("env.dev")).join("\n");
+    expect(dev).toMatch(/^DEV_API_PROXY = "1"$/m);
+  });
+
   it("serves production only from app.mergemate.dev, never workers.dev or previews", () => {
     const toml = readFileSync(new URL("../wrangler.toml", import.meta.url), "utf8");
     const section = toml.split(/^\[/m).find((s) => s.startsWith("env.production]")) ?? "";

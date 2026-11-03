@@ -88,3 +88,32 @@ describe("wrangler.toml [env.production]", () => {
     expect(production).not.toMatch(/local|-dev\b/);
   });
 });
+
+describe("agent runtime stays off in production", () => {
+  // The agent executor ships dev-only until its production security controls land. These pins make turning it on
+  // in production an explicit, reviewed config change instead of a silent one.
+  it("binds no workflow queue and allows no runner repositories in production", () => {
+    const production = inEnv("production").map((t) => `[${t.header}]\n${t.body}`).join("\n");
+    expect(production).not.toMatch(/WORKFLOW_/);
+    expect(production).not.toMatch(/mergemate-workflows/);
+    expect(vars("production")("WORKFLOW_RUNNER_REPOS")).toBeUndefined();
+    expect(all("production", "queues.producers").map((t) => value(t, "binding"))).not.toContain("WORKFLOW_QUEUE");
+  });
+
+  it("keeps the workflow queue in the dev environment only", () => {
+    expect(all("dev", "queues.producers").map((t) => value(t, "binding"))).toContain("WORKFLOW_QUEUE");
+    expect(toml).not.toMatch(/^\[\[queues\.producers\]\][^[]*WORKFLOW_QUEUE/m);
+  });
+
+  it("refuses runner calls when no runner credential is configured", async () => {
+    const { testContext } = await import("./helpers");
+    const { appFor } = await import("./sign-in");
+    const ctx = testContext();
+    const res = await appFor(ctx)("/internal/workflows/heartbeat", {
+      method: "POST",
+      headers: { "content-type": "application/json", authorization: `Bearer ${"x".repeat(40)}` },
+      body: JSON.stringify({ runnerId: "runner-1", repositories: ["dominquecox/mergemate"], capabilities: [] }),
+    });
+    expect(res.status).toBe(401);
+  });
+});
