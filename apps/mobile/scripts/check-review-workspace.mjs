@@ -1,0 +1,84 @@
+import { chromium } from '@playwright/test';
+import path from 'node:path';
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+const proof=process.env.MM_REVIEW_PROOF_DIR??'/tmp/mergemate-review-design-proof';
+fs.mkdirSync(proof,{recursive:true});
+const origin=process.env.MM_REVIEW_ORIGIN??'http://127.0.0.1:8086';
+if(!['localhost','127.0.0.1'].includes(new URL(origin).hostname))throw new Error('Use a local sample-data server');
+const browser=await chromium.launch({executablePath:process.env.CHROMIUM_PATH??(process.platform==='darwin'?'/Applications/Google Chrome.app/Contents/MacOS/Google Chrome':'/usr/bin/chromium'),args:['--no-sandbox']});
+try {
+for (const width of [360,393,1440]) {
+ const context=await browser.newContext({viewport:{width,height:1000},serviceWorkers:'block'});
+ await context.addInitScript(()=>{localStorage.setItem('mergemate_demo_session','true');localStorage.setItem('mergemate_theme','dark');});
+ const page=await context.newPage(); page.setDefaultTimeout(20000);
+ const errors=[]; page.on('pageerror',error=>errors.push(error.message));
+ page.on('console',m=>{if(m.type()==='error' && m.text().includes('Unexpected text node'))errors.push(m.text());});
+ const external=[];page.on('request',r=>{if(!r.url().startsWith(origin)&&!r.url().startsWith('data:'))external.push(r.url());});
+ await page.goto(`${origin}/inbox`,{waitUntil:'networkidle'});
+ await page.getByRole('heading',{name:'Less noise. A clearer next move.'}).waitFor();
+ assert((await page.locator('body').innerText()).includes('SAMPLE DATA'));
+ assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));
+ const all=page.getByRole('tab',{name:'All pull requests',exact:true});
+ await all.focus();await page.keyboard.press('ArrowRight');
+ await page.getByRole('tab',{name:'Needs review pull requests',selected:true}).waitFor();
+ await page.keyboard.press('End');await page.getByRole('tab',{name:'Mine pull requests',selected:true}).waitFor();
+ await page.keyboard.press('Home');await page.getByRole('tab',{name:'All pull requests',selected:true}).waitFor();
+ await page.screenshot({path:path.join(proof,`inbox-${width}.png`),fullPage:false});
+ await page.getByRole('button',{name:'Open review playbooks',exact:true}).click();
+ await page.getByRole('heading',{name:'Build a clearer path.'}).waitFor();
+ await page.getByRole('button',{name:'Use Sensitive change template'}).click();
+ await page.getByRole('heading',{name:'Sensitive change',exact:true}).waitFor();
+ await page.screenshot({path:path.join(proof,`playbooks-${width}.png`),fullPage:true});
+ assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));
+ await page.getByRole('button',{name:'Edit flow',exact:true}).click();
+ await page.getByRole('textbox',{name:'Playbook name'}).fill('Release confidence');
+ await page.getByRole('checkbox',{name:'Include Inspect sensitive changes'}).click();
+ await page.getByRole('button',{name:'Save playbook',exact:true}).click();
+ await page.getByText('Playbook saved on this device.',{exact:true}).waitFor();
+ await page.reload({waitUntil:'networkidle'});
+ await page.getByRole('heading',{name:'Release confidence',exact:true}).waitFor();
+ const url=page.getByRole('textbox',{name:'GitHub pull request URL'});
+ await url.fill('https://evil.test/o/r/pull/1');
+ assert(await page.getByRole('button',{name:'Start guided review'}).isDisabled());
+ await url.fill('https://github.com/dominquecox/mergemate/pull/7');
+ await page.getByRole('button',{name:'Start guided review'}).click();
+ await page.getByRole('checkbox',{name:'Understand the change, step 1'}).click();
+ await page.getByText('1 of 4 steps checked by you',{exact:true}).waitFor();
+ await page.getByRole('button',{name:'Reset review progress'}).click();
+ await page.getByRole('button',{name:'Start guided review'}).click();
+ await page.getByRole('button',{name:'Open PR workspace'}).click();
+ await page.waitForURL('**/pr/dominquecox/mergemate/7');
+ await page.goBack();
+ await page.getByRole('heading',{name:'Release confidence',exact:true}).waitFor();
+ await url.fill('https://github.com/dominquecox/mergemate/pull/9');
+ await page.getByRole('button',{name:'Start guided review'}).waitFor();
+ if(width===393){
+  await page.getByRole('button',{name:'Edit flow',exact:true}).click();
+  await page.getByRole('textbox',{name:'Playbook name'}).fill('Unsaved change');
+  await page.evaluate(()=>{window.__originalSetItem=Storage.prototype.setItem;Storage.prototype.setItem=function(key,value){if(key==='mergemate_review_playbook')throw new Error('blocked fixture');window.__originalSetItem.call(this,key,value);};});
+  await page.getByRole('button',{name:'Save playbook',exact:true}).click();
+  await page.getByText('Could not save locally. Your draft is still here; try again.',{exact:true}).waitFor();
+  assert.equal(await page.getByRole('textbox',{name:'Playbook name'}).inputValue(),'Unsaved change');
+  await page.evaluate(()=>{Storage.prototype.setItem=window.__originalSetItem;});
+  await page.reload({waitUntil:'networkidle'});
+  await page.getByRole('heading',{name:'Release confidence',exact:true}).waitFor();
+  await page.getByRole('button',{name:'Edit flow',exact:true}).click();
+  await page.getByRole('checkbox',{name:'Include Understand the change',exact:true}).waitFor();
+  for(const title of ['Understand the change','Check the evidence','Verify the behavior','Make the next decision']){const check=page.getByRole('checkbox',{name:`Include ${title}`,exact:true});await check.click();await check.waitFor();}
+  assert.equal(await page.getByRole('checkbox',{checked:true}).count(),0);
+  await page.getByRole('button',{name:'Preview',exact:true}).click();
+  await page.getByText('Your flow needs a review step',{exact:true}).waitFor();
+  assert(await page.getByRole('button',{name:'Save playbook',exact:true}).isDisabled());
+  await page.reload({waitUntil:'networkidle'});
+  await page.getByRole('heading',{name:'Release confidence',exact:true}).waitFor();
+  await page.evaluate(()=>localStorage.setItem('mergemate_theme','light'));
+  await page.reload({waitUntil:'networkidle'});
+  await page.getByRole('heading',{name:'Release confidence',exact:true}).waitFor();
+  await page.screenshot({path:path.join(proof,'playbooks-light-393.png'),fullPage:true});
+ }
+ assert.deepEqual(errors,[]);assert.deepEqual(external,[]);
+ console.log(JSON.stringify({width,inbox:true,keyboardNavigation:true,templates:true,saveReload:true,invalidUrl:true,progressReset:true,prHandoff:true,overflow:false,pageErrors:errors,externalRequests:external}));
+ await context.close();
+}
+}finally{await browser.close();}

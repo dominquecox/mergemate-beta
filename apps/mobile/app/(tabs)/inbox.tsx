@@ -1,3 +1,4 @@
+import { InboxOverview } from "../../src/components/InboxOverview";
 import * as Crypto from "expo-crypto";
 import type {InboxReceipt} from "@mergemate/contracts";
 import {useAuth} from "../../src/context/AuthContext";
@@ -104,16 +105,26 @@ function InboxWorkspace({initialFilter}:{initialFilter:NotificationFilter}) {
   };
 
   const tabNodes=useRef(new Map<string,HTMLElement>()),chooseTab=useRef(selectFilter);chooseTab.current=selectFilter;
-  useEffect(()=>{
-    if(Platform.OS!=='web')return;
-    const tabs:NotificationFilter[]=['all','review','mentions','mine'];const cleanup:(()=>void)[]=[];
-    for(const [index,tab] of tabs.entries()){
-      const node=tabNodes.current.get(tab);if(!node)continue;
-      const key=(event:KeyboardEvent)=>{let next=index;if(event.key==='ArrowRight')next=(index+1)%4;else if(event.key==='ArrowLeft')next=(index+3)%4;else if(event.key==='Home')next=0;else if(event.key==='End')next=3;else return;event.preventDefault();const value=tabs[next];if(value){chooseTab.current(value);tabNodes.current.get(value)?.focus();}};
-      node.addEventListener('keydown',key);cleanup.push(()=>node.removeEventListener('keydown',key));
-    }
-    return()=>{for(const remove of cleanup)remove();};
-  },[]);
+  // Header tabs mount after the paged list loads, so bind to their actual DOM lifetime.
+  const bindFilterTab=(tab:NotificationFilter,node:unknown,selected:boolean)=>{
+    const old=tabNodes.current.get(tab);
+    if(old){old.onkeydown=null;tabNodes.current.delete(tab);}
+    if(Platform.OS!=='web'||typeof HTMLElement==='undefined'||!(node instanceof HTMLElement))return;
+    node.tabIndex=selected?0:-1;
+    const tabs:NotificationFilter[]=['all','review','mentions','mine'],index=tabs.indexOf(tab);
+    node.onkeydown=(event:KeyboardEvent)=>{
+      let next=index;
+      if(event.key==='ArrowRight')next=(index+1)%4;
+      else if(event.key==='ArrowLeft')next=(index+3)%4;
+      else if(event.key==='Home')next=0;
+      else if(event.key==='End')next=3;
+      else return;
+      event.preventDefault();const value=tabs[next];
+      if(value){chooseTab.current(value);tabNodes.current.get(value)?.focus();}
+    };
+    tabNodes.current.set(tab,node);
+  };
+  useEffect(()=>()=>{for(const node of tabNodes.current.values())node.onkeydown=null;tabNodes.current.clear();},[]);
 
   const navigateToPr = (item: Notification) => {
     const parts = item.repo.split("/");
@@ -128,6 +139,7 @@ function InboxWorkspace({initialFilter}:{initialFilter:NotificationFilter}) {
         title="Inbox"
         rightAction={
           <View style={styles.headerIcons}>
+            <TouchableOpacity onPress={() => router.push("/workflows")} style={styles.iconBtn} accessibilityRole="button" accessibilityLabel="Review playbooks"><Icon name="git-network-outline" size={22} color={colors.brandLight}/></TouchableOpacity>
             <TouchableOpacity
               onPress={onRefresh}
               disabled={isRefreshing}
@@ -157,6 +169,41 @@ function InboxWorkspace({initialFilter}:{initialFilter:NotificationFilter}) {
         }
       />
 
+
+      {(prefSaving||Boolean(prefMessage&&prefMessage!=="Filter saved for next time."))&&<Text accessibilityLiveRegion="polite" style={[typography.caption,{color:colors.textSecondary,paddingHorizontal:16}]}>{prefSaving?"Saving filter…":prefMessage}</Text>}
+      {prefError&&<View style={{padding:12}}><Text style={[typography.body,{color:colors.textSecondary}]} accessibilityRole="alert">This filter applies here, but could not be saved for next time.</Text><Button title="Retry saving filter" variant="ghost" onPress={()=>persist(filter)}/></View>}
+      {acting&&<Text accessibilityLiveRegion="polite" style={[typography.body,{color:colors.textSecondary,padding:12}]}>Saving Inbox change…</Text>}
+      {error&&sourceItems.length>0&&<View style={{padding:12}}><Text accessibilityRole="alert" style={[typography.body,{color:colors.riskHigh}]}>{error}</Text></View>}
+      {/* Undo Toast */}
+      {undoItem && (
+        <View
+          style={[styles.undoToast, { backgroundColor: colors.surfaceElevated, borderColor: colors.border }]}
+          accessibilityLiveRegion="polite"
+        >
+          <Text style={[typography.footnote, { color: colors.text }]}>Inbox change saved</Text>
+          <TouchableOpacity
+            disabled={acting} onPress={handleUndo}
+            style={styles.undoBtn}
+            accessibilityRole="button"
+            accessibilityLabel={undoItem.item?`Undo moving ${undoItem.item.title}`:"Undo last Inbox change"}
+          >
+            <Text style={[typography.footnote, { color: colors.brandLight, fontWeight: "700" }]}>Undo</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
+        <FlatList
+          ref={listRef}
+          onScroll={event=>{if(listActive.current)scrollOffset.current=event.nativeEvent.contentOffset.y;}} scrollEventThrottle={16}
+          key={`${isDesktop?'desktop':'phone'}:${grouped?'grouped':'flat'}`} numColumns={isDesktop&&!grouped?2:1} columnWrapperStyle={isDesktop&&!grouped?{gap:16}:undefined}
+          data={isLoading?[]:rows}
+          ListEmptyComponent={isLoading?<LoadingState title="Loading your inbox..." message="Fetching accessible pull requests and your Inbox state."/>:error?<ErrorState title="Could not load your inbox" message={error} onRetry={hasMore?more:fetchItems}/>:<EmptyState icon="checkmark-done-outline" title={hasMore?"More results are available":"Inbox Zero"} message={hasMore?"No visible items on this page. Load more to continue checking your queue.":"No pull requests need your attention in this view."} actionTitle={hasMore?"Load more pull requests":undefined} onAction={hasMore?more:undefined}/>}
+          keyExtractor={row=>row.type==='header'?`repo:${row.repo}`:row.item.id} initialNumToRender={8} maxToRenderPerBatch={8} windowSize={5}
+          contentContainerStyle={{padding:isDesktop?24:spacing.base,paddingBottom:80}}
+          refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} tintColor={colors.brandLight}/>}
+          onEndReached={()=>{if(!error)void more();}} onEndReachedThreshold={0.4}
+          ListHeaderComponent={<>
+          <InboxOverview count={items.length} needsReview={items.filter(item=>item.kind==="review").length}/>
       <ReadoutControls label="Inbox overview" sentences={inboxNarration(items)}/>
 
       {/* Segmented Filter Control */}
@@ -171,7 +218,7 @@ function InboxWorkspace({initialFilter}:{initialFilter:NotificationFilter}) {
           return (
             <TouchableOpacity
               key={tab}
-              ref={node=>{if(Platform.OS==='web'&&typeof HTMLElement!=='undefined'&&node instanceof HTMLElement){node.tabIndex=isSelected?0:-1;tabNodes.current.set(tab,node);}}}
+              ref={node=>bindFilterTab(tab,node,isSelected)}
               aria-selected={isSelected}
               onPress={() => selectFilter(tab)}
               style={[
@@ -201,57 +248,7 @@ function InboxWorkspace({initialFilter}:{initialFilter:NotificationFilter}) {
         })}
       </View>
 
-      {(prefSaving||(prefMessage&&prefMessage!=="Filter saved for next time."))&&<Text accessibilityLiveRegion="polite" style={[typography.caption,{color:colors.textSecondary,paddingHorizontal:16}]}>{prefSaving?"Saving filter…":prefMessage}</Text>}
-      {prefError&&<View style={{padding:12}}><Text style={[typography.body,{color:colors.textSecondary}]} accessibilityRole="alert">This filter applies here, but could not be saved for next time.</Text><Button title="Retry saving filter" variant="ghost" onPress={()=>persist(filter)}/></View>}
-      {acting&&<Text accessibilityLiveRegion="polite" style={[typography.body,{color:colors.textSecondary,padding:12}]}>Saving Inbox change…</Text>}
-      {error&&sourceItems.length>0&&<View style={{padding:12}}><Text accessibilityRole="alert" style={[typography.body,{color:colors.riskHigh}]}>{error}</Text></View>}
-      {/* Undo Toast */}
-      {undoItem && (
-        <View
-          style={[styles.undoToast, { backgroundColor: colors.surfaceElevated, borderColor: colors.border }]}
-          accessibilityLiveRegion="polite"
-        >
-          <Text style={[typography.footnote, { color: colors.text }]}>Inbox change saved</Text>
-          <TouchableOpacity
-            disabled={acting} onPress={handleUndo}
-            style={styles.undoBtn}
-            accessibilityRole="button"
-            accessibilityLabel={undoItem.item?`Undo moving ${undoItem.item.title}`:"Undo last Inbox change"}
-          >
-            <Text style={[typography.footnote, { color: colors.brandLight, fontWeight: "700" }]}>Undo</Text>
-          </TouchableOpacity>
-        </View>
-      )}
 
-      {isLoading ? (
-        <LoadingState
-          title="Loading your inbox..."
-          message="Fetching accessible pull requests and your Inbox state."
-        />
-      ) : error && sourceItems.length===0 ? (
-        <ErrorState
-          title="Could not load your inbox"
-          message={error}
-          onRetry={hasMore?more:fetchItems}
-        />
-      ) : items.length === 0 ? (
-        <View style={{flex:1}}><EmptyState
-          icon="checkmark-done-outline"
-          title={hasMore?"More results are available":"Inbox Zero"}
-          message={hasMore?"No visible items on this page. Load more to continue checking your queue.":"No pull requests need your attention in this view."}
-          actionTitle={hasMore?"Load more pull requests":undefined}
-          onAction={hasMore?more:undefined}
-        /></View>
-      ) : (
-        <FlatList
-          ref={listRef}
-          onScroll={event=>{if(listActive.current)scrollOffset.current=event.nativeEvent.contentOffset.y;}} scrollEventThrottle={16}
-          key={`${isDesktop?'desktop':'phone'}:${grouped?'grouped':'flat'}`} numColumns={isDesktop&&!grouped?2:1} columnWrapperStyle={isDesktop&&!grouped?{gap:16}:undefined}
-          data={rows} keyExtractor={row=>row.type==='header'?`repo:${row.repo}`:row.item.id} initialNumToRender={8} maxToRenderPerBatch={8} windowSize={5}
-          contentContainerStyle={{padding:isDesktop?24:spacing.base,paddingBottom:80}}
-          refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} tintColor={colors.brandLight}/>}
-          onEndReached={()=>{if(!error)void more();}} onEndReachedThreshold={0.4}
-          ListHeaderComponent={<>
           <TouchableOpacity onPress={()=>setGrouped(value=>!value)} accessibilityRole="switch" accessibilityLabel="Group by repository" accessibilityState={{checked:grouped}} style={{alignSelf:'flex-start',flexDirection:'row',alignItems:'center',gap:6,minHeight:44,paddingHorizontal:12,marginBottom:8,borderRadius:radius.md,backgroundColor:grouped?colors.brandSubtle:colors.surfaceElevated}}><Icon name="folder-outline" size={14} color={grouped?colors.brandLight:colors.textSecondary}/><Text style={[typography.footnote,{color:grouped?colors.brandLight:colors.textSecondary,fontWeight:'600'}]}>{grouped?"Grouped by repo":"Group by repo"}</Text></TouchableOpacity>
           {/* Summary Strip Card */}
           <View
@@ -287,11 +284,11 @@ function InboxWorkspace({initialFilter}:{initialFilter:NotificationFilter}) {
                   styles.itemCard,
                   isDesktop && {flex:1,maxWidth:"50%"},
 
-                  { padding:16, marginBottom:16 },
+                  { padding:18, marginBottom:14 },
                   {
                     backgroundColor: colors.surface,
                     borderColor: colors.border,
-                    borderRadius: radius.lg,
+                    borderRadius: 20,
                     borderLeftColor: item.risk === "high" ? colors.riskHigh : colors.border,
                     borderLeftWidth: item.risk === "high" ? 4 : 1,
                     paddingLeft: item.risk === "high" ? 13 : 16,
@@ -362,7 +359,6 @@ function InboxWorkspace({initialFilter}:{initialFilter:NotificationFilter}) {
               </View>
 ))(row.item)}
         />
-      )}
     </View>
   );
 }
