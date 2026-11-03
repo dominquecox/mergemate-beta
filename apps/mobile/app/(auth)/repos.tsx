@@ -1,3 +1,4 @@
+import { ExperienceIntro, SetupPath } from "../../src/components/ExperienceDesign";
 import {AccessibleSwitch as Switch} from "../../src/components/AccessibleSwitch";
 import React, { useState, useEffect, useRef } from "react";
 import { View, FlatList, TouchableOpacity, StyleSheet, Linking, TextInput } from "react-native";
@@ -107,10 +108,13 @@ export default function ReposScreen() {
           keyExtractor={repo=>repo.id} initialNumToRender={12} maxToRenderPerBatch={10} windowSize={5}
           contentContainerStyle={{padding:spacing.base}} onEndReached={()=>{if(!pageError)void more();}} onEndReachedThreshold={0.4}
           ListHeaderComponent={<>
-          <View style={{height:4,backgroundColor:colors.brand,borderRadius:4,marginVertical:16}}/>
-          <View style={{flexDirection:"row",alignItems:"center",gap:10,backgroundColor:colors.surfaceElevated,borderRadius:12,paddingHorizontal:12,marginBottom:16}}><Icon name="search-outline" color={colors.textSecondary} size={18}/><TextInput value={query} onChangeText={setQuery} placeholder="Search repositories, organizations..." placeholderTextColor={colors.textSecondary} accessibilityLabel="Search repositories" style={{flex:1,minHeight:48,color:colors.text,fontFamily:typography.body.fontFamily}}/></View>
+          <View style={{gap:20,marginBottom:24}}>
+            <ExperienceIntro compact eyebrow="Set up your workspace" title={"Choose where\nyour work flows."} description="Connect the repositories that matter. Keep the rest outside your workspace."/>
+            <SetupPath active="repositories"/>
+          </View>
+          <View style={{flexDirection:"row",alignItems:"center",gap:10,backgroundColor:colors.surfaceElevated,borderRadius:16,paddingHorizontal:14,marginBottom:16}}><Icon name="search-outline" color={colors.textSecondary} size={18}/><TextInput value={query} onChangeText={setQuery} placeholder="Search repositories, organizations..." placeholderTextColor={colors.textSecondary} accessibilityLabel="Search repositories" style={{flex:1,minHeight:48,color:colors.text,fontFamily:typography.body.fontFamily}}/></View>
           {/* GitHub App Configuration Notice */}
-          <View style={[styles.infoBanner, { backgroundColor: colors.surfaceElevated, borderColor: colors.border, borderRadius: radius.md }]}>
+          <View style={[styles.infoBanner, { backgroundColor: colors.surfaceElevated, borderColor: colors.border, borderRadius: 20 }]}>
             <View style={styles.noticeRow}>
               <Icon name="lock-closed-outline" size={16} color={colors.textSecondary} style={styles.noticeIcon} />
               <Text style={[typography.callout, { color: colors.text, flex: 1 }]}>
@@ -167,7 +171,7 @@ export default function ReposScreen() {
                     key={org.id}
                     style={[
                       styles.orgCard,
-                      { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.md },
+                      { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: 20 },
                     ]}
                   >
                     <View style={styles.orgHeader}>
@@ -215,12 +219,12 @@ export default function ReposScreen() {
 
 <Text accessibilityRole="header" style={[typography.headline,{color:colors.text,marginTop:24}]}>Connected repositories · {repos.length} loaded</Text></>}
           ListEmptyComponent={repos.length===0&&!settledQuery?<EmptyState icon="folder-open-outline" title="No repositories connected yet" message="MergeMate only sees repositories you grant to its GitHub App. Choose repositories on GitHub, then refresh this list." actionTitle="Choose repositories on GitHub" onAction={openGitHubAppConfig}/>:<EmptyState icon="folder-open-outline" title="No matching repositories" message="Search the loaded repositories or load another page."/>}
-          ListFooterComponent={<View>{(hasMore || pageError) && <Button title={pageError?'Retry loading repositories':'Load more repositories'} loading={pageBusy} onPress={()=>void more()}/>}<Button title="Continue to Inbox" onPress={()=>router.replace('/(tabs)/inbox')} style={{marginVertical:24}}/></View>}
+          ListFooterComponent={<View>{(hasMore || pageError) && <Button title={pageError?'Retry loading repositories':'Load more repositories'} loading={pageBusy} onPress={()=>void more()}/>}<Button title="Continue to Inbox" onPress={()=>router.replace('/(tabs)/inbox')} style={{marginVertical:24,borderRadius:16,minHeight:52}}/></View>}
           renderItem={({item:repo})=>(                <View
                   key={repo.id}
                   style={[
                     styles.repoRow,
-                    { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.md },
+                    { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: 20 },
                   ]}
                 >
                   <View style={{ flex: 1, paddingRight: spacing.sm }}>

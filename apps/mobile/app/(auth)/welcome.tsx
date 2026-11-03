@@ -8,30 +8,28 @@ import { EmptyState } from "../../src/components/EmptyState";
 import { ErrorState } from "../../src/components/ErrorState";
 import { LoadingState } from "../../src/components/LoadingState";
 import { OnboardingPreview } from "../../src/components/OnboardingPreview";
-import { Icon, IconName } from "../../src/components/Icon";
+import { ExperienceIntro } from "../../src/components/ExperienceDesign";
+import { Icon } from "../../src/components/Icon";
 import { useAndroidBackHandler } from "../../src/platform/android";
 
 const CARDS = [
   {
     step: "01",
-    title: "Catch up fast",
+    title: "Less busywork.\nMore momentum.",
     subtitle:
-      "One unified inbox sorted by priority. Read plain-language pull request summaries in seconds instead of digging through long notifications.",
-    icon: "flash-outline" as IconName,
+      "One place for your pull requests, AI-assisted review and the workflows that move your work forward.",
   },
   {
     step: "02",
-    title: "Know what's risky",
+    title: "Give every change\na clearer path.",
     subtitle:
-      "Clear risk ratings with exact reasons. Spot possible secret leaks, schema changes, and auth edits before you review.",
-    icon: "shield-checkmark-outline" as IconName,
+      "Bring context, evidence and verification into a connected review flow. See what happened and what needs your attention.",
   },
   {
     step: "03",
-    title: "You stay in control",
+    title: "Your workflow.\nYour next move.",
     subtitle:
-      "Strictly read-only GitHub access. MergeMate never merges, approves, or comments on your behalf, and never stores your code.",
-    icon: "lock-closed-outline" as IconName,
+      "Choose your repositories, set your AI preferences and inspect the evidence. Your workspace keeps its controls within reach.",
   },
 ];
 
@@ -121,43 +119,22 @@ export default function WelcomeScreen() {
         </TouchableOpacity>}
       </View>
 
-      <ScrollView contentContainerStyle={{paddingTop:16,paddingBottom:24,gap:16}} showsVerticalScrollIndicator={false}>
+      <ScrollView style={{flex:1}} contentContainerStyle={{paddingTop:24,paddingBottom:20,gap:22}} showsVerticalScrollIndicator={false}>
+        <ExperienceIntro eyebrow={`Your work, connected · ${card.step} / 03`} title={card.title} description={card.subtitle}/>
         <OnboardingPreview step={activeStep}/>
-        <View style={{gap:8}}><View style={{flexDirection:"row",gap:8,alignItems:"center"}}><Icon name={card.icon} size={16} color={colors.brandLight}/><Text style={[typography.caption,{color:colors.brandLight,letterSpacing:1.5}]}>STEP {card.step} OF 03</Text></View>
-        <Text style={[typography.title1,{color:colors.text}]} accessibilityRole="header">{card.title}</Text>
-        <Text style={[typography.callout,{color:colors.textSecondary}]}>{card.subtitle}</Text></View>
+        <View style={{flexDirection:"row",gap:8}}>
+          {(["Overview","Workflows","Your controls"] as const).map((label,index)=><TouchableOpacity key={label} onPress={()=>setActiveStep(index)} accessibilityRole="button" accessibilityLabel={`Explore ${label}`} accessibilityState={{selected:index===activeStep}} aria-pressed={index===activeStep} style={{flex:1,minHeight:44,paddingHorizontal:6,borderRadius:14,backgroundColor:index===activeStep?colors.brandSubtle:colors.surface,alignItems:"center",justifyContent:"center"}}><Text style={[typography.caption,{color:index===activeStep?colors.brandLight:colors.textSecondary,fontSize:11}]}>{label}</Text></TouchableOpacity>)}
+        </View>
       </ScrollView>
 
       <View style={styles.footer}>
-        <View style={styles.dots} accessibilityRole="tablist">
-          {CARDS.map((item, i) => (
-            <TouchableOpacity
-              key={item.step}
-              onPress={() => setActiveStep(i)}
-              style={styles.dotHitBox}
-              accessibilityRole="tab"
-              accessibilityLabel={`Step ${i + 1}: ${item.title}`}
-              accessibilityState={{ selected: i === activeStep }}
-            >
-              <View
-                style={[
-                  styles.dot,
-                  {
-                    backgroundColor: i === activeStep ? colors.brandLight : colors.borderLight,
-                    width: i === activeStep ? 24 : 8,
-                    borderRadius: radius.full,
-                  },
-                ]}
-              />
-            </TouchableOpacity>
-          ))}
-        </View>
+        <View style={{flexDirection:"row",alignItems:"center",gap:7,alignSelf:"flex-start",marginBottom:12}}><Icon name="git-network-outline" size={14} color={colors.brandLight}/><Text style={[typography.caption,{color:colors.textSecondary}]}>Built for the way your team moves.</Text></View>
 
         <Button
           title={activeStep === CARDS.length - 1 ? "Get Started" : "Continue"}
           onPress={next}
           variant="primary"
-          style={{ width: "100%", marginTop: spacing.md }}
+          style={{ width: "100%", borderRadius: 16, minHeight:52 }}
         />
       </View>
     </View>
@@ -165,57 +142,9 @@ export default function WelcomeScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    justifyContent: "space-between",
-  },
-  topBar: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingTop: 8,
-    minHeight: 52,
-  },
-  logo: {
-    width: 148,
-    height: 36,
-  },
-  skipBtn: {
-    minHeight: 44,
-    minWidth: 56,
-    paddingHorizontal: 8,
-    alignItems: "flex-end",
-    justifyContent: "center",
-  },
-  content: {
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: 32,
-  },
-  iconCircle: {
-    width: 96,
-    height: 96,
-    borderRadius: 48,
-    alignItems: "center",
-    justifyContent: "center",
-    borderWidth: 1,
-  },
-  footer: {
-    alignItems: "center",
-    paddingBottom: 16,
-  },
-  dots: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  dotHitBox: {
-    minWidth: 44,
-    minHeight: 44,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  dot: {
-    height: 8,
-  },
+  container: {flex:1,justifyContent:"flex-start"},
+  topBar: {flexDirection:"row",alignItems:"center",justifyContent:"space-between",paddingTop:8,minHeight:52},
+  logo: {width:148,height:36},
+  skipBtn: {minHeight:44,minWidth:56,paddingHorizontal:8,alignItems:"flex-end",justifyContent:"center"},
+  footer: {alignItems:"center",paddingTop:12,paddingBottom:12},
 });

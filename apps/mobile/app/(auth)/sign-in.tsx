@@ -10,6 +10,7 @@ import { Button } from "../../src/components/Button";
 import { EmptyState } from "../../src/components/EmptyState";
 import { ErrorState } from "../../src/components/ErrorState";
 import { LoadingState } from "../../src/components/LoadingState";
+import { ExperienceIntro, ExperienceSurface, SetupPath } from "../../src/components/ExperienceDesign";
 import { Section, InfoLine } from "../../src/components/ScreenDesign";
 import { Icon } from "../../src/components/Icon";
 
@@ -54,16 +55,9 @@ export default function SignInScreen() {
           accessibilityRole="image"
           accessibilityLabel="MergeMate"
         />
-        <Text
-          style={[typography.title2, { color: colors.text, marginTop: spacing.base, textAlign: "center" }]}
-          ref={heading}
-          accessibilityRole="header"
-        >
-          Connect your GitHub
-        </Text>
-        <Text style={[typography.body, { color: colors.textSecondary, marginTop: spacing.xs, textAlign: "center" }]}>
-          Stay ahead of incoming pull requests, risk assessments, and code reviews.
-        </Text>
+        <ExperienceIntro eyebrow="Your connected workspace" title={"Connect the work.\nShape what’s next."} description="Bring your repositories, review context and agent workflows into one considered workspace." headingRef={heading}/>
+        <SetupPath active="connect"/>
+
       </View>
 
       {isLoading ? (
@@ -94,13 +88,13 @@ export default function SignInScreen() {
           }}
         />
       ) : (
-        <View style={[styles.actions, { marginTop: spacing.xxl }]}>
+        <ExperienceSurface accent style={[styles.actions, { marginTop: 24 }]}>
           <Button
             title="Continue with GitHub"
             onPress={handleSignIn}
             loading={isLoading}
             variant="primary"
-            style={{ width: "100%" }}
+            style={{ width: "100%", borderRadius:16, minHeight:52 }}
           />
 
           <TouchableOpacity
@@ -109,9 +103,9 @@ export default function SignInScreen() {
             style={[
               styles.demoBtn,
               {
-                backgroundColor: colors.surfaceElevated,
-                borderColor: colors.demoBadge,
-                borderRadius: radius.md,
+                backgroundColor: colors.surface,
+                borderColor: colors.border,
+                borderRadius: 18,
                 marginTop: spacing.md,
               },
             ]}
@@ -130,13 +124,13 @@ export default function SignInScreen() {
               </Text>
             </View>
           </TouchableOpacity>
-        </View>
+        </ExperienceSurface>
       )}
 
-      <Section title="What MergeMate accesses" icon="shield-checkmark-outline" style={{width:"100%",marginTop:24}}>
-        <InfoLine icon="git-pull-request-outline" title="Read-only pull requests" detail="Review selected diffs, comments and check results from repositories you connect."/>
+      <Section title="Connection permissions" icon="shield-checkmark-outline" style={{width:"100%",marginTop:24}}>
+        <InfoLine icon="git-pull-request-outline" title="Pull request context" detail="Read selected diffs, comments and check results from repositories you connect."/>
         <InfoLine icon="folder-open-outline" title="Repository metadata" detail="Only the repositories you choose on GitHub are available to MergeMate."/>
-        <InfoLine icon="person-outline" title="You stay in control" detail="MergeMate never merges, approves or closes a pull request. Take those actions in GitHub."/>
+        <InfoLine icon="person-outline" title="Permission-aware actions" detail="This connection reads PR context. Merge, approve and close actions currently happen in GitHub."/>
       </Section>
 
       <View style={[styles.footer, { marginTop: spacing.xl }]}>
@@ -192,15 +186,16 @@ const styles = StyleSheet.create({
   container: {
     flexGrow: 1,
     justifyContent: "flex-start",
-    alignItems: "center",
+    alignItems: "stretch",
   },
   header: {
-    alignItems: "center",
-    marginTop: 24,
+    alignItems: "stretch",
+    gap: 24,
+    marginTop: 8,
   },
   logo: {
-    width: 220,
-    height: 54,
+    width: 148,
+    height: 36,
   },
   actions: {
     width: "100%",
@@ -213,7 +208,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   demoContent: {
-    alignItems: "center",
+    alignItems: "flex-start",
     gap: 6,
   },
   badge: {
@@ -222,7 +217,7 @@ const styles = StyleSheet.create({
     borderRadius: 4,
   },
   footer: {
-    alignItems: "center",
+    alignItems: "stretch",
     paddingBottom: 24,
   },
   privacyRow: {
