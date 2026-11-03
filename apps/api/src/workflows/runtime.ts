@@ -3,6 +3,8 @@ import type { Env,Deps } from '../env';
 import type { SessionRecord } from '../lib/sessions';
 import { ApiError } from '../errors';
 import { captureAiPolicy } from '../lib/ai-policy';
+import { createModelProvider } from '../ai/provider';
+import { userModelContext } from '../lib/user-meta-key';
 import { createFetchTransport } from '../routes/ai-engine-model';
 import { actionLimits } from '../routes/ai-engine-gate';
 import { summarizePr,assessPrRisk } from '../routes/ai-engine';
@@ -13,15 +15,17 @@ import { loadRun,saveRun,TERMINAL,type RunRow } from './store';
 export const RUNNER_HEARTBEAT_MS=180000;
 export const workflowRepo=(target:WorkflowTarget)=>`${target.owner}/${target.repo}`.toLowerCase();
 export const workflowAllowedRepos=(env:Env)=>new Set((env.WORKFLOW_RUNNER_REPOS??'').split(',').map(x=>x.trim().toLowerCase()).filter(x=>/^[a-z\d-]+\/[\w.-]+$/i.test(x)));
-export async function workflowCapabilities(env:Env,repo:string,now:Date):Promise<WorkflowCapabilities>{
+export async function workflowCapabilities(env:Env,repo:string,now:Date,userId?:string):Promise<WorkflowCapabilities>{
  let ready=false;try{ready=!!env.DB&&!!await env.DB.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='workflow_runs'").first();}catch{/* Fail closed on missing migration. */}
- const analysis=ready&&!!env.WORKFLOW_QUEUE;
+ let modelsReady=true;
+ try{for(const task of ['summary','risk'] as const){const modelEnv=userId?(await userModelContext(env,userId,task)).env:env;createModelProvider(modelEnv,task,{transport:createFetchTransport(fetch),...(env.AI?{ai:env.AI}:{})});}}catch{modelsReady=false;}
+ const analysis=ready&&!!env.WORKFLOW_QUEUE&&modelsReady;
  let runner:{last_seen_at:string}|null=null;
  if(ready&&env.DB&&env.WORKFLOW_RUNNER_TOKEN&&env.WORKFLOW_RUNNER_TOKEN.length>=32&&workflowAllowedRepos(env).has(repo.toLowerCase())){
   const rows=await env.DB.prepare('SELECT repositories_json,capabilities_json,last_seen_at FROM workflow_runners WHERE last_seen_at>? ORDER BY last_seen_at DESC LIMIT 50').bind(new Date(now.getTime()-RUNNER_HEARTBEAT_MS).toISOString()).all<{repositories_json:string;capabilities_json:string;last_seen_at:string}>();
   for(const row of rows.results??[]){try{const repos=JSON.parse(row.repositories_json) as string[],caps=JSON.parse(row.capabilities_json);if(repos.map(x=>x.toLowerCase()).includes(repo.toLowerCase())&&caps.docker&&caps.patch&&caps.qa&&caps.draftPr){runner=row;break;}}catch{/* invalid heartbeat cannot grant capability */}}
  }
- return {analysis:{available:analysis,...(!analysis?{reason:!ready?'Workflow database migration is not applied.':'The durable workflow queue is not configured.'}:{})},coding:{available:analysis&&!!runner,...(runner?{lastHeartbeatAt:runner.last_seen_at}:{reason:'No recent configured isolated runner with patch, test and draft-PR capabilities for this repository.'})},limits:{maxSteps:9,maxFiles:8,maxPatchBytes:131072},requiresAiConsent:true};
+ return {analysis:{available:analysis,...(!analysis?{reason:!ready?'Workflow database migration is not applied.':!env.WORKFLOW_QUEUE?'The durable workflow queue is not configured.':'The required AI model bindings or credentials are not configured.'}:{})},coding:{available:analysis&&!!runner,...(runner?{lastHeartbeatAt:runner.last_seen_at}:{reason:'No recent configured isolated runner with patch, test and draft-PR capabilities for this repository.'})},limits:{maxSteps:9,maxFiles:8,maxPatchBytes:131072},requiresAiConsent:true};
 }
 export const workflowSession=(userId:string):SessionRecord=>({userId,tokenHash:'workflow-background',demo:false,transport:'bearer',csrfToken:null,expiresAt:new Date(Date.now()+3600000).toISOString(),userStatus:'active'});
 export async function assertRunCurrent(env:Env,deps:Deps,row:RunRow,run:WorkflowRun){
@@ -40,7 +44,7 @@ export async function createWorkflowRun(env:Env,deps:Deps,session:SessionRecord,
  if(prior){const run=JSON.parse(prior.body_json) as WorkflowRun;if(JSON.stringify(run.definition)!==JSON.stringify(definition))throw new ApiError('state_conflict','This idempotency key belongs to another workflow.');return run;}
  const snapshot=await targetSnapshot(env,deps,session,definition.target,definition.mode==='code_fix');
  if(!/^[a-f0-9]{40}$/i.test(snapshot.headSha))throw new ApiError('upstream_unavailable','The target commit is unavailable.');
- const policy=await captureAiPolicy(env.DB,session.userId,true),now=deps.now().toISOString(),capabilities=await workflowCapabilities(env,workflowRepo(definition.target),deps.now());
+ const policy=await captureAiPolicy(env.DB,session.userId,true),now=deps.now().toISOString(),capabilities=await workflowCapabilities(env,workflowRepo(definition.target),deps.now(),session.userId!);
  const available=definition.mode==='review'?capabilities.analysis.available:capabilities.coding.available;
  const run:WorkflowRun={id:crypto.randomUUID(),definition,status:available?'queued':'blocked',headSha:snapshot.headSha,revision:0,createdAt:now,updatedAt:now,capabilities,steps:definition.steps.map(s=>({id:s.id,kind:s.kind,title:s.title,status:s.enabled?(available?'pending':'blocked'):'skipped'})),...(!available?{error:definition.mode==='review'?capabilities.analysis.reason??'Analysis runtime unavailable.':capabilities.coding.reason??'Coding executor unavailable.'}:{})};
  await policy.assertCurrent();
@@ -50,7 +54,7 @@ export async function createWorkflowRun(env:Env,deps:Deps,session:SessionRecord,
 }
 export async function cancelWorkflowRun(env:Env,deps:Deps,userId:string,id:string){
  if(!env.DB)throw new ApiError('misconfigured','Workflow storage unavailable.');
- for(let attempt=0;attempt<3;attempt++){const {row,run}=await loadRun(env.DB,id,userId);if(TERMINAL.has(run.status))return run;run.status='cancelled';for(const step of run.steps)if(['pending','running'].includes(step.status))step.status='cancelled';if(await saveRun(env.DB,row,run,deps.now().toISOString())){await env.DB.prepare("UPDATE workflow_jobs SET status='cancelled',lease_hash=NULL WHERE run_id=? AND status!='done'").bind(id).run();return run;}}
+ for(let attempt=0;attempt<3;attempt++){const {row,run}=await loadRun(env.DB,id,userId);if(TERMINAL.has(run.status))return run;run.status='cancelled';for(const step of run.steps)if(['pending','running'].includes(step.status))step.status='cancelled';if(await saveRun(env.DB,row,run,deps.now().toISOString())){await env.DB.prepare("UPDATE workflow_jobs SET status='cancelled',lease_hash=NULL,patch_json=NULL,patch_claim_until=NULL WHERE run_id=? AND status!='done'").bind(id).run();return run;}}
  throw new ApiError('state_conflict','The workflow changed. Reload and try cancelling again.');
 }
 export async function processWorkflowMessage(env:Env,deps:Deps,id:string){
@@ -66,7 +70,7 @@ export async function processWorkflowMessage(env:Env,deps:Deps,id:string){
  try{
   const snapshot=await assertRunCurrent(env,deps,claimed.row,claimed.run),session=workflowSession(row.user_id);
   if(step.kind==='patch'){
-   const caps=await workflowCapabilities(env,workflowRepo(run.definition.target),deps.now());
+   const caps=await workflowCapabilities(env,workflowRepo(run.definition.target),deps.now(),row.user_id);
    if(!caps.coding.available)throw new ApiError('upstream_unavailable',caps.coding.reason??'Coding executor unavailable.');
    const now=deps.now().toISOString();
    await env.DB.prepare("INSERT OR IGNORE INTO workflow_jobs(id,run_id,user_id,repository,base_sha,status,created_at,updated_at) VALUES(?,?,?,?,?,'pending',?,?)").bind(crypto.randomUUID(),id,row.user_id,workflowRepo(run.definition.target),run.headSha,now,now).run();
@@ -91,10 +95,13 @@ export async function processWorkflowMessage(env:Env,deps:Deps,id:string){
 
 /** Recover the durable insert/send gap and expired analysis deliveries; never reassign expired coding jobs. */
 export async function recoverWorkflowRuns(env:Env,deps:Deps){
- if(!env.DB||!env.WORKFLOW_QUEUE)return;
+ if(!env.DB)return;
  const exists=await env.DB.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='workflow_runs'").first();if(!exists)return;
+ await env.DB.prepare("UPDATE workflow_jobs SET patch_json=NULL,patch_claim_until=NULL WHERE updated_at<? AND (status!='running' OR lease_expires_at<=?)").bind(new Date(deps.now().getTime()-3600000).toISOString(),deps.now().toISOString()).run();
+ await env.DB.prepare('DELETE FROM workflow_runs WHERE updated_at<?').bind(new Date(deps.now().getTime()-7*86400000).toISOString()).run();
+ if(!env.WORKFLOW_QUEUE)return;
  const rows=await env.DB.prepare("SELECT id FROM workflow_runs WHERE json_extract(body_json,'$.status') IN ('queued','running') AND (lease_until IS NULL OR lease_until<=?) ORDER BY updated_at LIMIT 20").bind(deps.now().toISOString()).all<{id:string}>();
  for(const row of rows.results??[])await env.WORKFLOW_QUEUE.send({runId:row.id});
  const expired=await env.DB.prepare("SELECT run_id,id FROM workflow_jobs WHERE status='running' AND lease_expires_at<=? LIMIT 20").bind(deps.now().toISOString()).all<{run_id:string;id:string}>();
- for(const job of expired.results??[]){const state=await loadRun(env.DB,job.run_id);if(TERMINAL.has(state.run.status))continue;state.run.status='failed';state.run.error='The isolated runner lease expired. Inspect any external artifacts before starting a new run.';for(const step of state.run.steps)if(step.status==='running')step.status='failed';const now=deps.now().toISOString();state.run.revision=state.row.revision+1;state.run.updatedAt=now;await env.DB.batch([env.DB.prepare("UPDATE workflow_jobs SET status='failed',lease_hash=NULL WHERE id=? AND status='running' AND lease_expires_at<=? AND EXISTS(SELECT 1 FROM workflow_runs WHERE id=? AND revision=?)").bind(job.id,now,state.row.id,state.row.revision),env.DB.prepare("UPDATE workflow_runs SET body_json=?,revision=revision+1,updated_at=? WHERE id=? AND revision=? AND EXISTS(SELECT 1 FROM workflow_jobs WHERE id=? AND status='failed')").bind(JSON.stringify(state.run),now,state.row.id,state.row.revision,job.id)]);}
+ for(const job of expired.results??[]){const state=await loadRun(env.DB,job.run_id);if(TERMINAL.has(state.run.status))continue;state.run.status='failed';state.run.error='The isolated runner lease expired. Inspect any external artifacts before starting a new run.';for(const step of state.run.steps)if(step.status==='running')step.status='failed';const now=deps.now().toISOString();state.run.revision=state.row.revision+1;state.run.updatedAt=now;await env.DB.batch([env.DB.prepare("UPDATE workflow_jobs SET status='failed',lease_hash=NULL,patch_json=NULL,patch_claim_until=NULL WHERE id=? AND status='running' AND lease_expires_at<=? AND EXISTS(SELECT 1 FROM workflow_runs WHERE id=? AND revision=?)").bind(job.id,now,state.row.id,state.row.revision),env.DB.prepare("UPDATE workflow_runs SET body_json=?,revision=revision+1,updated_at=? WHERE id=? AND revision=? AND EXISTS(SELECT 1 FROM workflow_jobs WHERE id=? AND status='failed')").bind(JSON.stringify(state.run),now,state.row.id,state.row.revision,job.id)]);}
 }

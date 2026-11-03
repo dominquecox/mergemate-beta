@@ -97,6 +97,8 @@ routes = [{ pattern = "api-dev.mergemate.dev", custom_domain = true }]
 workers_dev = false
 
 [env.dev.vars]
+# Coding execution is restricted to this reviewed repository until owner policy expands it.
+WORKFLOW_RUNNER_REPOS = "dominquecox/mergemate"
 APP_ENV = "development"
 STRIPE_MODE = "test"
 WEB_ORIGIN = "https://dev.mergemate.dev"

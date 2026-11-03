@@ -5,7 +5,7 @@ import { ApiError } from '../errors';
 import { randomToken, sha256Hex, timingSafeEqual } from '../lib/crypto';
 import { getAccessToken } from '../lib/github-tokens';
 import { githubGet } from '../lib/github';
-import { assertRunCurrent,workflowAllowedRepos,workflowSession } from './runtime';
+import { assertRunCurrent,cancelWorkflowRun,workflowAllowedRepos,workflowSession } from './runtime';
 import { generateWorkflowPatch } from './model';
 import { loadRun,POLICY_GUARD } from './store';
 
@@ -50,7 +50,10 @@ export async function activeExecutorJob(env:Env,deps:Deps,id:string,request:z.in
  if(!job||job.status!=='running'||job.runner_id!==request.runnerId||!job.lease_hash||!timingSafeEqual(job.lease_hash,await sha256Hex(request.leaseToken))||Date.parse(job.lease_expires_at??'')<=deps.now().getTime()||Date.parse(job.created_at)<deps.now().getTime()-3600000||!workflowAllowedRepos(env).has(job.repository))throw new ApiError('state_conflict','The executor lease is no longer active.');
  const state=await loadRun(env.DB!,job.run_id);
  if(state.run.status!=='waiting_executor')throw new ApiError('state_conflict','The workflow is no longer waiting for this runner.');
- await assertRunCurrent(env,deps,state.row,state.run);
+ try{await assertRunCurrent(env,deps,state.row,state.run);}catch(error){
+  if(error instanceof ApiError&&['consent_required','consent_changed','pr_changed','forbidden'].includes(error.code))await cancelWorkflowRun(env,deps,job.user_id,job.run_id).catch(()=>undefined);
+  throw error;
+ }
  return {job,...state};
 }
 export async function renewExecutorLease(env:Env,deps:Deps,id:string,request:z.infer<typeof LeaseRequest>){
@@ -116,7 +119,7 @@ export async function executorReport(env:Env,deps:Deps,id:string,value:z.infer<t
  const now=deps.now().toISOString();run.revision=row.revision+1;run.updatedAt=now;
  const jobStatus=value.status==='succeeded'&&next!=='done'?'running':value.status==='succeeded'?'done':value.status;
  const result=await env.DB!.batch([
-  env.DB!.prepare(`UPDATE workflow_jobs SET stage=?,status=?,updated_at=? WHERE id=? AND status='running' AND stage=? AND lease_hash=? AND EXISTS(SELECT 1 FROM workflow_runs WHERE id=? AND revision=? AND ${POLICY_GUARD})`).bind(value.status==='succeeded'?next:value.stage,jobStatus,now,id,value.stage,job.lease_hash,row.id,row.revision),
+  env.DB!.prepare(`UPDATE workflow_jobs SET stage=?,status=?,updated_at=?,patch_json=CASE WHEN ?='running' THEN patch_json ELSE NULL END,patch_claim_until=NULL WHERE id=? AND status='running' AND stage=? AND lease_hash=? AND EXISTS(SELECT 1 FROM workflow_runs WHERE id=? AND revision=? AND ${POLICY_GUARD})`).bind(value.status==='succeeded'?next:value.stage,jobStatus,now,jobStatus,id,value.stage,job.lease_hash,row.id,row.revision),
   env.DB!.prepare(`UPDATE workflow_runs SET body_json=?,revision=revision+1,updated_at=?,lease_until=NULL WHERE id=? AND revision=? AND ${POLICY_GUARD} AND EXISTS(SELECT 1 FROM workflow_jobs WHERE id=? AND stage=? AND status=?)`).bind(JSON.stringify(run),now,row.id,row.revision,id,value.status==='succeeded'?next:value.stage,jobStatus),
  ]);
  if(result[0]?.meta.changes!==1||result[1]?.meta.changes!==1)throw new ApiError('state_conflict','Executor report was superseded.');

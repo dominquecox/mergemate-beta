@@ -13,3 +13,6 @@ CREATE TABLE workflow_jobs (
  patch_json TEXT,patch_claim_until TEXT,created_at TEXT NOT NULL,updated_at TEXT NOT NULL
 );
 CREATE INDEX workflow_jobs_claim ON workflow_jobs(status,created_at);
+
+CREATE TABLE workflow_definitions (id TEXT PRIMARY KEY,user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,body_json TEXT NOT NULL,created_at TEXT NOT NULL,updated_at TEXT NOT NULL);
+CREATE INDEX workflow_definitions_owner ON workflow_definitions(user_id,updated_at DESC);

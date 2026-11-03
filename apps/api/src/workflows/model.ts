@@ -9,7 +9,7 @@ import { redactSecrets } from '../routes/ai-engine-scan';
 import { DATA_NOTICE } from '../routes/ai-engine-model';
 import { ApiError } from '../errors';
 const Plan=z.object({name:z.string().min(1).max(80),steps:z.array(z.enum(['context','checks','risk','summary','review_plan','patch','qa','draft_pr','route'])).min(1).max(9)}).strict();
-const titles:Record<string,string>={context:'Load PR context',checks:'Inspect current GitHub checks',risk:'Assess change risk',summary:'Summarize the change',review_plan:'Prepare a review plan',patch:'Prepare a code fix',qa:'Run isolated tests',draft_pr:'Create a draft pull request',route:'Prepare routing handoff'};
+const titles:Record<string,string>={context:'Load target context',checks:'Inspect current GitHub checks',risk:'Assess change risk',summary:'Summarize the change',review_plan:'Prepare a review plan',patch:'Prepare a code fix',qa:'Run isolated tests',draft_pr:'Create a draft pull request',route:'Prepare routing handoff'};
 async function modelCall<T>(env:Env,deps:Deps,session:SessionRecord,system:string,prompt:string,schema:z.ZodType<T>,maxOutputTokens:number):Promise<{value:T;model:string}>{
  if(!env.DB)throw new ApiError('misconfigured','Workflow storage is not configured.');
  const stores=storesFor(env.DB),limit=await gateAction(stores,actionLimits(env),session,env,'summary');
@@ -19,7 +19,7 @@ async function modelCall<T>(env:Env,deps:Deps,session:SessionRecord,system:strin
  return {value:output.value,model:servedModel};
 }
 export async function generateWorkflowPlan(env:Env,deps:Deps,session:SessionRecord,input:{intent:string;target:WorkflowTarget;mode:'review'|'code_fix'}){
- const {value:answer}=await modelCall(env,deps,session,'Create an executable PR workflow. Return JSON {name,steps:string[]}. Allowed steps: context,checks,risk,summary,review_plan,route; code_fix mode also requires patch,qa,draft_pr in that order after analysis. Context must be first. Unique steps only. Do not create commands, tools, URLs or claim execution.',JSON.stringify(input),Plan,700);
+ const {value:answer}=await modelCall(env,deps,session,'Create an executable GitHub task workflow. Return JSON {name,steps:string[]}. Allowed steps: context,checks,risk,summary,review_plan,route; code_fix mode also requires patch,qa,draft_pr in that order after analysis. Context must be first. Unique steps only. Do not create commands, tools, URLs or claim execution.',JSON.stringify(input),Plan,700);
  const parsed=WorkflowDefinition.safeParse({name:answer.name,intent:input.intent,target:input.target,mode:input.mode,steps:answer.steps.map((kind,index)=>({id:`step-${index+1}`,kind,title:titles[kind],enabled:true}))});
  if(!parsed.success)throw new ApiError('upstream_unavailable','The model did not produce a valid executable workflow. Try again.');
  return parsed.data;
