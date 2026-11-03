@@ -1,9 +1,9 @@
-import { WorkflowDefinition, type WorkflowRun, type WorkflowStepKind, type WorkflowTarget } from '@mergemate/contracts';
+import { WorkflowDefinition, WorkflowTarget as WorkflowTargetSchema, type WorkflowRun, type WorkflowStepKind, type WorkflowTarget } from '@mergemate/contracts';
 import { parseReviewPr } from './model';
 
 export type AgentMode = 'review' | 'code_fix';
 export const AGENT_STEP_META: Record<WorkflowStepKind, { title: string; detail: string; icon: string }> = {
-  context: { title: 'Gather PR context', detail: 'Pin the accessible pull request and current commit.', icon: 'git-pull-request-outline' },
+  context: { title: 'Gather repository context', detail: 'Pin the accessible target and current commit.', icon: 'git-pull-request-outline' },
   checks: { title: 'Inspect check evidence', detail: 'Read checks already reported for that commit.', icon: 'shield-checkmark-outline' },
   risk: { title: 'Assess change risk', detail: 'Analyze sensitive changes with the configured model.', icon: 'scan-outline' },
   summary: { title: 'Summarize the change', detail: 'Generate a grounded summary of the PR.', icon: 'sparkles-outline' },
@@ -17,16 +17,31 @@ export const AGENT_TEMPLATES: ReadonlyArray<{ id: string; name: string; descript
   { id: 'review', name: 'Review this PR', description: 'Context, checks, risk and a clear review plan.', mode: 'review', icon: 'git-compare-outline', intent: 'Review this pull request, assess risk, inspect reported checks and prepare a reading and verification plan.', kinds: ['context','checks','risk','summary','review_plan','route'] },
   { id: 'security', name: 'Inspect sensitive changes', description: 'Focus on auth, data access and permission boundaries.', mode: 'review', icon: 'shield-checkmark-outline', intent: 'Inspect this pull request for sensitive auth, data access, billing and permission changes. Report evidence and a verification plan.', kinds: ['context','checks','risk','review_plan','route'] },
   { id: 'visual', name: 'Review UI changes', description: 'A focused review plan for interfaces and accessibility.', mode: 'review', icon: 'phone-portrait-outline', intent: 'Review this pull request for UI and accessibility changes. Summarize the change and prepare a device and keyboard verification plan.', kinds: ['context','summary','review_plan','route'] },
-  { id: 'fix', name: 'Prepare a tested fix', description: 'Diagnose, patch, test and open a draft PR.', mode: 'code_fix', icon: 'code-working-outline', intent: 'Diagnose the issue in this pull request, prepare a minimal fix, execute the configured isolated tests and create a draft pull request if tests pass.', kinds: ['context','checks','risk','patch','qa','draft_pr','route'] },
-  { id: 'regression', name: 'Fix a regression', description: 'A bounded code change with real test evidence.', mode: 'code_fix', icon: 'construct-outline', intent: 'Investigate the reported regression in this pull request, implement a small source fix, validate it with the configured isolated test policy and create a draft pull request.', kinds: ['context','risk','patch','qa','draft_pr','route'] },
+  { id: 'fix', name: 'Prepare a tested fix', description: 'Diagnose, patch, test and open a draft PR.', mode: 'code_fix', icon: 'code-working-outline', intent: 'Diagnose the supplied repository task or issue, prepare a minimal fix, execute the configured isolated tests and create a draft pull request if tests pass.', kinds: ['context','checks','risk','patch','qa','draft_pr','route'] },
+  { id: 'regression', name: 'Fix a regression', description: 'A bounded code change with real test evidence.', mode: 'code_fix', icon: 'construct-outline', intent: 'Investigate the reported repository regression, implement a small source fix, validate it with the configured isolated test policy and create a draft pull request.', kinds: ['context','risk','patch','qa','draft_pr','route'] },
 ];
+/** Direct GitHub targets only; incoming route parameters never execute a workflow. */
+export function targetFromUrl(value: string): WorkflowTarget | null {
+  if (value.length > 400) return null;
+  try {
+    const url = new URL(value.trim());
+    if (url.protocol !== 'https:' || url.hostname !== 'github.com' || url.username || url.password || url.port || url.search || url.hash) return null;
+    const parts = /^\/([^/]+)\/([^/]+)(?:\/(pull|issues)\/([1-9]\d{0,8}))?\/?$/.exec(url.pathname);
+    if (!parts) return null;
+    const parsed = WorkflowTargetSchema.safeParse({ owner: parts[1], repo: parts[2], kind: parts[3] === 'pull' ? 'pull_request' : parts[3] === 'issues' ? 'issue' : 'repository', ...(parts[4] ? { number: Number(parts[4]) } : {}) });
+    return parsed.success ? parsed.data : null;
+  } catch { return null; }
+}
 export function targetFromPrUrl(value: string): WorkflowTarget | null {
-  const target = parseReviewPr(value);
-  return target ? { ...target, number: Number(target.number) } : null;
+  const parsed = parseReviewPr(value);
+  return parsed ? { ...parsed, number: Number(parsed.number) } : null;
+}
+export function sameTarget(a: WorkflowTarget, b: WorkflowTarget): boolean {
+  return a.owner.toLowerCase() === b.owner.toLowerCase() && a.repo.toLowerCase() === b.repo.toLowerCase() && (a.kind ?? 'pull_request') === (b.kind ?? 'pull_request') && a.number === b.number && a.baseBranch === b.baseBranch;
 }
 export function makeAgentTemplate(id: string, target: WorkflowTarget): WorkflowDefinition {
   const template = AGENT_TEMPLATES.find(value => value.id === id) ?? AGENT_TEMPLATES[0]!;
-  return WorkflowDefinition.parse({ name: template.name, intent: template.intent, mode: template.mode, target, steps: template.kinds.map(kind => ({ id: kind, kind, title: AGENT_STEP_META[kind].title, enabled: true })) });
+  return WorkflowDefinition.parse({ name: template.name, intent: template.intent, mode: template.mode, target, steps: template.kinds.filter(kind => template.mode !== 'code_fix' || (target.kind ?? 'pull_request') === 'pull_request' || !['checks','risk'].includes(kind)).map(kind => ({ id: kind, kind, title: AGENT_STEP_META[kind].title, enabled: true })) });
 }
 export function isRunActive(status: WorkflowRun['status']): boolean {
   return status === 'queued' || status === 'running' || status === 'waiting_executor';

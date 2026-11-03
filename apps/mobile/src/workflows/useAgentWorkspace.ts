@@ -40,6 +40,7 @@ export function useAgentWorkspace(account: string, target: WorkflowTarget | null
     const invalidate = () => {
       ++generation.current; client?.invalidateSession();
       for (const request of controllers.current) request.abort(); controllers.current.clear();
+      actionLock.current = false; uncertainStart.current = null; setBusy(null);
       setCapabilities(null); setRuns([]); setSelectedRun(null); setError('Your session changed. Reopen Agent workflows to continue.');
     };
     const unsubscribe = onSessionChange(invalidate);
@@ -67,7 +68,7 @@ export function useAgentWorkspace(account: string, target: WorkflowTarget | null
   }, [client, refreshKey]);
   const receive = useCallback((run: WorkflowRun) => {
     setSelectedRun(old => adoptRunUpdate(old, run));
-    setRuns(old => [run, ...old.filter(value => value.id !== run.id)].slice(0, 100));
+    setRuns(old => { const prior = old.find(value => value.id === run.id); return [adoptRunUpdate(prior ?? null, run), ...old.filter(value => value.id !== run.id)].slice(0, 100); });
   }, []);
   useFocusEffect(useCallback(() => {
     if (!client || !selectedRun || !isRunActive(selectedRun.status)) return;
