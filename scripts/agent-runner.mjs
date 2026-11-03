@@ -64,6 +64,7 @@ export async function executeJob(rawJob, { policy, bridge, github, docker, signa
     await progress('draft_pr'); outcome = { status: 'succeeded', stage, evidence };
   } catch (error) {
     const status = guard.signal.aborted ? 'cancelled' : error instanceof AgentError ? error.status : 'failed';
+    if (error.publicationEvidence) evidence = { ...evidence, ...error.publicationEvidence };
     if (error.tests) evidence.tests = error.tests.map(({ command, exitCode, durationMs, outputHash }) => ({ command, exitCode, durationMs, outputHash }));
     outcome = { status, stage, evidence: { ...evidence, summary: error instanceof AgentError ? error.message : 'Executor failed; inspect local configuration without exposing credentials.' }, code: error instanceof AgentError ? error.code : 'executor_failed' };
     try { await bridge.jobOperation(job, 'report', { status, stage, evidence: outcome.evidence }); } catch { outcome.reportAccepted = false; }

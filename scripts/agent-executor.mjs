@@ -17,22 +17,27 @@ export async function main(args = process.argv.slice(2), env = process.env) {
   const github = new GitHubPublisher(env.GITHUB_TOKEN, { maxArchiveBytes: policy.maxArchiveBytes });
   const docker = new DockerExecutor(policy);
   const available = await docker.available();
-  await bridge.heartbeat({ docker: available, patch: available, qa: available, draftPr: available });
+  const permitted = [];
+  if (available) for (const repository of policy.repositories) { try { await github.verifyRepository(repository); permitted.push(repository); } catch {} }
+  const ready = available && permitted.length > 0;
+  await bridge.heartbeat({ docker: available, patch: ready, qa: ready, draftPr: ready }, undefined, permitted.length ? permitted : policy.repositories);
   if (!available) throw new AgentError('docker_unavailable', 'Docker and the reviewed digest-pinned image must be available.');
+  if (!ready) throw new AgentError('github_write_unavailable', 'No configured repository has verified GitHub write access.');
   if (args.includes('--check')) { console.log(JSON.stringify({ status: 'configured', repositories: policy.repositories, imagePinned: true, note: 'Per-job repository write permission is checked before execution.' })); return 0; }
   const abort = new AbortController(); const stop = () => abort.abort(); process.once('SIGINT', stop); process.once('SIGTERM', stop);
-  const heartbeat = setInterval(() => { void bridge.heartbeat({ docker: true, patch: true, qa: true, draftPr: true }, abort.signal).catch(() => abort.abort()); }, 30000);
+  const heartbeat = setInterval(() => { void bridge.heartbeat({ docker: true, patch: true, qa: true, draftPr: true }, abort.signal, permitted).catch(() => abort.abort()); }, 30000);
   try {
     do {
       if (abort.signal.aborted) break;
       const job = await bridge.claim(abort.signal);
+      if (job && !permitted.includes(job.repository?.toLowerCase())) throw new AgentError('repository_unavailable', 'Claimed repository has no verified write capability.');
       if (job) {
         const result = await executeJob(job, { policy, bridge, github, docker, signal: abort.signal });
         console.log(JSON.stringify({ jobId: job.id, status: result.status, stage: result.stage, code: result.code, ...(result.evidence.draftPrUrl ? { draftPrUrl: result.evidence.draftPrUrl } : {}) }));
         if (args.includes('--once')) return result.status === 'succeeded' ? 0 : 2;
         if (result.code === 'container_cleanup_failed') throw new AgentError(result.code, 'Stop runner: container cleanup could not be confirmed.');
       } else if (args.includes('--once')) { console.log(JSON.stringify({ status: 'idle' })); return 0; }
-      await new Promise(resolve => { const timer = setTimeout(resolve, policy.pollMs); abort.signal.addEventListener('abort', () => { clearTimeout(timer); resolve(); }, { once: true }); });
+      await new Promise(resolve => { const stopWaiting = () => { clearTimeout(timer); abort.signal.removeEventListener('abort', stopWaiting); resolve(); }; const timer = setTimeout(stopWaiting, policy.pollMs); abort.signal.addEventListener('abort', stopWaiting, { once: true }); });
     } while (!abort.signal.aborted);
     return 0;
   } finally { clearInterval(heartbeat); process.removeListener('SIGINT', stop); process.removeListener('SIGTERM', stop); }

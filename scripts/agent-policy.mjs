@@ -42,6 +42,7 @@ export function validateConfig(input) {
 }
 export function validateJob(job, policy) {
   if (!job || !ID.test(job.id ?? '') || !ID.test(job.runId ?? '') || typeof job.leaseToken !== 'string' || job.leaseToken.length < 16 || job.leaseToken.length > 512 || !REPOSITORY.test(job.repository ?? '') || !policy.repositories.includes(job.repository.toLowerCase()) || !SHA.test(job.baseSha ?? '') || !['pull_request', 'issue', 'repository'].includes(job.targetKind ?? (job.targetPr ? 'pull_request' : 'repository')) || (job.targetPr !== undefined && (!Number.isSafeInteger(job.targetPr) || job.targetPr < 1)) || (job.targetNumber !== undefined && (!Number.isSafeInteger(job.targetNumber) || job.targetNumber < 1)) || typeof job.intent !== 'string' || !job.intent.trim() || job.intent.length > 4000 || !Number.isFinite(Date.parse(job.leaseExpiresAt)) || Date.parse(job.leaseExpiresAt) <= Date.now()) throw new AgentError('invalid_job', 'Job identity, repository, commit or lease is invalid.');
+  if (job.limits !== undefined && (!job.limits || typeof job.limits !== 'object' || ['maxFiles', 'maxPatchBytes'].some(key => job.limits[key] !== undefined && (!Number.isInteger(job.limits[key]) || job.limits[key] < 1)))) throw new AgentError('invalid_job', 'Job limits must be positive integers.');
   return { ...job, targetKind: job.targetKind ?? (job.targetPr ? 'pull_request' : 'repository'), targetNumber: job.targetNumber ?? job.targetPr, repository: job.repository.toLowerCase() };
 }
 export async function withinWorkspace(root, relative, { mayCreate = false } = {}) {
@@ -91,4 +92,19 @@ export async function selectContext(root, policy, intent) {
   }
   if (!result.length) throw new AgentError('no_context', 'No permitted source context is available.');
   return result;
+}
+
+export async function limitedResponseText(response, maxBytes) {
+  const chunks = []; let size = 0;
+  if (!response.body) return '';
+  const reader = response.body.getReader();
+  try {
+    while (true) {
+      const { done, value } = await reader.read(); if (done) break;
+      size += value.byteLength;
+      if (size > maxBytes) { await reader.cancel(); throw new AgentError('response_limit', 'Remote response exceeds the configured byte limit.'); }
+      chunks.push(Buffer.from(value));
+    }
+    return Buffer.concat(chunks, size).toString('utf8');
+  } finally { reader.releaseLock(); }
 }
