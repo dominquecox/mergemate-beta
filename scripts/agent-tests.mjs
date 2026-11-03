@@ -120,3 +120,12 @@ async function fakeJobRun({failTests=false,mutateOther=false,cancel=false}={}) {
  await publisher.downloadArchive(job(),path.join(root,'source.tgz'),new AbortController().signal);assert.equal(calls.length,2);assert.equal(calls[0].headers.Authorization,'Bearer fixture-secret');assert.equal(calls[1].headers.Authorization,undefined);
  const bad=new GitHubPublisher('fixture',{fetcher:async()=>new Response(null,{status:302,headers:{location:`https://codeload.github.com/other/repo/legacy.tar.gz/${sha('a')}`}})});await assert.rejects(bad.downloadArchive(job(),path.join(root,'bad.tgz'),new AbortController().signal),/pinned/);
  }));
+ test('missing archives and unsafe PAX metadata are refused cleanly',async()=>temporary(async root=>{
+ await assert.rejects(validateArchive(path.join(root,'missing'),policy()),/malformed/);
+ const file=path.join(root,'pax.tgz');await writeFile(file,tar([{path:'metadata',type:'x',content:'11 size=99\n'},{path:'source/a',content:'x'}]));await assert.rejects(validateArchive(file,policy()));
+ }));
+ test('owner setup pins only a reviewed local image and does not accept missing digests',async()=>{
+ const {initialPolicy}=await import('./agent-init-policy.mjs');
+ const config=initialPolicy('owner/repo',{inspect:()=>JSON.stringify([`node@sha256:${'a'.repeat(64)}`])});assert.equal(config.repositories[0],'owner/repo');assert(config.image.includes('@sha256:'));assert(config.tests.length===3);
+ assert.throws(()=>initialPolicy('owner/repo',{inspect:()=>JSON.stringify([])}),/digest/);
+ });

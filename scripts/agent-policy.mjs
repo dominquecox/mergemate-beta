@@ -26,7 +26,7 @@ export function validateConfig(input) {
   let origin; try { origin = new URL(input.serverOrigin); } catch { throw new AgentError('invalid_config', 'A valid workflow API origin is required.'); }
   if (origin.origin !== input.serverOrigin || origin.username || origin.password || !(origin.protocol === 'https:' || input.allowLocal === true && origin.protocol === 'http:' && ['localhost', '127.0.0.1'].includes(origin.hostname))) throw new AgentError('invalid_config', 'Runner API must use HTTPS (or explicitly enabled local fixtures).');
   if (!Array.isArray(input.repositories) || !input.repositories.length || input.repositories.length > 10 || input.repositories.some(repo => typeof repo !== 'string' || !REPOSITORY.test(repo) || [".", ".."].includes(repo.split("/")[1]))) throw new AgentError('invalid_config', 'Configure a bounded repository allowlist.');
-  if (typeof input.image !== 'string' || !/^[a-z\d./:_-]+@sha256:[a-f\d]{64}$/i.test(input.image)) throw new AgentError('unpinned_image', 'Use a reviewed Docker image pinned by SHA-256 digest.');
+  if (typeof input.image !== 'string' || !/^[a-z\d][a-z\d./:_-]*@sha256:[a-f\d]{64}$/i.test(input.image)) throw new AgentError('unpinned_image', 'Use a reviewed Docker image pinned by SHA-256 digest.');
   const roots = input.allowedRoots ?? ['apps/mobile/src', 'apps/mobile/app', 'apps/web/src', 'packages/contracts/src', 'apps/mobile/test', 'apps/web/test', 'packages/contracts/test'];
   if (!Array.isArray(roots) || !roots.length || roots.length > 20) throw new AgentError('invalid_config', 'Configure bounded source roots.');
   roots.forEach(safeRelative);

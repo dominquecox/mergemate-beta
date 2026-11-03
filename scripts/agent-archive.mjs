@@ -36,7 +36,8 @@ export async function validateArchive(archive, policy) {
   let buffered = Buffer.alloc(0), total = 0, entries = 0, remaining = 0, dataSize = 0, metadata = null, metadataChunks = [], metadataSize = 0;
   let pending = {}, prefix = null, zeroBlocks = 0;
   const names = new Set();
-  const stream = createReadStream(archive).pipe(createGunzip());
+  const input = createReadStream(archive), stream = createGunzip();
+  input.on('error', error => stream.destroy(error)); input.pipe(stream);
   try {
     for await (const chunk of stream) {
       total += chunk.length;
@@ -89,5 +90,5 @@ export async function validateArchive(archive, policy) {
   } catch (error) {
     if (error instanceof AgentError) throw error;
     throw new AgentError('archive_format', 'Compressed source archive is malformed.');
-  } finally { stream.destroy(); }
+  } finally { input.destroy(); stream.destroy(); }
 }
