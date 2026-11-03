@@ -176,7 +176,7 @@ export default function TriageScreen() {
       />
 
       <AudioCommuteBar sentences={triageExecutiveNarration(queue.map(item => { const note = inbox.find(n => `${n.repo}#${n.number}` === item.prRef), agent = detectAgentProvenance({ author: note?.author ?? item.author }); return { prRef: item.prRef, title: item.title ?? note?.title ?? 'Title unavailable', agent: agent.agentName ?? note?.author ?? 'Author unavailable', level: item.prRef === currentItem?.prRef ? verdict.level : note?.risk === 'high' ? 'blocked' : note?.risk === 'low' ? 'safe' : 'caution' }; }))} />
-      <ScrollView contentContainerStyle={{ padding: isDesktop ? 24 : 16, paddingBottom: 36, flexGrow: 1 }}>
+      <ScrollView contentContainerStyle={{ padding: isDesktop ? 24 : 16, paddingBottom: 96, flexGrow: 1 }}>
         <AccessGuidanceBanner error={error} compact />
         {/* Top Bento Command Header */}
         <View style={[styles.topHeaderBento, isDesktop && { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }]}>

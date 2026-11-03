@@ -262,7 +262,7 @@ export default function NotificationsScreen() {
           initialNumToRender={8}
           maxToRenderPerBatch={8}
           windowSize={5}
-          contentContainerStyle={{ padding: isDesktop ? 24 : 16, paddingBottom: 48 }}
+          contentContainerStyle={{ padding: isDesktop ? 24 : 16, paddingBottom: 96 }}
           onEndReached={() => {
             if (!error) void more();
           }}

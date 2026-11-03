@@ -225,7 +225,7 @@ export default function SettingsScreen() {
           onAction={() => router.replace("/(auth)/sign-in")}
         />
       ) : (
-        <ScrollView contentContainerStyle={{padding:isDesktop?24:16,paddingBottom:48}}>
+        <ScrollView contentContainerStyle={{padding:isDesktop?24:16,paddingBottom:96}}>
           <View style={{flexDirection:"row",alignItems:"flex-start",justifyContent:"space-between",marginBottom:12,gap:8}}>
             <View style={{flex:1}}><ExperienceIntro compact eyebrow="Your workspace" title="Make it work your way." description="Keep your connections, agent workflows and preferences in one place."/></View>
             <InfoTip

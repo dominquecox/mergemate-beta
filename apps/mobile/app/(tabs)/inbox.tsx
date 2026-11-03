@@ -204,7 +204,7 @@ function InboxWorkspace({initialFilter}:{initialFilter:NotificationFilter}) {
           data={isLoading?[]:rows}
           ListEmptyComponent={isLoading?<LoadingState title="Loading your inbox..." message="Fetching accessible pull requests and your Inbox state."/>:error?<ErrorState title="Could not load your inbox" message={error} onRetry={hasMore?more:fetchItems}/>:<EmptyState icon="checkmark-done-outline" title={hasMore?"More results are available":"Inbox Zero"} message={hasMore?"No visible items on this page. Load more to continue checking your queue.":"No pull requests need your attention in this view."} actionTitle={hasMore?"Load more pull requests":undefined} onAction={hasMore?more:undefined}/>}
           keyExtractor={row=>row.type==='header'?`repo:${row.repo}`:row.item.id} initialNumToRender={8} maxToRenderPerBatch={8} windowSize={5}
-          contentContainerStyle={{padding:isDesktop?24:spacing.base,paddingBottom:80}}
+          contentContainerStyle={{padding:isDesktop?24:spacing.base,paddingBottom:96}}
           refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} tintColor={colors.brandLight}/>}
           onEndReached={()=>{if(!error)void more();}} onEndReachedThreshold={0.4}
           ListHeaderComponent={<>

@@ -634,7 +634,7 @@ export function InboxOverview({ count, needsReview, items = [] }: InboxOverviewP
       </View>
     </View>
   ) : (
-    <View style={{ flexDirection: "row", gap: 6 }}>
+    <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
       {actions.map((action) => (
         <Pressable
           key={action.label}
@@ -642,32 +642,51 @@ export function InboxOverview({ count, needsReview, items = [] }: InboxOverviewP
           accessibilityLabel={action.label}
           onPress={action.run}
           style={({ pressed }) => ({
-            flex: 1,
+            flexBasis: "48%",
+            flexGrow: 1,
             minWidth: 0,
-            minHeight: 62,
+            minHeight: 56,
+            paddingHorizontal: 10,
+            paddingVertical: 8,
+            borderRadius: 12,
+            backgroundColor: colors.surface,
+            borderWidth: 1,
+            borderColor: colors.border,
+            flexDirection: "row",
             alignItems: "center",
-            gap: 4,
-            justifyContent: "center",
-            opacity: pressed ? 0.75 : 1,
+            gap: 8,
+            opacity: pressed ? 0.8 : 1,
           })}
         >
           <View
             style={{
-              width: 40,
-              height: 40,
-              borderRadius: 12,
-              backgroundColor: colors.surface,
-              alignItems: "center",
-              justifyContent: "center",
+              width: 30,
+              height: 30,
+              borderRadius: 9,
+              backgroundColor: colors.surfaceElevated,
               borderWidth: 1,
               borderColor: colors.border,
+              alignItems: "center",
+              justifyContent: "center",
             }}
           >
-            <Icon name={action.icon} size={18} color={colors.brandLight} />
+            <Icon name={action.icon} size={15} color={colors.brandLight} />
           </View>
-          <Text numberOfLines={1} style={[typography.caption, { color: colors.textSecondary, fontSize: 10 }]}>
-            {action.label}
-          </Text>
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 5 }}>
+              <Text numberOfLines={1} style={[typography.caption, { color: colors.text, fontWeight: "700", fontSize: 12, flexShrink: 1 }]}>
+                {action.label}
+              </Text>
+              {typeof action.badge === "number" && action.badge > 0 && (
+                <View style={{ paddingHorizontal: 5, paddingVertical: 1, borderRadius: 999, backgroundColor: colors.statusAlertBg, borderWidth: 1, borderColor: colors.statusAlert }}>
+                  <Text style={[typography.caption, { color: colors.statusAlert, fontSize: 9, fontWeight: "700" }]}>{action.badge}</Text>
+                </View>
+              )}
+            </View>
+            <Text numberOfLines={1} style={[typography.caption, { color: colors.textSecondary, fontSize: 10 }]}>
+              {action.detail}
+            </Text>
+          </View>
         </Pressable>
       ))}
     </View>
