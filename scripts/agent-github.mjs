@@ -46,7 +46,7 @@ export class GitHubPublisher {
       response = await this.fetcher(url, { redirect: 'manual', signal: AbortSignal.any([signal, AbortSignal.timeout(this.timeoutMs)]), headers: { 'User-Agent': 'MergeMate-Agent-Executor', ...(url.origin === API ? { Authorization: `Bearer ${this.token}` } : {}) } });
       if (response.status >= 300 && response.status < 400) {
         const location = response.headers.get('location'); if (!location) throw new AgentError('archive_failed', 'Archive redirect is missing.');
-        url = new URL(location, url); if (url.protocol !== 'https:' || !['api.github.com', 'codeload.github.com'].includes(url.hostname) || url.username || url.password || url.port) throw new AgentError('archive_origin', 'Archive redirect left permitted GitHub origins.');
+        url = new URL(location, url); const pinned = `/${job.repository}/`; if (url.protocol !== 'https:' || url.username || url.password || url.port || url.hash || !(url.origin === API && url.pathname === `/repos/${job.repository}/tarball/${job.baseSha}` || url.origin === 'https://codeload.github.com' && [ `${pinned}legacy.tar.gz/${job.baseSha}`, `${pinned}tar.gz/${job.baseSha}` ].some(value => value.toLowerCase() === url.pathname.toLowerCase()))) throw new AgentError('archive_origin', 'Archive redirect left the permitted pinned GitHub source.');
         continue;
       }
       break;

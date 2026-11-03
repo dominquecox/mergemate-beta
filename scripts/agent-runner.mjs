@@ -3,6 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { constants } from 'node:fs';
 import { AgentError, validateJob, validateChanges, selectContext, withinWorkspace, sha256, safeRelative } from './agent-policy.mjs';
+import { sourceManifest } from './agent-manifest.mjs';
 import { validateArchive } from './agent-archive.mjs';
 import { LeaseGuard } from './agent-bridge.mjs';
 
@@ -51,10 +52,12 @@ export async function executeJob(rawJob, { policy, bridge, github, docker, signa
     }
     evidence.patchHash = validated.patchHash; evidence.summary = `Validated patch: ${validated.changes.length} source file(s).`;
     await progress('patch'); stage = 'qa';
+    const testedSource = await sourceManifest(workspace, policy);
     await guard.assertActive(); await docker.install(workspace, guard.signal);
     const tests = await docker.test(workspace, guard.signal);
     evidence.tests = tests.map(({ command, exitCode, durationMs, outputHash }) => ({ command, exitCode, durationMs, outputHash }));
     if (!evidence.tests.length || evidence.tests.some(test => test.exitCode !== 0)) throw new AgentError('tests_failed', 'Actual isolated tests did not pass.', 'failed');
+    if ((await sourceManifest(workspace, policy)).hash !== testedSource.hash) throw new AgentError('changed_after_tests', 'Host source changed while isolated tests ran; refusing publication.');
     // Tests may mutate files or npm configuration; publication reads only unchanged validated patch data.
     await validateChanges(workspace, validated.changes, policy, job.limits);
     for (const change of validated.changes) if (sha256(await readFile(await withinWorkspace(workspace, change.path))) !== sha256(change.content)) throw new AgentError('changed_after_tests', 'Source changed during tests; refusing publication.');
