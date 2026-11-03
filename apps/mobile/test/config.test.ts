@@ -57,6 +57,7 @@ describe("API base URL from the environment", () => {
   it("points the iOS Manage plan link at the web app for the same environment", () => {
     expect(webAppOrigin({ kind: "http", baseUrl: "https://api.mergemate.dev" })).toBe("https://app.mergemate.dev");
     expect(webAppOrigin({ kind: "http", baseUrl: "https://api-dev.mergemate.dev" })).toBe("https://dev.mergemate.dev");
+    expect(webAppOrigin({ kind: "http", baseUrl: "/__api" })).toBe("https://dev.mergemate.dev");
     expect(webAppOrigin({ kind: "http", baseUrl: "http://localhost:8787" })).toBe("http://localhost:8081");
   });
 });
