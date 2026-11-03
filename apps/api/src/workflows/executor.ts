@@ -7,7 +7,7 @@ import { getAccessToken } from '../lib/github-tokens';
 import { githubGet } from '../lib/github';
 import { assertRunCurrent,workflowAllowedRepos,workflowSession } from './runtime';
 import { generateWorkflowPatch } from './model';
-import { loadRun,saveRun,TERMINAL } from './store';
+import { loadRun,POLICY_GUARD } from './store';
 
 export const RunnerId=z.string().regex(/^[a-z\d_-]{1,100}$/i);
 export const LeaseRequest=z.object({runnerId:RunnerId,leaseToken:z.string().min(16).max(128)});
@@ -116,8 +116,8 @@ export async function executorReport(env:Env,deps:Deps,id:string,value:z.infer<t
  const now=deps.now().toISOString();run.revision=row.revision+1;run.updatedAt=now;
  const jobStatus=value.status==='succeeded'&&next!=='done'?'running':value.status==='succeeded'?'done':value.status;
  const result=await env.DB!.batch([
-  env.DB!.prepare("UPDATE workflow_jobs SET stage=?,status=?,updated_at=? WHERE id=? AND status='running' AND stage=? AND lease_hash=? AND EXISTS(SELECT 1 FROM workflow_runs WHERE id=? AND revision=?)").bind(value.status==='succeeded'?next:value.stage,jobStatus,now,id,value.stage,job.lease_hash,row.id,row.revision),
-  env.DB!.prepare('UPDATE workflow_runs SET body_json=?,revision=revision+1,updated_at=?,lease_until=NULL WHERE id=? AND revision=? AND EXISTS(SELECT 1 FROM workflow_jobs WHERE id=? AND stage=? AND status=?)').bind(JSON.stringify(run),now,row.id,row.revision,id,value.status==='succeeded'?next:value.stage,jobStatus),
+  env.DB!.prepare(`UPDATE workflow_jobs SET stage=?,status=?,updated_at=? WHERE id=? AND status='running' AND stage=? AND lease_hash=? AND EXISTS(SELECT 1 FROM workflow_runs WHERE id=? AND revision=? AND ${POLICY_GUARD})`).bind(value.status==='succeeded'?next:value.stage,jobStatus,now,id,value.stage,job.lease_hash,row.id,row.revision),
+  env.DB!.prepare(`UPDATE workflow_runs SET body_json=?,revision=revision+1,updated_at=?,lease_until=NULL WHERE id=? AND revision=? AND ${POLICY_GUARD} AND EXISTS(SELECT 1 FROM workflow_jobs WHERE id=? AND stage=? AND status=?)`).bind(JSON.stringify(run),now,row.id,row.revision,id,value.status==='succeeded'?next:value.stage,jobStatus),
  ]);
  if(result[0]?.meta.changes!==1||result[1]?.meta.changes!==1)throw new ApiError('state_conflict','Executor report was superseded.');
  if(run.status==='queued')await env.WORKFLOW_QUEUE!.send({runId:run.id});

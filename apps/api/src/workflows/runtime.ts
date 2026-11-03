@@ -61,7 +61,7 @@ export async function processWorkflowMessage(env:Env,deps:Deps,id:string){
  const step=run.steps.find(s=>s.status==='pending'||s.status==='running');
  if(!step){run.status='succeeded';await saveRun(env.DB,row,run,deps.now().toISOString());return;}
  step.status='running';step.startedAt=deps.now().toISOString();run.status='running';
- if(!await saveRun(env.DB,row,run,deps.now().toISOString(),new Date(deps.now().getTime()+180000).toISOString()))return;
+ if(!await saveRun(env.DB,row,run,deps.now().toISOString(),new Date(deps.now().getTime()+180000).toISOString(),true))return;
  const claimed=await loadRun(env.DB,id);
  try{
   const snapshot=await assertRunCurrent(env,deps,claimed.row,claimed.run),session=workflowSession(row.user_id);
@@ -70,7 +70,7 @@ export async function processWorkflowMessage(env:Env,deps:Deps,id:string){
    if(!caps.coding.available)throw new ApiError('upstream_unavailable',caps.coding.reason??'Coding executor unavailable.');
    const now=deps.now().toISOString();
    await env.DB.prepare("INSERT OR IGNORE INTO workflow_jobs(id,run_id,user_id,repository,base_sha,status,created_at,updated_at) VALUES(?,?,?,?,?,'pending',?,?)").bind(crypto.randomUUID(),id,row.user_id,workflowRepo(run.definition.target),run.headSha,now,now).run();
-   claimed.run.status='waiting_executor';await saveRun(env.DB,claimed.row,claimed.run,now);return;
+   claimed.run.status='waiting_executor';await saveRun(env.DB,claimed.row,claimed.run,now,null,true);return;
   }
   if(step.kind==='qa'||step.kind==='draft_pr')throw new ApiError('state_conflict','Coding steps must be executed by the isolated runner.');
   let output:unknown;
@@ -85,7 +85,7 @@ export async function processWorkflowMessage(env:Env,deps:Deps,id:string){
   const latest=await loadRun(env.DB,id);if(latest.run.status==='cancelled'||latest.row.revision!==claimed.row.revision)return;
   const actual=latest.run.steps.find(s=>s.id===step.id)!;actual.status='succeeded';actual.finishedAt=deps.now().toISOString();actual.output=JSON.stringify(output).slice(0,24000);actual.evidence={headSha:run.headSha,source:step.kind==='checks'?'github-recorded':'workflow-execution'};
   latest.run.status=latest.run.steps.some(s=>s.status==='pending')?'queued':'succeeded';
-  if(await saveRun(env.DB,latest.row,latest.run,deps.now().toISOString())&&latest.run.status==='queued')await env.WORKFLOW_QUEUE.send({runId:id});
+  if(await saveRun(env.DB,latest.row,latest.run,deps.now().toISOString(),null,true)&&latest.run.status==='queued')await env.WORKFLOW_QUEUE.send({runId:id});
  }catch(error){const latest=await loadRun(env.DB,id);if(TERMINAL.has(latest.run.status)||latest.row.revision!==claimed.row.revision)return;latest.run.status='failed';latest.run.error=error instanceof ApiError?error.message:'The workflow step failed. Start a new run.';const actual=latest.run.steps.find(s=>s.id===step.id)!;actual.status='failed';actual.error=latest.run.error;actual.finishedAt=deps.now().toISOString();await saveRun(env.DB,latest.row,latest.run,deps.now().toISOString());}
 }
 
