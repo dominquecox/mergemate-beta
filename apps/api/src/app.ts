@@ -1,3 +1,4 @@
+import { createWorkflowRouter,createWorkflowExecutorRouter } from "./routes/workflows";
 import {prDependencies} from './routes/pr-dependencies';
 import {prVisual} from "./routes/pr-visual";
 import {searchPrs} from './routes/search';
@@ -67,6 +68,8 @@ export const createApp = (deps: Deps = defaultDeps) => {
       : jsonLimit(c, next);
   });
 
+  app.route("/internal/workflows", createWorkflowExecutorRouter());
+  app.route("/v1/workflows", createWorkflowRouter());
   app.route("/v1/health", health);
   // Flags rides the same IP limit as every other public route via authenticate().
   app.route("/v1", flags);

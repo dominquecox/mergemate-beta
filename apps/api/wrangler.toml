@@ -317,3 +317,13 @@ enabled = false
 enabled = false
 [env.production.cache]
 enabled = false
+
+# Agent runtime is deliberately dev-only. Provision the named queue before this dev deploy.
+[[env.dev.queues.producers]]
+binding = "WORKFLOW_QUEUE"
+queue = "mergemate-workflows-dev"
+
+[[env.dev.queues.consumers]]
+queue = "mergemate-workflows-dev"
+max_batch_size = 1
+max_retries = 3

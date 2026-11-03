@@ -5,7 +5,7 @@ import { ApiError } from '../errors';
 import { captureAiPolicy } from '../lib/ai-policy';
 import { createFetchTransport } from '../routes/ai-engine-model';
 import { actionLimits } from '../routes/ai-engine-gate';
-import { summarizePr,assessPrRisk } from '../routes/ai-engine-classifier';
+import { summarizePr,assessPrRisk } from '../routes/ai-engine';
 import { planReview } from '../routes/ai-engine-assist';
 import { targetSnapshot } from './target';
 import { analyzeRepositoryTask } from './model';
@@ -26,7 +26,7 @@ export async function workflowCapabilities(env:Env,repo:string,now:Date):Promise
 export const workflowSession=(userId:string):SessionRecord=>({userId,tokenHash:'workflow-background',demo:false,transport:'bearer',csrfToken:null,expiresAt:new Date(Date.now()+3600000).toISOString(),userStatus:'active'});
 export async function assertRunCurrent(env:Env,deps:Deps,row:RunRow,run:WorkflowRun){
  if(!env.DB)throw new ApiError('misconfigured','Workflow storage is unavailable.');
- const user=await env.DB.prepare('SELECT status,deletion_pending FROM users WHERE id=?').bind(row.user_id).first<{status:string;deletion_pending?:number}>();
+ const user=await env.DB.prepare("SELECT status,EXISTS(SELECT 1 FROM account_deletions WHERE user_id=users.id AND state='pending') AS deletion_pending FROM users WHERE id=?").bind(row.user_id).first<{status:string;deletion_pending?:number}>();
  if(!user||user.status!=='active'||user.deletion_pending)throw new ApiError('forbidden','The workflow account is no longer active.');
  const policy=await captureAiPolicy(env.DB,row.user_id,true);if(policy.revision!==row.policy_revision)throw new ApiError('consent_changed','AI choices changed. Start a new run after reviewing them.');
  const snapshot=await targetSnapshot(env,deps,workflowSession(row.user_id),run.definition.target,run.definition.mode==='code_fix');
@@ -82,9 +82,19 @@ export async function processWorkflowMessage(env:Env,deps:Deps,id:string){
   else if(snapshot.kind!=='pull_request')output=await analyzeRepositoryTask(env,deps,session,step.kind,run.definition.intent,snapshot.data);
   else{const ref={owner:run.definition.target.owner,repo:run.definition.target.repo,number:run.definition.target.number!};output=step.kind==='risk'?(await assessPrRisk(aiDeps,session,ref,env)).body:step.kind==='review_plan'?(await planReview(aiDeps,session,ref,env)).body:(await summarizePr(aiDeps,session,ref,env)).body;}
   await assertRunCurrent(env,deps,claimed.row,claimed.run);
-  const latest=await loadRun(env.DB,id);if(latest.run.status==='cancelled')return;
+  const latest=await loadRun(env.DB,id);if(latest.run.status==='cancelled'||latest.row.revision!==claimed.row.revision)return;
   const actual=latest.run.steps.find(s=>s.id===step.id)!;actual.status='succeeded';actual.finishedAt=deps.now().toISOString();actual.output=JSON.stringify(output).slice(0,24000);actual.evidence={headSha:run.headSha,source:step.kind==='checks'?'github-recorded':'workflow-execution'};
   latest.run.status=latest.run.steps.some(s=>s.status==='pending')?'queued':'succeeded';
   if(await saveRun(env.DB,latest.row,latest.run,deps.now().toISOString())&&latest.run.status==='queued')await env.WORKFLOW_QUEUE.send({runId:id});
- }catch(error){const latest=await loadRun(env.DB,id);if(TERMINAL.has(latest.run.status))return;latest.run.status='failed';latest.run.error=error instanceof ApiError?error.message:'The workflow step failed. Start a new run.';const actual=latest.run.steps.find(s=>s.id===step.id)!;actual.status='failed';actual.error=latest.run.error;actual.finishedAt=deps.now().toISOString();await saveRun(env.DB,latest.row,latest.run,deps.now().toISOString());}
+ }catch(error){const latest=await loadRun(env.DB,id);if(TERMINAL.has(latest.run.status)||latest.row.revision!==claimed.row.revision)return;latest.run.status='failed';latest.run.error=error instanceof ApiError?error.message:'The workflow step failed. Start a new run.';const actual=latest.run.steps.find(s=>s.id===step.id)!;actual.status='failed';actual.error=latest.run.error;actual.finishedAt=deps.now().toISOString();await saveRun(env.DB,latest.row,latest.run,deps.now().toISOString());}
+}
+
+/** Recover the durable insert/send gap and expired analysis deliveries; never reassign expired coding jobs. */
+export async function recoverWorkflowRuns(env:Env,deps:Deps){
+ if(!env.DB||!env.WORKFLOW_QUEUE)return;
+ const exists=await env.DB.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='workflow_runs'").first();if(!exists)return;
+ const rows=await env.DB.prepare("SELECT id FROM workflow_runs WHERE json_extract(body_json,'$.status') IN ('queued','running') AND (lease_until IS NULL OR lease_until<=?) ORDER BY updated_at LIMIT 20").bind(deps.now().toISOString()).all<{id:string}>();
+ for(const row of rows.results??[])await env.WORKFLOW_QUEUE.send({runId:row.id});
+ const expired=await env.DB.prepare("SELECT run_id,id FROM workflow_jobs WHERE status='running' AND lease_expires_at<=? LIMIT 20").bind(deps.now().toISOString()).all<{run_id:string;id:string}>();
+ for(const job of expired.results??[]){const state=await loadRun(env.DB,job.run_id);if(TERMINAL.has(state.run.status))continue;state.run.status='failed';state.run.error='The isolated runner lease expired. Inspect any external artifacts before starting a new run.';for(const step of state.run.steps)if(step.status==='running')step.status='failed';const now=deps.now().toISOString();state.run.revision=state.row.revision+1;state.run.updatedAt=now;await env.DB.batch([env.DB.prepare("UPDATE workflow_jobs SET status='failed',lease_hash=NULL WHERE id=? AND status='running' AND lease_expires_at<=? AND EXISTS(SELECT 1 FROM workflow_runs WHERE id=? AND revision=?)").bind(job.id,now,state.row.id,state.row.revision),env.DB.prepare("UPDATE workflow_runs SET body_json=?,revision=revision+1,updated_at=? WHERE id=? AND revision=? AND EXISTS(SELECT 1 FROM workflow_jobs WHERE id=? AND status='failed')").bind(JSON.stringify(state.run),now,state.row.id,state.row.revision,job.id)]);}
 }

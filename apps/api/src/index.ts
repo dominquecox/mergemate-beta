@@ -1,3 +1,4 @@
+import { recoverWorkflowRuns } from "./workflows/runtime";
 import {purgeDeletionTombstones} from "./lib/account-deletion";
 import {purgeExpiredSessions} from './lib/sessions';
 import { createApp } from './app';
@@ -15,6 +16,7 @@ export default {
   queue: (batch: MessageBatch<unknown>, env: Env) => handleQueue(batch, env),
   scheduled: async (_event: ScheduledController, env: Env) => {
     if(env.DB){await env.DB.prepare('DELETE FROM activity_audit WHERE received_at<=?').bind(new Date(Date.now()-7*86400000).toISOString()).run();await purgeExpiredSessions(env.DB,new Date());await purgeDeletionTombstones(env.DB,new Date());}
+    await recoverWorkflowRuns(env,{fetch:(input,init)=>fetch(input,init),now:()=>new Date()});
     await checkPushReceipts(env, { fetch: (input, init) => fetch(input, init), now: () => new Date() });
   },
 } satisfies ExportedHandler<Env>;
