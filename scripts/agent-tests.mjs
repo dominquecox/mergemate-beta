@@ -67,7 +67,7 @@ function tar(entries){const blocks=[];for(const item of entries){const data=Buff
  });
 function githubFixture({existing=false,collision=false,failDraft=false,permission=true}={}) {
  const requests=[],state={ref:existing?sha('d'):null,pr:existing?true:false};
- const pr=()=>({html_url:'https://github.com/owner/repo/pull/9',draft:true,state:'open',head:{sha:sha('d'),repo:{full_name:'owner/repo'}},base:{ref:'main',repo:{full_name:'owner/repo'}}});
+ const pr=()=>({html_url:'https://github.com/owner/repo/pull/9',draft:true,state:'open',head:{sha:sha('d'),ref:'mergemate-agent/run_1',repo:{full_name:'owner/repo'}},base:{sha:sha('a'),ref:'main',repo:{full_name:'owner/repo'}}});
  const fetcher=async(input,options={})=>{
   const url=new URL(input),method=options.method??'GET',body=options.body?JSON.parse(options.body):undefined;requests.push({url:url.href,method,body});
   if(url.pathname==='/repos/owner/repo')return Response.json({full_name:'owner/repo',permissions:{push:permission},default_branch:'main'});

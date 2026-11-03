@@ -63,7 +63,7 @@ export class GitHubPublisher {
     let visibleCommit = null;
     const validatePr = (pr, commitSha) => {
       let url; try { url = new URL(pr.html_url); } catch { throw new AgentError('github_invalid_response', 'Draft PR response could not be verified.'); }
-      if (url.origin !== 'https://github.com' || url.search || url.hash || url.username || !new RegExp(`^/${job.repository.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}/pull/[1-9]\\d*$`, 'i').test(url.pathname) || pr.draft !== true || pr.state === 'closed' || pr.head?.sha !== commitSha || pr.base?.ref !== base || pr.head?.repo?.full_name?.toLowerCase() !== job.repository || pr.base?.repo?.full_name?.toLowerCase() !== job.repository) throw new AgentError('github_invalid_response', 'Draft PR response could not be verified.');
+      if (url.origin !== 'https://github.com' || url.search || url.hash || url.username || url.password || !new RegExp(`^/${job.repository.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}/pull/[1-9]\\d*$`, 'i').test(url.pathname) || pr.draft !== true || pr.state !== 'open' || pr.head?.sha !== commitSha || pr.head?.ref !== branch || pr.base?.sha !== job.baseSha || pr.base?.ref !== base || pr.head?.repo?.full_name?.toLowerCase() !== job.repository || pr.base?.repo?.full_name?.toLowerCase() !== job.repository) throw new AgentError('github_invalid_response', 'Draft PR response could not be verified.');
       return { commitSha, draftPrUrl: url.href, branch };
     };
     try {
