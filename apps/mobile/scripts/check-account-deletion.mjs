@@ -1,3 +1,4 @@
+import {fixtureApiUrl} from './fixture-api.mjs';
 import {chromium} from '@playwright/test';
 import assert from 'node:assert/strict';
 import {createServer} from 'node:http';
@@ -16,7 +17,7 @@ try{
   const context=await browser.newContext({viewport:{width,height:1100},serviceWorkers:'block'});let signedIn=scenario!=='recovery',pending=false,deletes=0,mode=scenario==='device-error'?'success':'failure',release,deletionArrived;let holds=Promise.resolve();const errors=[];
   await context.addInitScript(fail=>{localStorage.setItem('mergemate_recent_searches','["fixture/private-repo"]');localStorage.setItem('mergemate_ai_consent','true');localStorage.setItem('mergemate_theme','dark');if(fail){const remove=Storage.prototype.removeItem;Storage.prototype.removeItem=function(key){if(key==='mergemate_recent_searches'&&!window.__allowCleanup)throw new Error('Fixture device storage denied');return remove.call(this,key);};}},scenario==='device-error');
   await context.route('**/*',async route=>{
-   const request=route.request(),url=new URL(request.url());if(url.origin===base||url.protocol==='data:')return route.continue();
+   const request=route.request(),url=fixtureApiUrl(request.url(),base);if(url.origin===base||url.protocol==='data:')return route.continue();
    if(url.origin==='https://mergemate.dev'){const file=resolve(site,'.'+url.pathname.replace(/^\/delete-account$/,'/delete-account.html'));if(!file.startsWith(site+sep))return route.abort();try{return route.fulfill({status:200,contentType:mime(file),body:await readFile(file)});}catch{return route.fulfill({status:404,body:'Missing fixture file'});}}
    if(url.origin==='https://app.mergemate.dev'){assert.equal(url.pathname,'/account/delete');assert.equal(request.method(),'GET');return route.fulfill({contentType:'text/html',body:'<title>Authenticated deletion entry</title>'});}
    if(url.origin!=='https://api-dev.mergemate.dev')return route.abort();

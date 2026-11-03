@@ -1,3 +1,4 @@
+import {fixtureApiUrl} from './fixture-api.mjs';
 import {chromium} from '@playwright/test';
 import assert from 'node:assert/strict';
 import {createServer} from 'node:http';
@@ -18,7 +19,7 @@ try{
   const ownRows=()=>mode==='empty'?[]:owner==='account-a'?rows:[{...rows[0],id:'other-item',title:'Other account item',number:999}];
   const allVisible=filter=>ownRows().filter(row=>{const state=states.get(`${owner}:${row.id}`);return (filter==='all'||row.kind===({review:'review',mentions:'mention',mine:'mine'})[filter])&&(!state?.doneAt||Date.parse(row.updatedAt)>Date.parse(state.doneAt))&&(!state?.snoozedUntil||Date.parse(state.snoozedUntil)<=serverNow);}).map(row=>({...row,stateToken:states.get(`${owner}:${row.id}`)?.operationId??null}));
   await context.route('**/*',async route=>{
-   const req=route.request(),url=new URL(req.url());if(url.origin===base||url.protocol==='data:')return route.continue();if(url.origin!=='https://api-dev.mergemate.dev')return route.abort();
+   const req=route.request(),url=fixtureApiUrl(req.url(),base);if(url.origin===base||url.protocol==='data:')return route.continue();if(url.origin!=='https://api-dev.mergemate.dev')return route.abort();
    const headers={'content-type':'application/json','access-control-allow-origin':base,'access-control-allow-credentials':'true','access-control-allow-headers':'content-type,x-csrf-token','access-control-allow-methods':'GET,POST,PUT,DELETE,OPTIONS'};
    const reply=async(status,body)=>{try{await route.fulfill({status,headers,body:status===204?undefined:JSON.stringify(body)});}catch{/* A discarded account fixture may no longer have a response consumer. */}};
    if(req.method()==='OPTIONS')return reply(204);const path=url.pathname.replace('/v1',''),current=owner;
