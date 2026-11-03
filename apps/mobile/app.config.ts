@@ -30,6 +30,13 @@ export function assertAccessTokenAllowed(env: Record<string, string | undefined>
   }
 }
 
+/** Dev web uses the existing service-binding proxy; direct API calls are intentionally blocked by CSP. */
+export function assertDevWebProxy(env: Record<string, string | undefined> = process.env, argv: readonly string[] = process.argv): void {
+  if (isWebExport(argv, env) && env.EXPO_PUBLIC_API_BASE_URL?.trim().replace(/\/+$/, "").toLowerCase() === "https://api-dev.mergemate.dev") {
+    throw new Error("Dev web exports must use EXPO_PUBLIC_API_BASE_URL=/__api to match the same-origin CSP. Native dev builds keep the direct API origin.");
+  }
+}
+
 /** Embedded at config evaluation, including EAS's archived build environment. */
 export function resolveBuildCommit(env: Record<string, string | undefined> = process.env): string {
   const supplied = env.EAS_BUILD_GIT_COMMIT_HASH;
@@ -48,6 +55,7 @@ export function resolveBuildCommit(env: Record<string, string | undefined> = pro
 
 export default ({ config }: ConfigContext): ExpoConfig => {
   assertAccessTokenAllowed();
+  assertDevWebProxy();
   const variant = process.env.APP_VARIANT;
   const base = appJson.expo as unknown as ExpoConfig;
   const host = variant === "development" ? "dev.mergemate.dev" : "app.mergemate.dev";

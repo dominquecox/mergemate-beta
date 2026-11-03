@@ -20,7 +20,7 @@ Starting development6c13ab19e5eb037fb53c9199afd94d3f6870b004:842 workspace tests
 npm ci --ignore-scripts
 npm run check
 node apps/site/scripts/check.mjs
-EXPO_NO_TELEMETRY=1 EXPO_PUBLIC_API_BASE_URL=https://api-dev.mergemate.dev npm run export:web -w @mergemate/mobile
+EXPO_NO_TELEMETRY=1 EXPO_PUBLIC_API_BASE_URL=/__api npm run export:web -w @mergemate/mobile
 node apps/mobile/scripts/check-voice-notes.mjs
 EXPO_NO_TELEMETRY=1 EXPO_PUBLIC_API_BASE_URL=https://api-dev.mergemate.dev npm exec -w @mergemate/mobile -- expo export --platform ios --platform android --no-bytecode --output-dir /private/tmp/j006-final-native-js
 npm run security:bundles

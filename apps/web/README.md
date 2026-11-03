@@ -23,9 +23,11 @@ npm run dev -w @mergemate/web
 Checks: `npm run typecheck -w @mergemate/web`, `npm run lint -w @mergemate/web`, `npm run test -w @mergemate/web`. A deploy dry run (no Cloudflare calls) needs the export first:
 
 ```bash
-EXPO_PUBLIC_API_BASE_URL=https://api-dev.mergemate.dev npm run export:web -w @mergemate/mobile
+EXPO_PUBLIC_API_BASE_URL=/__api npm run export:web -w @mergemate/mobile
 npx --no-install wrangler deploy --dry-run --config apps/web/wrangler.toml --env dev
 ```
+
+Dev browser builds use `/__api`, served by the existing web Worker proxy and pinned dev API service binding. `API_ORIGIN` is the Worker's upstream identity; it is not the dev browser's base URL. The dev CSP intentionally excludes direct connections to api-dev.mergemate.dev. `app.config.ts` rejects that mismatched web export; native dev builds still use the direct API origin. The manifest link uses `crossorigin="use-credentials"` so the browser includes its existing Access cookie when fetching the protected same-origin manifest. This does not grant access or widen CSP.
 
 ## Deploying
 

@@ -49,7 +49,7 @@ Logs: `/private/tmp/j015-*`. Fixture screenshots: `/private/tmp/mergemate-worksp
 ```sh
 npm ci --ignore-scripts
 npm run check
-EXPO_NO_TELEMETRY=1 EXPO_PUBLIC_API_BASE_URL=https://api-dev.mergemate.dev npm run export:web -w @mergemate/mobile
+EXPO_NO_TELEMETRY=1 EXPO_PUBLIC_API_BASE_URL=/__api npm run export:web -w @mergemate/mobile
 node apps/mobile/scripts/check-workspace.mjs
 ```
 
