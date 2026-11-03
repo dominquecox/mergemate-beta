@@ -1,3 +1,4 @@
+import {fixtureApiUrl} from './fixture-api.mjs';
 import {createHash} from 'node:crypto';
 import { chromium } from '@playwright/test';
 import assert from 'node:assert/strict';
@@ -33,7 +34,7 @@ try{
    window.SpeechSynthesisUtterance=class{constructor(text){this.text=text;}};
   });
   await context.route('**/*',async route=>{
-   const request=route.request(),url=new URL(request.url());if((url.origin===base&&!url.pathname.startsWith('/__api/v1'))||url.protocol==='data:')return route.continue();
+   const request=route.request(),url=fixtureApiUrl(request.url(),base);if((url.origin===base&&!url.pathname.startsWith('/__api/v1'))||url.protocol==='data:')return route.continue();
    if(url.origin==='https://github.com'&&url.pathname==='/login/oauth/authorize')return route.fulfill({status:200,contentType:'text/html',body:'<!doctype html><title>Mock GitHub</title><p>Fixture authorization transport only.</p>'});
    if(url.origin!=='https://api-dev.mergemate.dev'&&!(url.origin===base&&url.pathname.startsWith('/__api/v1')))return route.abort();
    const headers={'content-type':'application/json','access-control-allow-origin':base,'access-control-allow-credentials':'true','access-control-allow-headers':'content-type,x-csrf-token','access-control-allow-methods':'GET,POST,PUT,DELETE,OPTIONS'};

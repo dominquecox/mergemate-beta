@@ -1,3 +1,4 @@
+import {fixtureApiUrl} from './fixture-api.mjs';
 import { chromium } from '@playwright/test';
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
@@ -30,7 +31,7 @@ try{
   const context=await browser.newContext({viewport:{width,height:1000},serviceWorkers:'block'});
   const errors=[];
   await context.route('**/*',async route=>{
-   const request=route.request(),url=new URL(request.url());if(url.origin===base||url.protocol==='data:')return route.continue();
+   const request=route.request(),url=fixtureApiUrl(request.url(),base);if(url.origin===base||url.protocol==='data:')return route.continue();
    if(url.origin!=='https://api-dev.mergemate.dev')return route.abort();
    const headers={'content-type':'application/json','access-control-allow-origin':base,'access-control-allow-credentials':'true','access-control-allow-headers':'content-type,x-csrf-token','access-control-allow-methods':'GET,POST,PUT,DELETE,OPTIONS'};
    const reply=(status,body)=>route.fulfill({status,headers,body:status===204?'':JSON.stringify(body)});

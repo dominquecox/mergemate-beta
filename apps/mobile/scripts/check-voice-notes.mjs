@@ -1,3 +1,4 @@
+import {fixtureApiUrl} from './fixture-api.mjs';
 import {chromium} from '@playwright/test';
 import assert from 'node:assert/strict';
 import {createServer} from 'node:http';
@@ -26,7 +27,7 @@ try{
   await context.grantPermissions(['microphone'],{origin:base});
   const page=await context.newPage();page.setDefaultTimeout(20000);const errors=[];page.on('pageerror',e=>errors.push(e.message));
   await context.route('**/*',async route=>{
-   const request=route.request(),url=new URL(request.url());if(url.origin===base || ['blob:','data:'].includes(url.protocol))return route.continue();if(url.origin!=='https://api-dev.mergemate.dev')return route.abort();
+   const request=route.request(),url=fixtureApiUrl(request.url(),base);if(url.origin===base || ['blob:','data:'].includes(url.protocol))return route.continue();if(url.origin!=='https://api-dev.mergemate.dev')return route.abort();
    const headers={'content-type':'application/json','access-control-allow-origin':base,'access-control-allow-credentials':'true','access-control-allow-headers':'content-type,x-csrf-token','access-control-allow-methods':'GET,POST,PUT,DELETE,OPTIONS'};
    const reply=(status,body)=>route.fulfill({status,headers,body:JSON.stringify(body)});if(request.method()==='OPTIONS')return route.fulfill({status:204,headers});const path=url.pathname.replace('/v1','');
    if(path==='/flags')return reply(200,{voice_readout:false,voice_notes:mode!=='off',highlight:true});

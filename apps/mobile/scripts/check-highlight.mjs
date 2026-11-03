@@ -1,3 +1,4 @@
+import {fixtureApiUrl} from './fixture-api.mjs';
 import {chromium} from '@playwright/test';
 import assert from 'node:assert/strict';
 import {createServer} from 'node:http';
@@ -14,7 +15,7 @@ try{
   const context=await browser.newContext({viewport:{width,height:1050},serviceWorkers:'block'});const page=await context.newPage();page.setDefaultTimeout(20000);const errors=[];page.on('pageerror',e=>errors.push(e.message));let calls=0,pendingResolve,held=false,userId='highlight-fixture';
   const reply=async(route,status,body)=>{try{await route.fulfill({status,headers:{'content-type':'application/json','access-control-allow-origin':base,'access-control-allow-credentials':'true','access-control-allow-headers':'content-type,x-csrf-token','access-control-allow-methods':'GET,POST,DELETE,OPTIONS'},body:JSON.stringify(body)});}catch{/* Explicitly cancelled fixture requests have no response consumer. */}};
   await context.route('**/*',async route=>{
-   const request=route.request(),url=new URL(request.url());if(url.origin===base||['blob:','data:'].includes(url.protocol))return route.continue();if(url.origin!=='https://api-dev.mergemate.dev')return route.abort();
+   const request=route.request(),url=fixtureApiUrl(request.url(),base);if(url.origin===base||['blob:','data:'].includes(url.protocol))return route.continue();if(url.origin!=='https://api-dev.mergemate.dev')return route.abort();
    if(request.method()==='OPTIONS')return reply(route,204,undefined);const path=url.pathname.replace('/v1','');
    if(path==='/flags')return reply(route,200,{voice_readout:false,voice_notes:false,highlight:mode!=='off'});
    if(path==='/me')return reply(route,200,{id:userId,login:'fixture',name:'Fixture',avatarUrl:base+'/favicon.ico',demo:mode==='demo'});
