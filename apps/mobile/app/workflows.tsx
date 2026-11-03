@@ -36,6 +36,8 @@ function AgentWorkspace({ account, isDemo, initialTarget, initialMode }: { accou
   const [intent, setIntent] = useState('');
   const [definition, setDefinition] = useState<WorkflowDefinition | null>(null);
   const [confirmCodeChanges, setConfirmCodeChanges] = useState(false);
+  const [savedMessage, setSavedMessage] = useState('');
+  const [pendingDelete, setPendingDelete] = useState<string | null>(null);
   const [localError, setLocalError] = useState('');
   const draftVersion = useRef(0);
   const target = useMemo(() => {
@@ -52,7 +54,7 @@ function AgentWorkspace({ account, isDemo, initialTarget, initialMode }: { accou
   const canRun = !!definition && !!target && sameTarget(definition.target, target) && !!capability?.available && workspace.configured && consentReady && (!confirmRequired(definition) || confirmCodeChanges) && !busy;
   const surface = { backgroundColor: colors.surface, borderColor: colors.border, borderWidth: 1, borderRadius: 22, padding: 20 };
   const input = { minHeight: 48, padding: 14, borderRadius: 14, borderWidth: 1, borderColor: colors.borderLight, color: colors.text, backgroundColor: colors.surfaceElevated, fontFamily: typography.body.fontFamily };
-  const resetDraft = () => { draftVersion.current++; setDefinition(null); setConfirmCodeChanges(false); setLocalError(''); workspace.clearError(); workspace.clearRun(); };
+  const resetDraft = () => { draftVersion.current++; setDefinition(null); setConfirmCodeChanges(false); setLocalError(''); setSavedMessage(''); workspace.clearError(); workspace.clearRun(); };
   const chooseTemplate = (id: string) => {
     if (busy) return;
     const template = AGENT_TEMPLATES.find(value => value.id === id)!;
@@ -68,7 +70,7 @@ function AgentWorkspace({ account, isDemo, initialTarget, initialMode }: { accou
     const value = await workspace.generate(intent.trim(), mode);
     if (value && version === draftVersion.current) {
       if (value.mode !== mode || !target || !sameTarget(value.target, target)) { setLocalError('Generated workflow did not match the requested target and mode. Generate again.'); return; }
-      setDefinition(value); setIntent(value.intent);
+      setDefinition(withoutId(value)); setIntent(value.intent);
     }
   };
   const changeDefinition = (next: WorkflowDefinition | null) => {
@@ -78,7 +80,23 @@ function AgentWorkspace({ account, isDemo, initialTarget, initialMode }: { accou
   };
   const retry = () => {
     const run = workspace.selectedRun; if (!run || busy) return;
-    const d = run.definition; setTargetText(targetUrl(d)); setBaseBranch(d.target.baseBranch ?? ''); setMode(d.mode); setIntent(d.intent); setDefinition(d); setConfirmCodeChanges(false); setLocalError(''); workspace.clearRun();
+    const d = run.definition; setTargetText(targetUrl(d)); setBaseBranch(d.target.baseBranch ?? ''); setMode(d.mode); setIntent(d.intent); setDefinition(withoutId(d)); setConfirmCodeChanges(false); setLocalError(''); workspace.clearRun();
+  };
+  const openSaved = (value: WorkflowDefinition) => {
+    if (busy) return;
+    ++draftVersion.current; setTargetText(targetUrl(value)); setBaseBranch(value.target.baseBranch ?? ''); setMode(value.mode); setIntent(value.intent); setDefinition(value); setConfirmCodeChanges(false); setPendingDelete(null); setLocalError(''); setSavedMessage('Opened saved workflow.'); workspace.clearRun(); workspace.clearError();
+  };
+  const saveWorkflow = async (copy = false) => {
+    if (!definition || busy) return;
+    const version = draftVersion.current;
+    const input = copy ? { ...withoutId(definition), name: `${definition.name.slice(0, 75)} copy` } : definition;
+    setSavedMessage('');
+    const value = await workspace.saveDefinition(input);
+    if (value && version === draftVersion.current) { setDefinition(value); setConfirmCodeChanges(false); setSavedMessage('Workflow saved to your account.'); }
+  };
+  const removeSaved = async (id: string) => {
+    const removed = await workspace.deleteDefinition(id);
+    if (removed) { setPendingDelete(null); setDefinition(old => old?.id === id ? withoutId(old) : old); setSavedMessage('Saved workflow deleted. Existing run receipts are unchanged.'); }
   };
   return <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1, backgroundColor: colors.background }}>
     <Header title="Agent workspace" showBack rightAction={<Button title="Refresh" variant="ghost" disabled={busy} onPress={workspace.refresh} />} />
@@ -106,6 +124,12 @@ function AgentWorkspace({ account, isDemo, initialTarget, initialMode }: { accou
             <Text style={[typography.caption, { color: colors.textSecondary }]}>Coding needs a configured isolated executor and repository write authorization. Existing connection scopes are not silently expanded.</Text>
             <Button title="Manage workspace connections" variant="ghost" onPress={() => router.push('/(tabs)/settings')} />
           </View>
+          <View style={{ gap: 8 }}><Text accessibilityRole="header" style={[typography.headline, { color: colors.text }]}>Saved workflows</Text>
+            {workspace.definitionsLoading ? <Text style={[typography.footnote, { color: colors.textSecondary }]}>Loading saved workflows...</Text> : workspace.definitionsError ? <Text accessibilityRole="alert" style={[typography.footnote, { color: colors.riskHigh }]}>{workspace.definitionsError}</Text> : workspace.definitions.length ? workspace.definitions.map(value => <View key={value.id} style={[surface, { padding: 14, gap: 8, borderColor: definition?.id === value.id ? colors.brandLight : colors.border }]}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}><Pressable accessibilityRole="button" accessibilityLabel={`Edit saved workflow ${value.name}`} disabled={busy} onPress={() => openSaved(value)} style={{ flex: 1, minHeight: 44, justifyContent: 'center' }}><Text style={[typography.subhead, { color: colors.text }]}>{value.name}</Text><Text style={[typography.caption, { color: colors.textSecondary, marginTop: 4 }]}>{value.mode === 'review' ? 'PR review' : 'Coding workflow'} · {value.target.owner}/{value.target.repo}</Text></Pressable><Pressable accessibilityRole="button" accessibilityLabel={`Delete saved workflow ${value.name}`} disabled={busy} onPress={() => setPendingDelete(value.id ?? null)} style={{ width: 44, minHeight: 44, justifyContent: 'center', alignItems: 'center' }}><Icon name="trash-outline" size={19} color={colors.textSecondary} /></Pressable></View>
+              {pendingDelete === value.id && <View style={{ gap: 8 }}><Text style={[typography.caption, { color: colors.textSecondary }]}>Delete this saved definition? Existing runs will not be cancelled or removed.</Text><Button title="Confirm delete workflow" variant="destructive" loading={workspace.busy === 'delete'} disabled={busy} onPress={() => removeSaved(value.id!)} /><Button title="Keep saved workflow" variant="ghost" disabled={busy} onPress={() => setPendingDelete(null)} /></View>}
+            </View>) : <Text style={[typography.footnote, { color: colors.textSecondary }]}>Save a workflow to edit and reuse it across sessions.</Text>}
+          </View>
           <View style={{ gap: 8 }}><Text accessibilityRole="header" style={[typography.headline, { color: colors.text }]}>Recent runs</Text>
             {workspace.historyLoading ? <Text style={[typography.footnote, { color: colors.textSecondary }]}>Loading runs...</Text> : workspace.historyError ? <Text accessibilityRole="alert" style={[typography.footnote, { color: colors.riskHigh }]}>{workspace.historyError}</Text> : workspace.runs.length ? workspace.runs.map(run => <Pressable key={run.id} accessibilityRole="button" accessibilityLabel={`Inspect run ${run.definition.name}`} disabled={busy} onPress={() => void workspace.selectRun(run)} style={[surface, { minHeight: 64, padding: 14, gap: 5 }]}><Text numberOfLines={2} style={[typography.subhead, { color: colors.text }]}>{run.definition.name}</Text><Text style={[typography.caption, { color: colors.textSecondary }]}>{displayRunStatus(run.status)}</Text></Pressable>) : <Text style={[typography.footnote, { color: colors.textSecondary }]}>No execution receipts loaded yet.</Text>}
           </View>
@@ -124,9 +148,11 @@ function AgentWorkspace({ account, isDemo, initialTarget, initialMode }: { accou
             <Button title="Generate workflow" loading={workspace.busy === 'plan'} disabled={!workspace.configured || !targetCompatible || intent.trim().length < 3 || !consentReady || busy} onPress={generate} />
             {!consentReady && <View style={{ gap: 8 }}><Text style={[typography.footnote, { color: colors.textSecondary }]}>Model generation and execution require your current AI consent. Templates can be inspected without running a model.</Text><Button title="Review AI preferences" variant="secondary" onPress={() => router.push('/(auth)/consent')} /></View>}
           </View>
+          {!!savedMessage && <Text accessibilityLiveRegion="polite" style={[typography.footnote, { color: colors.brandLight }]}>{savedMessage}</Text>}
           {!!(localError || workspace.error) && <ErrorState title="Workflow needs attention" message={localError || workspace.error} onRetry={() => { setLocalError(''); workspace.clearError(); workspace.refresh(); }} retryLabel="Refresh capabilities" />}
           {workspace.selectedRun ? <><Button title="Back to workflow builder" variant="ghost" disabled={busy} onPress={workspace.clearRun} /><AgentRunPanel run={workspace.selectedRun} cancelling={workspace.busy === 'cancel'} onCancel={() => void workspace.cancel()} onRetry={retry} />{!isRunActive(workspace.selectedRun.status) && <Button title="Use this workflow again" variant="secondary" disabled={busy} onPress={retry} />}</> : definition ? <View style={{ gap: 14 }}>
             <TextInput accessibilityLabel="Workflow name" value={definition.name} editable={!busy} maxLength={80} onChangeText={name => setDefinition({ ...definition, name })} style={[input, { fontSize: 20, fontWeight: '600' }]} />
+            <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}><Button title={definition.id ? 'Save changes' : 'Save workflow'} accessibilityLabel="Save workflow" variant="secondary" loading={workspace.busy === 'save'} disabled={!workspace.configured || busy || workspace.definitionsLoading || !DefinitionSchema.safeParse(definition).success} onPress={() => saveWorkflow()} />{definition.id && <Button title="Save as a new workflow" variant="ghost" disabled={!workspace.configured || busy || workspace.definitionsLoading} onPress={() => saveWorkflow(true)} />}</View>
             <Text style={[typography.caption, { color: colors.textSecondary }]}>Edit the graph before starting. Required dependencies stay ordered.</Text>
             <View style={{ alignSelf: 'flex-start', flexDirection: 'row', gap: 7, padding: 10, marginLeft: 20, borderRadius: 10, backgroundColor: colors.brand }}><Icon name="play-outline" size={15} color="#FFFFFF" /><Text style={[typography.caption, { color: '#FFFFFF' }]}>Run trigger</Text></View>
             {definition.steps.map((step, index) => <View key={step.id}>
@@ -158,4 +184,9 @@ function targetUrl(definition: WorkflowDefinition) {
 function CapabilityLine({ title, available, reason }: { title: string; available: boolean; reason?: string }) {
   const { colors, typography } = useTheme();
   return <View style={{ gap: 4 }}><View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}><Icon name={available ? 'checkmark-circle-outline' : 'ellipse-outline'} size={17} color={available ? colors.brandLight : colors.textSecondary} /><Text style={[typography.subhead, { color: colors.text }]}>{title}: {available ? 'Ready' : 'Needs setup'}</Text></View>{!!reason && <Text style={[typography.caption, { color: colors.textSecondary }]}>{reason}</Text>}</View>;
+}
+
+function withoutId(definition: WorkflowDefinition): WorkflowDefinition {
+  const { id: _id, ...draft } = definition;
+  return draft;
 }

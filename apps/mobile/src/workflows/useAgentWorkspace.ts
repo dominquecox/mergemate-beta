@@ -22,7 +22,11 @@ export function useAgentWorkspace(account: string, target: WorkflowTarget | null
   const [selectedRun, setSelectedRun] = useState<WorkflowRun | null>(null);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyError, setHistoryError] = useState('');
-  const [busy, setBusy] = useState<'plan' | 'start' | 'cancel' | null>(null);
+  const [definitions, setDefinitions] = useState<WorkflowDefinition[]>([]);
+  const [definitionsLoading, setDefinitionsLoading] = useState(false);
+  const [definitionsError, setDefinitionsError] = useState('');
+  const definitionVersion = useRef(0);
+  const [busy, setBusy] = useState<'plan' | 'start' | 'cancel' | 'save' | 'delete' | null>(null);
   const [error, setError] = useState('');
   const [refreshKey, setRefreshKey] = useState(0);
   const generation = useRef(0), alive = useRef(false), actionLock = useRef(false), actionVersion = useRef(0);
@@ -38,6 +42,7 @@ export function useAgentWorkspace(account: string, target: WorkflowTarget | null
       ++generation.current; ++actionVersion.current; client?.invalidateSession();
       for (const request of controllers.current) request.abort(); controllers.current.clear();
       actionLock.current = false; uncertainStart.current = null; setBusy(null);
+      ++definitionVersion.current; setDefinitions([]); setDefinitionsError(''); setDefinitionsLoading(false);
       setCapabilities(null); setRuns([]); setSelectedRun(null); setError('Your session changed. Reopen Agent workflows to continue.');
     };
     const unsubscribe = onSessionChange(invalidate);
@@ -63,6 +68,38 @@ export function useAgentWorkspace(account: string, target: WorkflowTarget | null
       .finally(() => { done(request); if (current && valid(epoch)) setHistoryLoading(false); });
     return () => { current = false; request.abort(); done(request); };
   }, [client, refreshKey]);
+  useEffect(() => {
+    if (!client) return;
+    const epoch = generation.current, version = definitionVersion.current, request = controller(); let current = true;
+    setDefinitionsLoading(true); setDefinitionsError('');
+    client.definitions(request.signal).then(value => { if (current && valid(epoch) && version === definitionVersion.current) setDefinitions(value.definitions); })
+      .catch(cause => { if (current && valid(epoch) && !request.signal.aborted) setDefinitionsError(toUserMessage(cause, 'Could not load saved workflows.')); })
+      .finally(() => { done(request); if (current && valid(epoch)) setDefinitionsLoading(false); });
+    return () => { current = false; request.abort(); done(request); };
+  }, [client, refreshKey]);
+  const saveDefinition = async (definition: WorkflowDefinition): Promise<WorkflowDefinition | null> => {
+    if (!client || actionLock.current || definitionsLoading) return null;
+    actionLock.current = true; const operation = ++actionVersion.current; setBusy('save'); setError('');
+    const epoch = generation.current, request = controller();
+    try {
+      const value = await client.saveDefinition(definition, request.signal);
+      if (!valid(epoch)) return null;
+      ++definitionVersion.current; setDefinitions(old => [value, ...old.filter(item => item.id !== value.id)].slice(0, 20)); setDefinitionsError('');
+      return value;
+    } catch (cause) { if (valid(epoch) && !request.signal.aborted) setError(toUserMessage(cause, 'Could not save the workflow. Your draft is unchanged.')); return null; }
+    finally { done(request); if (operation === actionVersion.current) { actionLock.current = false; if (valid(epoch)) setBusy(null); } }
+  };
+  const deleteDefinition = async (id: string): Promise<boolean> => {
+    if (!client || actionLock.current) return false;
+    actionLock.current = true; const operation = ++actionVersion.current; setBusy('delete'); setError('');
+    const epoch = generation.current, request = controller();
+    try {
+      await client.deleteDefinition(id, request.signal);
+      if (!valid(epoch)) return false;
+      ++definitionVersion.current; setDefinitions(old => old.filter(item => item.id !== id)); setDefinitionsError(''); return true;
+    } catch (cause) { if (valid(epoch) && !request.signal.aborted) setError(toUserMessage(cause, 'Could not delete the saved workflow. It remains in your list.')); return false; }
+    finally { done(request); if (operation === actionVersion.current) { actionLock.current = false; if (valid(epoch)) setBusy(null); } }
+  };
   const receive = useCallback((run: WorkflowRun) => {
     setError('');
     setSelectedRun(old => adoptRunUpdate(old, run));
@@ -120,5 +157,5 @@ export function useAgentWorkspace(account: string, target: WorkflowTarget | null
     catch (cause) { if (valid(epoch) && !request.signal.aborted) setError(toUserMessage(cause, 'Could not refresh this run.')); }
     finally { done(request); }
   };
-  return { configured: !!client, capabilities, capabilityLoading, capabilityError, runs, selectedRun, historyLoading, historyError, busy, error, generate, start, cancel, selectRun, clearRun: () => setSelectedRun(null), clearError: () => setError(''), refresh: () => setRefreshKey(value => value + 1) };
+  return { configured: !!client, capabilities, capabilityLoading, capabilityError, runs, selectedRun, historyLoading, historyError, definitions, definitionsLoading, definitionsError, saveDefinition, deleteDefinition, busy, error, generate, start, cancel, selectRun, clearRun: () => setSelectedRun(null), clearError: () => setError(''), refresh: () => setRefreshKey(value => value + 1) };
 }
