@@ -1,3 +1,5 @@
+import { ExperienceIntro } from '../../src/components/ExperienceDesign';
+import {Button} from '../../src/components/Button';
 import {AudioCommuteBar} from '../../src/components/AudioCommuteBar';
 import {ExecutiveBriefExport} from '../../src/components/ExecutiveBriefExport';
 import {triageExecutiveNarration} from '../../src/readout/narration';
@@ -164,6 +166,7 @@ export default function TriageScreen() {
 
       <AudioCommuteBar sentences={triageExecutiveNarration(queue.map(item=>{const note=inbox.find(n=>`${n.repo}#${n.number}`===item.prRef),agent=detectAgentProvenance({author:note?.author??item.author});return {prRef:item.prRef,title:item.title??note?.title??'Title unavailable',agent:agent.agentName??note?.author??'Author unavailable',level:item.prRef===currentItem?.prRef?verdict.level:note?.risk==='high'?'blocked':note?.risk==='low'?'safe':'caution'};}))}/>
       <ScrollView contentContainerStyle={{padding:16,paddingBottom:32,flexGrow:1}}>
+        <View style={{gap:12,marginBottom:20}}><ExperienceIntro compact eyebrow="Your next decision" title="Keep work moving." description="Focus on one change, follow its evidence, and send the deeper work to an agent workflow."/><Button title="Open agent workflows" variant="ghost" onPress={()=>router.push('/workflows')} style={{alignSelf:'flex-start'}}/></View>
 
         {isLoading ? <LoadingState title="Loading triage deck..." message="Sorting your pull requests by review priority."/> : error && !currentItem && !reviewed.length ? <ErrorState title="Could not load triage deck" message={error} onRetry={loadQueue}/> : !currentItem ? (
           <View style={{alignItems:"center",justifyContent:"center",paddingVertical:48,paddingHorizontal:24}}>

@@ -44,6 +44,9 @@ async function seedOwned(ctx:TestContext,userId:string){
   ['INSERT INTO notification_push VALUES(?,?,?,?,?)',[userId,'notice','review',stamp,'accepted']],
   ['INSERT INTO web_push_subscriptions VALUES(?,?,?,?,?,?,?)',[userId,'browser','https://push.example/'+userId,'fixture-key','fixture-auth',session,stamp]],
   ['INSERT INTO session_lineage VALUES(?,?,?,?,?,?,?,?)',[userId+':spent','family',userId,0,'bearer',null,stamp,'2099-01-01T00:00:00Z']],
+  ['INSERT INTO workflow_runs VALUES(?,?,?,?,?,0,NULL,?,?)',[userId+':run',userId,'key','{}','1',stamp,stamp]],
+  ['INSERT INTO workflow_jobs(id,run_id,user_id,repository,base_sha,created_at,updated_at) VALUES(?,?,?,?,?,?,?)',[userId+':job',userId+':run',userId,'fixture/repo','a'.repeat(40),stamp,stamp]],
+  ['INSERT INTO workflow_definitions VALUES(?,?,?,?,?)',[userId+':def',userId,'{}',stamp,stamp]],
  ];
  for(const [sql,args] of statements)await ctx.db.prepare(sql).bind(...args).run();
  for(const scope of [userId,`${userId}:triage`,`${userId}:metakey`])await ctx.db.prepare('INSERT INTO ai_usage_daily VALUES(?,?,?)').bind(scope,'2026-10-27',1).run();

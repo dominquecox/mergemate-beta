@@ -1,3 +1,4 @@
+import { ExperienceIntro, ExperienceSurface, SetupPath } from "../../src/components/ExperienceDesign";
 import { InfoLine } from "../../src/components/ScreenDesign";
 import React, { useState } from "react";
 import { View, StyleSheet, ScrollView } from "react-native";
@@ -45,10 +46,10 @@ export default function ConsentScreen() {
   );
 
   const box = (title: string, icon: "checkmark-circle" | "alert-circle-outline", tint: string, items: string[], first = false) => (
-    <View style={[styles.box, { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.lg, marginTop: first ? spacing.xl : spacing.md }]}>
+    <View style={[styles.box, { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: 22, marginTop: first ? spacing.xl : spacing.md }]}>
       <View style={styles.boxTitleRow} accessibilityRole="header">
         <Icon name={icon} size={18} color={tint} />
-        <Text style={[typography.headline, { color: colors.text }]}>{title}</Text>
+        <Text style={[typography.headline, { color: colors.text, flex:1 }]}>{title}</Text>
       </View>
       {list(items)}
     </View>
@@ -89,12 +90,16 @@ export default function ConsentScreen() {
         />
       ) : (
         <ScrollView contentContainerStyle={[styles.content, { padding: spacing.xl }]}>
-          <InfoLine icon="person-outline" title="You choose" detail="AI is off until you agree here. Nothing is sent to an AI model before that." />
+          <View style={{gap:20,marginBottom:20}}>
+            <ExperienceIntro compact eyebrow="Your AI preferences" title={"Make AI work\non your terms."} description="Give your workspace a clear set of boundaries. Read what is shared, then choose what works for you."/>
+            <SetupPath active="ai"/>
+          </View>
+          <ExperienceSurface accent style={{padding:16}}><InfoLine icon="person-outline" title="You choose" detail="AI is off until you agree here. Nothing is sent to an AI model before that." /></ExperienceSurface>
 
           {box("What may be sent to the AI model", "checkmark-circle", colors.riskLow, SENT, true)}
           {box("What to know first", "alert-circle-outline", colors.riskMedium, LIMITS)}
 
-          <View style={[styles.notice, { backgroundColor: colors.surfaceElevated, borderRadius: radius.md, marginTop: spacing.md }]}>
+          <View style={[styles.notice, { backgroundColor: colors.surfaceElevated, borderRadius: 18, marginTop: spacing.md }]}>
             <Text style={[typography.caption, { color: colors.textMuted, lineHeight: 18 }]}>
               With AI summaries on, MergeMate may analyze PRs when you open them or load your inbox. Turning AI off stops new requests and
               blocks results that were still being prepared, but cannot recall anything already sent. Agreeing here covers all of the
@@ -103,13 +108,13 @@ export default function ConsentScreen() {
           </View>
 
           {needsReview && !aiConsentGranted ? (
-            <View accessibilityRole="alert" style={[styles.notice, { backgroundColor: colors.surfaceElevated, borderRadius: radius.md, marginTop: spacing.md }]}>
+            <View accessibilityRole="alert" style={[styles.notice, { backgroundColor: colors.surfaceElevated, borderRadius: 18, marginTop: spacing.md }]}>
               <Text style={[typography.body, { color: colors.text }]}>This text has changed since you last agreed. Read it again and choose.</Text>
             </View>
           ) : null}
 
           {error ? (
-            <View accessibilityRole="alert" style={[styles.notice, { backgroundColor: colors.surfaceElevated, borderRadius: radius.md, marginTop: spacing.md }]}>
+            <View accessibilityRole="alert" style={[styles.notice, { backgroundColor: colors.surfaceElevated, borderRadius: 18, marginTop: spacing.md }]}>
               <Text style={[typography.body, { color: colors.text }]}>{error}</Text>
               <Button title="Reload my choice" onPress={() => void refreshConsent()} variant="secondary" style={{ marginTop: spacing.sm }} />
             </View>
@@ -119,12 +124,12 @@ export default function ConsentScreen() {
             {aiConsentGranted ? (
               <>
                 <Text style={[typography.body, { color: colors.text, marginBottom: spacing.sm }]}>AI is on for your account.</Text>
-                <Button title="Turn off AI" onPress={() => choose("turn_off")} variant="secondary" style={{ width: "100%" }} />
+                <Button title="Turn off AI" onPress={() => choose("turn_off")} variant="secondary" style={{ width: "100%",borderRadius:16,minHeight:52 }} />
               </>
             ) : (
               <>
-                <Button title="I agree, turn on AI" onPress={() => choose("agree")} variant="primary" style={{ width: "100%" }} />
-                <Button title="Not now" onPress={() => router.back()} variant="secondary" style={{ width: "100%", marginTop: spacing.sm }} />
+                <Button title="I agree, turn on AI" onPress={() => choose("agree")} variant="primary" style={{ width: "100%",borderRadius:16,minHeight:52 }} />
+                <Button title="Not now" onPress={() => router.back()} variant="secondary" style={{ width: "100%", marginTop: spacing.sm,borderRadius:16,minHeight:52 }} />
               </>
             )}
           </View>

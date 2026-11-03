@@ -14,20 +14,20 @@ export function InboxOverview({ count, needsReview }: { count: number; needsRevi
   const actions: { label: string; icon: IconName; run: () => void }[] = [
     { label: 'Find a PR', icon: 'search-outline', run: () => router.push('/search') },
     { label: 'Triage deck', icon: 'layers-outline', run: () => router.push('/(tabs)/triage') },
-    { label: 'Playbooks', icon: 'git-network-outline', run: () => router.push('/workflows') },
+    { label: 'Agents', icon: 'git-network-outline', run: () => router.push('/workflows') },
     { label: 'Your alerts', icon: 'notifications-outline', run: () => router.push('/(tabs)/notifications') },
   ];
   return <View style={{ gap: 20, marginBottom: 24 }}>
     <View style={{ padding: isDesktop ? 28 : 22, borderRadius: 24, borderWidth: 1, borderColor: colors.brandMuted, backgroundColor: colors.brandSubtle, overflow: 'hidden' }}>
       <View style={{ flexDirection: 'row', gap: 6, alignItems: 'center', marginBottom: 16 }}>
         <Icon name="sparkles-outline" size={15} color={colors.brandLight} />
-        <Text style={[typography.code, { color: colors.brandLight, fontSize: 11, letterSpacing: 1.2 }]}>YOUR REVIEW WORKSPACE</Text>
+        <Text style={[typography.code, { color: colors.brandLight, fontSize: 11, letterSpacing: 1.2 }]}>YOUR AGENT WORKSPACE</Text>
       </View>
       <Text accessibilityRole="header" style={[isDesktop ? typography.largeTitle : typography.title1, { color: colors.text, maxWidth: 520 }]}>Less noise. A clearer next move.</Text>
-      <Text style={[typography.body, { color: colors.textSecondary, marginTop: 10, maxWidth: 460 }]}>Understand the risk, follow the evidence, and keep your reviews moving.</Text>
-      <Pressable accessibilityRole="button" accessibilityLabel="Open review playbooks" onPress={() => router.push('/workflows')} style={({ pressed }) => ({ marginTop: 22, minHeight: 48, paddingHorizontal: 16, borderRadius: 14, backgroundColor: colors.brand, alignSelf: 'flex-start', flexDirection: 'row', gap: 9, alignItems: 'center', opacity: pressed ? 0.8 : 1 })}>
+      <Text style={[typography.body, { color: colors.textSecondary, marginTop: 10, maxWidth: 460 }]}>Review changes, prepare fixes and follow the evidence your workflows produce.</Text>
+      <Pressable accessibilityRole="button" accessibilityLabel="Open agent workflows" onPress={() => router.push('/workflows')} style={({ pressed }) => ({ marginTop: 22, minHeight: 48, paddingHorizontal: 16, borderRadius: 14, backgroundColor: colors.brand, alignSelf: 'flex-start', flexDirection: 'row', gap: 9, alignItems: 'center', opacity: pressed ? 0.8 : 1 })}>
         <Icon name="git-network-outline" size={18} color="#FFFFFF" />
-        <Text style={[typography.subhead, { color: '#FFFFFF', fontWeight: '700' }]}>Build your review flow</Text>
+        <Text style={[typography.subhead, { color: '#FFFFFF', fontWeight: '700' }]}>Build an agent workflow</Text>
         <Icon name="arrow-forward-outline" size={17} color="#FFFFFF" />
       </Pressable>
     </View>

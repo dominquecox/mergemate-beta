@@ -105,13 +105,13 @@ export function Sidebar() {
           />
         ))}
       </View>
-      <Link href="/workflows" asChild><Pressable accessibilityRole="link" accessibilityLabel="Review playbooks" style={StyleSheet.flatten({ minHeight: 48, marginTop: 16, paddingHorizontal: 12, borderRadius: 14, flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: colors.brandSubtle })}>
-        <Icon name="git-network-outline" size={20} color={colors.brandLight}/><Text style={[typography.subhead,{color:colors.brandLight}]}>Review playbooks</Text>
+      <Link href="/workflows" asChild><Pressable accessibilityRole="link" accessibilityLabel="Agent workflows" style={StyleSheet.flatten({ minHeight: 48, marginTop: 16, paddingHorizontal: 12, borderRadius: 14, flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: colors.brandSubtle })}>
+        <Icon name="git-network-outline" size={20} color={colors.brandLight}/><Text style={[typography.subhead,{color:colors.brandLight}]}>Agent workflows</Text>
       </Pressable></Link>
       <View style={{flex:1}} />
       <View style={[styles.guard,{borderColor:colors.border}]}>
         <Icon name="shield-checkmark-outline" size={18} color={colors.brandLight}/>
-        <Text style={[typography.footnote,{color:colors.textSecondary,flex:1}]}>Review here. Take action in GitHub.</Text>
+        <Text style={[typography.footnote,{color:colors.textSecondary,flex:1}]}>Build a workflow. Follow its evidence.</Text>
       </View>
       <View accessibilityLabel="Signed-in account" style={StyleSheet.flatten([styles.account,{borderTopColor:colors.border}])}>
         <View style={[styles.avatar,{backgroundColor:colors.brandSubtle}]}><Icon name="person-outline" size={20} color={colors.brandLight}/></View>

@@ -97,6 +97,8 @@ routes = [{ pattern = "api-dev.mergemate.dev", custom_domain = true }]
 workers_dev = false
 
 [env.dev.vars]
+# Coding execution is restricted to this reviewed repository until owner policy expands it.
+WORKFLOW_RUNNER_REPOS = "dominquecox/mergemate"
 APP_ENV = "development"
 STRIPE_MODE = "test"
 WEB_ORIGIN = "https://dev.mergemate.dev"
@@ -317,3 +319,13 @@ enabled = false
 enabled = false
 [env.production.cache]
 enabled = false
+
+# Agent runtime is deliberately dev-only. Provision the named queue before this dev deploy.
+[[env.dev.queues.producers]]
+binding = "WORKFLOW_QUEUE"
+queue = "mergemate-workflows-dev"
+
+[[env.dev.queues.consumers]]
+queue = "mergemate-workflows-dev"
+max_batch_size = 1
+max_retries = 3

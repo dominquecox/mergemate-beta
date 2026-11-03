@@ -78,6 +78,9 @@ export interface Env {
   /** Image Transformations binding. When present, uploads are resized and re-encoded before analysis. */
   IMAGES?: ImagesBinding;
   POSTS?: KVNamespace;
+  WORKFLOW_QUEUE?: Pick<Queue<{ runId: string }>, "send">;
+  WORKFLOW_RUNNER_TOKEN?: string;
+  WORKFLOW_RUNNER_REPOS?: string;
   GITHUB_EVENTS?: Pick<Queue<GitHubEventMessage>, "send">;
 }
 
