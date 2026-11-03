@@ -166,7 +166,9 @@ export const StorageService = {
   /** One bounded local preference, account-scoped and erased with account cleanup. */
   async getReviewPlaybook(account: string): Promise<unknown> {
     try {
-      const raw = Platform.OS === "web" ? getWebStorage()?.getItem(REVIEW_PLAYBOOK_KEY) : await SecureStore.getItemAsync(REVIEW_PLAYBOOK_KEY);
+      const storage = Platform.OS === "web" ? getWebStorage() : null;
+      if (Platform.OS === "web" && !storage) throw new Error("Local storage unavailable");
+      const raw = Platform.OS === "web" ? storage!.getItem(REVIEW_PLAYBOOK_KEY) : await SecureStore.getItemAsync(REVIEW_PLAYBOOK_KEY);
       if (!raw) return null;
       if (raw.length > 1800) throw new Error("Invalid saved playbook");
       const record = JSON.parse(raw);
