@@ -14,7 +14,8 @@
     "test": "vitest run",
     "build:ios": "../../scripts/build-and-log.sh ios",
     "build:android": "../../scripts/build-and-log.sh android",
-    "android": "expo start --android"
+    "android": "expo start --android",
+    "eas-build-on-success": "node scripts/build-receipt.mjs"
   },
   "dependencies": {
     "@expo-google-fonts/geist": "0.4.2",
@@ -23,6 +24,7 @@
     "@expo/vector-icons": "15.1.1",
     "@mergemate/contracts": "*",
     "expo": "~58.0.22",
+    "expo-application": "58.1.2",
     "expo-audio": "58.0.10",
     "expo-clipboard": "58.0.4",
     "expo-constants": "~58.0.13",

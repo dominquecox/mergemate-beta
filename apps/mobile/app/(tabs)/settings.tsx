@@ -1,3 +1,4 @@
+import { BuildIdentity } from "../../src/components/BuildIdentity";
 import {QuietHoursEditor} from "../../src/components/QuietHoursEditor";
 import {AccessibleSwitch as Switch} from "../../src/components/AccessibleSwitch";
 import { SettingsGroup, SettingsRow } from "../../src/components/SettingsRows";
@@ -252,6 +253,7 @@ export default function SettingsScreen() {
           <SettingsGroup title="Information & security">
             {([{label:"What's New (Changelog)",route:'/(public)/changelog'},{label:'Product News',route:'/(public)/news'},{label:'Support',route:'/(public)/support'},{label:'Privacy Policy',route:'/(public)/privacy'},{label:'Terms of Service',route:'/(public)/terms'}] as const).map((item,index)=><SettingsRow key={item.route} first={index===0} label={item.label} onPress={()=>router.push(item.route)}/>)}
           </SettingsGroup>
+          <BuildIdentity />
           <SettingsGroup title="Danger zone"><SettingsRow first label="Delete Account & Revoke Access" detail="Permanently remove your account and revoke GitHub access" icon="trash-outline" danger onPress={()=>router.push('/account/delete')}/></SettingsGroup>
         </ScrollView>
       )}

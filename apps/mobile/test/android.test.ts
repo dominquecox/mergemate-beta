@@ -101,7 +101,9 @@ describe("MM-053 Android app configuration & parity", () => {
   });
 
   it("defines EAS build profiles for android-dev (APK), android-preview (AAB), and android-production (AAB)", () => {
-    expect(easJson.cli.appVersionSource).toBe("local");
+    expect(easJson.cli.appVersionSource).toBe("remote");
+    expect(easJson.build["ios-dev"].autoIncrement).toBe(true);
+    expect(easJson.build["android-dev"].autoIncrement).toBe(true);
     expect(appJson.expo.version).toBe("0.2.0");
     expect(appJson.expo.ios.buildNumber).toBe("1");
     expect(appJson.expo.android.versionCode).toBe(2);

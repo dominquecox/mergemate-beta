@@ -1,4 +1,5 @@
 import type { ConfigContext, ExpoConfig } from "expo/config";
+import { execFileSync } from "node:child_process";
 import appJson from "./app.json";
 
 export const ANDROID_PACKAGE_PROD = "dev.mergemate.app";
@@ -29,6 +30,22 @@ export function assertAccessTokenAllowed(env: Record<string, string | undefined>
   }
 }
 
+/** Embedded at config evaluation, including EAS's archived build environment. */
+export function resolveBuildCommit(env: Record<string, string | undefined> = process.env): string {
+  const supplied = env.EAS_BUILD_GIT_COMMIT_HASH;
+  if (supplied) {
+    if (!/^[a-f0-9]{40}$/i.test(supplied)) throw new Error("Invalid EAS build commit");
+    return supplied.toLowerCase();
+  }
+  try {
+    const commit = execFileSync("git", ["rev-parse", "HEAD"], { cwd: __dirname, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim();
+    return /^[a-f0-9]{40}$/i.test(commit) ? commit.toLowerCase() : "unavailable";
+  } catch {
+    if (env.EAS_BUILD === "true") throw new Error("Native build requires source commit metadata");
+    return "unavailable";
+  }
+}
+
 export default ({ config }: ConfigContext): ExpoConfig => {
   assertAccessTokenAllowed();
   const variant = process.env.APP_VARIANT;
@@ -38,6 +55,7 @@ export default ({ config }: ConfigContext): ExpoConfig => {
     ...base,
     ...config,
     name: resolveAppName(variant),
+    extra: { ...base.extra, ...config.extra, buildCommit: resolveBuildCommit() },
     ios: { ...base.ios, ...config.ios, associatedDomains: [`applinks:${host}`] },
     android: {
       ...base.android,
