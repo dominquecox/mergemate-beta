@@ -20,7 +20,7 @@ export function AgentRunPanel({ run, cancelling, onCancel, onRetry }: { run: Wor
       </View>
       <Text accessibilityRole="header" style={[typography.title2, { color: colors.text }]}>{run.definition.name}</Text>
       <Text style={[typography.footnote, { color: colors.textSecondary }]}>{complete} of {run.steps.length} steps finished · {run.definition.target.owner}/{run.definition.target.repo}</Text>
-      <Text selectable style={[typography.code, { color: colors.textSecondary, fontSize: 11 }]}>Commit {run.headSha}</Text>
+      <Text selectable style={[typography.code, { color: colors.textSecondary, fontSize: 11 }]}>Pinned target commit {run.headSha}</Text>
       <Text selectable style={[typography.caption, { color: colors.textSecondary }]}>Run {run.id}</Text>
       {!!run.error && <Text accessibilityRole="alert" style={[typography.footnote, { color: colors.riskHigh }]}>{run.error}</Text>}
       {isRunActive(run.status) ? <Button title="Cancel run" variant="secondary" loading={cancelling} onPress={onCancel} /> : ['failed','blocked','cancelled'].includes(run.status) ? <Button title="Review and retry workflow" variant="secondary" onPress={onRetry} /> : null}

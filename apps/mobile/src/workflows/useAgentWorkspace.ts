@@ -64,6 +64,7 @@ export function useAgentWorkspace(account: string, target: WorkflowTarget | null
     return () => { current = false; request.abort(); done(request); };
   }, [client, refreshKey]);
   const receive = useCallback((run: WorkflowRun) => {
+    setError('');
     setSelectedRun(old => adoptRunUpdate(old, run));
     setRuns(old => { const prior = old.find(value => value.id === run.id); return [adoptRunUpdate(prior ?? null, run), ...old.filter(value => value.id !== run.id)].slice(0, 100); });
   }, []);
