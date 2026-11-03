@@ -105,16 +105,26 @@ function InboxWorkspace({initialFilter}:{initialFilter:NotificationFilter}) {
   };
 
   const tabNodes=useRef(new Map<string,HTMLElement>()),chooseTab=useRef(selectFilter);chooseTab.current=selectFilter;
-  useEffect(()=>{
-    if(Platform.OS!=='web')return;
-    const tabs:NotificationFilter[]=['all','review','mentions','mine'];const cleanup:(()=>void)[]=[];
-    for(const [index,tab] of tabs.entries()){
-      const node=tabNodes.current.get(tab);if(!node)continue;
-      const key=(event:KeyboardEvent)=>{let next=index;if(event.key==='ArrowRight')next=(index+1)%4;else if(event.key==='ArrowLeft')next=(index+3)%4;else if(event.key==='Home')next=0;else if(event.key==='End')next=3;else return;event.preventDefault();const value=tabs[next];if(value){chooseTab.current(value);tabNodes.current.get(value)?.focus();}};
-      node.addEventListener('keydown',key);cleanup.push(()=>node.removeEventListener('keydown',key));
-    }
-    return()=>{for(const remove of cleanup)remove();};
-  },[]);
+  // Header tabs mount after the paged list loads, so bind to their actual DOM lifetime.
+  const bindFilterTab=(tab:NotificationFilter,node:unknown,selected:boolean)=>{
+    const old=tabNodes.current.get(tab);
+    if(old){old.onkeydown=null;tabNodes.current.delete(tab);}
+    if(Platform.OS!=='web'||typeof HTMLElement==='undefined'||!(node instanceof HTMLElement))return;
+    node.tabIndex=selected?0:-1;
+    const tabs:NotificationFilter[]=['all','review','mentions','mine'],index=tabs.indexOf(tab);
+    node.onkeydown=(event:KeyboardEvent)=>{
+      let next=index;
+      if(event.key==='ArrowRight')next=(index+1)%4;
+      else if(event.key==='ArrowLeft')next=(index+3)%4;
+      else if(event.key==='Home')next=0;
+      else if(event.key==='End')next=3;
+      else return;
+      event.preventDefault();const value=tabs[next];
+      if(value){chooseTab.current(value);tabNodes.current.get(value)?.focus();}
+    };
+    tabNodes.current.set(tab,node);
+  };
+  useEffect(()=>()=>{for(const node of tabNodes.current.values())node.onkeydown=null;tabNodes.current.clear();},[]);
 
   const navigateToPr = (item: Notification) => {
     const parts = item.repo.split("/");
@@ -182,31 +192,13 @@ function InboxWorkspace({initialFilter}:{initialFilter:NotificationFilter}) {
         </View>
       )}
 
-      {isLoading ? (
-        <LoadingState
-          title="Loading your inbox..."
-          message="Fetching accessible pull requests and your Inbox state."
-        />
-      ) : error && sourceItems.length===0 ? (
-        <ErrorState
-          title="Could not load your inbox"
-          message={error}
-          onRetry={hasMore?more:fetchItems}
-        />
-      ) : items.length === 0 ? (
-        <View style={{flex:1}}><EmptyState
-          icon="checkmark-done-outline"
-          title={hasMore?"More results are available":"Inbox Zero"}
-          message={hasMore?"No visible items on this page. Load more to continue checking your queue.":"No pull requests need your attention in this view."}
-          actionTitle={hasMore?"Load more pull requests":undefined}
-          onAction={hasMore?more:undefined}
-        /></View>
-      ) : (
         <FlatList
           ref={listRef}
           onScroll={event=>{if(listActive.current)scrollOffset.current=event.nativeEvent.contentOffset.y;}} scrollEventThrottle={16}
           key={`${isDesktop?'desktop':'phone'}:${grouped?'grouped':'flat'}`} numColumns={isDesktop&&!grouped?2:1} columnWrapperStyle={isDesktop&&!grouped?{gap:16}:undefined}
-          data={rows} keyExtractor={row=>row.type==='header'?`repo:${row.repo}`:row.item.id} initialNumToRender={8} maxToRenderPerBatch={8} windowSize={5}
+          data={isLoading?[]:rows}
+          ListEmptyComponent={isLoading?<LoadingState title="Loading your inbox..." message="Fetching accessible pull requests and your Inbox state."/>:error?<ErrorState title="Could not load your inbox" message={error} onRetry={hasMore?more:fetchItems}/>:<EmptyState icon="checkmark-done-outline" title={hasMore?"More results are available":"Inbox Zero"} message={hasMore?"No visible items on this page. Load more to continue checking your queue.":"No pull requests need your attention in this view."} actionTitle={hasMore?"Load more pull requests":undefined} onAction={hasMore?more:undefined}/>}
+          keyExtractor={row=>row.type==='header'?`repo:${row.repo}`:row.item.id} initialNumToRender={8} maxToRenderPerBatch={8} windowSize={5}
           contentContainerStyle={{padding:isDesktop?24:spacing.base,paddingBottom:80}}
           refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} tintColor={colors.brandLight}/>}
           onEndReached={()=>{if(!error)void more();}} onEndReachedThreshold={0.4}
@@ -226,7 +218,7 @@ function InboxWorkspace({initialFilter}:{initialFilter:NotificationFilter}) {
           return (
             <TouchableOpacity
               key={tab}
-              ref={node=>{if(Platform.OS==='web'&&typeof HTMLElement!=='undefined'&&node instanceof HTMLElement){node.tabIndex=isSelected?0:-1;tabNodes.current.set(tab,node);}}}
+              ref={node=>bindFilterTab(tab,node,isSelected)}
               aria-selected={isSelected}
               onPress={() => selectFilter(tab)}
               style={[
@@ -367,7 +359,6 @@ function InboxWorkspace({initialFilter}:{initialFilter:NotificationFilter}) {
               </View>
 ))(row.item)}
         />
-      )}
     </View>
   );
 }

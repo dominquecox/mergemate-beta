@@ -36,31 +36,33 @@ function PlaybooksWorkspace({ account }: { account: string }) {
   const [completed, setCompleted] = useState<ReviewStepId[]>([]);
   const alive = useRef(true);
   const saveLock = useRef(false);
+  useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
   useEffect(() => {
-    alive.current = true; setLoading(true); setLoadError('');
+    let current = true;
+    setLoading(true); setLoadError(''); setRunning(false); setCompleted([]);
     StorageService.getReviewPlaybook(account).then(value => {
-      if (!alive.current) return;
+      if (!current) return;
       const parsed = parsePlaybook(value);
       if (value && !parsed) setLoadError('Your saved playbook is invalid. Choose a template and save to replace it.');
       if (parsed) { setSaved(parsed); setDraft(parsed); }
-    }).catch(() => { if (alive.current) setLoadError('Could not load your local playbook. You can still preview templates; saving will retry local storage.'); })
-      .finally(() => { if (alive.current) setLoading(false); });
-    return () => { alive.current = false; };
+    }).catch(() => { if (current) setLoadError('Could not load your local playbook. You can still preview templates; saving will retry local storage.'); })
+      .finally(() => { if (current) setLoading(false); });
+    return () => { current = false; };
   }, [account, reload]);
   const resetRun = () => { setRunning(false); setCompleted([]); };
   const choose = (playbook: ReviewPlaybook) => {
-    if (saveLock.current) return;
+    if (saveLock.current || loading) return;
     setDraft({ title: playbook.title, steps: [...playbook.steps] }); setEditing(false); resetRun(); setError(''); setMessage('');
   };
   const change = (next: ReviewPlaybook) => { setDraft(next); resetRun(); setMessage(''); };
   const save = async () => {
     const parsed = parsePlaybook(draft);
     if (!parsed) { setError('Use a name up to 48 characters and choose at least two review steps.'); return; }
-    if (saveLock.current) return;
+    if (saveLock.current || loading) return;
     saveLock.current = true; setSaving(true); setError(''); setMessage('');
     try {
       await StorageService.setReviewPlaybook(account, parsed);
-      if (alive.current) { setSaved(parsed); setDraft(parsed); setEditing(false); setMessage('Playbook saved on this device.'); }
+      if (alive.current) { setLoadError(''); setSaved(parsed); setDraft(parsed); setEditing(false); setMessage('Playbook saved on this device.'); }
     } catch { if (alive.current) setError('Could not save locally. Your draft is still here; try again.'); }
     finally { saveLock.current = false; if (alive.current) setSaving(false); }
   };
@@ -86,19 +88,19 @@ function PlaybooksWorkspace({ account }: { account: string }) {
             </View>
             <Text style={[typography.footnote, { color: colors.textSecondary, marginTop: 12 }]}>{template.description}</Text>
           </Pressable>)}
-          {saved && <Button title={`Your saved flow: ${saved.title}`} accessibilityLabel="Open saved playbook" variant="secondary" disabled={saving} onPress={() => choose(saved)} />}
+          {saved && <Button title={`Your saved flow: ${saved.title}`} accessibilityLabel="Open saved playbook" variant="secondary" disabled={saving || loading} onPress={() => choose(saved)} />}
           <View style={{ padding: 16, gap: 6 }}><Icon name="lock-closed-outline" size={17} color={colors.textSecondary} /><Text style={[typography.caption, { color: colors.textSecondary }]}>One saved playbook per account on this device. Removed on sign-out. No PR contents or completion history are saved.</Text></View>
         </View>
         <View style={{ flex: 1, width: '100%', minWidth: 0, gap: 16 }}>
           <View style={[surface, { backgroundColor: colors.brandSubtle, borderColor: colors.brandMuted, gap: 14 }]}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}><Icon name="git-network-outline" size={20} color={colors.brandLight} /><Text style={[typography.caption, { color: colors.brandLight }]}>HUMAN-LED REVIEW FLOW</Text></View>
-            {editing ? <TextInput accessibilityLabel="Playbook name" editable={!saving} value={draft.title} maxLength={48} onChangeText={title => change({ ...draft, title })} style={inputStyle} /> : <Text accessibilityRole="header" style={[typography.title2, { color: colors.text }]}>{draft.title}</Text>}
+            {editing ? <TextInput accessibilityLabel="Playbook name" editable={!saving && !loading} value={draft.title} maxLength={48} onChangeText={title => change({ ...draft, title })} style={inputStyle} /> : <Text accessibilityRole="header" style={[typography.title2, { color: colors.text }]}>{draft.title}</Text>}
             <Text style={[typography.footnote, { color: colors.textSecondary }]}>{running ? `${completed.length} of ${draft.steps.length} steps checked by you` : 'Context → evidence → a considered decision'}</Text>
           </View>
-          {!!loadError && <ErrorState title="Local playbook unavailable" message={loadError} onRetry={() => setReload(value => value + 1)} />}
+          {!!loadError && !loading && !saving && !editing && <ErrorState title="Local playbook unavailable" message={loadError} onRetry={() => setReload(value => value + 1)} />}
           {loading ? <LoadingState title="Loading playbook..." message="Reading your local preference." /> : editing ? <View style={[surface, { gap: 8 }]}>
             <Text style={[typography.subhead, { color: colors.textSecondary }]}>Choose two or more steps. New selections are added at the end.</Text>
-            {REVIEW_STEPS.map(step => <Pressable key={step.id} disabled={saving} accessibilityRole="checkbox" accessibilityLabel={`Include ${step.title}`} accessibilityState={{ checked: draft.steps.includes(step.id) }} onPress={() => change({ ...draft, steps: draft.steps.includes(step.id) ? draft.steps.filter(id => id !== step.id) : [...draft.steps, step.id] })} style={{ minHeight: 52, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+            {REVIEW_STEPS.map(step => <Pressable key={step.id} disabled={saving || loading} accessibilityRole="checkbox" accessibilityLabel={`Include ${step.title}`} accessibilityState={{ checked: draft.steps.includes(step.id) }} aria-checked={draft.steps.includes(step.id)} onPress={() => change({ ...draft, steps: draft.steps.includes(step.id) ? draft.steps.filter(id => id !== step.id) : [...draft.steps, step.id] })} style={{ minHeight: 52, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
               <Icon name={draft.steps.includes(step.id) ? 'checkbox' : 'square-outline'} size={22} color={colors.brandLight} /><Text style={[typography.body, { color: colors.text, flex: 1 }]}>{step.title}</Text>
             </Pressable>)}
           </View> : draft.steps.length === 0 ? <EmptyState title="Your flow needs a review step" message="Choose at least two steps before saving your playbook." actionTitle="Choose review steps" onAction={() => setEditing(true)} /> : <View>
@@ -108,7 +110,7 @@ function PlaybooksWorkspace({ account }: { account: string }) {
               const checked = completed.includes(id);
               return <View key={id}>
                 <View style={{ height: 22, borderLeftWidth: 1, borderStyle: 'dashed', borderColor: colors.brandLight, marginLeft: 40 }} />
-                <Pressable accessibilityRole="checkbox" accessibilityLabel={`${step.title}, step ${index + 1}`} accessibilityState={{ checked, disabled: !running }} disabled={!running} onPress={() => setCompleted(old => old.includes(id) ? old.filter(value => value !== id) : [...old, id])} style={({ pressed }) => [surface, { padding: 16, flexDirection: 'row', alignItems: 'center', gap: 14, borderColor: checked ? colors.brandLight : colors.border, opacity: pressed ? 0.8 : 1 }]}>
+                <Pressable accessibilityRole="checkbox" accessibilityLabel={`${step.title}, step ${index + 1}`} accessibilityState={{ checked, disabled: !running }} aria-checked={checked} disabled={!running} onPress={() => setCompleted(old => old.includes(id) ? old.filter(value => value !== id) : [...old, id])} style={({ pressed }) => [surface, { padding: 16, flexDirection: 'row', alignItems: 'center', gap: 14, borderColor: checked ? colors.brandLight : colors.border, opacity: pressed ? 0.8 : 1 }]}>
                   <View style={{ width: 44, height: 44, backgroundColor: checked ? colors.brandSubtle : colors.surfaceElevated, borderRadius: 14, alignItems: 'center', justifyContent: 'center' }}><Icon name={checked ? 'checkmark-outline' : step.icon} size={21} color={checked ? colors.brandLight : colors.textSecondary} /></View>
                   <View style={{ flex: 1 }}><Text style={[typography.subhead, { color: colors.text, fontWeight: '600' }]}>{step.title}</Text><Text style={[typography.footnote, { color: colors.textSecondary, marginTop: 4 }]}>{step.detail}</Text></View>
                   <Text style={[typography.code, { color: colors.textSecondary, fontSize: 11 }]}>{String(index + 1).padStart(2, '0')}</Text>
