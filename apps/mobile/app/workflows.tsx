@@ -8,6 +8,8 @@ import { Text } from '../src/components/Text';
 import { Header } from '../src/components/Header';
 import { Icon, type IconName } from '../src/components/Icon';
 import { Button } from '../src/components/Button';
+import { EmptyState } from '../src/components/EmptyState';
+import { ErrorState } from '../src/components/ErrorState';
 import { LoadingState } from '../src/components/LoadingState';
 import { StorageService } from '../src/storage';
 import { PLAYBOOK_TEMPLATES, REVIEW_STEPS, parsePlaybook, parseReviewPr, type ReviewPlaybook, type ReviewStepId } from '../src/workflows/model';
@@ -24,6 +26,8 @@ function PlaybooksWorkspace({ account }: { account: string }) {
   const [saved, setSaved] = useState<ReviewPlaybook | null>(null);
   const [editing, setEditing] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
+  const [reload, setReload] = useState(0);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
@@ -33,16 +37,16 @@ function PlaybooksWorkspace({ account }: { account: string }) {
   const alive = useRef(true);
   const saveLock = useRef(false);
   useEffect(() => {
-    alive.current = true;
+    alive.current = true; setLoading(true); setLoadError('');
     StorageService.getReviewPlaybook(account).then(value => {
       if (!alive.current) return;
       const parsed = parsePlaybook(value);
-      if (value && !parsed) setError('Your saved playbook is invalid. Choose a template and save to replace it.');
+      if (value && !parsed) setLoadError('Your saved playbook is invalid. Choose a template and save to replace it.');
       if (parsed) { setSaved(parsed); setDraft(parsed); }
-    }).catch(() => { if (alive.current) setError('Could not load your local playbook. You can still preview templates; saving will retry local storage.'); })
+    }).catch(() => { if (alive.current) setLoadError('Could not load your local playbook. You can still preview templates; saving will retry local storage.'); })
       .finally(() => { if (alive.current) setLoading(false); });
     return () => { alive.current = false; };
-  }, [account]);
+  }, [account, reload]);
   const resetRun = () => { setRunning(false); setCompleted([]); };
   const choose = (playbook: ReviewPlaybook) => {
     if (saveLock.current) return;
@@ -91,12 +95,13 @@ function PlaybooksWorkspace({ account }: { account: string }) {
             {editing ? <TextInput accessibilityLabel="Playbook name" editable={!saving} value={draft.title} maxLength={48} onChangeText={title => change({ ...draft, title })} style={inputStyle} /> : <Text accessibilityRole="header" style={[typography.title2, { color: colors.text }]}>{draft.title}</Text>}
             <Text style={[typography.footnote, { color: colors.textSecondary }]}>{running ? `${completed.length} of ${draft.steps.length} steps checked by you` : 'Context → evidence → a considered decision'}</Text>
           </View>
+          {!!loadError && <ErrorState title="Local playbook unavailable" message={loadError} onRetry={() => setReload(value => value + 1)} />}
           {loading ? <LoadingState title="Loading playbook..." message="Reading your local preference." /> : editing ? <View style={[surface, { gap: 8 }]}>
             <Text style={[typography.subhead, { color: colors.textSecondary }]}>Choose two or more steps. New selections are added at the end.</Text>
             {REVIEW_STEPS.map(step => <Pressable key={step.id} disabled={saving} accessibilityRole="checkbox" accessibilityLabel={`Include ${step.title}`} accessibilityState={{ checked: draft.steps.includes(step.id) }} onPress={() => change({ ...draft, steps: draft.steps.includes(step.id) ? draft.steps.filter(id => id !== step.id) : [...draft.steps, step.id] })} style={{ minHeight: 52, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
               <Icon name={draft.steps.includes(step.id) ? 'checkbox' : 'square-outline'} size={22} color={colors.brandLight} /><Text style={[typography.body, { color: colors.text, flex: 1 }]}>{step.title}</Text>
             </Pressable>)}
-          </View> : <View>
+          </View> : draft.steps.length === 0 ? <EmptyState title="Your flow needs a review step" message="Choose at least two steps before saving your playbook." actionTitle="Choose review steps" onAction={() => setEditing(true)} /> : <View>
             <View style={{ alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: colors.brand, borderRadius: 9, padding: 10, marginLeft: 20 }}><Icon name="play-outline" size={14} color="#FFFFFF" /><Text style={[typography.caption, { color: '#FFFFFF' }]}>Start with a pull request</Text></View>
             {draft.steps.map((id, index) => {
               const step = REVIEW_STEPS.find(value => value.id === id)!;
