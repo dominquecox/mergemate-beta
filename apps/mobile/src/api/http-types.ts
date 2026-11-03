@@ -24,7 +24,7 @@ export interface HttpApiClientOptions {
 
 export interface RequestOptions<T> {
   signal?:AbortSignal;
-  credentials?: "omit";
+  credentials?: "omit" | "same-origin";
   method?: "GET" | "POST" | "PUT" | "DELETE";
   path: string;
   body?: unknown;

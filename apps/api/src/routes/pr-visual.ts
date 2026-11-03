@@ -18,7 +18,7 @@ export const prVisual=new Hono<AppEnv>().get('/prs/:owner/:repo/:number/visual',
  const {owner,repo,number}=c.req.param(),path=c.req.query('path')??'',side=c.req.query('side');
  if(!safeName(owner)||!safeName(repo)||!/^\d{1,10}$/.test(number)||!path||path.length>500||!['before','after'].includes(side??'')||! /\.(png|jpe?g|webp|svg)$/i.test(path)||path.split('/').some(x=>x==='..'||x==='.'||!x))throw new ApiError('validation_failed','Invalid visual asset.');
  const baseDeps=c.get('deps'),signal=AbortSignal.any([c.req.raw.signal,AbortSignal.timeout(20_000)]);
- const deps:Deps={...baseDeps,fetch:async(input,init)=>{const res=await baseDeps.fetch(input,{...init,signal,redirect:'error'});return new Response(await readBoundedBody(res,4*1024*1024),{status:res.status,headers:res.headers});}};
+ const deps:Deps={...baseDeps,fetch:async(input,init)=>{const res=await baseDeps.fetch(input,{...init,signal,redirect:'error'});const body=await readBoundedBody(res,4*1024*1024);const headers=new Headers(res.headers);headers.delete('content-encoding');headers.delete('content-length');return new Response(body,{status:res.status,headers});}};
  const token=await getAccessToken(c.env,session.userId,baseDeps.now()),base=`/repos/${owner}/${repo}`;
  const pull=await githubGet<Pull>(deps,token,`${base}/pulls/${number}`);
  if(c.req.query('headSha')&&c.req.query('headSha')!==pull.head.sha)throw new ApiError('pr_changed','Pull request changed. Refresh before inspecting assets.');

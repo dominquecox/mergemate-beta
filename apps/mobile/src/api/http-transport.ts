@@ -251,5 +251,5 @@ export abstract class HttpTransport {
     return operation();
   }
 
-  protected readonly featureFlags=new FeatureFlagCache(()=>this.request({path:"/flags",auth:false,credentials:"omit",schema:z.unknown()}));
+  protected readonly featureFlags=new FeatureFlagCache(()=>this.request({path:"/flags",auth:false,credentials:this.web && this.baseUrl==="/__api"?"same-origin":"omit",schema:z.unknown()}));
 }

@@ -4,7 +4,7 @@ import {testContext,json} from './helpers';
 import {appFor,signIn} from './sign-in';
 const sha='a'.repeat(40),root='https://api.github.com/repos/acme/app';
 async function setup(){const ctx=testContext(),{headers}=await signIn(ctx,'ios');ctx.net.on('GET',root+'/pulls/7',()=>json({head:{sha,repo:{full_name:'acme/app'}}}));ctx.net.on('GET',root+'/pulls/7/files?per_page=100&page=1',()=>json([{filename:'apps/mobile/src/view.ts'}]));let reads=0;
- const content=(pkg:object)=>json({encoding:'base64',size:JSON.stringify(pkg).length,content:btoa(JSON.stringify(pkg))});
+ const content=(pkg:object)=>new Response(JSON.stringify({encoding:'base64',size:JSON.stringify(pkg).length,content:btoa(JSON.stringify(pkg))}),{status:200,headers:{'content-type':'application/json','content-encoding':'gzip'}});
  ctx.net.on('GET',root+'/contents/package.json?ref='+sha,()=>{reads++;return content({name:'suite',workspaces:['apps/*'],dependencies:{rootlib:'private-registry-value'},registryAuth:'credential-not-returned'});});
  ctx.net.on('GET',root+'/contents/apps/mobile/package.json?ref='+sha,()=>{reads++;return content({name:'mobile',dependencies:{react:'private-version'},devDependencies:{typescript:'private-version'}});});return {call:appFor(ctx),headers,get reads(){return reads;}};
 }

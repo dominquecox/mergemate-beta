@@ -11,7 +11,7 @@ export const prDependencies=new Hono<AppEnv>().get('/prs/:owner/:repo/:number/de
  c.header('Cache-Control','private, no-store');const session=c.get('session');if(!session.userId||session.demo)throw new ApiError('forbidden','Dependency context requires a real account.');
  const {owner,repo,number}=c.req.param();if(!name(owner)||!name(repo)||!/^[1-9]\d{0,9}$/.test(number))throw new ApiError('validation_failed','Invalid PR reference.');
  const original=c.get('deps'),signal=AbortSignal.any([c.req.raw.signal,AbortSignal.timeout(20_000)]);
- const deps:Deps={...original,fetch:async(input,init)=>{const res=await original.fetch(input,{...init,signal,redirect:'error'});return new Response(await readBoundedBody(res,1024*1024),{status:res.status,headers:res.headers});}};
+ const deps:Deps={...original,fetch:async(input,init)=>{const res=await original.fetch(input,{...init,signal,redirect:'error'});const body=await readBoundedBody(res,1024*1024);const headers=new Headers(res.headers);headers.delete('content-encoding');headers.delete('content-length');return new Response(body,{status:res.status,headers});}};
  const token=await getAccessToken(c.env,session.userId,original.now()),base=`/repos/${owner}/${repo}`;
  const pull=await githubGet<{head:{sha:string;repo:{full_name:string}|null}}>(deps,token,`${base}/pulls/${number}`);
  if(c.req.query('headSha')&&c.req.query('headSha')!==pull.head.sha)throw new ApiError('pr_changed','Refresh the PR before scanning dependencies.');

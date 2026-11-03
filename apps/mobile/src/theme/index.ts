@@ -7,6 +7,10 @@ export const palette = {
     brand:'#4F46E5', brandLight:'#A5B4FC', brandMuted:'#3730A3', brandSubtle:'#202947',
     riskLow:'#6EE7B7', riskLowBg:'#123A32', riskMedium:'#FCD34D', riskMediumBg:'#3B2D18',
     riskHigh:'#FCA5A5', riskHighBg:'#42212A', secretWarning:'#FDA4AF', secretWarningBg:'#4C0519',
+    statusGood:'#6EE7B7', statusGoodBg:'#123A32',
+    statusWarning:'#FCD34D', statusWarningBg:'#3B2D18',
+    statusAlert:'#FCA5A5', statusAlertBg:'#42212A',
+    statusInfo:'#7DD3FC', statusInfoBg:'#0C3652',
     laneNeedsYou:'#4F46E5', laneFyi:'#0369A1', laneIgnore:'#94A3B8', demoBadge:'#FBBF24', demoBadgeBg:'#451A03',
   },
   light: {
@@ -16,6 +20,10 @@ export const palette = {
     brand:'#4F46E5', brandLight:'#4F46E5', brandSubtle:'#EEF2FF', brandMuted:'#E0E7FF',
     riskLow:'#047857', riskLowBg:'#D1FAE5', riskMedium:'#92400E', riskMediumBg:'#FEF3C7',
     riskHigh:'#B91C1C', riskHighBg:'#FEE2E2', secretWarning:'#9F1239', secretWarningBg:'#FFE4E6',
+    statusGood:'#047857', statusGoodBg:'#D1FAE5',
+    statusWarning:'#92400E', statusWarningBg:'#FEF3C7',
+    statusAlert:'#B91C1C', statusAlertBg:'#FEE2E2',
+    statusInfo:'#0369A1', statusInfoBg:'#E0F2FE',
     laneNeedsYou:'#4F46E5', laneFyi:'#0369A1', laneIgnore:'#475569', demoBadge:'#92400E', demoBadgeBg:'#FEF3C7',
   },
 };

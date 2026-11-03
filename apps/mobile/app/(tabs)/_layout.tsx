@@ -3,12 +3,14 @@ import { Platform } from "react-native";
 import { Tabs } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "../../src/context/ThemeContext";
+import { useAlerts } from "../../src/context/AlertsContext";
 import { useLayout } from "../../src/layout/useLayout";
 import { NAV_ITEMS } from "../../src/navigation/items";
 import { Icon } from "../../src/components/Icon";
 
 export default function TabsLayout() {
   const { colors, typography } = useTheme();
+  const { unreadCount } = useAlerts();
   // On desktop the sidebar is the navigation, so the bottom tab bar goes away.
   const { isDesktop } = useLayout();
   const insets = useSafeAreaInsets();
@@ -54,6 +56,13 @@ export default function TabsLayout() {
           options={{
             title: item.label,
             tabBarAccessibilityLabel: item.tabLabel,
+            tabBarBadge: item.name === "notifications" && unreadCount > 0 ? (unreadCount > 99 ? "99+" : unreadCount) : undefined,
+            tabBarBadgeStyle: {
+              backgroundColor: colors.statusAlertBg,
+              color: colors.statusAlert,
+              fontSize: 10,
+              fontWeight: "700",
+            },
             tabBarIcon: ({ color, focused }) => (
               <Icon name={focused ? item.iconActive : item.icon} size={22} color={color as string} />
             ),

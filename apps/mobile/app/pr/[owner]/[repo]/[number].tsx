@@ -1,4 +1,6 @@
 import {QaEvidenceCard} from "../../../../src/components/QaEvidenceCard";
+import {InfoTip} from "../../../../src/components/InfoTip";
+import {AccessGuidanceBanner} from "../../../../src/components/AccessGuidanceBanner";
 import {useNoteKeyboardScroll} from "../../../../src/hooks/useNoteKeyboardScroll";
 import {MetaTelemetryModal} from '../../../../src/components/MetaTelemetryModal';
 import {useAgentGuardrails} from '../../../../src/hooks/useAgentGuardrails';
@@ -135,13 +137,21 @@ function PrWorkspace({owner,repo,number}:{owner:string;repo:string;number:string
       ) : (
         <>
           <ScrollView onContentSizeChange={noteKeyboard.onContentSizeChange} keyboardDismissMode={Platform.OS==="ios"?"interactive":"on-drag"} keyboardShouldPersistTaps="handled" testID="pr-workspace-scroll" ref={scroll} onScroll={event=>{scrollOffset.current=event.nativeEvent.contentOffset.y;}} scrollEventThrottle={16} contentContainerStyle={{ padding:isDesktop?24:spacing.base, paddingBottom:24 }}>
-            {!!(error||linkError)&&<Text accessibilityRole="alert" style={{color:colors.riskHigh,padding:12}}>{error??linkError}</Text>}
+            <AccessGuidanceBanner error={error ?? linkError} compact />
+            {!!(error||linkError)&&<Text accessibilityRole="alert" style={{color:colors.statusAlert,padding:12}}>{error??linkError}</Text>}
             {isDemo&&tour==="1"&&!tourClosed&&<DemoTour onClose={()=>setTourClosed(true)}/>}
-            {/* Top Bento Row on Desktop: PR Header + Agent Workflow Dispatch */}
+            {/* Top Bento Row on Desktop: PR Header + Zero-Whitespace Agent & Workspace Control Card */}
             <View style={isDesktop ? styles.topBentoHeaderRow : { gap: 10 }}>
               {/* Unified Modern PR Header Surface */}
               <View style={[styles.headerCard, { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: 16, padding: 16, flex: isDesktop ? 7 : undefined }]}>
-                <Text style={[typography.code,{color:colors.brandLight,fontSize:10,letterSpacing:1.1,marginBottom:8}]}>PR WORKSPACE</Text>
+                <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+                  <Text style={[typography.code,{color:colors.brandLight,fontSize:10,letterSpacing:1.1}]}>PR WORKSPACE</Text>
+                  <InfoTip
+                    title="PR Workspace"
+                    body="Displays live pull request status, merge readiness, branch lineage, diff metrics, and model telemetry. Tap Refresh to pull the latest head commit and check states from GitHub."
+                    size={15}
+                  />
+                </View>
                 <View style={styles.topRow}>
                   <TouchableOpacity onPress={()=>void loadPr()} disabled={isRefreshing} accessibilityRole="button" accessibilityLabel="Refresh workspace" style={{minHeight:44,minWidth:44,alignItems:"center",justifyContent:"center"}}><Icon name="refresh-outline" size={18} color={colors.textMuted}/></TouchableOpacity>
                   <View style={{ flexDirection: "row", alignItems: "center", gap: 6, flex: 1, minWidth: 0, flexWrap: "wrap" }}>
@@ -177,9 +187,167 @@ function PrWorkspace({owner,repo,number}:{owner:string;repo:string;number:string
                 />
               </View>
 
-              <View style={[isDesktop ? { flex: 5, gap: 10 } : { gap: 10 }]}>
-                <TouchableOpacity accessibilityRole="button" accessibilityLabel="Configure an agent workflow for this pull request" onPress={()=>router.push({pathname:'/workflows',params:{target:detail.htmlUrl,mode:'review'}})} style={{minHeight:56,padding:14,borderRadius:16,backgroundColor:colors.brandSubtle,borderWidth:1,borderColor:colors.brandMuted,flexDirection:'row',alignItems:'center',gap:12}}><Icon name="git-network-outline" size={20} color={colors.brandLight}/><View style={{flex:1}}><Text style={[typography.subhead,{color:colors.text,fontWeight:'700'}]}>Put agents on the next step</Text><Text style={[typography.caption,{color:colors.textSecondary,marginTop:2}]}>Configure a workflow with this PR's context</Text></View><Icon name="arrow-forward-outline" size={16} color={colors.brandLight}/></TouchableOpacity>
-                <PrivacyStrip onOpenSettings={()=>router.push("/(tabs)/settings")}/>
+              {/* Right Bento Column: Full-Height Unified Agent & Access Control Card */}
+              <View
+                style={[
+                  {
+                    backgroundColor: colors.surface,
+                    borderColor: colors.brandMuted,
+                    borderWidth: 1,
+                    borderRadius: 16,
+                    padding: 14,
+                    justifyContent: "space-between",
+                    gap: 10,
+                  },
+                  isDesktop ? { flex: 5 } : undefined,
+                ]}
+              >
+                <View style={{ gap: 8 }}>
+                  <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                      <Icon name="git-network-outline" size={15} color={colors.brandLight} />
+                      <Text style={[typography.code, { color: colors.brandLight, fontSize: 10, letterSpacing: 1 }]}>
+                        PUT AGENTS ON THE NEXT STEP
+                      </Text>
+                    </View>
+                    <InfoTip
+                      title="Agent Workflow Dispatch"
+                      body="Launch a pre-configured review or coding workflow bound to this pull request, inspect impacted blast-radius domains, and verify AI & GitHub access controls."
+                      size={15}
+                    />
+                  </View>
+
+                  <TouchableOpacity
+                    accessibilityRole="button"
+                    accessibilityLabel="Configure an agent workflow for this pull request"
+                    onPress={() => router.push({ pathname: "/workflows", params: { target: detail.htmlUrl, mode: "review", template: "review" } })}
+                    style={{
+                      minHeight: 44,
+                      paddingHorizontal: 12,
+                      paddingVertical: 8,
+                      borderRadius: 10,
+                      backgroundColor: colors.brandSubtle,
+                      borderWidth: 1,
+                      borderColor: colors.brandMuted,
+                      flexDirection: "row",
+                      alignItems: "center",
+                      gap: 10,
+                    }}
+                  >
+                    <Icon name="sparkles-outline" size={17} color={colors.brandLight} />
+                    <View style={{ flex: 1 }}>
+                      <Text style={[typography.caption, { color: colors.text, fontWeight: "700" }]}>
+                        Configure workflow with this PR&apos;s context
+                      </Text>
+                      <Text style={[typography.caption, { color: colors.textSecondary, fontSize: 11 }]}>
+                        {detail.owner}/{detail.repo} #{detail.number} · Visual node graph
+                      </Text>
+                    </View>
+                    <Icon name="arrow-forward-outline" size={15} color={colors.brandLight} />
+                  </TouchableOpacity>
+
+                  {/* 3 Quick-Launch Preset Pills */}
+                  <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
+                    {[
+                      { label: "Risk & QA Flow", template: "review", mode: "review" as const, icon: "shield-checkmark-outline" as const },
+                      { label: "Sensitive Audit", template: "security", mode: "review" as const, icon: "lock-closed-outline" as const },
+                      { label: "Tested Fix", template: "fix_issue", mode: "code_fix" as const, icon: "construct-outline" as const },
+                    ].map((preset) => (
+                      <TouchableOpacity
+                        key={preset.template}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Run ${preset.label} on this PR`}
+                        onPress={() =>
+                          router.push({
+                            pathname: "/workflows",
+                            params: { target: detail.htmlUrl, mode: preset.mode, template: preset.template },
+                          })
+                        }
+                        style={{
+                          minHeight: 28,
+                          paddingHorizontal: 8,
+                          paddingVertical: 4,
+                          borderRadius: 8,
+                          backgroundColor: colors.surfaceElevated,
+                          borderWidth: 1,
+                          borderColor: colors.border,
+                          flexDirection: "row",
+                          alignItems: "center",
+                          gap: 5,
+                        }}
+                      >
+                        <Icon name={preset.icon} size={12} color={colors.brandLight} />
+                        <Text style={[typography.caption, { color: colors.text, fontSize: 11, fontWeight: "600" }]}>
+                          {preset.label}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </View>
+
+                {/* Live AI & GitHub Access Status Bar + Compact Blast Radius & Privacy */}
+                <View style={{ gap: 8, paddingTop: 6, borderTopWidth: 1, borderTopColor: colors.border }}>
+                  <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 6 }}>
+                    <View
+                      style={{
+                        flexDirection: "row",
+                        alignItems: "center",
+                        gap: 5,
+                        paddingHorizontal: 8,
+                        paddingVertical: 3,
+                        borderRadius: 999,
+                        backgroundColor: colors.statusGoodBg,
+                        borderWidth: 1,
+                        borderColor: colors.statusGood,
+                      }}
+                    >
+                      <Icon name="checkmark-circle" size={12} color={colors.statusGood} />
+                      <Text style={[typography.caption, { color: colors.statusGood, fontSize: 10, fontWeight: "700" }]}>
+                        GitHub Connected
+                      </Text>
+                    </View>
+                    <TouchableOpacity
+                      accessibilityRole="button"
+                      accessibilityLabel="Manage AI processing consent"
+                      onPress={() => router.push("/(tabs)/settings")}
+                      style={{
+                        flexDirection: "row",
+                        alignItems: "center",
+                        gap: 5,
+                        paddingHorizontal: 8,
+                        paddingVertical: 3,
+                        borderRadius: 999,
+                        backgroundColor: aiConsentGranted && aiSummaries ? colors.statusGoodBg : colors.statusWarningBg,
+                        borderWidth: 1,
+                        borderColor: aiConsentGranted && aiSummaries ? colors.statusGood : colors.statusWarning,
+                      }}
+                    >
+                      <Icon
+                        name={aiConsentGranted && aiSummaries ? "sparkles" : "warning-outline"}
+                        size={12}
+                        color={aiConsentGranted && aiSummaries ? colors.statusGood : colors.statusWarning}
+                      />
+                      <Text
+                        style={[
+                          typography.caption,
+                          {
+                            color: aiConsentGranted && aiSummaries ? colors.statusGood : colors.statusWarning,
+                            fontSize: 10,
+                            fontWeight: "700",
+                          },
+                        ]}
+                      >
+                        {aiConsentGranted && aiSummaries ? "AI Insights Active" : "Enable AI Insights →"}
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+
+                  {isDesktop && detail.files && detail.files.length > 0 && (
+                    <BlastRadiusChips files={detail.files} />
+                  )}
+
+                  <PrivacyStrip onOpenSettings={()=>router.push("/(tabs)/settings")}/>
+                </View>
               </View>
             </View>
             <PrSecretBanner detail={detail}/>
@@ -222,7 +390,7 @@ function PrWorkspace({owner,repo,number}:{owner:string;repo:string;number:string
               const renderChecksCard = () => <QaEvidenceCard key={detail.headSha??"unknown"} repository={`${owner}/${repo}`} number={Number(number)} headSha={detail.headSha} checks={detail.checks} sample={isDemo} runnable={detail.status === "open" || detail.status === "draft"} cursor={checkCursor} busy={pageBusy.checks} error={pageError.checks} capped={capped.checks} onLoadMore={() => loadPage("checks")} onOpen={url => void openLink(url)}/>;
 
               if (!hasAiInsights) {
-                const hasBlast = Boolean(detail.files && detail.files.length > 0);
+                const hasBlast = Boolean(!isDesktop && detail.files && detail.files.length > 0);
                 const hasChecks = true;
                 if (!hasBlast && !hasChecks) return null;
 
@@ -237,8 +405,8 @@ function PrWorkspace({owner,repo,number}:{owner:string;repo:string;number:string
               return (
                 <View style={isDesktop ? styles.analysisGrid : undefined}>
                   <View style={isDesktop ? { flex: 1.45, minWidth: 0 } : undefined}>
-                    {/* Blast Radius Analysis (Impact Domains) */}
-                    {detail.files && detail.files.length > 0 && (
+                    {/* Blast Radius Analysis (Impact Domains on Mobile; on Desktop rendered in Top-Right Control Card) */}
+                    {!isDesktop && detail.files && detail.files.length > 0 && (
                       <BlastRadiusChips files={detail.files} />
                     )}
 
@@ -379,9 +547,16 @@ function PrWorkspace({owner,repo,number}:{owner:string;repo:string;number:string
             {/* Changed Files List */}
             <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.lg, marginTop: spacing.sm, flex: isDesktop ? 1.45 : undefined, minWidth: 0 }]}>
               <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-                <Text style={[typography.headline, { color: colors.text }]} accessibilityRole="header">
-                  Files Changed ({detail.changedFilesCount})
-                </Text>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                  <Text style={[typography.headline, { color: colors.text }]} accessibilityRole="header">
+                    Files Changed ({detail.changedFilesCount})
+                  </Text>
+                  <InfoTip
+                    title="Files Changed"
+                    body="Tap any file row to expand or collapse its line-numbered diff hunk. Diff lines wrap by default on mobile and desktop."
+                    size={15}
+                  />
+                </View>
                 {detail.files.length > 0 && (
                   <Text style={[typography.caption, { color: colors.textMuted }]}>
                     +{detail.additions} / -{detail.deletions}
@@ -431,7 +606,14 @@ function PrWorkspace({owner,repo,number}:{owner:string;repo:string;number:string
             </View>
 
             <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.lg, marginTop: isDesktop ? spacing.sm : 16, flex: isDesktop ? 1 : undefined, minWidth: 0 }]}>
-              <Text accessibilityRole="header" style={[typography.headline, { color: colors.text }]}>Conversation</Text>
+              <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+                <Text accessibilityRole="header" style={[typography.headline, { color: colors.text }]}>Conversation</Text>
+                <InfoTip
+                  title="PR Conversation & Reviews"
+                  body="Groups general pull request comments, submitted reviews, and inline file review threads. Tap any group header to expand or collapse."
+                  size={15}
+                />
+              </View>
               {discussionGroups(detail.comments).map((group) => <View key={group.id} style={{ paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: colors.border }}><TouchableOpacity accessibilityRole="button" accessibilityLabel={group.kind === "conversation" ? "Toggle PR conversation" : group.kind === "review-summary" ? `Toggle submitted review by ${group.comments[0]?.author ?? "reviewer"}` : `Toggle review discussion for ${group.path ?? "file unavailable"}${group.line ? ` line ${group.line}` : ""}`} accessibilityState={{ expanded: !collapsedThreads.includes(group.id) }} aria-expanded={!collapsedThreads.includes(group.id)} onPress={() => setCollapsedThreads((old) => old.includes(group.id) ? old.filter((id) => id !== group.id) : [...old, group.id])} style={{ minHeight: 44, justifyContent: "center" }}><Text style={[typography.subhead, { color: colors.text }]}>{group.kind === "conversation" ? "PR conversation" : group.kind === "review-summary" ? `Review: ${(group.reviewState ?? "submitted").toLowerCase().replaceAll("_", " ")}` : `Review discussion · ${group.path ?? "file unavailable"}${group.line ? `:${group.line}` : ""}${group.outdated ? " (outdated)" : ""}`}</Text></TouchableOpacity>{!collapsedThreads.includes(group.id) && group.comments.map((comment) => <View key={comment.id} style={{ paddingVertical: 8 }}><Text style={[typography.footnote, { color: colors.textSecondary }]}>@{comment.author} · {relativeTime(comment.createdAt)}</Text><Text selectable style={[typography.body, { color: colors.text, marginTop: 4 }]}>{comment.body || "No review message."}</Text></View>)}</View>)}
               {commentCursor ? (
                 <View style={{ marginTop: 12, alignItems: "center" }}>

@@ -1,5 +1,8 @@
 import { ExperienceIntro } from "../../src/components/ExperienceDesign";
 import { BuildIdentity } from "../../src/components/BuildIdentity";
+import { InfoTip } from "../../src/components/InfoTip";
+import { AccessGuidanceBanner } from "../../src/components/AccessGuidanceBanner";
+import { useAlerts } from "../../src/context/AlertsContext";
 import {QuietHoursEditor} from "../../src/components/QuietHoursEditor";
 import {AccessibleSwitch as Switch} from "../../src/components/AccessibleSwitch";
 import { SettingsGroup, SettingsRow } from "../../src/components/SettingsRows";
@@ -34,6 +37,7 @@ export default function SettingsScreen() {
   const {isDesktop}=useLayout();
   const { colors, typography, spacing, radius, themeMode, setThemeMode } = useTheme();
   const { user, signOut, isDemo } = useAuth();
+  const { unreadCount } = useAlerts();
   const { aiConsentGranted, needsReview, aiSummaries, pending: consentPending, revokeConsent, setAiSummaries, refreshConsent, error: consentError } = useConsent();
 
   const saveLock=useRef(false);
@@ -222,13 +226,99 @@ export default function SettingsScreen() {
         />
       ) : (
         <ScrollView contentContainerStyle={{padding:isDesktop?24:16,paddingBottom:48}}>
-          <View style={{marginBottom:16}}><ExperienceIntro compact eyebrow="Your workspace" title="Make it work your way." description="Keep your connections, agent workflows and preferences in one place."/></View>
+          <View style={{flexDirection:"row",alignItems:"flex-start",justifyContent:"space-between",marginBottom:12,gap:8}}>
+            <View style={{flex:1}}><ExperienceIntro compact eyebrow="Your workspace" title="Make it work your way." description="Keep your connections, agent workflows and preferences in one place."/></View>
+            <InfoTip
+              title="Personal Workspace & Settings"
+              body="Manage your GitHub repository scope, AI processing consent, workflow automation capabilities, quiet hours, and encryption keys from one personal workspace dashboard."
+              size={16}
+            />
+          </View>
+
+          <AccessGuidanceBanner error={notice ?? consentError} compact />
+
+          {/* Actionable Personal Workspace Overview Card */}
+          <View
+            style={{
+              backgroundColor: colors.surface,
+              borderColor: colors.brandMuted,
+              borderWidth: 1,
+              borderRadius: 16,
+              padding: 14,
+              marginBottom: 16,
+              gap: 10,
+            }}
+          >
+            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 10 }}>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 10, flex: 1, minWidth: 200 }}>
+                <Avatar login={user?.login ?? "demo"} size={38} />
+                <View style={{ flex: 1, minWidth: 0 }}>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                    <Text style={[typography.subhead, { color: colors.text, fontWeight: "700" }]} numberOfLines={1}>
+                      {user?.name || user?.login || "Demo User"} · Personal Workspace
+                    </Text>
+                  </View>
+                  <Text style={[typography.code, { color: colors.textSecondary, fontSize: 11 }]} numberOfLines={1}>
+                    @{user?.login || "demo-developer"} · {billing.plan.toUpperCase()} PLAN
+                  </Text>
+                </View>
+              </View>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                <View style={{ paddingHorizontal: 8, paddingVertical: 3, borderRadius: 9999, backgroundColor: isDemo ? colors.demoBadgeBg : colors.statusGoodBg, borderWidth: 1, borderColor: isDemo ? colors.demoBadge : colors.statusGood }}>
+                  <Text style={[typography.caption, { color: isDemo ? colors.demoBadge : colors.statusGood, fontWeight: "700", fontSize: 10 }]}>
+                    {isDemo ? "Demo Session" : "GitHub Connected"}
+                  </Text>
+                </View>
+                <View style={{ paddingHorizontal: 8, paddingVertical: 3, borderRadius: 9999, backgroundColor: aiConsentGranted ? colors.statusGoodBg : colors.statusWarningBg, borderWidth: 1, borderColor: aiConsentGranted ? colors.statusGood : colors.statusWarning }}>
+                  <Text style={[typography.caption, { color: aiConsentGranted ? colors.statusGood : colors.statusWarning, fontWeight: "700", fontSize: 10 }]}>
+                    {aiConsentGranted ? "AI Enabled" : "AI Off"}
+                  </Text>
+                </View>
+                <View style={{ paddingHorizontal: 8, paddingVertical: 3, borderRadius: 9999, backgroundColor: unreadCount > 0 ? colors.statusAlertBg : colors.statusInfoBg, borderWidth: 1, borderColor: unreadCount > 0 ? colors.statusAlert : colors.statusInfo }}>
+                  <Text style={[typography.caption, { color: unreadCount > 0 ? colors.statusAlert : colors.statusInfo, fontWeight: "700", fontSize: 10 }]}>
+                    {unreadCount} Unread Alert{unreadCount === 1 ? "" : "s"}
+                  </Text>
+                </View>
+              </View>
+            </View>
+
+            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+              <TouchableOpacity
+                accessibilityRole="button"
+                accessibilityLabel="Configure watched repositories"
+                onPress={() => router.push("/(auth)/repos")}
+                style={{ minHeight: 32, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8, backgroundColor: colors.surfaceElevated, borderWidth: 1, borderColor: colors.border, flexDirection: "row", alignItems: "center", gap: 6 }}
+              >
+                <Icon name="folder-open-outline" size={13} color={colors.brandLight} />
+                <Text style={[typography.caption, { color: colors.text, fontWeight: "600", fontSize: 11 }]}>Configure Repos</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                accessibilityRole="button"
+                accessibilityLabel="Open agent workflows"
+                onPress={() => router.push("/workflows")}
+                style={{ minHeight: 32, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8, backgroundColor: colors.surfaceElevated, borderWidth: 1, borderColor: colors.border, flexDirection: "row", alignItems: "center", gap: 6 }}
+              >
+                <Icon name="git-network-outline" size={13} color={colors.brandLight} />
+                <Text style={[typography.caption, { color: colors.text, fontWeight: "600", fontSize: 11 }]}>Agent Workflows</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                accessibilityRole="button"
+                accessibilityLabel="Open unread alerts"
+                onPress={() => router.push("/(tabs)/notifications")}
+                style={{ minHeight: 32, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8, backgroundColor: colors.surfaceElevated, borderWidth: 1, borderColor: colors.border, flexDirection: "row", alignItems: "center", gap: 6 }}
+              >
+                <Icon name="notifications-outline" size={13} color={colors.brandLight} />
+                <Text style={[typography.caption, { color: colors.text, fontWeight: "600", fontSize: 11 }]}>View Alerts ({unreadCount})</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+
           {!!(notice || consentError) && <View accessibilityRole="alert" style={{padding:12,backgroundColor:colors.surfaceElevated,borderRadius:12,marginBottom:16}}><Text style={[typography.body,{color:colors.text}]}>{notice ?? consentError}</Text></View>}
           <View style={isDesktop ? styles.bentoGridDesktop : undefined}>
             <View style={isDesktop ? styles.bentoCol : undefined}>
               <SettingsGroup title="Agents & workflows"><SettingsRow first label="Open agent workspace" detail="Build workflows, inspect capabilities and follow each run" icon="git-network-outline" onPress={()=>router.push('/workflows')}/></SettingsGroup>
               <SettingsGroup title="GitHub authentication">
-                <View style={{flexDirection:"row",alignItems:"center",gap:12,padding:14}}><Avatar login={user?.login ?? 'demo'} size={36}/><View style={{flex:1}}><Text style={[typography.headline,{color:colors.text}]}>{user?.name || user?.login || 'Demo User'}</Text><Text style={[typography.code,{color:colors.textSecondary,fontSize:11}]}>@{user?.login || 'demo-developer'}</Text></View><View style={{paddingHorizontal:8,paddingVertical:4,borderRadius:9999,backgroundColor:isDemo?colors.demoBadgeBg:colors.riskLowBg}}><Text style={[typography.caption,{color:isDemo?colors.demoBadge:colors.riskLow}]}>{isDemo?'Demo':'Signed in'}</Text></View></View>
+                <View style={{flexDirection:"row",alignItems:"center",gap:12,padding:14}}><Avatar login={user?.login ?? 'demo'} size={36}/><View style={{flex:1}}><Text style={[typography.headline,{color:colors.text}]}>{user?.name || user?.login || 'Demo User'}</Text><Text style={[typography.code,{color:colors.textSecondary,fontSize:11}]}>@{user?.login || 'demo-developer'}</Text></View><View style={{paddingHorizontal:8,paddingVertical:4,borderRadius:9999,backgroundColor:isDemo?colors.demoBadgeBg:colors.statusGoodBg}}><Text style={[typography.caption,{color:isDemo?colors.demoBadge:colors.statusGood}]}>{isDemo?'Demo':'Signed in'}</Text></View></View>
                 <SettingsRow label="Sign Out" icon="log-out-outline" danger onPress={handleSignOut}/>
               </SettingsGroup>
               <SettingsGroup title="Workspace repositories">

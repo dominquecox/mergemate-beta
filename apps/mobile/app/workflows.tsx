@@ -1,5 +1,5 @@
-import React, { useMemo, useRef, useState } from 'react';
-import { View, ScrollView, Pressable, TextInput, KeyboardAvoidingView, Platform } from 'react-native';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { View, ScrollView, Pressable, TextInput, KeyboardAvoidingView, Platform, Modal } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import type { WorkflowDefinition } from '@mergemate/contracts';
 import { WorkflowDefinition as DefinitionSchema, WorkflowTarget as TargetSchema } from '@mergemate/contracts';
@@ -7,10 +7,13 @@ import { useAuth } from '../src/context/AuthContext';
 import { useConsent } from '../src/context/ConsentContext';
 import { useTheme } from '../src/context/ThemeContext';
 import { useLayout } from '../src/layout/useLayout';
+import { api } from '../src/api';
 import { Text } from '../src/components/Text';
 import { Header } from '../src/components/Header';
 import { Icon, type IconName } from '../src/components/Icon';
 import { Button } from '../src/components/Button';
+import { InfoTip } from '../src/components/InfoTip';
+import { AccessGuidanceBanner } from '../src/components/AccessGuidanceBanner';
 import { EmptyState } from '../src/components/EmptyState';
 import { LoadingState } from '../src/components/LoadingState';
 import { ErrorState } from '../src/components/ErrorState';
@@ -31,11 +34,24 @@ import {
 
 export default function AgentWorkflowsScreen() {
   const { user, isDemo } = useAuth();
-  const params = useLocalSearchParams<{ target?: string; mode?: string }>();
+  const params = useLocalSearchParams<{ target?: string; mode?: string; template?: string }>();
   const target = typeof params.target === 'string' && targetFromUrl(params.target) ? params.target : '';
-  const mode: AgentMode = params.mode === 'code_fix' ? 'code_fix' : 'review';
+  const templateParam = typeof params.template === 'string' && AGENT_TEMPLATES.some((t) => t.id === params.template) ? params.template : '';
+  const mode: AgentMode =
+    templateParam
+      ? AGENT_TEMPLATES.find((t) => t.id === templateParam)!.mode
+      : params.mode === 'code_fix'
+        ? 'code_fix'
+        : 'review';
   return user ? (
-    <AgentWorkspace key={`${user.id}:${target}:${mode}`} account={user.id} isDemo={isDemo} initialTarget={target} initialMode={mode} />
+    <AgentWorkspace
+      key={`${user.id}:${target}:${mode}:${templateParam}`}
+      account={user.id}
+      isDemo={isDemo}
+      initialTarget={target}
+      initialMode={mode}
+      initialTemplateId={templateParam || (mode === 'code_fix' ? 'fix_issue' : 'review')}
+    />
   ) : (
     <LoadingState title="Checking your session..." message="Workflow runs belong to your account." />
   );
@@ -46,21 +62,36 @@ function AgentWorkspace({
   isDemo,
   initialTarget,
   initialMode,
+  initialTemplateId,
 }: {
   account: string;
   isDemo: boolean;
   initialTarget: string;
   initialMode: AgentMode;
+  initialTemplateId: string;
 }) {
-  const { colors, typography } = useTheme();
+  const { colors, typography, radius } = useTheme();
   const { isDesktop } = useLayout();
   const { aiConsentGranted, needsReview, pending: consentPending } = useConsent();
   const router = useRouter();
+  const starterTemplate = AGENT_TEMPLATES.find((t) => t.id === initialTemplateId) ?? AGENT_TEMPLATES[0]!;
+  const starterParsed = targetFromUrl(initialTarget);
+  const starterTarget =
+    starterParsed && (starterTemplate.mode !== 'review' || (starterParsed.kind ?? 'pull_request') === 'pull_request')
+      ? starterParsed
+      : {
+          owner: 'owner',
+          repo: 'repo',
+          kind: starterTemplate.mode === 'review' ? ('pull_request' as const) : ('issue' as const),
+          number: 123,
+        };
   const [targetText, setTargetText] = useState(initialTarget);
   const [baseBranch, setBaseBranch] = useState('');
-  const [mode, setMode] = useState<AgentMode>(initialMode);
-  const [intent, setIntent] = useState('');
-  const [definition, setDefinition] = useState<WorkflowDefinition | null>(null);
+  const [mode, setMode] = useState<AgentMode>(starterTemplate.mode);
+  const [intent, setIntent] = useState(starterTemplate.intent);
+  const [definition, setDefinition] = useState<WorkflowDefinition | null>(() =>
+    makeAgentTemplate(starterTemplate.id, starterTarget),
+  );
   const [selectedStepIndex, setSelectedStepIndex] = useState<number | null>(null);
   const [confirmCodeChanges, setConfirmCodeChanges] = useState(false);
   const [savedMessage, setSavedMessage] = useState('');
@@ -68,7 +99,54 @@ function AgentWorkspace({
   const [localError, setLocalError] = useState('');
   const [searchFilter, setSearchFilter] = useState('');
   const [showSearch, setShowSearch] = useState(false);
+  const [targetModalOpen, setTargetModalOpen] = useState(false);
+  const [projectTargets, setProjectTargets] = useState<Array<{ label: string; sublabel: string; url: string; kind: 'pr' | 'repo' }>>([]);
   const draftVersion = useRef(0);
+
+  useEffect(() => {
+    let active = true;
+    Promise.all([
+      api.getNotificationPage('all').catch(() => ({ items: [] })),
+      api.getRepos().catch(() => []),
+    ]).then(([page, repos]) => {
+      if (!active) return;
+      const list: Array<{ label: string; sublabel: string; url: string; kind: 'pr' | 'repo' }> = [];
+      const seen = new Set<string>();
+      for (const item of page.items) {
+        const key = `${item.repo}#${item.number}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        list.push({
+          label: `${item.repo} #${item.number}`,
+          sublabel: item.title,
+          url: `https://github.com/${item.repo}/pull/${item.number}`,
+          kind: 'pr',
+        });
+      }
+      for (const r of repos) {
+        if (!r.watching || seen.has(r.fullName)) continue;
+        seen.add(r.fullName);
+        list.push({
+          label: r.fullName,
+          sublabel: 'Watched repository',
+          url: `https://github.com/${r.fullName}`,
+          kind: 'repo',
+        });
+      }
+      setProjectTargets(list);
+      if (!initialTarget && list[0]?.kind === 'pr') {
+        const firstUrl = list[0].url;
+        setTargetText(firstUrl);
+        const parsed = targetFromUrl(firstUrl);
+        if (parsed) {
+          setDefinition((prev) => (prev ? { ...prev, target: parsed } : prev));
+        }
+      }
+    });
+    return () => {
+      active = false;
+    };
+  }, [initialTarget]);
 
   const target = useMemo(() => {
     const parsed = targetFromUrl(targetText);
@@ -135,16 +213,16 @@ function AgentWorkspace({
     setSelectedStepIndex(null);
     setLocalError('');
     workspace.clearRun();
-    if (!target || (template.mode === 'review' && (target.kind ?? 'pull_request') !== 'pull_request')) {
-      setDefinition(null);
-      setLocalError(
-        template.mode === 'review'
-          ? 'Add a GitHub pull request link for this review template.'
-          : 'Add a GitHub issue, repository or pull request link.',
-      );
-      return;
-    }
-    setDefinition(makeAgentTemplate(id, target));
+    const compatibleTarget =
+      target && (template.mode !== 'review' || (target.kind ?? 'pull_request') === 'pull_request')
+        ? target
+        : {
+            owner: 'owner',
+            repo: 'repo',
+            kind: template.mode === 'review' ? ('pull_request' as const) : ('issue' as const),
+            number: 123,
+          };
+    setDefinition(makeAgentTemplate(id, compatibleTarget));
     draftVersion.current++;
   };
 
@@ -331,6 +409,8 @@ function AgentWorkspace({
           </View>
         )}
 
+        <AccessGuidanceBanner error={localError || workspace.error || workspace.capabilityError} compact />
+
         {/* Responsive Desktop Bento Grid vs Mobile Stack */}
         <View style={{ flexDirection: isDesktop ? 'row' : 'column', gap: 16, alignItems: 'flex-start' }}>
           {/* Left Bento Column: Templates, Capabilities, Saved Workflows & Recent Runs */}
@@ -338,9 +418,16 @@ function AgentWorkspace({
             {/* Bento Cell 1: Starter Workflows (Mexas List Style) */}
             <View style={[surface, { gap: 10 }]}>
               <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                <Text accessibilityRole="header" style={[typography.headline, { color: colors.text }]}>
-                  Start with a workflow
-                </Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                  <Text accessibilityRole="header" style={[typography.headline, { color: colors.text }]}>
+                    Start with a workflow
+                  </Text>
+                  <InfoTip
+                    title="Starter Workflows"
+                    body="Tap any template to load its visual node graph immediately. You can reorder steps, toggle optional nodes, and bind any PR or repository target before saving or running."
+                    size={15}
+                  />
+                </View>
                 <Text style={[typography.caption, { color: colors.brandLight }]}>{filteredTemplates.length} templates</Text>
               </View>
               {filteredTemplates.map((template) => {
@@ -397,13 +484,20 @@ function AgentWorkspace({
 
             {/* Bento Cell 2: Connected Capabilities */}
             <View style={[surface, { gap: 8 }]}>
-              <Text accessibilityRole="header" style={[typography.headline, { color: colors.text }]}>
-                Connected capabilities
-              </Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                <Text accessibilityRole="header" style={[typography.headline, { color: colors.text }]}>
+                  Connected capabilities
+                </Text>
+                <InfoTip
+                  title="Connected Capabilities"
+                  body="Shows live repository permissions and backend execution readiness. Review workflows require GitHub read access + AI consent; coding workflows also require an isolated executor and repository write scope."
+                  size={15}
+                />
+              </View>
               {workspace.capabilityLoading ? (
                 <Text style={[typography.caption, { color: colors.textSecondary }]}>Checking this repository...</Text>
               ) : workspace.capabilityError ? (
-                <Text accessibilityRole="alert" style={[typography.caption, { color: colors.riskHigh }]}>
+                <Text accessibilityRole="alert" style={[typography.caption, { color: colors.statusAlert }]}>
                   {workspace.capabilityError}
                 </Text>
               ) : workspace.capabilities ? (
@@ -435,13 +529,20 @@ function AgentWorkspace({
 
             {/* Bento Cell 3: Saved Workflows */}
             <View style={[surface, { gap: 8 }]}>
-              <Text accessibilityRole="header" style={[typography.headline, { color: colors.text }]}>
-                Saved workflows
-              </Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                <Text accessibilityRole="header" style={[typography.headline, { color: colors.text }]}>
+                  Saved workflows
+                </Text>
+                <InfoTip
+                  title="Saved Workflows"
+                  body="Workflows saved to your account persist across desktop and mobile sessions so you can re-run or customize them anytime."
+                  size={15}
+                />
+              </View>
               {workspace.definitionsLoading ? (
                 <Text style={[typography.caption, { color: colors.textSecondary }]}>Loading saved workflows...</Text>
               ) : workspace.definitionsError ? (
-                <Text accessibilityRole="alert" style={[typography.caption, { color: colors.riskHigh }]}>
+                <Text accessibilityRole="alert" style={[typography.caption, { color: colors.statusAlert }]}>
                   {workspace.definitionsError}
                 </Text>
               ) : workspace.definitions.length ? (
@@ -506,13 +607,20 @@ function AgentWorkspace({
 
             {/* Bento Cell 4: Recent Runs */}
             <View style={[surface, { gap: 8 }]}>
-              <Text accessibilityRole="header" style={[typography.headline, { color: colors.text }]}>
-                Recent runs
-              </Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                <Text accessibilityRole="header" style={[typography.headline, { color: colors.text }]}>
+                  Recent runs
+                </Text>
+                <InfoTip
+                  title="Recent Runs"
+                  body="Execution receipts from past workflow runs. Select any run to inspect its step-by-step output, evidence, and verification status."
+                  size={15}
+                />
+              </View>
               {workspace.historyLoading ? (
                 <Text style={[typography.caption, { color: colors.textSecondary }]}>Loading runs...</Text>
               ) : workspace.historyError ? (
-                <Text accessibilityRole="alert" style={[typography.caption, { color: colors.riskHigh }]}>
+                <Text accessibilityRole="alert" style={[typography.caption, { color: colors.statusAlert }]}>
                   {workspace.historyError}
                 </Text>
               ) : workspace.runs.length ? (
@@ -560,12 +668,54 @@ function AgentWorkspace({
             {/* Top Bento Row: Prompt Composer + Conversational AI Plan Card */}
             <View style={{ flexDirection: isDesktop && definition ? 'row' : 'column', gap: 14, alignItems: 'stretch' }}>
               <View style={[surface, { flex: isDesktop && definition ? 6 : undefined, backgroundColor: colors.brandSubtle, borderColor: colors.brandMuted, gap: 10 }]}>
-                <View style={{ flexDirection: 'row', gap: 6, alignItems: 'center' }}>
-                  <Icon name="sparkles-outline" size={16} color={colors.brandLight} />
-                  <Text style={[typography.code, { color: colors.brandLight, fontSize: 10, letterSpacing: 1 }]}>
-                    WHAT WOULD YOU LIKE TO AUTOMATE TODAY?
-                  </Text>
+                <View style={{ flexDirection: 'row', gap: 6, alignItems: 'center', justifyContent: 'space-between' }}>
+                  <View style={{ flexDirection: 'row', gap: 6, alignItems: 'center' }}>
+                    <Icon name="sparkles-outline" size={16} color={colors.brandLight} />
+                    <Text style={[typography.code, { color: colors.brandLight, fontSize: 10, letterSpacing: 1 }]}>
+                      WHAT WOULD YOU LIKE TO AUTOMATE TODAY?
+                    </Text>
+                  </View>
+                  <InfoTip
+                    title="Workflow Target & Action"
+                    body="Pick an open PR or watched repository from your project dropdown, choose an automation action, and customize or run the visual node graph."
+                    size={15}
+                  />
                 </View>
+
+                {/* Project PR / Repository Dropdown Selector */}
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Select target PR or repository from your projects"
+                  disabled={busy}
+                  onPress={() => setTargetModalOpen(true)}
+                  style={({ pressed }) => ({
+                    minHeight: 42,
+                    paddingHorizontal: 12,
+                    paddingVertical: 6,
+                    borderRadius: 10,
+                    backgroundColor: colors.surface,
+                    borderWidth: 1,
+                    borderColor: colors.brandMuted,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: 8,
+                    opacity: pressed ? 0.85 : 1,
+                  })}
+                >
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1, minWidth: 0 }}>
+                    <Icon name="git-pull-request-outline" size={15} color={colors.brandLight} />
+                    <View style={{ flex: 1, minWidth: 0 }}>
+                      <Text style={[typography.caption, { color: colors.textMuted, fontSize: 10 }]}>
+                        SELECT TARGET FROM ACTIVE PRS & REPOS
+                      </Text>
+                      <Text numberOfLines={1} style={[typography.caption, { color: colors.text, fontWeight: '700' }]}>
+                        {target ? `${target.owner}/${target.repo}${target.number ? ` #${target.number}` : ''}` : 'Choose a PR or repository from your projects...'}
+                      </Text>
+                    </View>
+                  </View>
+                  <Icon name="chevron-down" size={15} color={colors.textSecondary} />
+                </Pressable>
                 <TextInput
                   accessibilityLabel="Workflow task"
                   value={intent}
@@ -616,7 +766,24 @@ function AgentWorkspace({
                   editable={!busy}
                   onChangeText={(value) => {
                     setTargetText(value);
-                    resetDraft();
+                    const nextParsed = targetFromUrl(value);
+                    if (
+                      definition &&
+                      nextParsed &&
+                      (definition.mode === 'code_fix' || (nextParsed.kind ?? 'pull_request') === 'pull_request')
+                    ) {
+                      const nextTarget = TargetSchema.safeParse({
+                        ...nextParsed,
+                        ...(definition.mode === 'code_fix' && baseBranch.trim() ? { baseBranch: baseBranch.trim() } : {}),
+                      });
+                      if (nextTarget.success) {
+                        setDefinition({ ...definition, target: nextTarget.data });
+                        setConfirmCodeChanges(false);
+                        setLocalError('');
+                        return;
+                      }
+                    }
+                    if (!definition) resetDraft();
                   }}
                   maxLength={400}
                   placeholder={
@@ -774,7 +941,12 @@ function AgentWorkspace({
                   </Pressable>
                 )}
 
-                {!capability?.available && (
+                {!target && (
+                  <Text style={[typography.caption, { color: colors.brandLight }]}>
+                    Previewing template graph — paste a GitHub {definition.mode === 'review' ? 'pull request' : 'issue, repository or PR'} link above to check repository capabilities, save or run.
+                  </Text>
+                )}
+                {!!target && !capability?.available && (
                   <Text style={[typography.caption, { color: colors.textSecondary }]}>
                     {capability?.reason ?? 'Execution stays disabled until the API confirms the required runtime and repository capabilities.'}
                   </Text>
@@ -799,14 +971,14 @@ function AgentWorkspace({
                       accessibilityLabel="Save workflow"
                       variant="secondary"
                       loading={workspace.busy === 'save'}
-                      disabled={!workspace.configured || busy || workspace.definitionsLoading || !DefinitionSchema.safeParse(definition).success}
+                      disabled={!workspace.configured || !targetCompatible || !target || !sameTarget(definition.target, target) || busy || workspace.definitionsLoading || !DefinitionSchema.safeParse(definition).success}
                       onPress={() => saveWorkflow()}
                     />
                     {definition.id && (
                       <Button
                         title="Save as a new workflow"
                         variant="ghost"
-                        disabled={!workspace.configured || busy || workspace.definitionsLoading}
+                        disabled={!workspace.configured || !targetCompatible || !target || !sameTarget(definition.target, target) || busy || workspace.definitionsLoading}
                         onPress={() => saveWorkflow(true)}
                       />
                     )}
@@ -834,6 +1006,123 @@ function AgentWorkspace({
           </View>
         </View>
       </ScrollView>
+
+      <Modal
+        visible={targetModalOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setTargetModalOpen(false)}
+      >
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Close target selector"
+          onPress={() => setTargetModalOpen(false)}
+          style={{
+            flex: 1,
+            backgroundColor: 'rgba(11, 15, 23, 0.72)',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: 20,
+          }}
+        >
+          <Pressable
+            onPress={(e) => e.stopPropagation?.()}
+            style={{
+              width: '100%',
+              maxWidth: 460,
+              maxHeight: 420,
+              backgroundColor: colors.surface,
+              borderRadius: radius.lg,
+              borderWidth: 1,
+              borderColor: colors.brandMuted,
+              padding: 16,
+              gap: 10,
+            }}
+          >
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+              <Text accessibilityRole="header" style={[typography.headline, { color: colors.text }]}>
+                Select PR or Repository
+              </Text>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Close modal"
+                onPress={() => setTargetModalOpen(false)}
+                style={{ width: 28, height: 28, alignItems: 'center', justifyContent: 'center' }}
+              >
+                <Icon name="close" size={18} color={colors.textSecondary} />
+              </Pressable>
+            </View>
+            <Text style={[typography.caption, { color: colors.textSecondary }]}>
+              Choose an open pull request or watched repository from your connected projects.
+            </Text>
+            <ScrollView style={{ maxHeight: 300 }} contentContainerStyle={{ gap: 6 }}>
+              {projectTargets.length === 0 ? (
+                <Text style={[typography.caption, { color: colors.textSecondary, paddingVertical: 12 }]}>
+                  No active pull requests or watched repositories loaded yet.
+                </Text>
+              ) : (
+                projectTargets.map((option) => {
+                  const selected = targetText === option.url;
+                  return (
+                    <Pressable
+                      key={option.url}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Select ${option.label}`}
+                      onPress={() => {
+                        setTargetText(option.url);
+                        const nextParsed = targetFromUrl(option.url);
+                        if (definition && nextParsed) {
+                          const nextMode: AgentMode =
+                            definition.mode === 'review' && (nextParsed.kind ?? 'pull_request') !== 'pull_request'
+                              ? 'code_fix'
+                              : definition.mode;
+                          setMode(nextMode);
+                          const nextTarget = TargetSchema.safeParse({
+                            ...nextParsed,
+                            ...(nextMode === 'code_fix' && baseBranch.trim() ? { baseBranch: baseBranch.trim() } : {}),
+                          });
+                          if (nextTarget.success) {
+                            setDefinition({ ...definition, mode: nextMode, target: nextTarget.data });
+                            setConfirmCodeChanges(false);
+                            setLocalError('');
+                          }
+                        }
+                        setTargetModalOpen(false);
+                      }}
+                      style={({ pressed }) => ({
+                        padding: 10,
+                        borderRadius: 10,
+                        borderWidth: 1,
+                        borderColor: selected ? colors.brandLight : colors.border,
+                        backgroundColor: selected ? colors.brandSubtle : colors.surfaceElevated,
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        gap: 10,
+                        opacity: pressed ? 0.85 : 1,
+                      })}
+                    >
+                      <Icon
+                        name={option.kind === 'repo' ? 'folder-outline' : 'git-pull-request-outline'}
+                        size={16}
+                        color={selected ? colors.brandLight : colors.textSecondary}
+                      />
+                      <View style={{ flex: 1, minWidth: 0 }}>
+                        <Text style={[typography.caption, { color: colors.text, fontWeight: '700' }]} numberOfLines={1}>
+                          {option.label}
+                        </Text>
+                        <Text style={[typography.caption, { color: colors.textSecondary }]} numberOfLines={1}>
+                          {option.sublabel}
+                        </Text>
+                      </View>
+                      {selected && <Icon name="checkmark-circle" size={16} color={colors.statusGood} />}
+                    </Pressable>
+                  );
+                })
+              )}
+            </ScrollView>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </KeyboardAvoidingView>
   );
 }
@@ -854,11 +1143,11 @@ function CapabilityLine({ title, available, reason }: { title: string; available
     <View style={{ gap: 2 }}>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
         <Icon
-          name={available ? 'checkmark-circle-outline' : 'ellipse-outline'}
+          name={available ? 'checkmark-circle-outline' : 'alert-circle-outline'}
           size={15}
-          color={available ? colors.riskLow : colors.textSecondary}
+          color={available ? colors.statusGood : colors.statusWarning}
         />
-        <Text style={[typography.caption, { color: colors.text, fontWeight: '600' }]}>
+        <Text style={[typography.caption, { color: available ? colors.statusGood : colors.statusWarning, fontWeight: '700' }]}>
           {title}: {available ? 'Ready' : 'Needs setup'}
         </Text>
       </View>

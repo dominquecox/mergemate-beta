@@ -1,4 +1,7 @@
 import { InboxOverview } from "../../src/components/InboxOverview";
+import { InfoTip } from "../../src/components/InfoTip";
+import { AccessGuidanceBanner } from "../../src/components/AccessGuidanceBanner";
+import { useAlerts } from "../../src/context/AlertsContext";
 import * as Crypto from "expo-crypto";
 import type {InboxReceipt} from "@mergemate/contracts";
 import {useAuth} from "../../src/context/AuthContext";
@@ -45,6 +48,7 @@ function InboxWorkspace({initialFilter}:{initialFilter:NotificationFilter}) {
   const { isDesktop } = useLayout();
 
   const {isDemo,user}=useAuth();
+  const { syncItems } = useAlerts();
   const [filter,setFilter]=useState<NotificationFilter>(initialFilter),[prefError,setPrefError]=useState(false),[prefSaving,setPrefSaving]=useState(false),[prefMessage,setPrefMessage]=useState("");
   const preferenceQueue=useRef(Promise.resolve()),view=useRef(0),currentFilter=useRef(filter);currentFilter.current=filter;
   const {items:sourceItems,setItems,loading:isLoading,busy:isRefreshing,error,setError,refresh:fetchItems,revalidate,more,hasMore,refreshAfterMs}=usePagedList(`inbox:${user?.id}:${filter}`,cursor=>api.getNotificationPage(filter,cursor),()=>api.invalidateInbox());
@@ -54,6 +58,7 @@ function InboxWorkspace({initialFilter}:{initialFilter:NotificationFilter}) {
   const actionLock=useRef(false),undoGeneration=useRef(0),retryActions=useRef(new Map<string,{key:string;operationId:string}>()),undoRetry=useRef<{expected:string;id:string}|null>(null);
   useEffect(()=>{const version=view.current,generation=undoGeneration.current;api.getInboxUndo().then(saved=>{if(version===view.current&&generation===undoGeneration.current&&saved)setUndoItem(saved);},()=>{});},[]);
   const items=sourceItems.filter(item=>{const removed=hidden[item.id];return !removed||Date.parse(item.updatedAt)>Date.parse(removed.revision)||(removed.until!==undefined&&removed.until<=Date.now());}).sort((a,b)=>Date.parse(b.updatedAt)-Date.parse(a.updatedAt)||(a.id<b.id?-1:a.id>b.id?1:0));
+  useEffect(()=>{if(filter==="all"&&sourceItems.length>0)syncItems(items);},[filter,items,sourceItems.length,syncItems]);
   const [grouped,setGrouped]=useState(false);
   const rows:InboxRow[]=grouped?groupByRepo(items):items.map(item=>({type:"item",item}));
   const persist=(next:NotificationFilter)=>{
@@ -203,76 +208,102 @@ function InboxWorkspace({initialFilter}:{initialFilter:NotificationFilter}) {
           refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} tintColor={colors.brandLight}/>}
           onEndReached={()=>{if(!error)void more();}} onEndReachedThreshold={0.4}
           ListHeaderComponent={<>
-          <InboxOverview count={items.length} needsReview={items.filter(item=>item.kind==="review").length}/>
+          <InboxOverview count={items.length} needsReview={items.filter(item=>item.kind==="review").length} items={items}/>
+      <AccessGuidanceBanner error={error} compact />
       <ReadoutControls label="Inbox overview" sentences={inboxNarration(items)}/>
 
-      {/* Bento Control Bar: Segmented Filter + Repo Grouping + Live Counts */}
-      <View style={{ flexDirection: isDesktop ? "row" : "column", alignItems: isDesktop ? "center" : "stretch", gap: 10, marginBottom: 12 }}>
-      <View style={[styles.filterBar, { flex: isDesktop ? 1 : undefined, borderBottomWidth: 0, paddingHorizontal: 4, paddingVertical: 3, backgroundColor: colors.surface, borderColor: colors.border, borderWidth: 1, borderRadius: radius.md }]} accessibilityRole="tablist">
-        {(["all", "review", "mentions", "mine"] as NotificationFilter[]).map((tab) => {
-          const isSelected = filter === tab;
-          let label = "All";
-          if (tab === "review") label = "Review";
-          if (tab === "mentions") label = "Mentions";
-          if (tab === "mine") label = "Mine";
-
-          return (
-            <TouchableOpacity
-              key={tab}
-              ref={node=>bindFilterTab(tab,node,isSelected)}
-              aria-selected={isSelected}
-              onPress={() => selectFilter(tab)}
-              style={[
-                styles.filterTab,
-                {
-                  backgroundColor: isSelected ? colors.brandSubtle : "transparent",
-                  borderRadius: radius.sm,
-                },
-              ]}
-              accessibilityRole="tab"
-              accessibilityLabel={tab === "review" ? "Needs review pull requests" : `${label} pull requests`}
-              accessibilityState={{ selected: isSelected }}
-            >
-              <Text numberOfLines={1} ellipsizeMode="tail"
-                style={[
-                  typography.caption,
-                  {
-                    color: isSelected ? colors.brandLight : colors.textSecondary,
-                    fontWeight: isSelected ? "700" : "500",
-                  },
-                ]}
-              >
-                {label}
-              </Text>
-            </TouchableOpacity>
-          );
-        })}
+      {/* Sleek Compact Control Toolbar: Section Header + Segmented Filter + Repo Grouping + Live Counts */}
+      <View style={{ flexDirection: isDesktop ? "row" : "column", alignItems: isDesktop ? "center" : "stretch", justifyContent: "space-between", gap: 8, marginBottom: 10 }}>
+      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 6 }}>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+          <Text accessibilityRole="header" style={[typography.subhead, { color: colors.text, fontWeight: "700", fontSize: 13 }]}>
+            Upcoming & Active Reviews
+          </Text>
+          <InfoTip
+            title="Upcoming & Active Reviews"
+            body="Filter your queue by All activity, Review requests, @Mentions, or your own PRs. Use Snooze (24h) or Done to keep your workspace clean without altering GitHub state."
+            size={14}
+          />
+        </View>
+        {!isDesktop && (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Open all workflows"
+            onPress={() => router.push("/workflows")}
+            style={{ flexDirection: "row", alignItems: "center", gap: 3, minHeight: 28, paddingHorizontal: 4 }}
+          >
+            <Text style={[typography.caption, { color: colors.brandLight, fontWeight: "700", fontSize: 11 }]}>Workflows →</Text>
+          </Pressable>
+        )}
       </View>
 
-      <View style={{ flexDirection: "row", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-        <TouchableOpacity onPress={()=>setGrouped(value=>!value)} accessibilityRole="switch" accessibilityLabel="Group by repository" accessibilityState={{checked:grouped}} style={{flexDirection:'row',alignItems:'center',gap:6,minHeight:44,paddingHorizontal:12,borderRadius:radius.md,borderWidth:1,borderColor:grouped?colors.brandMuted:colors.border,backgroundColor:grouped?colors.brandSubtle:colors.surface}}><Icon name="folder-outline" size={14} color={grouped?colors.brandLight:colors.textSecondary}/><Text style={[typography.caption,{color:grouped?colors.brandLight:colors.textSecondary,fontWeight:'600'}]}>{grouped?"Grouped by repo":"Group by repo"}</Text></TouchableOpacity>
-        {/* Summary Strip Card */}
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 6, flexWrap: "wrap", flex: isDesktop ? 1 : undefined, justifyContent: isDesktop ? "flex-end" : "space-between" }}>
+        <View style={[styles.filterBar, { flex: isDesktop ? undefined : 1, minWidth: isDesktop ? 260 : 210, borderBottomWidth: 0, paddingHorizontal: 3, paddingVertical: 2, backgroundColor: colors.surface, borderColor: colors.border, borderWidth: 1, borderRadius: radius.sm }]} accessibilityRole="tablist">
+          {(["all", "review", "mentions", "mine"] as NotificationFilter[]).map((tab) => {
+            const isSelected = filter === tab;
+            let label = "All";
+            if (tab === "review") label = "Review";
+            if (tab === "mentions") label = "Mentions";
+            if (tab === "mine") label = "Mine";
+
+            return (
+              <TouchableOpacity
+                key={tab}
+                ref={node=>bindFilterTab(tab,node,isSelected)}
+                aria-selected={isSelected}
+                onPress={() => selectFilter(tab)}
+                style={[
+                  styles.filterTab,
+                  {
+                    backgroundColor: isSelected ? colors.brandSubtle : "transparent",
+                    borderRadius: 6,
+                  },
+                ]}
+                accessibilityRole="tab"
+                accessibilityLabel={tab === "review" ? "Needs review pull requests" : `${label} pull requests`}
+                accessibilityState={{ selected: isSelected }}
+              >
+                <Text numberOfLines={1} ellipsizeMode="tail"
+                  style={[
+                    typography.caption,
+                    {
+                      fontSize: 11,
+                      color: isSelected ? colors.brandLight : colors.textSecondary,
+                      fontWeight: isSelected ? "700" : "500",
+                    },
+                  ]}
+                >
+                  {label}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+
+        <TouchableOpacity onPress={()=>setGrouped(value=>!value)} accessibilityRole="switch" accessibilityLabel="Group by repository" accessibilityState={{checked:grouped}} style={{flexDirection:'row',alignItems:'center',gap:5,minHeight:32,paddingHorizontal:10,paddingVertical:4,borderRadius:radius.sm,borderWidth:1,borderColor:grouped?colors.brandMuted:colors.border,backgroundColor:grouped?colors.brandSubtle:colors.surface}}><Icon name="folder-outline" size={13} color={grouped?colors.brandLight:colors.textSecondary}/><Text style={[typography.caption,{fontSize:11,color:grouped?colors.brandLight:colors.textSecondary,fontWeight:'600'}]}>{grouped?"Grouped":"Group by repo"}</Text></TouchableOpacity>
+
+        {/* Compact Summary Strip */}
         <View
-          style={[styles.summaryStrip, { flex: 1, minWidth: 210, backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.md, paddingVertical: 8, paddingHorizontal: 12, marginBottom: 0 }]}
+          style={[styles.summaryStrip, { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.sm, paddingVertical: 4, paddingHorizontal: 10, marginBottom: 0, gap: 10 }]}
           accessibilityLabel={`Summary: ${items.filter((i) => i.kind === "review").length} needs you, ${items.filter((i) => i.kind === "mention").length} FYI, ${items.filter((i) => i.kind === "mine").length} mine`}
         >
           <View style={styles.stripCol}>
-            <Text style={[typography.subhead, { color: colors.brandLight, fontWeight: "700" }]}>
+            <Text style={[typography.caption, { color: items.some((i) => i.kind === "review") ? colors.statusWarning : colors.statusGood, fontWeight: "700", fontSize: 12 }]}>
               {items.filter((i) => i.kind === "review").length}
             </Text>
-            <Text style={[typography.caption, { color: colors.textSecondary }]}>Needs you</Text>
+            <Text style={[typography.caption, { color: colors.textSecondary, fontSize: 10 }]}>Needs you</Text>
           </View>
           <View style={styles.stripCol}>
-            <Text style={[typography.subhead, { color: colors.text, fontWeight: "700" }]}>
+            <Text style={[typography.caption, { color: colors.statusInfo, fontWeight: "700", fontSize: 12 }]}>
               {items.filter((i) => i.kind === "mention").length}
             </Text>
-            <Text style={[typography.caption, { color: colors.textSecondary }]}>FYI</Text>
+            <Text style={[typography.caption, { color: colors.textSecondary, fontSize: 10 }]}>FYI</Text>
           </View>
           <View style={styles.stripCol}>
-            <Text style={[typography.subhead, { color: colors.text, fontWeight: "700" }]}>
+            <Text style={[typography.caption, { color: colors.text, fontWeight: "700", fontSize: 12 }]}>
               {items.filter((i) => i.kind === "mine").length}
             </Text>
-            <Text style={[typography.caption, { color: colors.textSecondary }]}>Mine</Text>
+            <Text style={[typography.caption, { color: colors.textSecondary, fontSize: 10 }]}>Mine</Text>
           </View>
         </View>
       </View>
@@ -286,12 +317,12 @@ function InboxWorkspace({initialFilter}:{initialFilter:NotificationFilter}) {
                 style={[
                   styles.itemCard,
                   isDesktop && {flex:1,maxWidth:"50%"},
-                  { padding: 14, marginBottom: 10 },
+                  { padding: 12, marginBottom: 10 },
                   {
                     backgroundColor: colors.surface,
-                    borderColor: item.risk === "high" ? colors.riskHigh : colors.border,
-                    borderRadius: 14,
-                    borderLeftColor: item.risk === "high" ? colors.riskHigh : colors.brandMuted,
+                    borderColor: item.risk === "high" ? colors.statusAlert : colors.border,
+                    borderRadius: 12,
+                    borderLeftColor: item.risk === "high" ? colors.statusAlert : colors.brandMuted,
                     borderLeftWidth: item.risk === "high" ? 3 : 1,
                   },
                 ]}
@@ -304,12 +335,12 @@ function InboxWorkspace({initialFilter}:{initialFilter:NotificationFilter}) {
                   accessibilityLabel={`Open pull request #${item.number}: ${item.title} in ${item.repo}, ${item.risk || "normal"} risk`}
                 >
                   <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-                    <View style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: colors.surfaceElevated, borderWidth: 1, borderColor: colors.border, alignItems: "center", justifyContent: "center" }}>
-                      <Icon name="git-pull-request-outline" size={16} color={colors.brandLight} />
+                    <View style={{ width: 32, height: 32, borderRadius: 8, backgroundColor: colors.surfaceElevated, borderWidth: 1, borderColor: colors.border, alignItems: "center", justifyContent: "center" }}>
+                      <Icon name="git-pull-request-outline" size={15} color={colors.brandLight} />
                     </View>
                     <View style={{ flex: 1, minWidth: 0 }}>
                       <View style={[styles.cardTop, { gap: 6 }]}>
-                        <Text style={[typography.caption, { color: colors.textMuted, fontFamily: typography.code.fontFamily, flexShrink: 1 }]} numberOfLines={1}>
+                        <Text style={[typography.caption, { color: colors.textMuted, fontFamily: typography.code.fontFamily, flexShrink: 1, fontSize: 11 }]} numberOfLines={1}>
                           {item.repo} #{item.number}
                         </Text>
                         <View style={styles.badgeGroup}>
@@ -317,27 +348,27 @@ function InboxWorkspace({initialFilter}:{initialFilter:NotificationFilter}) {
                           {item.risk && <RiskBadge level={item.risk} compact />}
                         </View>
                       </View>
-                      <Text style={[typography.subhead, { color: colors.text, fontWeight: "600", marginTop: 2 }]} numberOfLines={1} ellipsizeMode="tail" accessibilityLabel={item.title}>
+                      <Text style={[typography.subhead, { color: colors.text, fontWeight: "600", marginTop: 2, fontSize: 13 }]} numberOfLines={1} ellipsizeMode="tail" accessibilityLabel={item.title}>
                         {item.title}
                       </Text>
                     </View>
-                    <Icon name="chevron-forward" size={16} color={colors.textMuted} />
+                    <Icon name="chevron-forward" size={15} color={colors.textMuted} />
                   </View>
 
                   {!!item.summaryLine && (
-                    <View style={[styles.summaryRow,{paddingHorizontal:10,paddingVertical:7,backgroundColor:colors.surfaceElevated,borderRadius:8,marginTop:8}]}>
+                    <View style={[styles.summaryRow,{paddingHorizontal:8,paddingVertical:5,backgroundColor:colors.surfaceElevated,borderRadius:8,marginTop:6}]}>
                       <Icon name="sparkles" size={11} color={colors.brandLight} style={styles.summaryIcon} />
-                      <Text style={[typography.caption, { color: colors.textSecondary, flex: 1 }]} numberOfLines={1}>
+                      <Text style={[typography.caption, { color: colors.textSecondary, flex: 1, fontSize: 11 }]} numberOfLines={1}>
                         {item.summaryLine}
                       </Text>
                     </View>
                   )}
                 </Pressable>
 
-                <View style={[styles.cardBottom,{flexWrap:"wrap",gap:8,borderTopColor:colors.border,marginTop:8,paddingTop:8}]}>
+                <View style={[styles.cardBottom,{flexWrap:"wrap",gap:8,borderTopColor:colors.border,marginTop:6,paddingTop:6}]}>
                   <View style={{flexDirection:"row",alignItems:"center",gap:6,flex:1}}>
-                    <Avatar login={item.author} size={16} />
-                    <Text style={[typography.caption, { color: colors.textMuted }]} numberOfLines={1}>
+                    <Avatar login={item.author} size={15} />
+                    <Text style={[typography.caption, { color: colors.textMuted, fontSize: 11 }]} numberOfLines={1}>
                       @{item.author} · {new Date(item.updatedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
                     </Text>
                   </View>
@@ -345,19 +376,19 @@ function InboxWorkspace({initialFilter}:{initialFilter:NotificationFilter}) {
                   <View style={styles.quickActions}>
                     <TouchableOpacity
                       disabled={acting||isDemo} onPress={() => handleSnooze(item)}
-                      style={[styles.actionBtn, { borderColor: colors.border, borderRadius: 8 }]}
+                      style={[styles.actionBtn, { borderColor: colors.border, backgroundColor: colors.surfaceElevated, borderRadius: 6 }]}
                       accessibilityRole="button"
                       accessibilityLabel={`Snooze ${item.title}`}
                     >
-                      <Text style={[typography.caption, { color: colors.textSecondary, fontWeight: "600" }]}>Snooze</Text>
+                      <Text style={[typography.caption, { color: colors.textSecondary, fontWeight: "600", fontSize: 11 }]}>Snooze</Text>
                     </TouchableOpacity>
                     <TouchableOpacity
                       disabled={acting||isDemo} onPress={() => handleDone(item)}
-                      style={[styles.actionBtn, { borderColor: colors.brandMuted, backgroundColor: colors.brandSubtle, borderRadius: 8 }]}
+                      style={[styles.actionBtn, { borderColor: colors.statusGood, backgroundColor: colors.statusGoodBg, borderRadius: 6 }]}
                       accessibilityRole="button"
                       accessibilityLabel={`Mark ${item.title} as done`}
                     >
-                      <Text style={[typography.caption, { color: colors.brandLight, fontWeight: "600" }]}>Done</Text>
+                      <Text style={[typography.caption, { color: colors.statusGood, fontWeight: "700", fontSize: 11 }]}>Done</Text>
                     </TouchableOpacity>
                   </View>
                 </View>
@@ -385,27 +416,30 @@ const styles = StyleSheet.create({
   },
   filterBar: {
     flexDirection: "row",
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    paddingHorizontal: 6,
+    paddingVertical: 3,
     borderBottomWidth: 1,
-    gap: 6,
+    gap: 3,
   },
   filterTab: {
     flex: 1,
-    minHeight: 44,
-    paddingVertical: 8,
+    minHeight: 28,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
     alignItems: "center",
     justifyContent: "center",
   },
   summaryStrip: {
     flexDirection: "row",
-    padding: 12,
+    paddingVertical: 4,
+    paddingHorizontal: 10,
     borderWidth: 1,
-    marginBottom: 12,
+    marginBottom: 8,
   },
   stripCol: {
-    flex: 1,
+    flexDirection: "row",
     alignItems: "center",
+    gap: 4,
   },
   summaryIcon: {
     marginTop: 2,
@@ -423,12 +457,12 @@ const styles = StyleSheet.create({
     minWidth: 280,
   },
   itemCard: {
-    padding: 14,
+    padding: 12,
     borderWidth: 1,
     marginBottom: 10,
   },
   cardMainTouch: {
-    minHeight: 44,
+    minHeight: 40,
   },
   cardTop: {
     flexDirection: "row",
@@ -450,20 +484,20 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    marginTop: 10,
-    paddingTop: 8,
+    marginTop: 6,
+    paddingTop: 6,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: "rgba(128,128,128,0.2)",
   },
   quickActions: {
     flexDirection: "row",
-    gap: 8,
+    gap: 6,
   },
   actionBtn: {
-    minHeight: 44,
-    minWidth: 64,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    minHeight: 28,
+    minWidth: 48,
+    paddingHorizontal: 9,
+    paddingVertical: 3,
     borderWidth: 1,
     borderRadius: 6,
     alignItems: "center",

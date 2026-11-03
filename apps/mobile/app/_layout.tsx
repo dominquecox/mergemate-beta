@@ -11,6 +11,7 @@ import { View, StyleSheet, Platform, useWindowDimensions } from "react-native";
 import { ThemeProvider, useTheme } from "../src/context/ThemeContext";
 import { AuthProvider, useAuth } from "../src/context/AuthContext";
 import { ConsentProvider } from "../src/context/ConsentContext";
+import { AlertsProvider } from "../src/context/AlertsContext";
 import { DemoBanner } from "../src/components/DemoBanner";
 import { ConfigErrorScreen, SampleDataBanner, isApiMisconfigured } from "../src/components/ConfigBanner";
 import { AppFonts } from "../src/components/AppFonts";
@@ -173,7 +174,9 @@ export default function RootLayout() {
       <ThemeProvider>
         <AuthProvider>
           <ConsentProvider>
-            <ReadoutProvider><AppContent /></ReadoutProvider>
+            <AlertsProvider>
+              <ReadoutProvider><AppContent /></ReadoutProvider>
+            </AlertsProvider>
           </ConsentProvider>
         </AuthProvider>
       </ThemeProvider>
