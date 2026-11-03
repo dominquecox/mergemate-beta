@@ -41,6 +41,7 @@ export function resolveApiConfig(rawBaseUrl: string | undefined, isDevBuild: boo
 /** The web app that hosts billing, for the "Manage plan" link on iOS. It follows the API environment. */
 export function webAppOrigin(mode: ApiMode): string {
   if (mode.kind === "http") {
+    if (mode.baseUrl === "/__api") return "https://dev.mergemate.dev";
     const host = new URL(mode.baseUrl).hostname;
     if (host === "localhost" || host === "127.0.0.1") return "http://localhost:8081";
     if (host.startsWith("api-dev.")) return "https://dev.mergemate.dev";

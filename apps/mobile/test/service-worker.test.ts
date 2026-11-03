@@ -235,7 +235,8 @@ describe("install files", () => {
 
   it("the page template links the manifest and the Home Screen icon", () => {
     const html = readFileSync(resolve(publicDir, "index.html"), "utf8");
-    expect(html).toContain('<link rel="manifest" href="/manifest.webmanifest" />');
+    expect(html).toContain('<link rel="manifest" href="/manifest.webmanifest" crossorigin="use-credentials" />');
+    expect(html).toContain('<meta name="mobile-web-app-capable" content="yes" />');
     expect(html).toContain('<link rel="apple-touch-icon" href="/icons/icon-192.png" />');
   });
 });

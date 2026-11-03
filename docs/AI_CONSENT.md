@@ -14,7 +14,7 @@
 
 ## Checks
 - `npm test` (API `test/ai-policy.test.ts`, `test/ai-engine.test.ts`; app `test/ai-choices.test.ts`), `npm run typecheck`, `npm run lint`.
-- Browser fixture against the exported app: `EXPO_NO_TELEMETRY=1 EXPO_PUBLIC_API_BASE_URL=https://api-dev.mergemate.dev npm run export:web -w @mergemate/mobile && node apps/mobile/scripts/check-consent.mjs` (set `MM_CHROME_PATH` for a non-Chrome binary). The API is a stateful fixture, not the real Worker.
+- Browser fixture against the exported app: `EXPO_NO_TELEMETRY=1 EXPO_PUBLIC_API_BASE_URL=/__api npm run export:web -w @mergemate/mobile && node apps/mobile/scripts/check-consent.mjs` (set `MM_CHROME_PATH` for a non-Chrome binary). The API is a stateful fixture, not the real Worker.
 
 ## Not proven here
 Real D1 trigger behaviour on a remote database (tests use the SQLite test D1), physical devices, authenticated dev smoke, screen-reader acceptance and production acceptance. The `migrations 0013-0015` ordering must be resolved when the other PRs land.

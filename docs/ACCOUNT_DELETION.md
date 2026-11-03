@@ -42,7 +42,7 @@ From the repository root:
 npm ci --ignore-scripts
 npm run check
 node apps/site/scripts/check.mjs
-EXPO_NO_TELEMETRY=1 EXPO_PUBLIC_API_BASE_URL=https://api-dev.mergemate.dev npm run export:web -w @mergemate/mobile
+EXPO_NO_TELEMETRY=1 EXPO_PUBLIC_API_BASE_URL=/__api npm run export:web -w @mergemate/mobile
 node apps/mobile/scripts/check-account-deletion.mjs
 EXPO_NO_TELEMETRY=1 EXPO_PUBLIC_API_BASE_URL=https://api-dev.mergemate.dev npm exec -w @mergemate/mobile -- expo export -p ios -p android --output-dir /private/tmp/j005-native-exports
 npm exec -w @mergemate/api -- wrangler deploy --env dev --dry-run --outdir /private/tmp/j005-api-dryrun

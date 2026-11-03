@@ -26,7 +26,7 @@ Run from the repository root:
 
 ```sh
 npm run check
-EXPO_NO_TELEMETRY=1 EXPO_PUBLIC_API_BASE_URL=https://api-dev.mergemate.dev npm run export:web -w @mergemate/mobile
+EXPO_NO_TELEMETRY=1 EXPO_PUBLIC_API_BASE_URL=/__api npm run export:web -w @mergemate/mobile
 node apps/mobile/scripts/check-session-lifecycle.mjs
 EXPO_NO_TELEMETRY=1 EXPO_PUBLIC_API_BASE_URL=https://api-dev.mergemate.dev npm exec -w @mergemate/mobile -- expo export -p ios -p android --output-dir /private/tmp/j003-native-export
 npm exec -w @mergemate/api -- wrangler deploy --env dev --dry-run --outdir /private/tmp/j003-api-dryrun
