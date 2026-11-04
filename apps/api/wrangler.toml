@@ -194,6 +194,8 @@ workers_dev = false
 APP_ENV = "production"
 # Free plan: a few real AI actions a day; Pro (default 200) is the plan for daily use.
 AI_DAILY_ACTIONS_FREE = "5"
+# Everyone without their own Meta key shares this one small daily pool on the shared key; with their own key, AI is uncapped.
+AI_DEMO_DAILY_ACTIONS = "40"
 STRIPE_MODE = "live"
 WEB_ORIGIN = "https://app.mergemate.dev"
 SITE_ORIGIN = "https://mergemate.dev"

@@ -100,7 +100,7 @@ describe('user Meta key settings',()=>{
 });
 
 describe('user-key AI routing and budgets',()=>{
-  it.each(['summary','risk'] as const)('uses the user key for Meta %s, bypasses global budget, retains user cap',async task=>{
+  it.each(['summary','risk'] as const)('uses the user key for Meta %s, bypasses the shared budget and the plan cap',async task=>{
     const {ctx,web,put}=await fixture();await put();
     ctx.env.MODEL_ROUTE_RISK='meta:muse-spark-1.2';
     await createDbConsentStore(ctx.env.DB).write(web.userId,true);
@@ -112,10 +112,10 @@ describe('user-key AI routing and budgets',()=>{
     expect(transport.calls).toHaveLength(1);expect(transport.calls[0]?.apiKey).toBe(key());
     expect((await usage.check('global',1)).remaining).toBe(0);
     expect(ctx.db.rows<{used:number}>('SELECT used FROM ai_usage_daily WHERE scope=?','global')).toEqual([{used:1}]);
-    // Over the user cap: summary is refused; risk falls back to its rule-based result. Neither calls the model.
-    if(task==='summary')await expect(analyze(deps,record(web.userId),ref,ctx.env)).rejects.toMatchObject({code:'rate_limited'});
-    else expect((await analyze(deps,record(web.userId),{...ref,number:ref.number+1},ctx.env)).body).toMatchObject({assessedBy:'rules'});
-    expect(transport.calls).toHaveLength(1);
+    // Past the free plan's cap of 1: their own key pays, so a second action still runs on it and spends no shared budget.
+    await analyze(deps,record(web.userId),{...ref,number:ref.number+1},ctx.env);
+    expect(transport.calls).toHaveLength(2);expect(transport.calls[1]?.apiKey).toBe(key());
+    expect(ctx.db.rows<{used:number}>('SELECT used FROM ai_usage_daily WHERE scope=?','global')).toEqual([{used:1}]);
   });
   it('does not bypass the global budget for Workers AI, or for users without a key',async()=>{
     const {ctx,web,put}=await fixture();await put();await createDbConsentStore(ctx.env.DB).write(web.userId,true);

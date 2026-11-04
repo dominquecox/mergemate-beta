@@ -5,6 +5,8 @@ import { requireBinding } from "../config";
 import type { Deps, Env } from "../env";
 import { ApiError, ConfigError } from "../errors";
 import { createModelProvider } from "../ai/provider";
+import { userModelContext } from "../lib/user-meta-key";
+import { fundingLimits, userDailyLimit } from "./ai-engine-gate";
 import type { ModelProvider, ProviderDeps } from "../ai/provider";
 import { TRIAGE_JSON_SCHEMA } from "../ai/schemas";
 import { fetchPrDetail } from "./github";
@@ -281,9 +283,12 @@ const scoreWithModel = async (input: TriageQueueInput, stores: AiStores, candida
   }
   if (toAsk.length === 0) return;
 
+  // Same funding rule as other AI: the user's own Meta key when saved (no plan cap), else the shared pool.
+  const owned = await userModelContext(env, userId, "triage").catch(() => null);
+  if (!owned) return;
   let provider: ModelProvider;
   try {
-    provider = createModelProvider(env, "triage", input.model);
+    provider = createModelProvider(owned.env, "triage", input.model);
   } catch (error) {
     // Misconfigured route: keep the rules lanes and leave a content-free trace for operators.
     if (error instanceof ConfigError) {
@@ -293,9 +298,9 @@ const scoreWithModel = async (input: TriageQueueInput, stores: AiStores, candida
     throw error;
   }
 
-  const limits = actionLimits(env);
+  const limits = fundingLimits(owned.ownsMetaKey, actionLimits(env));
   const plan = (await getBillingPlan(env, userId)).plan;
-  const userLimit = triageDailyLimit(env, plan);
+  const userLimit = userDailyLimit(owned.ownsMetaKey, triageDailyLimit(env, plan));
 
   let stopped = false;
   let failures = 0;

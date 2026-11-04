@@ -1,13 +1,14 @@
+import { savedMetaKey } from "../lib/user-meta-key";
 import { requireBinding } from "../config";
 import { captureAiPolicy } from "../lib/ai-policy";
 import { VoiceNoteResult } from "@mergemate/contracts";
-import { transcribeWithMeta } from "../ai/provider";
+import { transcribeWithMeta, withUserOwnedKey } from "../ai/provider";
 import type { SessionRecord } from "../lib/sessions";
 import { getBillingPlan } from "../lib/stripe-billing";
 import { requireConsent } from "./consent";
 import type { Env } from "../env";
 import { ApiError } from "../errors";
-import { AiActionLimits, AiStores, GLOBAL_LIMIT_MESSAGE, USER_LIMIT_MESSAGE, limitError, storesFor, userKey, withReservation } from "./ai-engine-gate";
+import { AiActionLimits, AiStores, FREE_POOL_MESSAGE, GLOBAL_LIMIT_MESSAGE, USER_LIMIT_MESSAGE, fundingLimits, limitError, storesFor, userDailyLimit, userKey, withReservation } from "./ai-engine-gate";
 
 export const VOICE_NOTE_MAX_BYTES = 5 * 1024 * 1024;
 export const VOICE_NOTE_MAX_SECONDS = 120;
@@ -93,27 +94,29 @@ export const readWavInfo = (bytes: Uint8Array): WavInfo | null => {
 };
 
 /**
- * Consent, plan and a read-only cap check for the fixed voice endpoint. Unlike gateAction
- * this does not resolve a routed model: transcription always calls Muse Voice Transcribe
- * on the shared Meta key, so a user's own Meta key (MM-032) does not apply here.
+ * Consent, plan, key and a read-only cap check for the fixed voice endpoint. Transcription always calls Muse
+ * Voice Transcribe; it runs on the user's own saved Meta key when there is one, and otherwise follows the same
+ * funding rule as other AI actions (fundingLimits).
  */
 export const gateVoiceAction = async (
   stores: AiStores,
   limits: AiActionLimits,
   session: SessionRecord,
   env: Env,
-): Promise<{ limit: number; remaining: number }> => {
+): Promise<{ limit: number; remaining: number; limits: AiActionLimits; env: Env }> => {
   const key = userKey(session);
   await requireConsent(stores.consent, key);
   stores.policy=await captureAiPolicy(stores.db??requireBinding(env,"DB"),key);
   const plan = (await getBillingPlan(env, key)).plan;
-  const userCheck = await stores.usage.check(key, plan === "pro" ? limits.pro : limits.free);
+  const ownKey = await savedMetaKey(env, key);
+  const userCheck = await stores.usage.check(key, userDailyLimit(ownKey !== null, plan === "pro" ? limits.pro : limits.free));
   if (userCheck.limited) throw limitError(USER_LIMIT_MESSAGE);
-  if (limits.global !== undefined) {
-    const globalCheck = await stores.globalBudget.check("global", limits.global);
-    if (globalCheck.limited) throw limitError(GLOBAL_LIMIT_MESSAGE);
+  const funded = fundingLimits(ownKey !== null, limits);
+  if (funded.global !== undefined) {
+    const globalCheck = await stores.globalBudget.check(funded.globalScope ?? "global", funded.global);
+    if (globalCheck.limited) throw funded.globalScope === "demo" ? new ApiError("forbidden", FREE_POOL_MESSAGE) : limitError(GLOBAL_LIMIT_MESSAGE);
   }
-  return { limit: userCheck.limit, remaining: userCheck.remaining };
+  return { limit: userCheck.limit, remaining: userCheck.remaining, limits: funded, env: ownKey === null ? env : withUserOwnedKey(env, ownKey) };
 };
 
 export interface VoiceNoteRunResult {
@@ -142,7 +145,7 @@ export const transcribeVoiceNote = async (args: {
   const { db, fetchImpl, limits, env, session, audio, audioType, requestId } = args;
   const stores = storesFor(db);
   const userId = userKey(session);
-  const { limit } = await gateVoiceAction(stores, limits, session, env);
+  const { limit, limits: funded, env: keyedEnv } = await gateVoiceAction(stores, limits, session, env);
   if(audioType!=="wav")throw new ApiError("validation_failed","Send a WAV recording from MergeMate. Compressed audio cannot be safely duration-checked here.");
   let audioSeconds:number|undefined;
   if (audioType === "wav") {
@@ -158,10 +161,10 @@ export const transcribeVoiceNote = async (args: {
     }
   }
   const { contentType, extension } = VOICE_CONTENT_TYPES[audioType];
-  const { value: body, remaining: left } = await withReservation(stores, limits, userId, limit, async () => {
+  const { value: body, remaining: left } = await withReservation(stores, funded, userId, limit, async () => {
     await stores.policy?.assertCurrent();
     const { text } = await transcribeWithMeta({
-      env,
+      env: keyedEnv,
       fetchImpl,
       audio,
       contentType,

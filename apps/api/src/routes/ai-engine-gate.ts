@@ -30,6 +30,10 @@ export interface AiActionLimits {
   pro: number;
   /** Global daily action budget. Absent when unconfigured, and then unenforced. */
   global?: number | undefined;
+  /** One shared daily pool on the shared key for everyone without their own Meta key. */
+  demo?: number | undefined;
+  /** Usage scope the shared budget is counted in ("global" by default, "demo" for the free pool). */
+  globalScope?: string | undefined;
 }
 
 export const parsePositiveInt = (value: string | undefined, fallback: number): number => {
@@ -48,6 +52,7 @@ export const actionLimits = (env: Env): AiActionLimits => {
     // Launch value per specs/LIMITS.md until AI Gateway shows real cost; the CTO resets it then.
     pro: parsePositiveInt(env.AI_DAILY_ACTIONS_PRO, 200),
     global: global === undefined || Number.isNaN(global) ? undefined : global,
+    ...(env.AI_DEMO_DAILY_ACTIONS === undefined ? {} : { demo: parsePositiveInt(env.AI_DEMO_DAILY_ACTIONS, 1) }),
   };
 };
 
@@ -219,6 +224,27 @@ export interface AiRunResult {
 
 export const USER_LIMIT_MESSAGE = "Daily AI limit reached. Resets at midnight.";
 export const GLOBAL_LIMIT_MESSAGE = "AI is paused while usage is over budget.";
+export const FREE_POOL_MESSAGE = "Today's free AI is used up. Add your Meta key in Settings to keep going.";
+/** A user's own Meta key pays for their AI, so no plan cap applies (per-minute abuse limits still do). */
+export const OWN_KEY_DAILY_LIMIT = 1_000_000;
+
+/** The free pool running out sends people to Settings to add their key, not to an upgrade. */
+const sharedLimitError = (limits: AiActionLimits): ApiError =>
+  limits.globalScope === "demo" ? new ApiError("forbidden", FREE_POOL_MESSAGE) : limitError(GLOBAL_LIMIT_MESSAGE);
+
+/**
+ * Who pays for an AI action. A saved Meta key always pays for its owner, with no shared budget. Where
+ * AI_DEMO_DAILY_ACTIONS is set, everyone without their own key shares that one daily pool on the shared key.
+ * Without that setting the shared key serves everyone as before.
+ */
+export const fundingLimits = (ownsMetaKey: boolean, limits: AiActionLimits): AiActionLimits => {
+  if (ownsMetaKey) return { ...limits, global: undefined, globalScope: undefined };
+  if (limits.demo === undefined) return limits;
+  return { ...limits, global: limits.demo, globalScope: "demo" };
+};
+
+/** The daily cap on the user's own counter: the plan cap on the shared key, none on their own key. */
+export const userDailyLimit = (ownsMetaKey: boolean, planLimit: number): number => (ownsMetaKey ? OWN_KEY_DAILY_LIMIT : planLimit);
 
 export const limitError = (message: string): ApiError =>
   new ApiError("rate_limited", message, { "retry-after": String(secondsToMidnight()) });
@@ -238,13 +264,13 @@ export const gateAction = async (
   await requireConsent(stores.consent, key);
   stores.policy=await captureAiPolicy(stores.db??requireBinding(env,"DB"),key,task==="summary"||task==="risk");
   const plan = (await getBillingPlan(env, key)).plan;
-  const userCheck = await stores.usage.check(key, plan === "pro" ? limits.pro : limits.free);
-  if (userCheck.limited) throw limitError(USER_LIMIT_MESSAGE);
   const model = await userModelContext(env, key, task);
-  const effectiveLimits = model.ownsMetaKey ? { ...limits, global: undefined } : limits;
+  const userCheck = await stores.usage.check(key, userDailyLimit(model.ownsMetaKey, plan === "pro" ? limits.pro : limits.free));
+  if (userCheck.limited) throw limitError(USER_LIMIT_MESSAGE);
+  const effectiveLimits = fundingLimits(model.ownsMetaKey, limits);
   if (effectiveLimits.global !== undefined) {
-    const globalCheck = await stores.globalBudget.check("global", effectiveLimits.global);
-    if (globalCheck.limited) throw limitError(GLOBAL_LIMIT_MESSAGE);
+    const globalCheck = await stores.globalBudget.check(effectiveLimits.globalScope ?? "global", effectiveLimits.global);
+    if (globalCheck.limited) throw sharedLimitError(effectiveLimits);
   }
   return { limit: userCheck.limit, remaining: userCheck.remaining, model, limits: effectiveLimits };
 };
@@ -274,8 +300,8 @@ export const withReservation = async <T>(
     if (!mine) throw limitError(USER_LIMIT_MESSAGE);
     held.push(mine);
     if (limits.global !== undefined) {
-      const shared = await stores.globalBudget.reserve("global", limits.global);
-      if (!shared) throw limitError(GLOBAL_LIMIT_MESSAGE);
+      const shared = await stores.globalBudget.reserve(limits.globalScope ?? "global", limits.global);
+      if (!shared) throw sharedLimitError(limits);
       held.push(shared);
     }
     return { value: await work(), remaining: Math.max(0, userLimit - mine.used) };

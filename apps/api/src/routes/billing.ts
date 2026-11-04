@@ -16,9 +16,11 @@ function realUser(c: Context<AppEnv>, webOnly=false) {
 }
 export const billing = new Hono<AppEnv>()
   .get("/billing/plan",async c=>{
-    const user=realUser(c),plan=await getBillingPlan(c.env,user),limits=actionLimits(c.env);
+    const user=realUser(c),plan=await getBillingPlan(c.env,user),limits=actionLimits(c.env),db=requireBinding(c.env,"DB");
+    // A user's own Meta key has no daily cap, so there is no count to show.
+    if(await db.prepare("SELECT 1 AS own FROM user_meta_keys WHERE user_id=?").bind(user).first())return c.json(plan);
     // Same read-only cap check the AI gate uses, so Settings shows what the next AI action will see.
-    const today=await createDbUsageStore(requireBinding(c.env,"DB")).check(user,plan.plan==="pro"?limits.pro:limits.free);
+    const today=await createDbUsageStore(db).check(user,plan.plan==="pro"?limits.pro:limits.free);
     return c.json({...plan,aiActions:{limit:today.limit,remaining:today.remaining}});
   })
   .post("/billing/checkout",async c=>{

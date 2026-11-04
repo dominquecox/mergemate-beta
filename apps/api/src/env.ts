@@ -41,6 +41,8 @@ export interface Env {
   AI_DAILY_ACTIONS_FREE?: string;
   /** Daily AI actions per user on the paid plan. Defaults to 200. */
   AI_DAILY_ACTIONS_PRO?: string;
+  /** When set, everyone without their own Meta key shares this one daily pool of actions on the shared key. */
+  AI_DEMO_DAILY_ACTIONS?: string;
   /** Global daily AI actions. Absent means unenforced. */
   AI_GLOBAL_DAILY_ACTIONS?: string;
   GITHUB_APP_CLIENT_ID?: string;

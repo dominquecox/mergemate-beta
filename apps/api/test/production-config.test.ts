@@ -51,6 +51,11 @@ describe("wrangler.toml [env.production]", () => {
     expect(prod("AI_DAILY_ACTIONS_PRO")).toBeUndefined();
   });
 
+  it("shares one small daily AI pool on the shared key in production, and leaves dev as it was", () => {
+    expect(prod("AI_DEMO_DAILY_ACTIONS")).toBe("40");
+    expect(dev("AI_DEMO_DAILY_ACTIONS")).toBeUndefined();
+  });
+
   it("uses the same model settings as dev", () => {
     for (const name of ["MODEL_ROUTE_SUMMARY", "MODEL_ROUTE_RISK", "MODEL_ROUTE_TRIAGE", "MODEL_ROUTE_HIGHLIGHT", "MODEL_BASE_URL"]) {
       expect(prod(name)).toBeDefined();

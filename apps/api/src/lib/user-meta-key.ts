@@ -41,6 +41,17 @@ export async function verifyMetaKey(env: Env,deps: Deps,key: string) {
   if(body?.object!=='response')throw new ApiError('upstream_unavailable','The Meta key could not be checked. Try again.');
 }
 
+/** The user's saved Meta key, or null when none is saved. Throws if a saved key cannot be read (never falls back). */
+export async function savedMetaKey(env: Env,userId: string): Promise<string|null> {
+  const row=await requireBinding(env,'DB').prepare('SELECT key_version,ciphertext FROM user_meta_keys WHERE user_id=?')
+    .bind(userId).first<{key_version:string;ciphertext:string}>();
+  if(!row)return null;
+  try {
+    const cipher=await createTokenCipher(env);
+    return await cipher.decrypt(row.key_version,row.ciphertext,context(userId));
+  } catch { throw new ApiError('upstream_unavailable','Your saved Meta key is unavailable. Replace or remove it in web Settings.'); }
+}
+
 /** Request-local credential context. Never mutates Worker bindings or falls back on a broken saved key. */
 export async function userModelContext(env: Env,userId: string,task: AiTask): Promise<{env:Env;ownsMetaKey:boolean}> {
   const row=await requireBinding(env,'DB').prepare('SELECT key_version,ciphertext FROM user_meta_keys WHERE user_id=?')
