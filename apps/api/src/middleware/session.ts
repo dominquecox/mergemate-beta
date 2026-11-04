@@ -67,7 +67,7 @@ export const authenticate = (): MiddlewareHandler<AppEnv> => async (c, next) => 
   }
 
   // The brain answers as if absent while its flag is off, before any session lookup.
-  if (path.startsWith("/v1/brain/") && !(await brainEnabled(c.env))) {
+  if (/^\/v1\/brain(?:\/|$)/.test(path) && !(await brainEnabled(c.env))) {
     await limitIp(c);
     throw new ApiError("not_found", "Not found.");
   }

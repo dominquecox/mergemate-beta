@@ -11,7 +11,7 @@ import { parseBody } from "../lib/validate";
 import { authenticateAgent, newAgentSecret } from "../brain/agent-auth";
 import { requireBrain } from "../brain/flag";
 import {
-  BOARD_TOP, DEFAULT_RULES, LOCK_TTL_MAX_SECONDS, LOCK_TTL_SECONDS, acquireLock, boardCards, cardIn, db, eventStatement, liveLockFor,
+  BOARD_TOP, DEFAULT_RULES, LOCK_TTL_MAX_SECONDS, LOCK_TTL_SECONDS, acquireLock, boardCards, cardIn, db, liveLockFor,
   liveLocks, lockOnCard, ownedProject, projectById, toCard, toLock, toProject, toToken, trackTail, type TokenRow,
 } from "../brain/store";
 
@@ -26,6 +26,10 @@ const CLIENT_EVENT_KINDS = new Set(["note", "pr_opened"]);
 export const MAX_PROJECTS_PER_USER = 50;
 export const MAX_CARDS_PER_PROJECT = 500;
 export const MAX_TOKENS_PER_PROJECT = 20;
+/** Events agents may log themselves on one board in a rolling day; server events are not counted. */
+export const MAX_CLIENT_EVENTS_PER_DAY = 1000;
+/** Statuses that end work on a card; closing one releases any lock on it. */
+const CLOSED_STATUSES = new Set(["merged", "blocked"]);
 /** Holds only while this token still has a live lock on the card; every lock-gated write carries it. */
 const HOLDS_LOCK = "EXISTS(SELECT 1 FROM brain_locks WHERE card_id=? AND token_id=? AND expires_at>?)";
 const lostLock = () => new ApiError("state_conflict", "Your lock on this card expired. Proceed or lock it again.");
@@ -112,8 +116,17 @@ export function createBrainRouter() {
   r.patch("/cards", async (c) => {
     const user = realUser(c), body = await parseBody(c, UpdateCardRequestSchema), project = await ownedProject(c.env, user, body.projectId), card = await cardIn(c.env, project.id, body.cardId);
     const next = { ...card, ...(body.title ? { title: body.title } : {}), ...(body.details ? { details: body.details } : {}), ...(body.priority ? { priority: body.priority } : {}), ...(body.doneWhen ? { done_when: body.doneWhen } : {}), ...(body.status ? { status: body.status } : {}), updated_at: nowOf(c).toISOString() };
-    await db(c.env).prepare("UPDATE brain_cards SET title=?,details=?,priority=?,done_when=?,status=?,updated_at=? WHERE id=? AND project_id=?")
-      .bind(next.title, next.details, next.priority, next.done_when, next.status, next.updated_at, card.id, project.id).run();
+    const d = db(c.env), closing = CLOSED_STATUSES.has(next.status) && !CLOSED_STATUSES.has(card.status);
+    await d.batch([
+      d.prepare("UPDATE brain_cards SET title=?,details=?,priority=?,done_when=?,status=?,updated_at=? WHERE id=? AND project_id=?")
+        .bind(next.title, next.details, next.priority, next.done_when, next.status, next.updated_at, card.id, project.id),
+      // A closed card frees its agent: the lock goes, and the track says so.
+      ...(closing ? [
+        d.prepare("INSERT INTO brain_events(id,project_id,card_id,kind,actor,text,at) SELECT ?,?,?,'unlock','owner',?,? WHERE EXISTS(SELECT 1 FROM brain_locks WHERE card_id=? AND project_id=?)")
+          .bind(crypto.randomUUID(), project.id, card.id, `Lock released: the owner marked the card ${next.status}.`, next.updated_at, card.id, project.id),
+        d.prepare("DELETE FROM brain_locks WHERE card_id=? AND project_id=?").bind(card.id, project.id),
+      ] : []),
+    ]);
     return c.json({ card: toCard(next) });
   });
   r.post("/cards/reorder", async (c) => {
@@ -215,7 +228,10 @@ export function createBrainAgentRouter() {
     const body = await parseBody(c, TrackLogRequestSchema), { token, project } = await scoped(c, body.projectId);
     if (!CLIENT_EVENT_KINDS.has(body.kind)) throw new ApiError("forbidden", "Only the server records that kind of event.");
     if (body.cardId) await cardIn(c.env, project.id, body.cardId);
-    await eventStatement(c.env, { projectId: project.id, cardId: body.cardId, kind: body.kind, actor: agentName(token), text: body.text, at: nowOf(c).toISOString() }).run();
+    const now = nowOf(c), since = new Date(now.getTime() - 86_400_000).toISOString();
+    const logged = await db(c.env).prepare("INSERT INTO brain_events(id,project_id,card_id,kind,actor,text,at) SELECT ?,?,?,?,?,?,? WHERE (SELECT COUNT(*) FROM brain_events WHERE project_id=? AND kind IN ('note','pr_opened') AND at>?)<?")
+      .bind(crypto.randomUUID(), project.id, body.cardId ?? null, body.kind, agentName(token), body.text.slice(0, 4096), now.toISOString(), project.id, since, MAX_CLIENT_EVENTS_PER_DAY).run();
+    if (logged.meta.changes !== 1) throw new ApiError("rate_limited", `A board takes at most ${MAX_CLIENT_EVENTS_PER_DAY} logged events a day. Try again later.`);
     return c.json({ logged: true }, 201);
   });
 

@@ -2,7 +2,7 @@ import { ActivityEvent } from "@mergemate/contracts";
 import { z } from "zod";
 import type { Deps, Env } from "../env";
 import { deliverGitHubPush } from "./github-push";
-import { verifyMergedPullRequest } from "../brain/verifier";
+import { VerifyLater, verifyMergedPullRequest } from "../brain/verifier";
 import { timingSafeEqual } from "./crypto";
 
 const encoder = new TextEncoder();
@@ -257,7 +257,13 @@ export const consumeGitHubEvents = async (batch: MessageBatch<GitHubEventMessage
       // Event writes can retry; push delivery and the brain verifier are best effort and idempotent.
       try { await deliverGitHubPush(env, deps, msg.body); } catch { /* Never retry an applied event for push failures. */ }
       if (message.data.kind === "pr" && message.data.merge) {
-        try { await verifyMergedPullRequest(env, deps, { deliveryId: message.deliveryId, repo: message.data.repo, number: message.data.numbers[0] ?? 0, merge: message.data.merge }); } catch { /* Recorded on the card when it can be; never blocks the event. */ }
+        try {
+          await verifyMergedPullRequest(env, deps, { deliveryId: message.deliveryId, repo: message.data.repo, number: message.data.numbers[0] ?? 0, merge: message.data.merge, attempt: msg.attempts ?? 1 });
+        } catch (error) {
+          // GitHub was briefly unreadable: try the message again. Applying the event and push delivery are idempotent.
+          if (error instanceof VerifyLater) { msg.retry({ delaySeconds: 60 * (msg.attempts ?? 1) }); continue; }
+          /* Anything else is recorded on the card when it can be; it never blocks the event. */
+        }
       }
       msg.ack();
     } catch {

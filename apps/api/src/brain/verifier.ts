@@ -18,11 +18,20 @@ import { readBoundedBody } from "../lib/bounded-body";
 import { refreshUserRepoAccess } from "../lib/repo-access";
 import type { MergeRef } from "../lib/github-webhooks";
 import { mintJobToken, revokeJobToken } from "../workflows/github-app-token";
+import { ApiError } from "../errors";
 import { brainEnabled } from "./flag";
 import { db } from "./store";
 
 const API = "https://api.github.com";
 const SHA = /^[0-9a-f]{40}$/;
+/** Board owners whose access is re-checked for one merge; each check costs GitHub calls. */
+export const MAX_OWNERS_PER_MERGE = 10;
+/** A GitHub read that fails is retried with the queue message this many times before a FAIL is recorded. */
+export const MAX_VERIFY_ATTEMPTS = 3;
+
+/** Thrown when GitHub could not be read and the queue should try the message again later. */
+export class VerifyLater extends Error {}
+
 /** PR bodies are read only to look for the gate line; larger bodies are cut, not stored. */
 const MAX_BODY_CHARS = 65536;
 
@@ -107,7 +116,7 @@ const eventId = async (deliveryId: string, cardId: string) => {
 export async function verifyMergedPullRequest(
   env: Env,
   deps: Deps,
-  input: { deliveryId: string; repo: string; number: number; merge: MergeRef },
+  input: { deliveryId: string; repo: string; number: number; merge: MergeRef; attempt?: number },
   github: (repo: string, repoId: number) => Promise<VerifierGitHub> = (repo, repoId) => appGitHub(env, deps, repo, repoId),
 ): Promise<void> {
   if (!input.number || !(await brainEnabled(env))) return;
@@ -124,7 +133,7 @@ export async function verifyMergedPullRequest(
   // The access list is a cache, so re-check each owner with GitHub first, as push delivery does.
   // A failed check fails closed: stale rows never let a board see a repository its owner lost.
   const allowed = new Set<string>();
-  for (const userId of new Set((linked.results ?? []).map((card) => card.user_id))) {
+  for (const userId of [...new Set((linked.results ?? []).map((card) => card.user_id))].slice(0, MAX_OWNERS_PER_MERGE)) {
     try {
       await refreshUserRepoAccess(env, deps, userId);
       if (await db(env).prepare("SELECT 1 FROM user_repo_access WHERE user_id=? AND full_name=? COLLATE NOCASE").bind(userId, input.repo).first()) allowed.add(userId);
@@ -139,8 +148,11 @@ export async function verifyMergedPullRequest(
     client = await github(input.repo, input.merge.repoId);
     pull = await client.pull(input.repo, input.number);
     if (pull.mergeCommitSha) trees = { head: await client.commitTree(input.repo, pull.headSha), merge: await client.commitTree(input.repo, pull.mergeCommitSha) };
-  } catch {
+  } catch (error) {
     failure = "The verifier could not read this PR from GitHub.";
+    // A missing GitHub App will not fix itself; anything else may, so the queue tries again first.
+    const permanent = error instanceof ApiError && (error.code === "misconfigured" || error.code === "forbidden");
+    if (!permanent && (input.attempt ?? MAX_VERIFY_ATTEMPTS) < MAX_VERIFY_ATTEMPTS) throw new VerifyLater(failure);
   } finally {
     await client?.done().catch(() => undefined);
   }
@@ -153,6 +165,8 @@ export async function verifyMergedPullRequest(
     return [
       d.prepare("INSERT INTO brain_events(id,project_id,card_id,kind,actor,text,at) VALUES(?,?,?,'verified','verifier',?,?) ON CONFLICT(id) DO NOTHING").bind(id, card.project_id, card.id, text, now),
       d.prepare("UPDATE brain_cards SET status='merged',updated_at=? WHERE id=? AND project_id=? AND status<>'merged'").bind(now, card.id, card.project_id),
+      // A merged card needs no agent any more, so its lock goes too.
+      d.prepare("DELETE FROM brain_locks WHERE card_id=? AND project_id=?").bind(card.id, card.project_id),
     ];
   }));
   await d.batch(writes.flat());

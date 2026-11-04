@@ -2,7 +2,8 @@ import { describe, expect, it } from "vitest";
 import { testContext } from "./helpers";
 import { appFor, ghUser, post, signIn } from "./sign-in";
 import { consumeGitHubEvents, toWebhookData, type GitHubEventMessage } from "../src/lib/github-webhooks";
-import { verifyMerge, verifyMergedPullRequest, type MergedPull, type VerifierGitHub } from "../src/brain/verifier";
+import { VerifyLater, verifyMerge, verifyMergedPullRequest, type MergedPull, type VerifierGitHub } from "../src/brain/verifier";
+import { ApiError } from "../src/errors";
 
 const HEAD = "a".repeat(40), MERGE = "b".repeat(40), TREE = "c".repeat(40);
 const goodBody = `Exact head: \`${HEAD}\`\n- \`npm run check\`: exit 0. API 761.`;
@@ -66,6 +67,8 @@ const events = (ctx: ReturnType<typeof testContext>) => ctx.db.rows<{ kind: stri
 describe("verifyMergedPullRequest", () => {
   it("records one PASS on the linked card, marks it merged, and is idempotent per delivery", async () => {
     const { ctx, card } = await board(), calls: string[] = [];
+    await ctx.db.prepare("INSERT INTO brain_agent_tokens(id,project_id,name,tool,token_hash,created_at) SELECT 't1',project_id,'A','codex','h1',? FROM brain_cards WHERE id=?").bind(ctx.time.now().toISOString(), card.id).run();
+    await ctx.db.prepare("INSERT INTO brain_locks(card_id,project_id,token_id,agent,tool,since,expires_at) SELECT id,project_id,'t1','A','codex',?,? FROM brain_cards WHERE id=?").bind(ctx.time.now().toISOString(), new Date(ctx.time.now().getTime() + 600000).toISOString(), card.id).run();
     const gh = fakeGitHub(pull(), { [HEAD]: TREE, [MERGE]: TREE }, calls);
     await verifyMergedPullRequest(ctx.env, ctx.deps, input(), gh);
     await verifyMergedPullRequest(ctx.env, ctx.deps, input(), gh);
@@ -75,6 +78,7 @@ describe("verifyMergedPullRequest", () => {
     expect(rows[0]?.text).toMatch(/^PASS: PR #7/);
     expect(rows[0]?.id.length).toBeLessThanOrEqual(64);
     expect(ctx.db.rows<{ status: string }>("SELECT status FROM brain_cards WHERE id=?", card.id)[0]?.status).toBe("merged");
+    expect(ctx.db.rows("SELECT * FROM brain_locks WHERE card_id=?", card.id)).toEqual([]);
     expect(calls).toContain("done");
   });
 
@@ -141,5 +145,20 @@ describe("verifyMergedPullRequest", () => {
     await ctx.db.prepare("UPDATE user_access_checks SET checked_at=? WHERE user_id=?").bind("2020-01-01T00:00:00.000Z", owner.userId).run();
     await verifyMergedPullRequest(ctx.env, ctx.deps, input(), fakeGitHub(pull(), { [HEAD]: TREE, [MERGE]: TREE }));
     expect(events(ctx)).toEqual([]);
+  });
+
+  it("asks the queue to retry a GitHub read that failed, and records a FAIL only on the last attempt", async () => {
+    const { ctx } = await board();
+    const broken = async (): Promise<VerifierGitHub> => { throw new Error("GitHub 502"); };
+    await expect(verifyMergedPullRequest(ctx.env, ctx.deps, { ...input(), attempt: 1 }, broken)).rejects.toBeInstanceOf(VerifyLater);
+    expect(events(ctx)).toEqual([]);
+    await verifyMergedPullRequest(ctx.env, ctx.deps, { ...input(), attempt: 3 }, broken);
+    expect(events(ctx)[0]?.text).toMatch(/^FAIL: .*could not read this PR/);
+  });
+
+  it("records a FAIL at once when the GitHub App is not configured", async () => {
+    const { ctx } = await board();
+    await verifyMergedPullRequest(ctx.env, ctx.deps, { ...input(), attempt: 1 }, async () => { throw new ApiError("misconfigured", "no app"); });
+    expect(events(ctx)[0]?.text).toMatch(/^FAIL:/);
   });
 });

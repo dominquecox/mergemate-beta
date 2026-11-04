@@ -157,4 +157,40 @@ describe("brain API", () => {
     ctx.kv.set("flags:v1", JSON.stringify({ brain: false }));
     expect((await call(`/v1/brain/projects/${project.id}/proceed`, post({}, owner.headers))).status).toBe(404);
   });
+
+  it("hides every brain path while the flag is off, signed in or not", async () => {
+    const ctx = testContext(), call = appFor(ctx);
+    for (const path of ["/v1/brain", "/v1/brain/projects", "/agent/v1/brain", "/agent/v1/brain/board"]) {
+      expect((await call(path)).status).toBe(404);
+    }
+    on(ctx);
+    expect((await call("/v1/brain/projects")).status).toBe(401);
+  });
+
+  it("releases the lock when the owner closes a card, and keeps it otherwise", async () => {
+    const { ctx, call, owner, project, card, token, agent } = await setup();
+    const first = await card("first"), second = await card("second"), third = await card("third");
+    const a = await token("A"), b = await token("B", "copilot");
+    await call("/agent/v1/brain/proceed", post({ projectId: project.id }, agent(a.secret)));
+    await call("/agent/v1/brain/proceed", post({ projectId: project.id }, agent(b.secret)));
+    const patch = (cardId: string, status: string) => call("/v1/brain/cards", { ...post({ projectId: project.id, cardId, status }, owner.headers), method: "PATCH" });
+    expect((await patch(second.id, "review")).status).toBe(200);
+    expect(ctx.db.rows("SELECT * FROM brain_locks WHERE card_id=?", second.id)).toHaveLength(1);
+    expect((await patch(first.id, "merged")).status).toBe(200);
+    expect(ctx.db.rows("SELECT * FROM brain_locks WHERE card_id=?", first.id)).toEqual([]);
+    expect(ctx.db.rows<{ actor: string }>("SELECT actor FROM brain_events WHERE card_id=? AND kind='unlock'", first.id)).toEqual([{ actor: "owner" }]);
+    // The freed agent can take the next free card straight away.
+    expect((await json(await call("/agent/v1/brain/proceed", post({ projectId: project.id }, agent(a.secret))))).card.id).toBe(third.id);
+  });
+
+  it("caps the events agents can log on one board in a day", async () => {
+    const { ctx, call, project, token, agent } = await setup();
+    const { secret } = await token("A");
+    const at = ctx.time.now().toISOString();
+    const insert = ctx.db.prepare("INSERT INTO brain_events(id,project_id,card_id,kind,actor,text,at) VALUES(?,?,NULL,'note','A','x',?)");
+    for (let i = 0; i < 999; i++) await insert.bind(`seed-${i}`, project.id, at).run();
+    const log = () => call("/agent/v1/brain/log", post({ projectId: project.id, kind: "note", actor: "A", text: "hello" }, agent(secret)));
+    expect((await log()).status).toBe(201);
+    expect((await log()).status).toBe(429);
+  });
 });
