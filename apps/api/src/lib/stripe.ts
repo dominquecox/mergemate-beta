@@ -5,19 +5,26 @@ import { ApiError, ConfigError } from "../errors";
 export const STRIPE_API = "https://api.stripe.com/v1";
 const version = "2025-06-30.basil";
 export const StripeSubscription = z.object({
-  id: z.string(), customer: z.string(), livemode: z.literal(false), status: z.string(),
+  id: z.string(), customer: z.string(), livemode: z.boolean(), status: z.string(),
   created: z.number().optional(), cancel_at: z.number().nullable().optional(),
   cancel_at_period_end: z.boolean().optional(),
   items: z.object({ data: z.array(z.object({ current_period_end: z.number().optional(), price: z.object({ id: z.string() }) })) }),
 });
 export type StripeSubscription = z.infer<typeof StripeSubscription>;
 export const StripeCheckout = z.object({
-  id: z.string(), url: z.string().nullable(), status: z.string(),
+  id: z.string(), url: z.string().nullable(), status: z.string(), livemode: z.boolean(),
   metadata: z.record(z.string(),z.string()).nullable().optional(),
 });
 export const stripeMode = (env: Env) => {
-  if (env.STRIPE_MODE !== "test" || !env.STRIPE_SECRET_KEY?.startsWith("sk_test_")) throw new ConfigError("Stripe test mode is not configured");
+  const mode = env.STRIPE_MODE;
+  const prefix = mode === "test" ? "sk_test_" : mode === "live" ? "sk_live_" : null;
+  if (!prefix || !env.STRIPE_SECRET_KEY?.startsWith(prefix)) throw new ConfigError("Stripe mode is not configured");
+  return mode;
 };
+export const stripeLivemode = (env: Env) => stripeMode(env) === "live";
+export function assertStripeLivemode(env: Env, actual: boolean) {
+  if (actual !== stripeLivemode(env)) throw new ApiError("upstream_unavailable", "Billing returned data for the wrong environment.");
+}
 export async function stripeRequest(env: Env, deps: Deps, method: string, path: string, params?: Record<string,string>, idempotencyKey?: string): Promise<unknown> {
   stripeMode(env);
   const query = new URLSearchParams(params);
@@ -60,6 +67,7 @@ export async function subscriptions(env: Env, deps: Deps, customer: string) {
   return (await stripeList(env,deps,"/subscriptions",customer,{status:"all"})).map(value=>{
     const parsed=StripeSubscription.safeParse(value);
     if (!parsed.success || parsed.data.customer!==customer) throw new ApiError("upstream_unavailable","Billing returned an invalid subscription.");
+    assertStripeLivemode(env,parsed.data.livemode);
     return parsed.data;
   });
 }
@@ -67,12 +75,14 @@ export async function openCheckouts(env: Env, deps: Deps, customer: string) {
   return (await stripeList(env,deps,"/checkout/sessions",customer,{status:"open"})).map(value=>{
     const parsed=StripeCheckout.safeParse(value);
     if (!parsed.success) throw new ApiError("upstream_unavailable","Billing returned an invalid checkout.");
+    assertStripeLivemode(env,parsed.data.livemode);
     return parsed.data;
   });
 }
-export function billingUrl(value: unknown, host: "checkout.stripe.com" | "billing.stripe.com") {
-  const parsed=z.object({url:z.string()}).safeParse(value);
+export function billingUrl(env: Env, value: unknown, host: "checkout.stripe.com" | "billing.stripe.com") {
+  const parsed=z.object({url:z.string(),livemode:z.boolean()}).safeParse(value);
   if (!parsed.success) throw new ApiError("upstream_unavailable","Billing returned an invalid link.");
+  assertStripeLivemode(env,parsed.data.livemode);
   let url: URL;
   try { url=new URL(parsed.data.url); } catch { throw new ApiError("upstream_unavailable","Billing returned an invalid link."); }
   if (!url || url.protocol!=="https:" || url.hostname!==host || url.username || url.password || url.port) throw new ApiError("upstream_unavailable","Billing returned an invalid link.");
@@ -80,6 +90,7 @@ export function billingUrl(value: unknown, host: "checkout.stripe.com" | "billin
 }
 
 export async function expireCheckout(env: Env,deps: Deps,id: string) {
-  const response=z.object({id:z.string(),status:z.literal("expired")}).safeParse(await stripeRequest(env,deps,"POST",`/checkout/sessions/${encodeURIComponent(id)}/expire`,{},`expire-${id}`));
+  const response=z.object({id:z.string(),status:z.literal("expired"),livemode:z.boolean()}).safeParse(await stripeRequest(env,deps,"POST",`/checkout/sessions/${encodeURIComponent(id)}/expire`,{},`expire-${id}`));
   if(!response.success || response.data.id!==id)throw new ApiError("upstream_unavailable","Checkout expiration could not be confirmed.");
+  assertStripeLivemode(env,response.data.livemode);
 }

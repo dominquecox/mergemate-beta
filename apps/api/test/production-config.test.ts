@@ -43,7 +43,7 @@ describe("wrangler.toml [env.production]", () => {
     expect(webOrigin(env)).toBe("https://app.mergemate.dev");
     expect(siteOrigin(env)).toBe("https://mergemate.dev");
     expect(callbackUrl(env, "web")).toBe("https://app.mergemate.dev/auth/callback");
-    expect(prod("STRIPE_MODE")).toBe("disabled");
+    expect(prod("STRIPE_MODE")).toBe("live");
   });
 
   it("uses the same model settings as dev", () => {

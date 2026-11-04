@@ -15,8 +15,8 @@ function setup(){
   ctx.net.on("POST","https://api.stripe.com/v1/customers",{id:customer,livemode:false})
     .on("GET","https://api.stripe.com/v1/subscriptions",{data:[],has_more:false})
     .on("GET","https://api.stripe.com/v1/checkout/sessions",{data:[],has_more:false})
-    .on("POST","https://api.stripe.com/v1/checkout/sessions",{url:"https://checkout.stripe.com/c/pay/test"})
-    .on("POST","https://api.stripe.com/v1/billing_portal/sessions",{url:"https://billing.stripe.com/p/session/test"});
+    .on("POST","https://api.stripe.com/v1/checkout/sessions",{url:"https://checkout.stripe.com/c/pay/test",livemode:false})
+    .on("POST","https://api.stripe.com/v1/billing_portal/sessions",{url:"https://billing.stripe.com/p/session/test",livemode:false});
   return {ctx,messages};
 }
 async function web(ctx:TestContext){const s=await signIn(ctx,"web");return {...s,headers:{...s.headers,origin,"x-csrf-token":s.csrf??""}};}
@@ -73,12 +73,12 @@ describe('billing sessions',()=>{
     const {ctx}=setup();const s=await web(ctx);await mapped(ctx,s.userId);const app=appFor(ctx);
     expect((await app('/v1/billing/portal',post({},s.headers))).status).toBe(200);
     expect(new URLSearchParams(ctx.net.calls.at(-1)?.body??'').get('customer')).toBe(customer);
-    ctx.net.on('POST','https://api.stripe.com/v1/billing_portal/sessions',{url:'https://billing.stripe.com.evil.example'});
+    ctx.net.on('POST','https://api.stripe.com/v1/billing_portal/sessions',{url:'https://billing.stripe.com.evil.example',livemode:false});
     expect((await app('/v1/billing/portal',post({},s.headers))).status).toBe(502);
   });
   it('reuses open checkout and refuses a second active subscription',async()=>{
     const {ctx}=setup();const s=await web(ctx);await mapped(ctx,s.userId);const app=appFor(ctx);
-    ctx.net.on('GET','https://api.stripe.com/v1/checkout/sessions',{data:[{id:'cs_open',status:'open',url:'https://checkout.stripe.com/c/pay/open',metadata:{price_key:'pro_monthly'}}],has_more:false});
+    ctx.net.on('GET','https://api.stripe.com/v1/checkout/sessions',{data:[{id:'cs_open',status:'open',url:'https://checkout.stripe.com/c/pay/open',livemode:false,metadata:{price_key:'pro_monthly'}}],has_more:false});
     const res=await app('/v1/billing/checkout',post({priceKey:'pro_monthly'},s.headers));expect(await res.json()).toMatchObject({url:'https://checkout.stripe.com/c/pay/open'});
     ctx.net.on('GET','https://api.stripe.com/v1/subscriptions',{data:[subscription()],has_more:false});
     expect((await app('/v1/billing/checkout',post({priceKey:'pro_monthly'},s.headers))).status).toBe(403);
@@ -140,10 +140,10 @@ describe('verified billing events',()=>{
 describe('cancel before deletion',()=>{
   it('expires checkout, confirms cancellation then revokes GitHub and deletes data',async()=>{
     const {ctx}=setup();const s=await web(ctx);await mapped(ctx,s.userId);
-    ctx.net.on('GET','https://api.stripe.com/v1/checkout/sessions',{data:[{id:'cs_open',status:'open',url:null}],has_more:false})
-      .on('POST','https://api.stripe.com/v1/checkout/sessions/cs_open/expire',{id:'cs_open',status:'expired'})
+    ctx.net.on('GET','https://api.stripe.com/v1/checkout/sessions',{data:[{id:'cs_open',status:'open',url:null,livemode:false}],has_more:false})
+      .on('POST','https://api.stripe.com/v1/checkout/sessions/cs_open/expire',{id:'cs_open',status:'expired',livemode:false})
       .on('GET','https://api.stripe.com/v1/subscriptions',{data:[subscription()],has_more:false})
-      .on('DELETE','https://api.stripe.com/v1/subscriptions/sub_testbilling',{id:'sub_testbilling',status:'canceled'})
+      .on('DELETE','https://api.stripe.com/v1/subscriptions/sub_testbilling',{id:'sub_testbilling',status:'canceled',livemode:false})
       .on('DELETE','https://api.github.com/applications/',()=>new Response(null,{status:204}));
     const res=await appFor(ctx)('/v1/account',{method:'DELETE',headers:s.headers});expect(res.status).toBe(204);
     const cancel=ctx.net.calls.findIndex(c=>c.method==='DELETE'&&c.url.includes('/subscriptions/'));const revoke=ctx.net.calls.findIndex(c=>c.method==='DELETE'&&c.url.includes('/applications/'));expect(cancel).toBeGreaterThan(-1);expect(revoke).toBeGreaterThan(cancel);

@@ -188,10 +188,11 @@ workers_dev = false
 # GITHUB_APP_CLIENT_ID and GITHUB_APP_SLUG are public values of the production GitHub App (not secrets).
 # Dedicated production GitHub App identity supplied by the owner; dev uses its own App.
 # WEB_ORIGIN is the web app and the only allowed browser origin; SITE_ORIGIN is the public site (post and RSS links).
-# Both must match the fixed allowlists in src/config.ts, and a test pins them. STRIPE_MODE stays "disabled".
+# Both must match the fixed allowlists in src/config.ts, and a test pins them. Live billing also requires
+# STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET, STRIPE_PRICE_PRO_MONTHLY and STRIPE_PRICE_PRO_ANNUAL in production.
 [env.production.vars]
 APP_ENV = "production"
-STRIPE_MODE = "disabled"
+STRIPE_MODE = "live"
 WEB_ORIGIN = "https://app.mergemate.dev"
 SITE_ORIGIN = "https://mergemate.dev"
 GITHUB_APP_CLIENT_ID = "Iv1.submission-production-example"

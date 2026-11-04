@@ -3,11 +3,12 @@ import { requireBinding } from "../config";
 import type { Deps, Env } from "../env";
 import { ApiError, ConfigError } from "../errors";
 import { billingOperation } from "./stripe-billing";
-import { stripePrice, subscriptions } from "./stripe";
+import { assertStripeLivemode, stripeMode, stripePrice, subscriptions } from "./stripe";
 const types=new Set(["checkout.session.completed","customer.subscription.created","customer.subscription.updated","customer.subscription.deleted","invoice.payment_failed","invoice.paid"]);
-const Event=z.object({id:z.string().min(1).max(255),type:z.string(),created:z.number().int(),livemode:z.literal(false),data:z.object({object:z.object({customer:z.union([z.string(),z.object({id:z.string()})]).nullable().optional()}).passthrough()})});
+const Event=z.object({id:z.string().min(1).max(255),type:z.string(),created:z.number().int(),livemode:z.boolean(),data:z.object({object:z.object({customer:z.union([z.string(),z.object({id:z.string()})]).nullable().optional()}).passthrough()})});
 export async function verifyStripeEvent(raw: string, header: string|undefined, env: Env, now: Date) {
-  if(env.STRIPE_MODE!=="test" || !env.STRIPE_WEBHOOK_SECRET)throw new ConfigError("Stripe test webhook is not configured");
+  stripeMode(env);
+  if(!env.STRIPE_WEBHOOK_SECRET)throw new ConfigError("Stripe webhook is not configured");
   const parts=(header??"").split(',');const times=parts.filter(p=>p.startsWith('t='));const timestamp=times.length===1?Number(times[0]?.slice(2)):NaN;
   if(!Number.isSafeInteger(timestamp) || Math.abs(Math.floor(now.getTime()/1000)-timestamp)>300)throw new ApiError("forbidden","Invalid webhook signature.");
   const signatures=parts.filter(p=>p.startsWith('v1=')).map(p=>p.slice(3)).filter(s=>/^[a-f0-9]{64}$/i.test(s));
@@ -16,7 +17,8 @@ export async function verifyStripeEvent(raw: string, header: string|undefined, e
   for(const hex of signatures){const signature=Uint8Array.from(hex.match(/../g)??[],pair=>parseInt(pair,16));if(await crypto.subtle.verify("HMAC",key,signature,encoder.encode(`${timestamp}.${raw}`)))valid=true;}
   if(!valid)throw new ApiError("forbidden","Invalid webhook signature.");
   let json:unknown;try{json=JSON.parse(raw);}catch{throw new ApiError("validation_failed","Invalid webhook body.");}
-  const event=Event.safeParse(json);if(!event.success)throw new ApiError("validation_failed","Invalid test webhook event.");
+  const event=Event.safeParse(json);if(!event.success)throw new ApiError("validation_failed","Invalid webhook event.");
+  assertStripeLivemode(env,event.data.livemode);
   return event.data;
 }
 export async function acceptStripeEvent(env: Env,deps: Deps,raw:string,signature:string|undefined) {

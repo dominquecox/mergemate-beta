@@ -3,7 +3,7 @@ import { z } from "zod";
 import { requireBinding } from "../config";
 import type { Deps, Env } from "../env";
 import { ApiError } from "../errors";
-import { expireCheckout, openCheckouts, stripeRequest, subscriptions } from "./stripe";
+import { assertStripeLivemode, expireCheckout, openCheckouts, stripeRequest, subscriptions } from "./stripe";
 export type BillingAccount = { user_id:string; customer_id:string|null; plan:"free"|"pro"; status:string; subscription_id:string|null; renews_at:string|null; cancel_at:string|null; deleting:number };
 export async function getBillingPlan(env: Env, userId: string): Promise<BillingPlan> {
   const row=await requireBinding(env,"DB").prepare('SELECT plan,status,renews_at,cancel_at,customer_id,subscription_id,deleting FROM billing_accounts WHERE user_id=?').bind(userId).first<BillingAccount>();
@@ -29,8 +29,9 @@ export async function billingOperation<T>(env: Env,deps: Deps,userId: string,run
 }
 export async function ensureCustomer(env: Env,deps: Deps,row: BillingAccount) {
   if(row.customer_id)return row.customer_id;
-  const value=z.object({id:z.string().regex(/^cus_[A-Za-z0-9]+$/),livemode:z.literal(false)}).safeParse(await stripeRequest(env,deps,"POST","/customers",{"metadata[user_id]":row.user_id},`customer-${row.user_id}`));
+  const value=z.object({id:z.string().regex(/^cus_[A-Za-z0-9]+$/),livemode:z.boolean()}).safeParse(await stripeRequest(env,deps,"POST","/customers",{"metadata[user_id]":row.user_id},`customer-${row.user_id}`));
   if(!value.success)throw new ApiError("upstream_unavailable","Billing returned an invalid customer.");
+  assertStripeLivemode(env,value.data.livemode);
   await requireBinding(env,"DB").prepare('UPDATE billing_accounts SET customer_id=?,updated_at=? WHERE user_id=?').bind(value.data.id,deps.now().toISOString(),row.user_id).run();
   return value.data.id;
 }
@@ -40,8 +41,9 @@ export async function cancelBillingBeforeDelete(env: Env,deps: Deps,userId: stri
     for(const session of await openCheckouts(env,deps,account.customer_id))await expireCheckout(env,deps,session.id);
     for(const sub of await subscriptions(env,deps,account.customer_id)) {
       if(["canceled","incomplete_expired"].includes(sub.status))continue;
-      const value=z.object({id:z.string(),status:z.literal("canceled")}).safeParse(await stripeRequest(env,deps,"DELETE",`/subscriptions/${encodeURIComponent(sub.id)}`));
+      const value=z.object({id:z.string(),status:z.literal("canceled"),livemode:z.boolean()}).safeParse(await stripeRequest(env,deps,"DELETE",`/subscriptions/${encodeURIComponent(sub.id)}`));
       if(!value.success || value.data.id!==sub.id)throw new ApiError("upstream_unavailable","Subscription cancellation could not be confirmed.");
+      assertStripeLivemode(env,value.data.livemode);
     }
   },true,deletionLease?`deletion:${deletionLease}`:undefined);
 }

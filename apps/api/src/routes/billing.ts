@@ -25,10 +25,10 @@ export const billing = new Hono<AppEnv>()
       // The advertised trial is for a first subscription only; Stripe's own list is the record of earlier ones.
       const trial=existing.length===0?{"subscription_data[trial_period_days]":String(TRIAL_DAYS)}:{};
       for(const session of await openCheckouts(c.env,deps,customer)){
-        if(session.metadata?.price_key===input.priceKey && session.url)return billingUrl({url:session.url},"checkout.stripe.com");
+        if(session.metadata?.price_key===input.priceKey && session.url)return billingUrl(c.env,session,"checkout.stripe.com");
         await expireCheckout(c.env,deps,session.id);
       }
-      return billingUrl(await stripeRequest(c.env,deps,"POST","/checkout/sessions",{
+      return billingUrl(c.env,await stripeRequest(c.env,deps,"POST","/checkout/sessions",{
         customer,mode:"subscription",client_reference_id:user,
         "metadata[user_id]":user,"metadata[price_key]":input.priceKey,"subscription_data[metadata][user_id]":user,...trial,
         "line_items[0][price]":price,"line_items[0][quantity]":"1",
@@ -40,5 +40,5 @@ export const billing = new Hono<AppEnv>()
     const user=realUser(c,true);const origin=billingOrigin(c.env);
     const row=await requireBinding(c.env,"DB").prepare('SELECT customer_id,deleting FROM billing_accounts WHERE user_id=?').bind(user).first<{customer_id:string|null;deleting:number}>();
     if(!row?.customer_id || row.deleting)throw new ApiError("not_found","No billing account is available.");
-    return c.json(billingUrl(await stripeRequest(c.env,c.get("deps"),"POST","/billing_portal/sessions",{customer:row.customer_id,return_url:`${origin}/billing`},`portal-${crypto.randomUUID()}`),"billing.stripe.com"));
+    return c.json(billingUrl(c.env,await stripeRequest(c.env,c.get("deps"),"POST","/billing_portal/sessions",{customer:row.customer_id,return_url:`${origin}/billing`},`portal-${crypto.randomUUID()}`),"billing.stripe.com"));
   });
