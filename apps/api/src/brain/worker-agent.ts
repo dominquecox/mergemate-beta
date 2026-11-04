@@ -60,13 +60,23 @@ export type PreparedBoardRun =
   | { kind: "awaiting_approval"; run: WorkflowRun; summary: string; files: string[] }
   | { kind: "no_change"; summary: string; files: string[] };
 
+/**
+ * Board runs are allowed on the operator allowlist, or on any repository when it holds "*". "*" never matches the
+ * external-runner allowlist, so general coding runs stay limited to named repositories. Write access is still proven
+ * below, and publishing still needs the owner's passkey and opens a draft PR only.
+ */
+export function boardRunAllowed(env: Env, repository: string): boolean {
+  const all = (env.WORKFLOW_RUNNER_REPOS ?? "").split(",").some((value) => value.trim() === "*");
+  return all || workflowAllowedRepos(env).has(repository.toLowerCase());
+}
+
 /** Plans the card's change in the Worker and stores it for passkey approval. Nothing is written to GitHub. */
 export async function prepareBoardRun(env: Env, deps: Deps, session: SessionRecord, definition: WorkflowDefinition): Promise<PreparedBoardRun> {
   if (!env.DB || !session.userId || session.demo) throw new ApiError("forbidden", "Agent runs require a signed-in account and configured storage.");
   const userId = session.userId;
   // Pins the base commit and proves write access; a repository the user cannot write to is refused here.
   // Agents write only to repositories on the operator's allowlist, as for every code-fix run.
-  if (!workflowAllowedRepos(env).has(`${definition.target.owner}/${definition.target.repo}`.toLowerCase())) {
+  if (!boardRunAllowed(env, `${definition.target.owner}/${definition.target.repo}`)) {
     throw new ApiError("forbidden", "Agent runs are not enabled for this repository.");
   }
   const snapshot = await targetSnapshot(env, deps, session, definition.target, true);

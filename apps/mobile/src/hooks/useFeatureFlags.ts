@@ -6,7 +6,6 @@ export function useFeatureFlags(){
   const [flags,setFlags]=useState(disabledFeatureFlags);
   useFocusEffect(useCallback(()=>{
     let active=true;
-    setFlags(disabledFeatureFlags());
     api.getFeatureFlags().then(value=>{if(active)setFlags(value);},()=>{if(active)setFlags(disabledFeatureFlags());});
     return()=>{active=false;};
   },[]));

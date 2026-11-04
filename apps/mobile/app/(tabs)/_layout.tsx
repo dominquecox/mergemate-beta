@@ -70,7 +70,11 @@ export default function TabsLayout() {
     />
   );
 
-  const hidden = (name: NavItem["name"]) => <Tabs.Screen key={name} name={name} options={{ href: null }} />;
+  // Hide only the tab button. `href: null` marks the screen hidden, which expo-router 58 treats like a guarded route:
+  // navigating to it redirects to the first visible tab, so Board opened Workflows and Settings did nothing.
+  const hidden = (name: NavItem["name"]) => (
+    <Tabs.Screen key={name} name={name} options={{ tabBarButton: () => null, tabBarItemStyle: { display: "none" } }} />
+  );
   const brainScreen = flags.brain ? itemScreen(BRAIN_NAV_ITEM) : hidden("brain");
   // Narrow web: Board, Workflows and Triage in the bar; Inbox, Alerts and Settings stay routable, hidden from it.
   const compactScreens = [brainScreen, workflowsScreen, itemScreen(item("triage")), hidden("inbox"), hidden("notifications"), hidden("settings")];

@@ -21,7 +21,9 @@ describe("narrow navigation", () => {
     expect(compactTabOrder({ brain: true })).toEqual(["brain", "workflows-tab", "triage"]);
     expect(compactTabOrder({ brain: false })).toEqual(["workflows-tab", "triage"]);
     const layout = read("app/(tabs)/_layout.tsx");
-    expect(layout).toContain('options={{ href: null }}');
+    // Hidden tabs must stay routable: `href: null` redirects them away in expo-router 58.
+    expect(layout).not.toContain("href: null");
+    expect(layout).toContain("tabBarButton: () => null");
     expect(layout).toContain('Platform.OS === "web" && !isDesktop');
   });
 
