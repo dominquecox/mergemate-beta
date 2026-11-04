@@ -143,32 +143,30 @@ function PrWorkspace({owner,repo,number}:{owner:string;repo:string;number:string
             {/* Top Bento Row on Desktop: PR Header + Zero-Whitespace Agent & Workspace Control Card */}
             <View style={isDesktop ? styles.topBentoHeaderRow : { gap: 10 }}>
               {/* Unified Modern PR Header Surface */}
-              <View style={[styles.headerCard, { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: 16, padding: 16, flex: isDesktop ? 7 : undefined }]}>
-                <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
-                  <Text style={[typography.code,{color:colors.brandLight,fontSize:10,letterSpacing:1.1}]}>PR WORKSPACE</Text>
-                  <InfoTip
-                    title="PR Workspace"
-                    body="Displays live pull request status, merge readiness, branch lineage, diff metrics, and model telemetry. Tap Refresh to pull the latest head commit and check states from GitHub."
-                    size={15}
-                  />
-                </View>
-                <View style={styles.topRow}>
-                  <TouchableOpacity onPress={()=>void loadPr()} disabled={isRefreshing} accessibilityRole="button" accessibilityLabel="Refresh workspace" style={{minHeight:44,minWidth:44,alignItems:"center",justifyContent:"center"}}><Icon name="refresh-outline" size={18} color={colors.textMuted}/></TouchableOpacity>
-                  <View style={{ flexDirection: "row", alignItems: "center", gap: 6, flex: 1, minWidth: 0, flexWrap: "wrap" }}>
-                    <Icon name="folder-outline" size={13} color={colors.textMuted} />
-                    <Text style={[typography.caption, { color: colors.textMuted, fontFamily: typography.code.fontFamily }]} numberOfLines={1}>
+              <View style={[styles.headerCard, { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: 14, padding: 12, flex: isDesktop ? 7 : undefined }]}>
+                <View style={[styles.topRow, { gap: 6 }]}>
+                  <TouchableOpacity onPress={()=>void loadPr()} disabled={isRefreshing} accessibilityRole="button" accessibilityLabel="Refresh workspace" style={{minHeight:44,minWidth:44,margin:-6,alignItems:"center",justifyContent:"center"}}><Icon name="refresh-outline" size={16} color={colors.textMuted}/></TouchableOpacity>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 5, flex: 1, minWidth: 0 }}>
+                    <Icon name="folder-outline" size={12} color={colors.textMuted} />
+                    <Text style={[typography.caption, { color: colors.textMuted, fontFamily: typography.code.fontFamily, fontSize: 11, flexShrink: 1 }]} numberOfLines={1}>
                       {detail.owner}/{detail.repo} · #{detail.number}
                     </Text>
                   </View>
-                  <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-                    <StatusPill status={detail.status} />
-                    {detail.mergeState && <MergeStateChip state={detail.mergeState} />}
-                  </View>
+                  <InfoTip
+                    title="PR Workspace"
+                    body="Displays live pull request status, merge readiness, branch lineage, diff metrics, and model telemetry. Tap Refresh to pull the latest head commit and check states from GitHub."
+                    size={14}
+                  />
+                </View>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginTop: 6, flexWrap: "wrap" }}>
+                  <StatusPill status={detail.status} />
+                  {detail.mergeState && <MergeStateChip state={detail.mergeState} />}
                 </View>
 
                 <Text
-                  style={[typography.title2, { color: colors.text, marginTop: 8, fontWeight: "700" }]}
+                  style={[typography.headline, { color: colors.text, marginTop: 8, fontWeight: "700", fontSize: isDesktop ? 18 : 16, lineHeight: isDesktop ? 24 : 22 }]}
                   accessibilityRole="header"
+                  numberOfLines={3}
                 >
                   {detail.title}
                 </Text>

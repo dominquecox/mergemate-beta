@@ -181,8 +181,8 @@ const styles = StyleSheet.create({
   inlineContainer: {
     borderTopWidth: 1,
     marginTop: 12,
-    paddingTop: 10,
-    gap: 8,
+    paddingTop: 6,
+    gap: 6,
   },
   container: {
     borderWidth: 1,
