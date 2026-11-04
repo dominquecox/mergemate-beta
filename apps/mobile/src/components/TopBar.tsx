@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Animated, Modal, Pressable, View } from "react-native";
-import { useRouter } from "expo-router";
+import { useRouter, useSegments } from "expo-router";
 import { useTheme } from "../context/ThemeContext";
 import { useAuth } from "../context/AuthContext";
 import { useAlerts } from "../context/AlertsContext";
@@ -9,6 +9,7 @@ import { useReducedMotion } from "../hooks/useReducedMotion";
 import { useTopBarActions } from "../context/TopBarActionsContext";
 import { Text } from "./Text";
 import { Icon, type IconName } from "./Icon";
+import { isDestinationActive, menuDestinations } from "../navigation/items";
 
 const MENU_WIDTH = 288;
 
@@ -88,13 +89,14 @@ export function TopBar() {
         {iconButton("notifications-outline", "Alerts", () => router.push("/(tabs)/notifications"), unreadCount)}
         {flags.highlight && iconButton("camera-outline", "Highlight screenshot", () => router.push("/highlight"))}
       </View>
-      <SideMenu open={menuOpen} onClose={closeMenu} />
+      <SideMenu open={menuOpen} onClose={closeMenu} unreadCount={unreadCount} brain={!!flags.brain} />
     </View>
   );
 }
 
-function SideMenu({ open, onClose }: { open: boolean; onClose: () => void }) {
+function SideMenu({ open, onClose, unreadCount, brain }: { open: boolean; onClose: () => void; unreadCount: number; brain: boolean }) {
   const router = useRouter();
+  const segments = useSegments() as readonly string[];
   const { colors, typography, themeMode, setThemeMode, isDark } = useTheme();
   const { user, isDemo, signOut } = useAuth();
   const reducedMotion = useReducedMotion();
@@ -115,10 +117,13 @@ function SideMenu({ open, onClose }: { open: boolean; onClose: () => void }) {
     router.push(href);
   };
 
-  const row = (icon: IconName, label: string, onPress: () => void, accessibilityLabel = label, role: "button" | "link" = "button") => (
+  const row = (icon: IconName, label: string, onPress: () => void, accessibilityLabel = label, role: "button" | "link" = "button", selected = false, badge = 0) => (
     <Pressable
+      key={label}
       accessibilityRole={role}
       accessibilityLabel={accessibilityLabel}
+      accessibilityState={selected ? { selected: true } : undefined}
+      aria-current={selected ? "page" : undefined}
       onPress={onPress}
       style={({ pressed }) => ({
         minHeight: 44,
@@ -127,13 +132,18 @@ function SideMenu({ open, onClose }: { open: boolean; onClose: () => void }) {
         flexDirection: "row",
         alignItems: "center",
         gap: 12,
-        backgroundColor: pressed ? colors.surfaceElevated : "transparent",
+        backgroundColor: selected ? colors.brandSubtle : pressed ? colors.surfaceElevated : "transparent",
       })}
     >
-      <Icon name={icon} size={19} color={colors.textMuted} />
-      <Text style={[typography.body, { flex: 1, color: colors.textSecondary, fontWeight: "500" }]}>{label}</Text>
+      <Icon name={icon} size={19} color={selected ? colors.brandLight : colors.textMuted} />
+      <Text style={[typography.body, { flex: 1, color: selected ? colors.text : colors.textSecondary, fontWeight: selected ? "600" : "500" }]}>{label}</Text>
+      {badge > 0 && <Text style={[typography.caption, { color: colors.statusAlert, fontWeight: "600" }]}>{badge > 99 ? "99+" : badge}</Text>}
     </Pressable>
   );
+  const navigate = (href: Parameters<typeof router.navigate>[0]) => {
+    onClose();
+    router.navigate(href);
+  };
 
   return (
     <Modal visible={open} transparent animationType="none" onRequestClose={onClose}>
@@ -154,6 +164,11 @@ function SideMenu({ open, onClose }: { open: boolean; onClose: () => void }) {
             transform: [{ translateX: slide }],
           }}
         >
+          {menuDestinations({ brain }).map((item) => {
+            const badge = item.key === "notifications" ? unreadCount : 0;
+            return row(item.icon, item.label, () => navigate(item.href), badge > 0 ? `${item.label} (${badge} unread)` : item.label, "link", isDestinationActive(segments, item.key), badge);
+          })}
+          <View style={{ height: 1, backgroundColor: colors.border, marginVertical: 8 }} />
           {row("search", "Search", () => go("/search"), "Search pull requests")}
           {row("settings-outline", "Settings", () => go("/(tabs)/settings"), "Settings", "link")}
           {row(isDark ? "sunny-outline" : "moon-outline", isDark ? "Light theme" : "Dark theme", () => setThemeMode(isDark ? "light" : "dark"), `Switch to ${isDark ? "light" : "dark"} theme, currently ${themeMode}`)}

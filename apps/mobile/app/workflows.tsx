@@ -12,6 +12,8 @@ import { webAppOrigin } from '../src/api/config';
 import { toUserMessage } from '../src/api/errors';
 import { Text } from '../src/components/Text';
 import { Header } from '../src/components/Header';
+import { useFeatureFlags } from '../src/hooks/useFeatureFlags';
+import { homeHref } from '../src/navigation/items';
 import { Icon, type IconName } from '../src/components/Icon';
 import { Button } from '../src/components/Button';
 import { InfoTip } from '../src/components/InfoTip';
@@ -87,6 +89,7 @@ function AgentWorkspace({
   const { isDesktop } = useLayout();
   const { aiConsentGranted, needsReview, pending: consentPending } = useConsent();
   const router = useRouter();
+  const flags = useFeatureFlags();
   const starterTemplate = AGENT_TEMPLATES.find((t) => t.id === initialTemplateId)
     ?? AGENT_TEMPLATES.find((t) => t.id === (initialMode === 'code_fix' ? 'fix_issue' : 'review'))
     ?? AGENT_TEMPLATES[0]!;
@@ -434,6 +437,7 @@ function AgentWorkspace({
       <Header
         title="Workflows"
         showBack
+        onBack={() => (router.canGoBack() ? router.back() : router.replace(homeHref(flags)))}
         rightAction={<Button title="Refresh" variant="ghost" disabled={busy} onPress={workspace.refresh} />}
       />
       <ScrollView

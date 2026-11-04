@@ -37,3 +37,32 @@ export function navItemsFor(flags: { brain?: boolean }): NavItem[] {
   if (!flags.brain) return NAV_ITEMS;
   return [...NAV_ITEMS.filter((item) => item.name !== "settings"), BRAIN_NAV_ITEM, ...NAV_ITEMS.filter((item) => item.name === "settings")];
 }
+
+export interface MenuDestination {
+  key: "brain" | "workflows" | "triage" | "inbox" | "notifications";
+  label: string;
+  href: "/(tabs)/brain" | "/workflows" | "/(tabs)/triage" | "/(tabs)/inbox" | "/(tabs)/notifications";
+  icon: IconName;
+}
+
+/** Every main destination, for the narrow-web side menu, so no page is a dead end (Workflows has no bottom tab bar). */
+export function menuDestinations(flags: { brain?: boolean }): MenuDestination[] {
+  return [
+    ...(flags.brain ? [{ key: "brain", label: "Board", href: "/(tabs)/brain", icon: "albums-outline" } as const] : []),
+    { key: "workflows", label: "Workflows", href: "/workflows", icon: "git-network-outline" },
+    { key: "triage", label: "Triage", href: "/(tabs)/triage", icon: "flash-outline" },
+    { key: "inbox", label: "Inbox", href: "/(tabs)/inbox", icon: "file-tray-outline" },
+    { key: "notifications", label: "Alerts", href: "/(tabs)/notifications", icon: "notifications-outline" },
+  ];
+}
+
+/** Whether the current route is this destination. Workflows counts both its page and its tab. */
+export function isDestinationActive(segments: readonly string[], key: MenuDestination["key"]): boolean {
+  if (key === "workflows") return segments[0] === "workflows" || (segments[0] === "(tabs)" && segments[1] === "workflows-tab");
+  return segments[0] === "(tabs)" && segments[1] === key;
+}
+
+/** Where Back goes when there is no history: the Board when it is on, otherwise the Inbox. */
+export function homeHref(flags: { brain?: boolean }): "/(tabs)/brain" | "/(tabs)/inbox" {
+  return flags.brain ? "/(tabs)/brain" : "/(tabs)/inbox";
+}
