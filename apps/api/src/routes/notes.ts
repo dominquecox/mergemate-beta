@@ -6,6 +6,7 @@ import type {AppEnv} from "../env";
 import {parseBody,parseValue} from "../lib/validate";
 import {getAccessToken} from "../lib/github-tokens";
 import {githubGet} from "../lib/github";
+import {cardIn,ownedProject} from "../brain/store";
 
 async function access(c:Context<AppEnv>,context:NoteContext){
  const session=c.get("session");
@@ -14,6 +15,11 @@ async function access(c:Context<AppEnv>,context:NoteContext){
   const token=await getAccessToken(c.env,session.userId,c.get("deps").now());
   const [owner="",repo=""]=context.repo.split("/");
   await githubGet(c.get("deps"),token,`/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/pulls/${context.number}`);
+ }
+ if(context.kind==="card"){
+  // Throws not-found unless the board belongs to this user and the card is on it.
+  const project=await ownedProject(c.env,session.userId,context.projectId);
+  await cardIn(c.env,project.id,context.cardId);
  }
  return session.userId;
 }

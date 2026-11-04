@@ -12,12 +12,12 @@ import {Button} from './Button';
 import {Text} from './Text';
 import {VoiceNoteRecorder} from './VoiceNoteRecorder';
 
-export function PrivateNotes({context,focusRequest=0,onClose,onInputFocus,onInputBlur}:{context:NoteContext;focusRequest?:number;onClose?:()=>void;onInputFocus?:()=>void;onInputBlur?:()=>void}){
+export function PrivateNotes({context,focusRequest=0,onClose,onInputFocus,onInputBlur,noteActions}:{context:NoteContext;focusRequest?:number;onClose?:()=>void;onInputFocus?:()=>void;onInputBlur?:()=>void;noteActions?:(note:PrivateNote)=>React.ReactNode}){
  const {user,isDemo}=useAuth();const {colors,typography}=useTheme();
  if(!user || isDemo)return <Text style={[typography.body,{color:colors.textSecondary}]}>Private notes and recording are unavailable in demo mode.</Text>;
- return <NotesWorkspace key={`${user.id}:${noteContextKey(context)}`} context={context} focusRequest={focusRequest} onClose={onClose} onInputFocus={onInputFocus} onInputBlur={onInputBlur}/>;
+ return <NotesWorkspace key={`${user.id}:${noteContextKey(context)}`} context={context} focusRequest={focusRequest} onClose={onClose} onInputFocus={onInputFocus} onInputBlur={onInputBlur} noteActions={noteActions}/>;
 }
-function NotesWorkspace({context,focusRequest,onClose,onInputFocus,onInputBlur}:{context:NoteContext;focusRequest:number;onClose?:()=>void;onInputFocus?:()=>void;onInputBlur?:()=>void}){
+function NotesWorkspace({context,focusRequest,onClose,onInputFocus,onInputBlur,noteActions}:{context:NoteContext;focusRequest:number;onClose?:()=>void;onInputFocus?:()=>void;onInputBlur?:()=>void;noteActions?:(note:PrivateNote)=>React.ReactNode}){
  const {colors,typography}=useTheme(),flags=useFeatureFlags();const {aiConsentGranted}=useConsent();
  const [items,setItems]=useState<PrivateNote[]>([]),[text,setText]=useState(''),[loading,setLoading]=useState(true),[busy,setBusy]=useState(false),[error,setError]=useState<string|null>(null),[loaded,setLoaded]=useState(false),[active,setActive]=useState(true),[uncertain,setUncertain]=useState(false),[recording,setRecording]=useState(false);
  const [notice,setNotice]=useState('');const noteInput=useRef<React.ComponentRef<typeof TextInput>|null>(null),focusTranscript=useRef(false);
@@ -42,7 +42,7 @@ function NotesWorkspace({context,focusRequest,onClose,onInputFocus,onInputBlur}:
   {!!error && <Text accessibilityRole="alert" style={{color:colors.riskHigh}}>{error}</Text>}
   {!loaded && !loading && <Button title="Retry loading notes" onPress={load}/>}
   {loaded && items.length===0 && <Text style={[typography.body,{color:colors.textSecondary}]}>No private notes saved here yet.</Text>}
-  {items.map((note,index)=><View key={note.id} style={{gap:6,paddingVertical:8,borderBottomWidth:1,borderColor:colors.border}}><Text selectable style={[typography.body,{color:colors.text}]}>{note.text}</Text><Button title={`Remove note ${index+1}`} variant="ghost" disabled={busy} onPress={()=>remove(note)}/></View>)}
+  {items.map((note,index)=><View key={note.id} style={{gap:6,paddingVertical:8,borderBottomWidth:1,borderColor:colors.border}}><Text selectable style={[typography.body,{color:colors.text}]}>{note.text}</Text>{noteActions?.(note)}<Button title={`Remove note ${index+1}`} variant="ghost" disabled={busy} onPress={()=>remove(note)}/></View>)}
   {flags.voice_notes && aiConsentGranted && !busy && !uncertain && <VoiceNoteRecorder onBusyChange={setRecording} onTranscript={value=>{focusTranscript.current=true;setText(value);setNotice('Transcript ready. Review and edit the text, then choose Save private note.');id.current=Crypto.randomUUID();}}/>}
   {!!notice && <Text accessibilityLiveRegion="polite" style={[typography.body,{color:colors.textSecondary}]}>{notice}</Text>}
   <TextInput ref={noteInput} onFocus={onInputFocus} onBlur={onInputBlur} multiline value={text} onChangeText={setText} maxLength={8000} editable={!busy&&!uncertain&&!recording} accessibilityLabel="Private note text" placeholder="Write a note or review your transcript before saving…" placeholderTextColor={colors.textMuted} style={{minHeight:100,maxHeight:160,textAlignVertical:"top",padding:12,color:colors.text,borderColor:colors.border,borderWidth:1,borderRadius:8}}/>

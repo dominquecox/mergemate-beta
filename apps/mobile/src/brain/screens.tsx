@@ -18,6 +18,7 @@ import type { ApiClient } from '../api/client';
 import { AgentPanel, type AgentPanelProps } from './AgentPanel';
 import * as Clipboard from 'expo-clipboard';
 import { shortCardId } from './cardLabel';
+import { PrivateNotes } from '../components/PrivateNotes';
 
 export function BoardScreen({
   project,
@@ -233,6 +234,11 @@ export function CardDetailModal({
             </View>
           )}
 
+          <View style={styles.section}>
+            <Text style={styles.sectionLabel}>Notes</Text>
+            <Text style={styles.text}>Private to you: typed or recorded notes for this card. Not posted to GitHub.</Text>
+            <PrivateNotes context={{ kind: 'card', projectId: card.projectId, cardId: card.id }} />
+          </View>
           {trackEvents.length > 0 && (
             <View style={styles.section}>
               <Text style={styles.sectionLabel}>History</Text>

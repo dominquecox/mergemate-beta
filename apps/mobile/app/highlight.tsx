@@ -3,6 +3,7 @@ import {PrAssetInspection} from "../src/components/PrAssetInspection";
 import {useLocalSearchParams} from "expo-router";
 import { DemoHighlightGallery } from "../src/components/DemoHighlightGallery";
 import {PrivateNotes} from "../src/components/PrivateNotes";
+import {AddToBoard,cardTitle} from "../src/brain/AddToBoard";
 import {useFocusEffect,useRouter} from "expo-router";
 import {useConsent} from "../src/context/ConsentContext";
 import {AI_CONSENT_VERSION} from "../src/config/consent";
@@ -31,7 +32,11 @@ const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp"];
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 
 export default function HighlightScreen() {
-  const context=useLocalSearchParams<{owner?:string;repo?:string;number?:string;asset?:string;headSha?:string}>();
+  const context=useLocalSearchParams<{owner?:string;repo?:string;number?:string;asset?:string;headSha?:string;project?:string}>();
+  // Two clear actions: a screenshot for the AI, or a private voice note. The screen always opens at the top.
+  const [mode,setMode]=useState<"screenshot"|"voice">("screenshot");
+  const scrollRef=useRef<React.ComponentRef<typeof ScrollView>>(null);
+  useEffect(()=>{scrollRef.current?.scrollTo({y:0,animated:false});},[mode]);
   const { colors, typography, spacing, radius } = useTheme();
 
   const flags=useFeatureFlags();const {aiConsentGranted}=useConsent(),{isDemo,user}=useAuth();const router=useRouter();
@@ -100,9 +105,23 @@ export default function HighlightScreen() {
   return (
     <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={[styles.root, { backgroundColor: colors.background }]}>
       <Header title="Screenshot Insight" showBack />
-      <ScrollView contentContainerStyle={{ padding: spacing.base, paddingBottom: 60 }}>
+      <ScrollView ref={scrollRef} contentContainerStyle={{ padding: spacing.base, paddingBottom: 60 }}>
+        <View accessibilityRole="tablist" style={{ flexDirection: "row", gap: 8, marginBottom: spacing.md }}>
+          {(["screenshot", "voice"] as const).map((value) => (
+            <TouchableOpacity key={value} onPress={() => setMode(value)} accessibilityRole="tab" accessibilityState={{ selected: mode === value }} accessibilityLabel={value === "screenshot" ? "Screenshot" : "Voice note"}
+              style={{ flex: 1, minHeight: 48, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, borderRadius: radius.md, borderWidth: 1, borderColor: mode === value ? colors.brandLight : colors.border, backgroundColor: mode === value ? colors.brandSubtle : colors.surface }}>
+              <Icon name={value === "screenshot" ? "image-outline" : "mic-outline"} size={18} color={mode === value ? colors.brandLight : colors.textSecondary} />
+              <Text style={[typography.subhead, { color: mode === value ? colors.text : colors.textSecondary, fontWeight: "600" }]}>{value === "screenshot" ? "Screenshot" : "Voice note"}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
 
-        {/* Intro Card */}
+        {mode === "voice" ? (
+          <Section title="Voice note" icon="mic-outline">
+            <Text style={[typography.body, { color: colors.textSecondary, marginBottom: spacing.md }]}>Saved to your private notes. Not attached to a screenshot or posted to GitHub.</Text>
+            <PrivateNotes context={{kind:"highlight"}} noteActions={(note)=><AddToBoard defaultProjectId={typeof context.project==="string"?context.project:undefined} draft={()=>({title:cardTitle(note.text,"Voice note"),details:note.text})}/>}/>
+          </Section>
+        ) : <>
         <Section title="Meta AI Vision Analysis" icon="image-outline">
           <Text style={[typography.body, { color: colors.textSecondary }]}>
             Capture or upload a PR screenshot or UI diff. Get an explanation and suggested areas to inspect. Boxes are approximate AI suggestions, not precise measurements.
@@ -138,7 +157,7 @@ export default function HighlightScreen() {
 
           <View style={{flexDirection:"row",alignItems:"center",gap:8,marginTop:16,padding:12,backgroundColor:colors.riskLowBg,borderRadius:12}}><Icon name="shield-checkmark-outline" size={16} color={colors.riskLow}/><Text style={[typography.footnote,{color:colors.riskLow,flex:1}]}>Screenshots are processed in memory and are not saved on our servers.</Text></View>
           <Text style={[typography.subhead, { color: colors.textSecondary, marginTop: spacing.md }]}>
-            Optional Reviewer Note
+            Note for the AI (optional)
           </Text>
           <TextInput
             maxLength={500}
@@ -146,7 +165,7 @@ export default function HighlightScreen() {
             onChangeText={value=>{abort();setIsAnalyzing(false);setResult(null);setNote(value);}}
             placeholder="e.g. Check button padding on mobile"
             placeholderTextColor={colors.textMuted}
-            accessibilityLabel="Optional reviewer note"
+            accessibilityLabel="Note for the AI, optional"
             style={[
               styles.input,
               {
@@ -174,7 +193,7 @@ export default function HighlightScreen() {
 
         {isAnalyzing ? (
           <LoadingState
-            title="Analyzing screenshot..."
+            title="Analyzing your screenshot…"
             message="Checking layout, spacing, and contrast regions with Meta AI."
           />
         ) : error ? (
@@ -194,8 +213,9 @@ export default function HighlightScreen() {
                 </Text>
               </View>
               <MetaTelemetryModal telemetry={result.telemetry} sample={isDemo}/>
+              {result.regions.length===0 && <Text style={[typography.subhead,{color:colors.text,marginTop:6}]}>No specific problem areas found.</Text>}
               <Text style={[typography.body, { color: colors.text, marginTop: 6, lineHeight: 22 }]}>
-                {result.insight}
+                {cleanInsight(result.insight)}
               </Text>
 
               {result.regions.length > 0 && (
@@ -204,7 +224,6 @@ export default function HighlightScreen() {
                 </Text>
               )}
 
-              {result.regions.length===0 && <Text style={[typography.body,{color:colors.textSecondary,marginTop:12}]}>No reliable region was suggested. Read the explanation and inspect the image yourself.</Text>}
               {result.regions.map((reg,index) => (
                 <View
                   key={reg.id}
@@ -229,10 +248,19 @@ export default function HighlightScreen() {
                   The server did not save your screenshot. These suggestions may be wrong; verify them against the image.
                 </Text>
               </View>
+              <View style={{ marginTop: spacing.md }}>
+                <AddToBoard
+                  defaultProjectId={typeof context.project==="string"?context.project:undefined}
+                  draft={()=>({
+                    title: cardTitle(cleanInsight(result.insight), "Fix from screenshot"),
+                    details: [note.trim(), cleanInsight(result.insight), result.regions.map((reg,index)=>`${index+1}. ${reg.label} (${reg.x},${reg.y},${reg.width},${reg.height})`).join("\n")].filter(Boolean).join("\n\n"),
+                  })}
+                />
+              </View>
             </Card>
           </View>
         ) : null}
-        <PrivateNotes context={{kind:"highlight"}}/>
+        </>}
       </ScrollView>
     </KeyboardAvoidingView>
   );
@@ -283,3 +311,9 @@ const styles = StyleSheet.create({
     gap:8,
   },
 });
+
+/** The model's explanation without a lowercase "no regions were detected" opener, starting with a capital letter. */
+export function cleanInsight(text: string): string {
+  const rest = text.replace(/^\s*no (reliable |specific )?(regions?|areas?) (were |was )?(detected|found|suggested)[,.;:]?\s*(but\s+|and\s+)?/i, "").trim();
+  return rest ? rest.charAt(0).toUpperCase() + rest.slice(1) : text;
+}

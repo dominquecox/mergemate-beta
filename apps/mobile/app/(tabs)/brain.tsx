@@ -1,4 +1,5 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { useLocalSearchParams } from 'expo-router';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { Card, Project } from '@mergemate/contracts';
@@ -30,6 +31,14 @@ export default function BrainTab() {
 
 function ProjectsView({ onSelect }: { onSelect: (p: Project) => void }) {
   const { projects, loading, error, retry } = useProjectsList({ api });
+  // ?project=<id> (for example from "Open board" after adding a card) opens that board once the list loads.
+  const { project: wanted } = useLocalSearchParams<{ project?: string }>();
+  const opened = useRef('');
+  useEffect(() => {
+    if (typeof wanted !== 'string' || !wanted || opened.current === wanted) return;
+    const match = projects.find((p) => p.id === wanted);
+    if (match) { opened.current = wanted; onSelect(match); }
+  }, [wanted, projects, onSelect]);
   const [creating, setCreating] = useState(false);
   const dialog = creating ? <CreateBoardDialog api={api} onOpened={(project) => { setCreating(false); onSelect(project); }} onClose={() => setCreating(false)} /> : null;
   if (error) return <ErrorState title="Could not load projects" message={error.message} onRetry={retry} />;
