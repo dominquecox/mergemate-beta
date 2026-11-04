@@ -231,7 +231,7 @@ export const applyGitHubEvent = async (db: D1Database, message: GitHubEventMessa
 };
 
 /** Queue consumer: ack each applied message, retry failures (the queue dead-letters after its retry limit). */
-export const consumeGitHubEvents = async (batch: MessageBatch<GitHubEventMessage>, env: Env, now: Date, deps: Deps = { fetch, now: () => new Date() }) => {
+export const consumeGitHubEvents = async (batch: MessageBatch<GitHubEventMessage>, env: Env, now: Date, deps: Deps = { fetch: (input, init) => fetch(input, init), now: () => new Date() }) => {
   const db = env.DB;
   if (!db) {
     batch.retryAll();

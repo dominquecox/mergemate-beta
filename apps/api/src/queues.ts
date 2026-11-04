@@ -4,10 +4,16 @@ import { consumeGitHubEvents, type GitHubEventMessage, recordDeadLetters } from 
 import { consumeStripeEvents } from "./lib/stripe-events";
 
 /**
+ * Workers' fetch throws "Illegal invocation" when called as a method of another object, so the
+ * queue deps wrap it instead of storing the bare global.
+ */
+export const defaultQueueDeps = (): Deps => ({ fetch: (input, init) => fetch(input, init), now: () => new Date() });
+
+/**
  * Routes each queue batch to its consumer by queue name. Queue names per environment are
  * set in wrangler.toml; other queue consumers are added here.
  */
-export const handleQueue = async (batch: MessageBatch<unknown>, env: Env, now = new Date(), deps: Deps = { fetch, now: () => new Date() }) => {
+export const handleQueue = async (batch: MessageBatch<unknown>, env: Env, now = new Date(), deps: Deps = defaultQueueDeps()) => {
   const name = batch.queue;
   if(name==='mergemate-workflows-dev'){
     for(const message of batch.messages){
@@ -27,10 +33,7 @@ export const handleQueue = async (batch: MessageBatch<unknown>, env: Env, now = 
     return recordDeadLetters(batch as MessageBatch<{ eventId?: string }>, env, "stripe", now);
   }
   if (/^mergemate-stripe-events(-[a-z]+)?$/.test(name)) {
-    return consumeStripeEvents(batch as MessageBatch<{ eventId: string }>, env, {
-      fetch: (input, init) => fetch(input, init),
-      now: () => new Date(),
-    });
+    return consumeStripeEvents(batch as MessageBatch<{ eventId: string }>, env, defaultQueueDeps());
   }
   // Unknown queue: leave the messages for retry rather than dropping them.
   batch.retryAll();
