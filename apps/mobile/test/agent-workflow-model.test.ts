@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { WorkflowDefinition } from '@mergemate/contracts';
-import { AGENT_TEMPLATES, makeAgentTemplate, moveAgentStep, toggleAgentStep, targetFromPrUrl, targetFromUrl, sameTarget, safeDraftPrLink, isRunActive, evidenceText, isRepositoryPickerTarget, approvalCopy } from '../src/workflows/agent-model';
+import { AGENT_TEMPLATES, makeAgentTemplate, moveAgentStep, toggleAgentStep, targetFromPrUrl, targetFromUrl, sameTarget, safeDraftPrLink, isRunActive, evidenceText, isRepositoryPickerTarget, approvalCopy, runPollDelay } from '../src/workflows/agent-model';
 const target={owner:'owner',repo:'repo',number:7};
 describe('agent builder model',()=>{
  it('creates executable validated review and code-fix templates without claiming execution',()=>{
@@ -43,5 +43,12 @@ describe('approval copy for board card runs',()=>{
   const other={definition:{name:'Board card: look-alike'} as never,steps:steps('Run tests')};
   expect(approvalCopy(other).action).toBe('Action QA and create a draft PR');
   expect(approvalCopy({definition:{name:'Fix bug'} as never,steps:steps('Tests (not run in this version)')}).note).toMatch(/after QA passes/);
+ });
+});
+describe('run polling',()=>{
+ it('polls a run waiting for approval every 15 seconds and a working run every 2 seconds',()=>{
+  expect(runPollDelay('waiting_approval')).toBe(15000);
+  expect(runPollDelay('running')).toBe(2000);
+  expect(runPollDelay('queued')).toBe(2000);
  });
 });

@@ -11,7 +11,7 @@ import { onSessionChange } from '../auth/session-events';
 import { WorkflowApiClient } from './api';
 import type { PatchProposalValue } from './api';
 import { createPasskeyCredential,getPasskeyCredential,passkeysAvailable } from './passkeys';
-import { isRunActive, adoptRunUpdate } from './agent-model';
+import { isRunActive, adoptRunUpdate, runPollDelay, RUN_POLL_IDLE_MS } from './agent-model';
 
 export function useAgentWorkspace(account: string, target: WorkflowTarget | null, isDemo: boolean,initialRunId='') {
   const client = useMemo(() => apiMode.kind === 'http' && !isDemo ? new WorkflowApiClient({
@@ -123,11 +123,13 @@ export function useAgentWorkspace(account: string, target: WorkflowTarget | null
     if (!client || !selectedRun || !isRunActive(selectedRun.status)) return;
     const id = selectedRun.id, epoch = generation.current, request = controller(); let focused = true; let timer: ReturnType<typeof setTimeout> | undefined;
     const poll = async () => {
+      // A hidden browser tab does not fetch; it checks again later.
+      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') { timer = setTimeout(poll, RUN_POLL_IDLE_MS); return; }
       try {
         const run = await client.run(id, request.signal);
         if (!focused || !valid(epoch) || selected.current?.id !== id) return;
         receive(run);
-        if (isRunActive(run.status)) timer = setTimeout(poll, 2000);
+        if (isRunActive(run.status)) timer = setTimeout(poll, runPollDelay(run.status));
       } catch (cause) { if (focused && valid(epoch) && !request.signal.aborted) { setError(toUserMessage(cause, 'Run updates paused. Refresh to reconnect.'), cause); timer = setTimeout(poll, 5000); } }
     };
     timer = setTimeout(poll, 1500);

@@ -109,3 +109,6 @@ export function approvalCopy(run: Pick<WorkflowRun, 'definition' | 'steps'>): { 
     ? { action: 'Action create a draft PR (no tests are run in this beta)', note: 'Approval binds this repository, commit and patch hash. MergeMate publishes only a draft PR; no tests are run in this beta.' }
     : { action: 'Action QA and create a draft PR', note: 'Approval binds this repository, commit and patch hash. MergeMate publishes only a draft PR after QA passes.' };
 }
+/** A run waiting for the owner's approval changes only when they act, so it is polled slowly. */
+export const RUN_POLL_MS = 2000, RUN_POLL_IDLE_MS = 15000;
+export const runPollDelay = (status: WorkflowRun['status']): number => (status === 'waiting_approval' ? RUN_POLL_IDLE_MS : RUN_POLL_MS);
