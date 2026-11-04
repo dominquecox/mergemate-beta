@@ -46,9 +46,18 @@ export default function SignInScreen() {
     }
   };
 
+  const privacyNote = (
+    <View style={[styles.privacyRow, isDesktop && styles.privacyRowPanel]}>
+      <Icon name="lock-closed-outline" size={14} color={colors.textMuted} style={styles.privacyIcon} />
+      <Text style={[typography.caption, { color: colors.textMuted, textAlign: isDesktop ? "left" : "center", lineHeight: 18, flexShrink: 1 }]}>
+        We never store your code. Your GitHub token stays encrypted on our server, never on this device.
+      </Text>
+    </View>
+  );
+
   return (
-    <ScrollView contentContainerStyle={[styles.container, { backgroundColor: colors.background, padding: isDesktop ? 28 : 18 }]}>
-      <View style={styles.header}>
+    <ScrollView contentContainerStyle={[styles.container, isDesktop && styles.containerDesktop, { backgroundColor: colors.background, padding: isDesktop ? 24 : 18 }]}>
+      <View style={[styles.header, isDesktop && { gap: 14 }]}>
         <Image
           source={isDark ? require("../../assets/logo-dark.png") : require("../../assets/logo-light.png")}
           style={styles.logo}
@@ -89,7 +98,8 @@ export default function SignInScreen() {
         />
       ) : (
         <View style={[styles.bentoGrid, isDesktop && styles.bentoGridDesktop]}>
-          <ExperienceSurface accent style={[styles.actions, isDesktop && { flex: 1 }]}>
+          <ExperienceSurface accent style={[styles.actions, isDesktop && styles.columnDesktop]}>
+            <View style={isDesktop ? styles.actionsStack : undefined}>
             <Button
               title="Continue with GitHub"
               onPress={handleSignIn}
@@ -103,6 +113,7 @@ export default function SignInScreen() {
               disabled={isLoading}
               style={[
                 styles.demoBtn,
+                isDesktop && styles.demoBtnFill,
                 {
                   backgroundColor: colors.surface,
                   borderColor: colors.border,
@@ -125,9 +136,11 @@ export default function SignInScreen() {
                 </Text>
               </View>
             </TouchableOpacity>
+            </View>
+            {isDesktop && privacyNote}
           </ExperienceSurface>
 
-          <Section title="Connection permissions" icon="shield-checkmark-outline" style={{ width: "100%", ...(isDesktop ? { flex: 1 } : {}) }}>
+          <Section title="Connection permissions" icon="shield-checkmark-outline" style={isDesktop ? styles.columnDesktop : { width: "100%" }}>
             <InfoLine icon="git-pull-request-outline" title="Pull request context" detail="Read selected diffs, comments and check results from repositories you connect." />
             <InfoLine icon="folder-open-outline" title="Repository metadata" detail="Only the repositories you choose on GitHub are available to MergeMate." />
             <InfoLine icon="person-outline" title="Permission-aware actions" detail="Review workflows are read-only. Isolated code-fix workflows publish only draft PRs when you run them." />
@@ -135,15 +148,10 @@ export default function SignInScreen() {
         </View>
       )}
 
-      <View style={[styles.footer, { marginTop: spacing.xl }]}>
-        <View style={styles.privacyRow}>
-          <Icon name="lock-closed-outline" size={14} color={colors.textMuted} style={styles.privacyIcon} />
-          <Text style={[typography.caption, { color: colors.textMuted, textAlign: "center", lineHeight: 18, flexShrink: 1 }]}>
-            We never store your code. Your GitHub token stays encrypted on our server, never on this device.
-          </Text>
-        </View>
+      <View style={[styles.footer, { marginTop: isDesktop ? 20 : spacing.xl }]}>
+        {!isDesktop && privacyNote}
 
-        <View style={[styles.linksRow, { marginTop: spacing.sm }]}>
+        <View style={[styles.linksRow, { marginTop: isDesktop ? 0 : spacing.sm }]}>
           <TouchableOpacity
             onPress={() => router.push("/(public)/privacy")}
             style={styles.footerLinkBtn}
@@ -176,7 +184,7 @@ export default function SignInScreen() {
           </TouchableOpacity>
         </View>
 
-        <Text style={[typography.caption, { color: colors.textMuted, marginTop: spacing.xs }]}>
+        <Text style={[typography.caption, { color: colors.textMuted, marginTop: spacing.xs, textAlign: "center" }]}>
           Powered by Meta AI models
         </Text>
       </View>
@@ -189,6 +197,9 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     justifyContent: "flex-start",
     alignItems: "stretch",
+  },
+  containerDesktop: {
+    justifyContent: "center",
   },
   header: {
     alignItems: "stretch",
@@ -211,12 +222,28 @@ const styles = StyleSheet.create({
   actions: {
     width: "100%",
   },
+  // Equal columns that share the row's height: the action panel ends with the privacy note instead of empty space.
+  columnDesktop: {
+    flexGrow: 1,
+    padding: 20,
+    flexBasis: 0,
+    minWidth: 0,
+    justifyContent: "space-between",
+  },
   demoBtn: {
     width: "100%",
     minHeight: 44,
     padding: 14,
     borderWidth: 1,
     alignItems: "flex-start",
+  },
+  // On desktop the demo card takes the column's spare height, so the panel has no empty block.
+  demoBtnFill: {
+    flexGrow: 1,
+    justifyContent: "center",
+  },
+  actionsStack: {
+    flexGrow: 1,
   },
   demoContent: {
     alignItems: "flex-start",
@@ -236,6 +263,10 @@ const styles = StyleSheet.create({
     alignItems: "flex-start",
     justifyContent: "center",
     gap: 6,
+  },
+  privacyRowPanel: {
+    justifyContent: "flex-start",
+    marginTop: 16,
   },
   privacyIcon: {
     marginTop: 2,

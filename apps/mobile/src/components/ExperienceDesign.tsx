@@ -36,10 +36,9 @@ export function ExperienceFeature({ icon, title, detail }: { icon: IconName; tit
 export function SetupPath({ active }: { active: "connect" | "repositories" | "ai" }) {
   const { colors, typography } = useTheme();
   const items = [{ id: "connect", title: "Connect", icon: "logo-github" }, { id: "repositories", title: "Choose repos", icon: "folder-open-outline" }, { id: "ai", title: "AI preferences", icon: "sparkles-outline" }] as const;
-  return <View accessibilityLabel={`Workspace setup: ${items.find(item => item.id === active)?.title}`} style={{ flexDirection: "row", gap: 6, alignItems: "center" }}>
-    {items.map((item, index) => <React.Fragment key={item.id}>
-      {index > 0 && <View style={{ height: 1, width: 10, backgroundColor: colors.borderLight }} />}
-      <View style={{ flex: 1, minWidth: 0, paddingVertical: 8, paddingHorizontal: 6, borderRadius: 10, alignItems: "center", gap: 4, borderWidth: 1, borderColor: item.id === active ? colors.brandMuted : colors.border, backgroundColor: item.id === active ? colors.brandSubtle : colors.surface }}>
+  return <View accessibilityLabel={`Workspace setup: ${items.find(item => item.id === active)?.title}`} style={{ flexDirection: "row", gap: 8, alignItems: "stretch" }}>
+    {items.map(item => <React.Fragment key={item.id}>
+      <View style={{ flexGrow: 1, flexBasis: 0, minWidth: 0, paddingVertical: 8, paddingHorizontal: 6, borderRadius: 10, alignItems: "center", gap: 4, borderWidth: 1, borderColor: item.id === active ? colors.brandMuted : colors.border, backgroundColor: item.id === active ? colors.brandSubtle : colors.surface }}>
         <Icon name={item.icon} size={15} color={item.id === active ? colors.brandLight : colors.textSecondary} />
         <Text numberOfLines={1} style={[typography.caption, { color: item.id === active ? colors.brandLight : colors.textSecondary, textAlign: "center", fontSize: 10 }]}>{item.title}</Text>
       </View>

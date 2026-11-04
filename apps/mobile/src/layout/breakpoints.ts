@@ -17,6 +17,8 @@ export const COLUMN_WIDTH = {
   reading: 720,
   wide: 1100,
   authCard: 520,
+  /** Sign-in has two equal columns, so its card uses more of the window. */
+  authWide: 960,
 } as const;
 
 /** Tab screens that use the full wide column on desktop. Everything else keeps a readable line length. */
@@ -81,7 +83,7 @@ export function resolveShell({ width, segments, signedIn, isWeb }: ResolveShellI
 
   let columnMaxWidth: number | undefined = COLUMN_WIDTH.reading;
   if (card) {
-    columnMaxWidth = COLUMN_WIDTH.authCard;
+    columnMaxWidth = mode === "desktop" && segments[1] === "sign-in" ? COLUMN_WIDTH.authWide : COLUMN_WIDTH.authCard;
   } else if (sidebar || (mode === "desktop" && kind === "app")) {
     // Desktop signed-in workspace is fluid next to the sidebar (no artificial gutters).
     columnMaxWidth = undefined;

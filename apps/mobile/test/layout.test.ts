@@ -66,7 +66,14 @@ describe("MM-042 responsive web shell", () => {
     const auth = web(1440, ["(auth)", "sign-in"], false);
     expect(auth.sidebar).toBe(false);
     expect(auth.card).toBe(true);
-    expect(auth.columnMaxWidth).toBe(COLUMN_WIDTH.authCard);
+    expect(auth.columnMaxWidth).toBe(COLUMN_WIDTH.authWide);
+  });
+
+  it("gives only desktop sign-in the wide card; other setup steps and tablets keep the narrow one", () => {
+    expect(web(1440, ["(auth)", "consent"], false).columnMaxWidth).toBe(COLUMN_WIDTH.authCard);
+    expect(web(1440, ["(auth)", "repos"], false).columnMaxWidth).toBe(COLUMN_WIDTH.authCard);
+    expect(web(900, ["(auth)", "sign-in"], false).columnMaxWidth).toBe(COLUMN_WIDTH.authCard);
+    expect(web(393, ["(auth)", "sign-in"], false)).toMatchObject({ card: false, columnMaxWidth: COLUMN_WIDTH.phone });
   });
 
   it("hides the sidebar when signed out", () => {
