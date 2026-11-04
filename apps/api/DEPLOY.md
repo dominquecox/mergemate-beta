@@ -91,14 +91,16 @@ Public posts are read from the KV namespace the staff tool publishes to. Add it 
 
 Operator-only KV keys in the `POSTS` namespace. They are not part of the public `flags:v1` document and are never served by `/v1/flags`. Agent runs are off unless `agent_runs:v1` is exactly `on`; any other value, a missing key or a KV error means off.
 
+KV edits need your Cloudflare login, not the deploy-scoped API token, so each command unsets `CLOUDFLARE_API_TOKEN` and runs from `apps/api`.
+
 ```bash
 # turn agent runs on / off
-npx wrangler kv key put --binding=POSTS --env dev --remote "agent_runs:v1" "on"
-npx wrangler kv key put --binding=POSTS --env dev --remote "agent_runs:v1" "off"
+cd ~/code/mergemate/apps/api && env -u CLOUDFLARE_API_TOKEN npx wrangler kv key put --binding=POSTS --env dev --remote "agent_runs:v1" "on"
+cd ~/code/mergemate/apps/api && env -u CLOUDFLARE_API_TOKEN npx wrangler kv key put --binding=POSTS --env dev --remote "agent_runs:v1" "off"
 
 # block / unblock one user (any non-empty value blocks)
-npx wrangler kv key put --binding=POSTS --env dev --remote "agent_blocked:<userId>" "1"
-npx wrangler kv key delete --binding=POSTS --env dev --remote "agent_blocked:<userId>"
+cd ~/code/mergemate/apps/api && env -u CLOUDFLARE_API_TOKEN npx wrangler kv key put --binding=POSTS --env dev --remote "agent_blocked:<userId>" "1"
+cd ~/code/mergemate/apps/api && env -u CLOUDFLARE_API_TOKEN npx wrangler kv key delete --binding=POSTS --env dev --remote "agent_blocked:<userId>"
 ```
 
 ## GitHub App webhook

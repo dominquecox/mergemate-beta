@@ -39,10 +39,23 @@ describe('agent kill switch', () => {
     const blocked = await assertAgentRunAllowed(envWith({ 'agent_runs:v1': 'on', 'agent_blocked:u1': '1' }), 'u1').catch(e => e);
     expect(blocked).toMatchObject({ code: 'forbidden', message: 'Agent runs are not available for this account.' });
   });
-  it('treats an empty, over-long or odd user id as blocked instead of looking up a key nobody set', async () => {
-    const env = envWith({ 'agent_runs:v1': 'on' });
-    for (const id of ['', 'a'.repeat(129), 'u1:x', 'u1/../x', 'u 1', 'u1\n']) expect(await agentUserBlocked(env, id)).toBe(true);
-    expect(await agentUserBlocked(env, '0b8f7c2e-6d1a-4c3b-9e5f-1a2b3c4d5e6f')).toBe(false);
-    await expect(assertAgentRunAllowed(env, '')).rejects.toMatchObject({ code: 'forbidden' });
+  it('treats a missing POSTS binding as blocked', async () => {
+    expect(await agentUserBlocked({} as Env, 'u1')).toBe(true);
+  });
+  it('treats an invalid userId as blocked without reading KV', async () => {
+    const env = envWith({ 'agent_blocked:': '', 'agent_blocked:a:b': '' });
+    for (const id of ['', 'a:b', 'a/b', 'a b', ' u1', 'u1\n', 'x'.repeat(129)]) {
+      expect(await agentUserBlocked(env, id)).toBe(true);
+    }
+  });
+  it('assert fails closed on a KV error and with KV missing', async () => {
+    await expect(assertAgentRunAllowed(envWith({ 'agent_runs:v1': 'on' }, true), 'u1')).rejects.toMatchObject({ code: 'forbidden' });
+    await expect(assertAgentRunAllowed({} as Env, 'u1')).rejects.toMatchObject({ code: 'forbidden' });
+  });
+  it('assert rejects a bad userId even when the switch is on', async () => {
+    await expect(assertAgentRunAllowed(envWith({ 'agent_runs:v1': 'on' }), 'a:b')).rejects.toMatchObject({
+      code: 'forbidden',
+      message: 'Agent runs are not available for this account.',
+    });
   });
 });
