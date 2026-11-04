@@ -8,6 +8,8 @@ import { useTheme } from '../context/ThemeContext';
 import { AGENT_STEP_META, approvalCopy, displayRunStatus, evidenceText, isRunActive, safeDraftPrLink } from './agent-model';
 import type { PatchProposalValue } from './api';
 import { allPatchFilesReviewed } from './patch-review';
+import { diffForPath } from './patch-diff';
+import { PatchDiff } from './PatchDiff';
 import { CopyDetailsButton } from '../components/CopyDetailsButton';
 
 export function AgentRunPanel({ run, cancelling, passkeyBusy, passkeysAvailable, proposal, onCancel, onRetry, onRegisterPasskey, onApprovePatch, onOpenWebApproval }: { run: WorkflowRun; cancelling: boolean; passkeyBusy:boolean; passkeysAvailable:boolean; proposal:PatchProposalValue|null; onCancel: () => void; onRetry: () => void; onRegisterPasskey:()=>void; onApprovePatch:()=>void; onOpenWebApproval:()=>void }) {
@@ -51,7 +53,7 @@ export function AgentRunPanel({ run, cancelling, passkeyBusy, passkeysAvailable,
               <Text numberOfLines={2} style={[typography.code,{color:colors.text,flex:1,fontSize:11}]}>{index+1}. {change.path}</Text>
               <Icon name={open?'chevron-up':'chevron-down'} size={16} color={colors.textSecondary}/>
             </Pressable>
-            {open&&<View style={{padding:10,borderTopWidth:1,borderTopColor:colors.border,backgroundColor:colors.background}}><Text selectable style={[typography.code,{color:colors.text,fontSize:11}]}>{change.content}</Text></View>}
+            {open&&<View style={{padding:10,borderTopWidth:1,borderTopColor:colors.border,backgroundColor:colors.background}}>{(()=>{const diff=diffForPath(proposal.diffs,change.path);return diff?<PatchDiff diff={diff}/>:<Text selectable style={[typography.code,{color:colors.text,fontSize:11}]}>{change.content}</Text>;})()}</View>}
           </View>;})}</View>
           <Text accessibilityLiveRegion="polite" style={[typography.caption,{color:patchReviewed?colors.riskLow:colors.textSecondary}]}>{reviewedPatchPaths.length} of {proposal.changes.length} exact files inspected</Text>
         </>:<Text style={[typography.footnote,{color:colors.textSecondary}]}>Loading the patch contents and binding...</Text>}

@@ -6,7 +6,7 @@ import type { HttpApiClientOptions } from '../api/http-types';
 const WebAuthnResponse=z.object({id:z.string().min(1),rawId:z.string().min(1),type:z.literal('public-key'),response:z.record(z.string(),z.unknown()),clientExtensionResults:z.record(z.string(),z.unknown())}).passthrough();
 const WebAuthnOptions=z.record(z.string(),z.unknown());
 const PasskeyOptions=z.object({challengeId:z.string().uuid(),options:WebAuthnOptions});
-export const PatchProposal=z.object({runId:z.string(),jobId:z.string(),repository:z.string(),repositoryId:z.number().int().positive(),headSha:z.string().regex(/^[a-f\d]{40}$/i),patchHash:z.string().regex(/^[a-f\d]{64}$/i),action:z.literal('qa_and_draft_pr'),summary:z.string(),changes:z.array(z.object({path:z.string(),content:z.string()}))});
+export const PatchProposal=z.object({runId:z.string(),jobId:z.string(),repository:z.string(),repositoryId:z.number().int().positive(),headSha:z.string().regex(/^[a-f\d]{40}$/i),patchHash:z.string().regex(/^[a-f\d]{64}$/i),action:z.literal('qa_and_draft_pr'),summary:z.string(),changes:z.array(z.object({path:z.string(),content:z.string()})),diffs:z.array(z.object({path:z.string(),diff:z.string()})).optional()});
 export type PatchProposalValue=z.infer<typeof PatchProposal>;
 
 /** Uses the same cookie/CSRF/native bearer, cancellation and session fences as the main API client. */

@@ -36,6 +36,7 @@ import { createGatedModel } from "./runtime/model";
 import { hasSecretShape } from "./runtime/proposal";
 import { noteRunStep } from "./run-events";
 import { assertAgentRunAllowed } from "./kill-switch";
+import { fileDiffs } from "../workflows/unified-diff";
 
 /** Idempotency-key prefix that marks a run as a board run carried out in the Worker. */
 export const BOARD_RUN_KEY_PREFIX = "brain-w-";
@@ -131,7 +132,7 @@ export async function prepareBoardRun(env: Env, deps: Deps, session: SessionReco
     d.prepare("INSERT INTO workflow_runs(id,user_id,idempotency_key,body_json,policy_revision,revision,created_at,updated_at) VALUES(?,?,?,?,?,0,?,?)")
       .bind(runId, userId, `${BOARD_RUN_KEY_PREFIX}${runId.replace(/-/g, "")}`, JSON.stringify(run), policy.revision, now, now),
     d.prepare("INSERT INTO workflow_jobs(id,run_id,user_id,repository,repository_id,base_sha,status,stage,patch_json,patch_hash,created_at,updated_at) VALUES(?,?,?,?,?,?,'awaiting_approval','patch',?,?,?,?)")
-      .bind(jobId, runId, userId, repo, snapshot.repositoryId, snapshot.headSha, JSON.stringify({ changes, summary }), patchHash, now, now),
+      .bind(jobId, runId, userId, repo, snapshot.repositoryId, snapshot.headSha, JSON.stringify({ changes, summary, diffs: fileDiffs(original, changes) }), patchHash, now, now),
     auditOutboxStatement(d, userId, `job:${jobId}:created`, "job_created", jobId, { runId, repositoryId: snapshot.repositoryId, baseSha: snapshot.headSha, executor: "worker" }, now, "EXISTS(SELECT 1 FROM workflow_jobs WHERE id=? AND user_id=?)", [jobId, userId]),
     auditOutboxStatement(d, userId, `job:${jobId}:patch-ready:${patchHash}`, "job_reported", jobId, { stage: "patch", status: "succeeded", patchHash, files: changes.length }, now, "EXISTS(SELECT 1 FROM workflow_jobs WHERE id=? AND status='awaiting_approval' AND patch_hash=?)", [jobId, patchHash]),
   ]);
