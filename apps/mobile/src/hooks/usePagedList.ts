@@ -9,12 +9,12 @@ export function mergePageItems<T extends {id:string}>(items:T[]):T[]{
  for(const item of items){const old=rows.get(item.id);if(old&&'updatedAt'in old&&'updatedAt'in item&&typeof old.updatedAt==='string'&&typeof item.updatedAt==='string'&&Date.parse(old.updatedAt)>Date.parse(item.updatedAt))continue;rows.set(item.id,item);}return [...rows.values()];
 }
 /** One append in flight; reset supersedes it. Revalidation preserves loaded pages for Back. 
- * Focus/snooze refresh: merge new data with existing items to avoid list jump.
+ * Focus/snooze refresh: show previous items while fetching, then replace with fresh result.
  */
 export function usePagedList<T extends {id:string}>(key:string,load:(cursor?:string|null)=>Promise<Page<T>>,invalidate?:()=>void){
  const invalidator=useRef(invalidate);invalidator.current=invalidate;
  const loader=useRef(load);loader.current=load;
- const generation=useRef(0),pending=useRef(false),cursor=useRef<string|null>(null),pages=useRef(0),revalidating=useRef(false);
+ const generation=useRef(0),pending=useRef(false),cursor=useRef<string|null>(null),pages=useRef(0);
  const [items,setItems]=useState<T[]>([]),[loading,setLoading]=useState(true),[busy,setBusy]=useState(false),[error,setError]=useState<string|null>(null),[hasMore,setHasMore]=useState(false),[refreshAfterMs,setRefreshAfterMs]=useState<number|null>(null);
  const fetchPage=useCallback(async(reset:boolean,preserve=false)=>{
   if(!reset&&(pending.current||!cursor.current))return;
@@ -32,9 +32,10 @@ export function usePagedList<T extends {id:string}>(key:string,load:(cursor?:str
    }
    cursor.current=next;pages.current=reset?fetched:pages.current+1;setHasMore(!!next);
    if(first?.refreshAt&&first.serverTime)setRefreshAfterMs(Math.max(0,Date.parse(first.refreshAt)-Date.parse(first.serverTime)));else setRefreshAfterMs(null);
-   // On revalidation (focus/snooze refresh), keep existing items and merge updates (avoid list jump).
+   // On revalidation (focus/snooze refresh), replace items with fresh result (items removed upstream disappear).
+   // During fetch, previous items remain visible (no loading flash).
    // On cold reset, replace all items.
-   setItems(old=>isRevalidation?mergePageItems([...old,...gathered]):mergePageItems(reset?gathered:[...old,...gathered]));
+   setItems(mergePageItems(gathered));
   }catch(error){if(version===generation.current)setError(toUserMessage(error,'Could not load this page. Try again.'));}
   finally{if(version===generation.current){pending.current=false;setBusy(false);setLoading(false);}}
  },[]);
