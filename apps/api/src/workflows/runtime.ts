@@ -61,7 +61,7 @@ export async function cancelWorkflowRun(env:Env,deps:Deps,userId:string,id:strin
 export async function processWorkflowMessage(env:Env,deps:Deps,id:string){
  if(!env.DB||!env.WORKFLOW_QUEUE)throw new ApiError('misconfigured','Workflow runtime unavailable.');
  const loaded=await loadRun(env.DB,id),{row,run}=loaded;
- if(TERMINAL.has(run.status)||run.status==='waiting_executor')return;
+ if(TERMINAL.has(run.status)||run.status==='waiting_executor'||run.status==='waiting_approval')return;
  if(row.lease_until&&Date.parse(row.lease_until)>deps.now().getTime())throw new Error('Workflow step already leased');
  const step=run.steps.find(s=>s.status==='pending'||s.status==='running');
  if(!step){run.status='succeeded';await saveRun(env.DB,row,run,deps.now().toISOString());return;}
