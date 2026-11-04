@@ -64,13 +64,15 @@ describe("MM-035 UI Polish & Accessibility", () => {
   });
 
   // A route whose only job is to send you to another screen loads nothing, so it has no data states.
+  // A tab placeholder whose press listener navigates elsewhere renders nothing, so it has no states to show.
+  const isPlaceholderOnly = (src: string) => /^(\/\*\*[\s\S]*?\*\/\s*)?export default function \w+\(\) \{\s*return null;\s*\}\s*$/.test(src);
   const isRedirectOnly = (src: string) => /^import \{ Redirect \} from "expo-router";\s*(\/\*\*[^*]*\*\/\s*)?export default function \w+\(\) \{\s*return <Redirect href="[^"]+" \/>;\s*\}\s*$/.test(src);
 
   it("ensures every screen in app/ includes LoadingState, EmptyState, and ErrorState", () => {
     const appDir = path.resolve(__dirname, "../app");
     const screens = collectFiles(appDir).filter(
       // Legal pages load nothing; they hand off to the official pages on mergemate.dev.
-      (f) => !f.endsWith("_layout.tsx") && !f.endsWith("+html.tsx") && !f.endsWith("cancelled.tsx") && !fs.readFileSync(f, "utf8").includes("<LegalPage ") && !isRedirectOnly(fs.readFileSync(f, "utf8"))
+      (f) => !f.endsWith("_layout.tsx") && !f.endsWith("+html.tsx") && !f.endsWith("cancelled.tsx") && !fs.readFileSync(f, "utf8").includes("<LegalPage ") && !isRedirectOnly(fs.readFileSync(f, "utf8")) && !isPlaceholderOnly(fs.readFileSync(f, "utf8"))
     );
     expect(screens.length).toBeGreaterThanOrEqual(17);
     for (const file of screens) {

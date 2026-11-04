@@ -6,8 +6,11 @@ import { useTheme } from "../../src/context/ThemeContext";
 import { useAlerts } from "../../src/context/AlertsContext";
 import { useFeatureFlags } from "../../src/hooks/useFeatureFlags";
 import { useLayout } from "../../src/layout/useLayout";
-import { navItemsFor, compactTabOrder, type NavItem } from "../../src/navigation/items";
+import { BRAIN_NAV_ITEM, NAV_ITEMS, type NavItem } from "../../src/navigation/items";
 import { Icon } from "../../src/components/Icon";
+
+/** Inbox always exists, so a first mount or a fallback never lands on the Workflows placeholder tab. */
+export const unstable_settings = { initialRouteName: "inbox" };
 
 export default function TabsLayout() {
   const { colors, typography } = useTheme();
@@ -20,7 +23,10 @@ export default function TabsLayout() {
   // On iPhone the home indicator overlaps the bar; the web build reads it from env(safe-area-inset-bottom).
   const bottomInset = insets.bottom;
 
-  const allItems = navItemsFor(flags);
+  // The screen list keeps one fixed order whatever the flags say. Flags reset while they reload on focus; if the
+  // Board screen moved in or out of first place, the navigator would reset to its first tab (the Workflows
+  // redirect) and every menu link into the tabs would land on /workflows.
+  const item = (name: NavItem["name"]) => (name === "brain" ? BRAIN_NAV_ITEM : NAV_ITEMS.find((value) => value.name === name)!);
   // Narrow web shows only Board, Workflows and Triage; Inbox, Alerts and Settings move to the top bar and side menu.
   const compact = Platform.OS === "web" && !isDesktop;
 
@@ -64,14 +70,12 @@ export default function TabsLayout() {
     />
   );
 
-  const compactScreens = [
-    ...compactTabOrder(flags).map((name) =>
-      name === "workflows-tab" ? workflowsScreen : itemScreen(allItems.find((item) => item.name === name)!),
-    ),
-    ...allItems
-      .filter((item) => item.name === "inbox" || item.name === "notifications" || item.name === "settings")
-      .map((item) => <Tabs.Screen key={`hidden-${item.name}`} name={item.name} options={{ href: null }} />),
-  ];
+  const hidden = (name: NavItem["name"]) => <Tabs.Screen key={name} name={name} options={{ href: null }} />;
+  const brainScreen = flags.brain ? itemScreen(BRAIN_NAV_ITEM) : hidden("brain");
+  // Narrow web: Board, Workflows and Triage in the bar; Inbox, Alerts and Settings stay routable, hidden from it.
+  const compactScreens = [brainScreen, workflowsScreen, itemScreen(item("triage")), hidden("inbox"), hidden("notifications"), hidden("settings")];
+  // Wide and native: the full list, Board just before Settings.
+  const fullScreens = [itemScreen(item("inbox")), itemScreen(item("triage")), workflowsScreen, itemScreen(item("notifications")), brainScreen, itemScreen(item("settings"))];
 
   return (
     <Tabs
@@ -107,12 +111,7 @@ export default function TabsLayout() {
         tabBarItemStyle: { minHeight: 44 },
       }}
     >
-      {compact ? compactScreens : allItems.flatMap((item) => [
-        itemScreen(item),
-        ...(item.name === "triage" ? [workflowsScreen] : []),
-      ])}
-      {/* Expo Router adds every file in this folder as a tab, so the Board route is hidden while its flag is off. */}
-      {!flags.brain && <Tabs.Screen key="brain" name="brain" options={{ href: null }} />}
+      {compact ? compactScreens : fullScreens}
     </Tabs>
   );
 }

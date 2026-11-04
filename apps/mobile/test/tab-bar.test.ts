@@ -9,9 +9,13 @@ describe("bottom tab bar", () => {
 
   it("adds a Workflows tab after Triage that opens the shared Workflows screen", () => {
     expect(layout).toMatch(/name="workflows-tab"[\s\S]*title: "Workflows"/);
-    expect(layout).toMatch(/item\.name === "triage" \? \[workflowsScreen\]/);
+    expect(layout).toMatch(/const fullScreens = \[itemScreen\(item\("inbox"\)\), itemScreen\(item\("triage"\)\), workflowsScreen,/);
+    // The screen list has one fixed order, so flags reloading can never move the Board in or out of first place.
+    expect(layout).toMatch(/const compactScreens = \[brainScreen, workflowsScreen, itemScreen\(item\("triage"\)\),/);
     expect(layout).toMatch(/tabPress: \(event\) => \{\s*event\.preventDefault\(\);\s*router\.push\("\/workflows"\);/);
-    expect(read("app/(tabs)/workflows-tab.tsx")).toContain('<Redirect href="/workflows" />');
+    // The placeholder never redirects on render; only a press on the tab opens /workflows.
+    expect(read("app/(tabs)/workflows-tab.tsx")).not.toContain("Redirect");
+    expect(layout).toContain('export const unstable_settings = { initialRouteName: "inbox" };');
   });
 
   it("keeps labels clear of the iPhone home indicator with 44px tab targets", () => {
