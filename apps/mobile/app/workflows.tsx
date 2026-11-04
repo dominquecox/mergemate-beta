@@ -218,6 +218,8 @@ function AgentWorkspace({
   
   const targetCompatible = !!target && (mode === 'code_fix' || (target.kind ?? 'pull_request') === 'pull_request') && prSelected && branchSelected;
   const capability = mode === 'code_fix' ? workspace.capabilities?.coding : workspace.capabilities?.analysis;
+  // Coding workflows appear only where the API confirms an executor (dev today); elsewhere the screen offers review workflows only.
+  const codingEnabled = workspace.capabilities?.coding.available === true;
   const canRun =
     !!definition &&
     !!target &&
@@ -316,6 +318,10 @@ function AgentWorkspace({
     setDefinition(makeAgentTemplate(id, compatibleTarget));
     draftVersion.current++;
   };
+
+  useEffect(() => {
+    if (workspace.capabilities && !codingEnabled && mode === 'code_fix' && !busy) chooseTemplate('review');
+  }, [workspace.capabilities, codingEnabled, mode]);
 
   const generate = async () => {
     if (!targetCompatible || !consentReady) return;
@@ -416,12 +422,12 @@ function AgentWorkspace({
   };
 
   const filteredTemplates = useMemo(() => {
-    const q = searchFilter.trim().toLowerCase();
-    if (!q) return AGENT_TEMPLATES;
-    return AGENT_TEMPLATES.filter(
+    const q = searchFilter.trim().toLowerCase(),available = AGENT_TEMPLATES.filter((t) => codingEnabled || t.mode === 'review');
+    if (!q) return available;
+    return available.filter(
       (t) => t.name.toLowerCase().includes(q) || t.description.toLowerCase().includes(q),
     );
-  }, [searchFilter]);
+  }, [searchFilter, codingEnabled]);
 
   return (
     <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1, backgroundColor: colors.background }}>
@@ -622,11 +628,13 @@ function AgentWorkspace({
                     available={workspace.capabilities.analysis.available}
                     reason={workspace.capabilities.analysis.reason}
                   />
-                  <CapabilityLine
-                    title="Coding executor"
-                    available={workspace.capabilities.coding.available}
-                    reason={workspace.capabilities.coding.reason}
-                  />
+                  {codingEnabled && (
+                    <CapabilityLine
+                      title="Coding executor"
+                      available={workspace.capabilities.coding.available}
+                      reason={workspace.capabilities.coding.reason}
+                    />
+                  )}
                   <Text style={[typography.caption, { color: colors.textSecondary }]}>
                     Limits: {workspace.capabilities.limits.maxFiles} changed files · {workspace.capabilities.limits.maxSteps} workflow steps
                   </Text>
@@ -855,7 +863,7 @@ function AgentWorkspace({
                   placeholderTextColor={colors.textMuted}
                   style={[input, { minHeight: 74, textAlignVertical: 'top', lineHeight: 19 }]}
                 />
-                <View style={{ flexDirection: 'row', gap: 8 }} accessibilityRole="radiogroup">
+                {codingEnabled && <View style={{ flexDirection: 'row', gap: 8 }} accessibilityRole="radiogroup">
                   {(['review', 'code_fix'] as const).map((value) => (
                     <Pressable
                       key={value}
@@ -884,7 +892,7 @@ function AgentWorkspace({
                       </Text>
                     </Pressable>
                   ))}
-                </View>
+                </View>}
 
                 {/* PR Picker for Review Mode with Repo Target */}
                 {isRepoOnly && mode === 'review' && (
@@ -1377,7 +1385,7 @@ function AgentWorkspace({
                         const nextParsed = targetFromUrl(option.url);
                         if (definition && nextParsed) {
                           const nextMode: AgentMode =
-                            definition.mode === 'review' && (nextParsed.kind ?? 'pull_request') !== 'pull_request'
+                            codingEnabled && definition.mode === 'review' && (nextParsed.kind ?? 'pull_request') !== 'pull_request'
                               ? 'code_fix'
                               : definition.mode;
                           setMode(nextMode);
