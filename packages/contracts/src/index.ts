@@ -23,3 +23,5 @@ export * from './model-telemetry';
 export * from "./qa-evidence";
 
 export * from "./workflows";
+
+export * from "./brain";
