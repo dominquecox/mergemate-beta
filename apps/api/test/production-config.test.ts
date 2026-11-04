@@ -102,12 +102,14 @@ describe("wrangler.toml [env.production]", () => {
 describe("agent runtime stays off in production", () => {
   // The agent executor ships dev-only until its production security controls land. These pins make turning it on
   // in production an explicit, reviewed config change instead of a silent one.
-  it("binds no workflow queue and allows no runner repositories in production", () => {
+  // Owner decision (Nov 4): production runs board agent runs like dev, for the one reviewed repository only. Those run
+  // in the Worker and publish a passkey-approved draft PR; general coding runs and external runners stay off.
+  it("binds no workflow queue or runner access, and allows board runs for one repository only", () => {
     const production = inEnv("production").map((t) => `[${t.header}]\n${t.body}`).join("\n");
-    expect(production).not.toMatch(/WORKFLOW_/);
+    expect(production.replace(/^WORKFLOW_RUNNER_REPOS = "dominquecox\/mergemate"$/m, "")).not.toMatch(/WORKFLOW_/);
     expect(production).not.toMatch(/mergemate-workflows/);
     expect(production).not.toMatch(/CF_ACCESS_/);
-    expect(vars("production")("WORKFLOW_RUNNER_REPOS")).toBeUndefined();
+    expect(vars("production")("WORKFLOW_RUNNER_REPOS")).toBe("dominquecox/mergemate");
     expect(all("production", "queues.producers").map((t) => value(t, "binding"))).not.toContain("WORKFLOW_QUEUE");
   });
 

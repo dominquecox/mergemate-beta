@@ -194,6 +194,9 @@ workers_dev = false
 # STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET, STRIPE_PRICE_PRO_MONTHLY and STRIPE_PRICE_PRO_ANNUAL in production.
 [env.production.vars]
 APP_ENV = "production"
+# Board agent runs (in the Worker, passkey-approved draft PRs) are allowed for this one repository only.
+# General coding runs stay off: production has no workflow queue and no Cloudflare Access settings.
+WORKFLOW_RUNNER_REPOS = "dominquecox/mergemate"
 # Free plan: a few real AI actions a day; Pro (default 200) is the plan for daily use.
 AI_DAILY_ACTIONS_FREE = "5"
 # Everyone without their own Meta key shares this one small daily pool on the shared key; with their own key, AI is uncapped.
