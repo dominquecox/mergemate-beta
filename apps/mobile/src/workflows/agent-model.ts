@@ -83,3 +83,18 @@ export function evidenceText(value: unknown, limit = 4000): string {
 export function adoptRunUpdate(current: WorkflowRun | null, incoming: WorkflowRun): WorkflowRun {
   return current?.id === incoming.id && current.revision > incoming.revision ? current : incoming;
 }
+
+export const SAVE_DESCRIPTION_MAX = 280;
+/** Prefills the save sheet; a copy gets its own name so it never silently overwrites the original. */
+export function saveDraftFor(definition: WorkflowDefinition, copy = false): { name: string; description: string } {
+  return { name: copy ? `${definition.name.slice(0, 75)} copy` : definition.name, description: definition.description ?? '' };
+}
+/** Applies the save sheet to a definition, or explains what to fix. An empty description is removed. */
+export function applySaveDraft(definition: WorkflowDefinition, draft: { name: string; description: string }): { definition: WorkflowDefinition } | { error: string } {
+  const name = draft.name.trim(), description = draft.description.trim();
+  if (!name) return { error: 'Give the workflow a name.' };
+  if (name.length > 80) return { error: 'Use 80 characters or fewer for the name.' };
+  if (description.length > SAVE_DESCRIPTION_MAX) return { error: `Use ${SAVE_DESCRIPTION_MAX} characters or fewer for the description.` };
+  const { description: _old, ...rest } = definition;
+  return { definition: description ? { ...rest, name, description } : { ...rest, name } };
+}

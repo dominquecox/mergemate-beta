@@ -3,7 +3,7 @@ import { z } from 'zod';
 export const WorkflowTarget = z.object({owner:z.string().regex(/^[a-z\d][a-z\d-]{0,38}$/i),repo:z.string().regex(/^[\w.-]{1,100}$/).refine(x=>x!=='.'&&x!=='..'),kind:z.enum(['pull_request','issue','repository']).optional(),number:z.number().int().min(1).max(999999999).optional(),baseBranch:z.string().min(1).max(160).regex(/^[a-zA-Z0-9_./-]+$/).optional()}).strict();
 export const WorkflowStepKind=z.enum(['context','checks','risk','summary','review_plan','patch','qa','draft_pr','route']);
 export const WorkflowStepDefinition=z.object({id:z.string().regex(/^[a-z][a-z0-9_-]{0,39}$/),kind:WorkflowStepKind,title:z.string().trim().min(1).max(80),enabled:z.boolean()}).strict();
-export const WorkflowDefinition=z.object({id:z.string().max(80).optional(),name:z.string().trim().min(1).max(80),intent:z.string().trim().min(3).max(2000),mode:z.enum(['review','code_fix']),target:WorkflowTarget,steps:z.array(WorkflowStepDefinition).min(1).max(9)}).strict().superRefine((v,c)=>{
+export const WorkflowDefinition=z.object({id:z.string().max(80).optional(),name:z.string().trim().min(1).max(80),description:z.string().trim().max(280).optional(),intent:z.string().trim().min(3).max(2000),mode:z.enum(['review','code_fix']),target:WorkflowTarget,steps:z.array(WorkflowStepDefinition).min(1).max(9)}).strict().superRefine((v,c)=>{
  if((v.target.kind??'pull_request')!=='repository'&&!v.target.number)c.addIssue({code:'custom',message:'PR and issue targets require a number'});
  if(v.mode==='review'&&(v.target.kind??'pull_request')!=='pull_request')c.addIssue({code:'custom',message:'Review workflows require a pull request'});
  const enabled=v.steps.filter(s=>s.enabled),kinds=enabled.map(s=>s.kind);

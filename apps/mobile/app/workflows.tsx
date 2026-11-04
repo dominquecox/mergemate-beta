@@ -29,6 +29,9 @@ import { useRepoBranches } from '../src/hooks/useRepoBranches';
 import {
   AGENT_TEMPLATES,
   makeAgentTemplate,
+  saveDraftFor,
+  applySaveDraft,
+  SAVE_DESCRIPTION_MAX,
   targetFromUrl,
   isRepositoryPickerTarget,
   displayRunStatus,
@@ -109,6 +112,11 @@ function AgentWorkspace({
   const [searchFilter, setSearchFilter] = useState('');
   const [showSearch, setShowSearch] = useState(false);
   const [targetModalOpen, setTargetModalOpen] = useState(false);
+  const [saveSheet, setSaveSheet] = useState<null | { copy: boolean; name: string; description: string; error: string }>(null);
+  const [justSavedId, setJustSavedId] = useState<string | null>(null);
+  const [showAllTemplates, setShowAllTemplates] = useState(false);
+  const scrollRef = useRef<React.ComponentRef<typeof ScrollView>>(null);
+  const savedLayout = useRef({ column: 0, cell: 0 });
   const [projectTargets, setProjectTargets] = useState<Array<{ label: string; sublabel: string; url: string; kind: 'pr' | 'repo' }>>([]);
   const [selectedPr, setSelectedPr] = useState<number | null>(null);
   const [selectedBranch, setSelectedBranch] = useState<string | null>(null);
@@ -356,16 +364,29 @@ function AgentWorkspace({
     workspace.clearError();
   };
 
-  const saveWorkflow = async (copy = false) => {
+  const openSaveSheet = (copy = false) => {
     if (!definition || busy) return;
+    setSaveSheet({ copy, ...saveDraftFor(definition, copy), error: '' });
+  };
+
+  const saveWorkflow = async () => {
+    if (!definition || busy || !saveSheet) return;
+    const applied = applySaveDraft(saveSheet.copy ? withoutId(definition) : definition, saveSheet);
+    if ('error' in applied) {
+      setSaveSheet({ ...saveSheet, error: applied.error });
+      return;
+    }
     const version = draftVersion.current;
-    const inputValue = copy ? { ...withoutId(definition), name: `${definition.name.slice(0, 75)} copy` } : definition;
     setSavedMessage('');
-    const value = await workspace.saveDefinition(inputValue);
+    const value = await workspace.saveDefinition(applied.definition);
     if (value && version === draftVersion.current) {
       setDefinition(value);
       setConfirmCodeChanges(false);
-      setSavedMessage('Workflow saved to your account.');
+      setSaveSheet(null);
+      setJustSavedId(value.id ?? null);
+      setSavedMessage(`Saved "${value.name}". It is at the top of Saved workflows.`);
+      // Bring the saved list into view so the new item is visible right away.
+      requestAnimationFrame(() => scrollRef.current?.scrollTo({ y: Math.max(0, savedLayout.current.column + savedLayout.current.cell - 12), animated: true }));
     }
   };
 
@@ -394,6 +415,7 @@ function AgentWorkspace({
         rightAction={<Button title="Refresh" variant="ghost" disabled={busy} onPress={workspace.refresh} />}
       />
       <ScrollView
+        ref={scrollRef}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="interactive"
         contentContainerStyle={{ padding: isDesktop ? 22 : 14, paddingBottom: 48, gap: 16 }}
@@ -479,9 +501,10 @@ function AgentWorkspace({
         <AccessGuidanceBanner error={localError || workspace.error || workspace.capabilityError} compact />
 
         {/* Responsive Desktop Bento Grid vs Mobile Stack */}
-        <View style={{ flexDirection: isDesktop ? 'row' : 'column', gap: 16, alignItems: 'flex-start' }}>
+        {/* Phones show the composer first; templates and saved workflows follow it. */}
+        <View style={{ flexDirection: isDesktop ? 'row' : 'column-reverse', gap: 16, alignItems: isDesktop ? 'flex-start' : 'stretch' }}>
           {/* Left Bento Column: Templates, Capabilities, Saved Workflows & Recent Runs */}
-          <View style={{ width: isDesktop ? 330 : '100%', gap: 12 }}>
+          <View onLayout={(e) => { savedLayout.current.column = e.nativeEvent.layout.y; }} style={{ width: isDesktop ? 330 : '100%', gap: 12 }}>
             {/* Bento Cell 1: Starter Workflows (Mexas List Style) */}
             <View style={[surface, { gap: 10 }]}>
               <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -497,7 +520,7 @@ function AgentWorkspace({
                 </View>
                 <Text style={[typography.caption, { color: colors.brandLight }]}>{filteredTemplates.length} templates</Text>
               </View>
-              {filteredTemplates.map((template) => {
+              {(isDesktop || showAllTemplates || searchFilter.trim() ? filteredTemplates : filteredTemplates.slice(0, 3)).map((template) => {
                 const active = definition?.name === template.name;
                 return (
                   <Pressable
@@ -541,12 +564,21 @@ function AgentWorkspace({
                       </View>
                       <Icon name="ellipsis-horizontal" size={15} color={colors.textMuted} />
                     </View>
-                    <Text numberOfLines={2} style={[typography.caption, { color: colors.textSecondary }]}>
-                      {template.description}
-                    </Text>
+                    {isDesktop && (
+                      <Text numberOfLines={2} style={[typography.caption, { color: colors.textSecondary }]}>
+                        {template.description}
+                      </Text>
+                    )}
                   </Pressable>
                 );
               })}
+              {!isDesktop && !searchFilter.trim() && filteredTemplates.length > 3 && (
+                <Button
+                  title={showAllTemplates ? 'Show fewer templates' : `Show all ${filteredTemplates.length} templates`}
+                  variant="ghost"
+                  onPress={() => setShowAllTemplates((value) => !value)}
+                />
+              )}
             </View>
 
             {/* Bento Cell 2: Connected Capabilities */}
@@ -595,7 +627,7 @@ function AgentWorkspace({
             </View>
 
             {/* Bento Cell 3: Saved Workflows */}
-            <View style={[surface, { gap: 8 }]}>
+            <View onLayout={(e) => { savedLayout.current.cell = e.nativeEvent.layout.y; }} style={[surface, { gap: 8 }]}>
               <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
                 <Text accessibilityRole="header" style={[typography.headline, { color: colors.text }]}>
                   Saved workflows
@@ -606,6 +638,11 @@ function AgentWorkspace({
                   size={15}
                 />
               </View>
+              {!!savedMessage && (
+                <Text accessibilityRole="alert" accessibilityLiveRegion="polite" style={[typography.footnote, { color: colors.brandLight }]}>
+                  {savedMessage}
+                </Text>
+              )}
               {workspace.definitionsLoading ? (
                 <Text style={[typography.caption, { color: colors.textSecondary }]}>Loading saved workflows...</Text>
               ) : workspace.definitionsError ? (
@@ -621,7 +658,7 @@ function AgentWorkspace({
                       borderRadius: 12,
                       borderWidth: 1,
                       borderColor: definition?.id === value.id ? colors.brandLight : colors.border,
-                      backgroundColor: colors.surfaceElevated,
+                      backgroundColor: justSavedId === value.id ? colors.brandSubtle : colors.surfaceElevated,
                       gap: 6,
                     }}
                   >
@@ -637,6 +674,11 @@ function AgentWorkspace({
                         <Text style={[typography.caption, { color: colors.textSecondary, marginTop: 2 }]}>
                           {value.mode === 'review' ? 'PR review' : 'Coding workflow'} · {value.target.owner}/{value.target.repo}
                         </Text>
+                        {!!value.description && (
+                          <Text numberOfLines={2} style={[typography.caption, { color: colors.textSecondary, marginTop: 2 }]}>
+                            {value.description}
+                          </Text>
+                        )}
                       </Pressable>
                       <Pressable
                         accessibilityRole="button"
@@ -1053,11 +1095,6 @@ function AgentWorkspace({
               )}
             </View>
 
-            {!!savedMessage && (
-              <Text accessibilityLiveRegion="polite" style={[typography.footnote, { color: colors.brandLight }]}>
-                {savedMessage}
-              </Text>
-            )}
             {!!(localError || workspace.error) && (
               <ErrorState
                 title="Workflow needs attention"
@@ -1165,30 +1202,27 @@ function AgentWorkspace({
                 <View
                   style={[
                     surface,
-                    {
-                      flexDirection: 'row',
-                      flexWrap: 'wrap',
-                      gap: 10,
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                    },
+                    // Phones stack the actions full width so Save and Run never overlap.
+                    isDesktop
+                      ? { flexDirection: 'row', flexWrap: 'wrap', gap: 10, alignItems: 'center', justifyContent: 'space-between' }
+                      : { flexDirection: 'column', gap: 10, alignItems: 'stretch' },
                   ]}
                 >
-                  <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap', flex: 1 }}>
+                  <View style={isDesktop ? { flexDirection: 'row', gap: 8, flexWrap: 'wrap', flex: 1 } : { flexDirection: 'column', gap: 10, alignItems: 'stretch' }}>
                     <Button
                       title={definition.id ? 'Save changes' : 'Save workflow'}
                       accessibilityLabel="Save workflow"
                       variant="secondary"
                       loading={workspace.busy === 'save'}
                       disabled={!workspace.configured || !targetCompatible || !target || !sameTarget(definition.target, target) || busy || workspace.definitionsLoading || !DefinitionSchema.safeParse(definition).success}
-                      onPress={() => saveWorkflow()}
+                      onPress={() => openSaveSheet()}
                     />
                     {definition.id && (
                       <Button
                         title="Save as a new workflow"
                         variant="ghost"
                         disabled={!workspace.configured || !targetCompatible || !target || !sameTarget(definition.target, target) || busy || workspace.definitionsLoading}
-                        onPress={() => saveWorkflow(true)}
+                        onPress={() => openSaveSheet(true)}
                       />
                     )}
                   </View>
@@ -1197,7 +1231,7 @@ function AgentWorkspace({
                     loading={workspace.busy === 'start'}
                     disabled={!canRun || !DefinitionSchema.safeParse(definition).success}
                     onPress={() => workspace.start(definition, confirmCodeChanges)}
-                    style={{ flexGrow: 1 }}
+                    style={isDesktop ? { flexGrow: 1 } : { width: '100%' }}
                   />
                 </View>
 
@@ -1215,6 +1249,41 @@ function AgentWorkspace({
           </View>
         </View>
       </ScrollView>
+
+      <Modal visible={!!saveSheet} transparent animationType="slide" onRequestClose={() => setSaveSheet(null)}>
+        <View style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.55)' }}>
+          <View accessibilityViewIsModal style={{ backgroundColor: colors.surface, borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 18, gap: 12, width: '100%', maxWidth: 560, alignSelf: 'center' }}>
+            <Text accessibilityRole="header" style={[typography.headline, { color: colors.text }]}>
+              {saveSheet?.copy ? 'Save as a new workflow' : definition?.id ? 'Save changes' : 'Save workflow'}
+            </Text>
+            <Text style={[typography.footnote, { color: colors.textSecondary }]}>Name</Text>
+            <TextInput
+              accessibilityLabel="Workflow name"
+              value={saveSheet?.name ?? ''}
+              maxLength={80}
+              autoFocus
+              onChangeText={(name) => setSaveSheet((old) => (old ? { ...old, name, error: '' } : old))}
+              style={{ minHeight: 44, borderWidth: 1, borderColor: colors.border, borderRadius: 12, paddingHorizontal: 12, color: colors.text, backgroundColor: colors.background }}
+            />
+            <Text style={[typography.footnote, { color: colors.textSecondary }]}>Description (optional)</Text>
+            <TextInput
+              accessibilityLabel="Workflow description"
+              value={saveSheet?.description ?? ''}
+              maxLength={SAVE_DESCRIPTION_MAX}
+              multiline
+              onChangeText={(description) => setSaveSheet((old) => (old ? { ...old, description, error: '' } : old))}
+              style={{ minHeight: 72, borderWidth: 1, borderColor: colors.border, borderRadius: 12, padding: 12, color: colors.text, backgroundColor: colors.background, textAlignVertical: 'top' }}
+            />
+            {!!saveSheet?.error && (
+              <Text accessibilityRole="alert" style={[typography.footnote, { color: colors.statusAlert }]}>{saveSheet.error}</Text>
+            )}
+            <View style={{ flexDirection: 'row', gap: 10 }}>
+              <Button title="Cancel" variant="ghost" disabled={workspace.busy === 'save'} onPress={() => setSaveSheet(null)} style={{ flexGrow: 1, flexBasis: 0 }} />
+              <Button title="Save" loading={workspace.busy === 'save'} disabled={busy} onPress={() => void saveWorkflow()} style={{ flexGrow: 1, flexBasis: 0 }} />
+            </View>
+          </View>
+        </View>
+      </Modal>
 
       <Modal
         visible={targetModalOpen}
