@@ -8,9 +8,11 @@ import { toUserMessage } from '../api/errors';
 import { StorageService } from '../storage';
 import { onSessionChange } from '../auth/session-events';
 import { WorkflowApiClient } from './api';
+import type { PatchProposalValue } from './api';
+import { createPasskeyCredential,getPasskeyCredential,passkeysAvailable } from './passkeys';
 import { isRunActive, adoptRunUpdate } from './agent-model';
 
-export function useAgentWorkspace(account: string, target: WorkflowTarget | null, isDemo: boolean) {
+export function useAgentWorkspace(account: string, target: WorkflowTarget | null, isDemo: boolean,initialRunId='') {
   const client = useMemo(() => apiMode.kind === 'http' && !isDemo ? new WorkflowApiClient({
     baseUrl: apiMode.baseUrl, platform: Platform.OS === 'web' ? 'web' : 'native', nativePlatform: Platform.OS === 'android' ? 'android' : 'ios',
     tokenStore: { get: () => StorageService.getSessionToken(), set: token => StorageService.setSessionToken(token), clear: () => StorageService.clearSessionToken() },
@@ -20,19 +22,21 @@ export function useAgentWorkspace(account: string, target: WorkflowTarget | null
   const [capabilityError, setCapabilityError] = useState('');
   const [runs, setRuns] = useState<WorkflowRun[]>([]);
   const [selectedRun, setSelectedRun] = useState<WorkflowRun | null>(null);
+  const [patchProposal,setPatchProposal]=useState<PatchProposalValue|null>(null);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyError, setHistoryError] = useState('');
   const [definitions, setDefinitions] = useState<WorkflowDefinition[]>([]);
   const [definitionsLoading, setDefinitionsLoading] = useState(false);
   const [definitionsError, setDefinitionsError] = useState('');
   const definitionVersion = useRef(0);
-  const [busy, setBusy] = useState<'plan' | 'start' | 'cancel' | 'save' | 'delete' | null>(null);
+  const [busy, setBusy] = useState<'plan' | 'start' | 'cancel' | 'save' | 'delete' | 'register_passkey' | 'approve_patch' | null>(null);
   const [error, setError] = useState('');
   const [refreshKey, setRefreshKey] = useState(0);
   const generation = useRef(0), alive = useRef(false), actionLock = useRef(false), actionVersion = useRef(0);
   const controllers = useRef(new Set<AbortController>());
   const uncertainStart = useRef<{ fingerprint: string; key: string } | null>(null);
   const selected = useRef(selectedRun); selected.current = selectedRun;
+  const initialRunRequested=useRef('');
   const controller = () => { const value = new AbortController(); controllers.current.add(value); return value; };
   const done = (value: AbortController) => controllers.current.delete(value);
   const valid = (epoch: number) => alive.current && epoch === generation.current;
@@ -105,6 +109,12 @@ export function useAgentWorkspace(account: string, target: WorkflowTarget | null
     setSelectedRun(old => adoptRunUpdate(old, run));
     setRuns(old => { const prior = old.find(value => value.id === run.id); return [adoptRunUpdate(prior ?? null, run), ...old.filter(value => value.id !== run.id)].slice(0, 100); });
   }, []);
+  useEffect(()=>{
+    if(!client||!initialRunId||initialRunRequested.current===initialRunId)return;
+    initialRunRequested.current=initialRunId;const epoch=generation.current,request=controller();let current=true;
+    client.run(initialRunId,request.signal).then(run=>{if(current&&valid(epoch))receive(run);}).catch(cause=>{if(current&&valid(epoch)&&!request.signal.aborted)setError(toUserMessage(cause,'Could not open this workflow run.'));}).finally(()=>done(request));
+    return()=>{current=false;request.abort();done(request);};
+  },[client,initialRunId,receive]);
   useFocusEffect(useCallback(() => {
     if (!client || !selectedRun || !isRunActive(selectedRun.status)) return;
     const id = selectedRun.id, epoch = generation.current, request = controller(); let focused = true; let timer: ReturnType<typeof setTimeout> | undefined;
@@ -119,6 +129,13 @@ export function useAgentWorkspace(account: string, target: WorkflowTarget | null
     timer = setTimeout(poll, 1500);
     return () => { focused = false; if (timer) clearTimeout(timer); request.abort(); done(request); };
   }, [client, selectedRun?.id, selectedRun ? isRunActive(selectedRun.status) : false, receive]));
+  useEffect(()=>{
+    setPatchProposal(null);
+    if(!client||selectedRun?.status!=='waiting_approval')return;
+    const epoch=generation.current,runId=selectedRun.id,request=controller();let current=true;
+    client.patchProposal(runId,request.signal).then(value=>{if(current&&valid(epoch)&&selected.current?.id===runId)setPatchProposal(value);}).catch(cause=>{if(current&&valid(epoch)&&!request.signal.aborted)setError(toUserMessage(cause,'Could not load the exact patch awaiting approval.'));}).finally(()=>done(request));
+    return()=>{current=false;request.abort();done(request);};
+  },[client,selectedRun?.id,selectedRun?.status]);
   const generate = async (intent: string, mode: WorkflowDefinition['mode']): Promise<WorkflowDefinition | null> => {
     if (!client || !target || actionLock.current) return null;
     actionLock.current = true; const operation = ++actionVersion.current; setBusy('plan'); setError('');
@@ -157,5 +174,15 @@ export function useAgentWorkspace(account: string, target: WorkflowTarget | null
     catch (cause) { if (valid(epoch) && !request.signal.aborted) setError(toUserMessage(cause, 'Could not refresh this run.')); }
     finally { done(request); }
   };
-  return { configured: !!client, capabilities, capabilityLoading, capabilityError, runs, selectedRun, historyLoading, historyError, definitions, definitionsLoading, definitionsError, saveDefinition, deleteDefinition, busy, error, generate, start, cancel, selectRun, clearRun: () => setSelectedRun(null), clearError: () => setError(''), refresh: () => setRefreshKey(value => value + 1) };
+  const passkeyAction=async(kind:'register_passkey'|'approve_patch')=>{
+    const run=selected.current;if(!client||!run||run.status!=='waiting_approval'||actionLock.current)return;
+    if(!passkeysAvailable){setError('Open Agent workflows in your browser to approve this exact patch with a passkey.');return;}
+    actionLock.current=true;const operation=++actionVersion.current,epoch=generation.current,request=controller();setBusy(kind);setError('');
+    try{
+      if(kind==='register_passkey'){const value=await client.passkeyRegistrationOptions(request.signal),response=await createPasskeyCredential(value.options);await client.verifyPasskeyRegistration(value.challengeId,response,request.signal);}
+      else{const value=await client.patchApprovalOptions(run.id,request.signal);if(value.binding.runId!==run.id||patchProposal&&value.binding.patchHash!==patchProposal.patchHash)throw new Error('Patch approval binding changed.');const response=await getPasskeyCredential(value.options),approved=await client.approvePatch(run.id,value.challengeId,response,request.signal);if(valid(epoch)&&selected.current?.id===run.id)receive(approved.run);}
+    }catch(cause){if(valid(epoch)&&!request.signal.aborted)setError(toUserMessage(cause,kind==='register_passkey'?'Passkey registration was not completed.':'Exact patch approval was not completed.'));}
+    finally{done(request);if(operation===actionVersion.current){actionLock.current=false;if(valid(epoch))setBusy(null);}}
+  };
+  return { configured: !!client, capabilities, capabilityLoading, capabilityError, runs, selectedRun, patchProposal, passkeysAvailable, historyLoading, historyError, definitions, definitionsLoading, definitionsError, saveDefinition, deleteDefinition, busy, error, generate, start, cancel, registerPasskey:()=>passkeyAction('register_passkey'), approvePatch:()=>passkeyAction('approve_patch'), selectRun, clearRun: () => setSelectedRun(null), clearError: () => setError(''), refresh: () => setRefreshKey(value => value + 1) };
 }

@@ -14,7 +14,7 @@ import { executeJob } from './agent-runner.mjs';
 
 const sha = c => c.repeat(40);
 const policy = () => validateConfig({serverOrigin:'https://api.example.test',repositories:['owner/repo'],image:`node@sha256:${'a'.repeat(64)}`,tests:[['npm','test']],runnerId:'fixture-runner'});
-const job = () => ({id:'job_1',runId:'run_1',repository:'owner/repo',repositoryId:101,baseSha:sha('a'),targetKind:'repository',baseBranch:'main',intent:'Fix the label',leaseToken:'x'.repeat(32),leaseExpiresAt:new Date(Date.now()+60000).toISOString(),githubAccessToken:'fixture-installation-token',githubTokenExpiresAt:new Date(Date.now()+3600000).toISOString()});
+const job = () => ({id:'job_1',runId:'run_1',repository:'owner/repo',repositoryId:101,baseSha:sha('a'),targetKind:'repository',baseBranch:'main',intent:'Fix the label',stage:'patch',leaseToken:'x'.repeat(32),leaseExpiresAt:new Date(Date.now()+60000).toISOString()});
 async function temporary(fn){const dir=await mkdtemp(path.join(tmpdir(),'mm-agent-test-'));try{return await fn(dir);}finally{await rm(dir,{recursive:true,force:true});}}
 function tar(entries){const blocks=[];for(const item of entries){const data=Buffer.from(item.content??''),h=Buffer.alloc(512);h.write(item.path,0,100);h.write('0000644\0',100);h.write('0000000\0',108);h.write('0000000\0',116);h.write(`${data.length.toString(8).padStart(11,'0')}\0`,124);h.write('00000000000\0',136);h.fill(32,148,156);h[156]=(item.type??'0').charCodeAt(0);if(item.link)h.write(item.link,157,100);h.write('ustar\0',257);let sum=0;for(const x of h)sum+=x;h.write(`${sum.toString(8).padStart(6,'0')}\0 `,148);blocks.push(h,data,Buffer.alloc((512-data.length%512)%512));}blocks.push(Buffer.alloc(1024));return gzipSync(Buffer.concat(blocks));}
 
@@ -23,6 +23,7 @@ function tar(entries){const blocks=[];for(const item of entries){const data=Buff
  for(const bad of [{image:'node:latest'},{repositories:['owner/..']},{runnerId:'bad/id'},{maxSandboxMb:99999},{tests:[['sh','-c','anything']]}])assert.throws(()=>validateConfig({...good,...bad}),AgentError);
  assert.throws(()=>validateJob({...job(),limits:{maxFiles:'not-a-number'}},good),/limits/);
  assert.throws(()=>validateJob({...job(),repository:'other/repo'},good),/invalid/);
+ assert.throws(()=>validateJob({...job(),githubAccessToken:'must-never-reach-runner'},good),/invalid/);
  });
  test('patches reject traversal, protected files, symlinks, credentials and byte overrun',async()=>temporary(async root=>{
  await mkdir(path.join(root,'apps/mobile/src'),{recursive:true});await writeFile(path.join(root,'apps/mobile/src/a.ts'),'old');
@@ -63,6 +64,8 @@ function tar(entries){const blocks=[];for(const item of entries){const data=Buff
  assert.throws(()=>new WorkflowBridge(policy(),'short'),/credential/);let seen;
  const bridge=new WorkflowBridge(policy(),'x'.repeat(64),{accessClientId:'fixture-id',accessClientSecret:'fixture-secret',fetcher:async(url,options)=>{seen={url,options};return Response.json({active:false});}});
  const guard=new LeaseGuard(bridge,job(),undefined,{intervalMs:100000});await assert.rejects(guard.assertActive(),/lease/);guard.stop();assert(seen.url.startsWith('https://api.example.test/internal/workflows/'));assert.equal(seen.options.redirect,'error');assert(!('Origin' in seen.options.headers));assert.equal(seen.options.headers['CF-Access-Client-Id'],'fixture-id');assert.equal(seen.options.headers['CF-Access-Client-Secret'],'fixture-secret');
+ const archiveBridge=new WorkflowBridge(policy(),'x'.repeat(64),{accessClientId:'fixture-id',accessClientSecret:'fixture-secret',fetcher:async()=>new Response(Buffer.from([31,139,8,0]))});assert.deepEqual(await archiveBridge.archive(job()),Buffer.from([31,139,8,0]));
+ const oversized=new WorkflowBridge({...policy(),maxArchiveBytes:3},'x'.repeat(64),{accessClientId:'fixture-id',accessClientSecret:'fixture-secret',fetcher:async()=>new Response(Buffer.from([1,2,3,4]))});await assert.rejects(oversized.archive(job()),/limit/);
  await assert.rejects(limitedResponseText(new Response('x'.repeat(100)),20),/byte limit/);
  });
 function githubFixture({existing=false,collision=false,failDraft=false,permission=true}={}) {
@@ -100,19 +103,20 @@ function githubFixture({existing=false,collision=false,failDraft=false,permissio
  const cancelled=githubFixture();await assert.rejects(new GitHubPublisher('fixture',{fetcher:cancelled.fetcher}).publish(job(),root,changes,tests,sha256('x'),{assertActive:async()=>{throw new AgentError('cancelled','cancelled','cancelled');}}),/cancelled/);assert(!cancelled.requests.some(r=>r.method==='POST'));
  const partial=githubFixture({failDraft:true});await assert.rejects(new GitHubPublisher('fixture',{fetcher:partial.fetcher}).publish(job(),root,changes,tests,sha256('x'),{assertActive:async()=>{}}),e=>e.publicationEvidence?.commitSha===sha('d'));
  }));
-async function fakeJobRun({failTests=false,mutateOther=false,cancel=false}={}) {
+async function fakeJobRun({failTests=false,mutateOther=false,cancel=false,stage='patch'}={}) {
  const reports=[];let published=false,cleaned=false;const testResult={command:'npm test',exitCode:0,durationMs:1,outputHash:'c'.repeat(64)};
- const github={verifyTarget:async()=>{},downloadArchive:async(_job,file)=>writeFile(file,tar([{path:'source/package-lock.json',content:'{}'}])),publish:async()=>{published=true;return {commitSha:sha('d'),draftPrUrl:'https://github.com/owner/repo/pull/9'};}};
  const docker={available:async()=>true,extract:async root=>{await mkdir(path.join(root,'apps/mobile/src'),{recursive:true});await writeFile(path.join(root,'apps/mobile/src/a.ts'),'old');await writeFile(path.join(root,'apps/mobile/src/b.ts'),'other');await writeFile(path.join(root,'package-lock.json'),JSON.stringify({lockfileVersion:3,packages:{}}));},install:async()=>{},test:async root=>{if(failTests)throw Object.assign(new AgentError('tests_failed','tests failed','failed'),{tests:[{...testResult,exitCode:1}]});if(mutateOther)await writeFile(path.join(root,'apps/mobile/src/b.ts'),'mutated');return[testResult];},cleanup:async()=>{cleaned=true;}};
- const bridge={jobOperation:async(_job,op,value)=>{if(op==='patch')return {changes:[{path:'apps/mobile/src/a.ts',content:'fixed'}]};reports.push(value);return{};}};
+ const bridge={archive:async()=>tar([{path:'source/package-lock.json',content:'{}'}]),jobOperation:async(_job,op,value)=>{if(op==='patch')return {changes:[{path:'apps/mobile/src/a.ts',content:'fixed'}]};reports.push(value);return{};}};
  let checks=0;const guard={signal:new AbortController().signal,assertActive:async()=>{if(cancel&&++checks>3)throw new AgentError('cancelled','fixture cancel','cancelled');},stop:()=>{}};
- const outcome=await executeJob(job(),{policy:policy(),bridge,github,docker,makeGuard:()=>guard});return{outcome,reports,published,cleaned};
+ const changes=[{path:'apps/mobile/src/a.ts',content:'fixed'}],rawJob=stage==='qa'?{...job(),stage:'qa',approvedPatch:{changes,summary:'Approved fixture'},patchHash:sha256(JSON.stringify(changes))}:job();
+ const outcome=await executeJob(rawJob,{policy:policy(),bridge,docker,makeGuard:()=>guard});return{outcome,reports,published,cleaned};
 }
- test('complete fake job publishes only after actual passing test evidence and ordered reports',async()=>{
- const result=await fakeJobRun();assert.equal(result.outcome.status,'succeeded');assert(result.published&&result.cleaned);assert.deepEqual(result.reports.map(r=>r.stage),['patch','qa','draft_pr']);assert.equal(result.outcome.evidence.tests[0].exitCode,0);
+ test('patch generation stops for approval and QA reports only the exact approved patch without runner publication',async()=>{
+ const proposal=await fakeJobRun();assert.equal(proposal.outcome.status,'waiting_approval');assert(!proposal.published&&proposal.cleaned);assert.deepEqual(proposal.reports.map(r=>r.stage),['patch']);
+ const result=await fakeJobRun({stage:'qa'});assert.equal(result.outcome.status,'succeeded');assert(!result.published&&result.cleaned);assert.deepEqual(result.reports.map(r=>r.stage),['qa']);assert.equal(result.outcome.evidence.tests[0].exitCode,0);
  });
  test('failed tests, source drift and cancellation never publish success',async()=>{
- for(const options of [{failTests:true},{mutateOther:true},{cancel:true}]){const result=await fakeJobRun(options);assert(!result.published);assert.notEqual(result.outcome.status,'succeeded');assert(result.cleaned);}
+ for(const options of [{failTests:true,stage:'qa'},{mutateOther:true,stage:'qa'},{cancel:true,stage:'qa'}]){const result=await fakeJobRun(options);assert(!result.published);assert.notEqual(result.outcome.status,'succeeded');assert(result.cleaned);}
  });
  test('archive download pins repo/SHA and never forwards host credentials to codeload',async()=>temporary(async root=>{
  const calls=[],content=tar([{path:'source/a.ts',content:'ok'}]);

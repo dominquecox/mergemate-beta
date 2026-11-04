@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { View, ScrollView, Pressable, TextInput, KeyboardAvoidingView, Platform, Modal } from 'react-native';
+import { View, ScrollView, Pressable, TextInput, KeyboardAvoidingView, Platform, Modal, Linking } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import type { WorkflowDefinition } from '@mergemate/contracts';
 import { WorkflowDefinition as DefinitionSchema, WorkflowTarget as TargetSchema } from '@mergemate/contracts';
@@ -7,7 +7,8 @@ import { useAuth } from '../src/context/AuthContext';
 import { useConsent } from '../src/context/ConsentContext';
 import { useTheme } from '../src/context/ThemeContext';
 import { useLayout } from '../src/layout/useLayout';
-import { api } from '../src/api';
+import { api, apiMode } from '../src/api';
+import { webAppOrigin } from '../src/api/config';
 import { Text } from '../src/components/Text';
 import { Header } from '../src/components/Header';
 import { Icon, type IconName } from '../src/components/Icon';
@@ -22,6 +23,7 @@ import { WorkflowCanvas } from '../src/workflows/WorkflowCanvas';
 import { WorkflowNodeInspector } from '../src/workflows/WorkflowNodeInspector';
 import { WorkflowPlanCard } from '../src/workflows/WorkflowPlanCard';
 import { useAgentWorkspace } from '../src/workflows/useAgentWorkspace';
+import { workflowApprovalUrl,workflowRunParam } from '../src/workflows/run-handoff';
 import {
   AGENT_TEMPLATES,
   makeAgentTemplate,
@@ -34,9 +36,10 @@ import {
 
 export default function AgentWorkflowsScreen() {
   const { user, isDemo } = useAuth();
-  const params = useLocalSearchParams<{ target?: string; mode?: string; template?: string }>();
+  const params = useLocalSearchParams<{ target?: string; mode?: string; template?: string; run?:string }>();
   const target = typeof params.target === 'string' && targetFromUrl(params.target) ? params.target : '';
   const templateParam = typeof params.template === 'string' && AGENT_TEMPLATES.some((t) => t.id === params.template) ? params.template : '';
+  const initialRunId=workflowRunParam(params.run);
   const mode: AgentMode =
     templateParam
       ? AGENT_TEMPLATES.find((t) => t.id === templateParam)!.mode
@@ -45,12 +48,13 @@ export default function AgentWorkflowsScreen() {
         : 'review';
   return user ? (
     <AgentWorkspace
-      key={`${user.id}:${target}:${mode}:${templateParam}`}
+      key={`${user.id}:${target}:${mode}:${templateParam}:${initialRunId}`}
       account={user.id}
       isDemo={isDemo}
       initialTarget={target}
       initialMode={mode}
       initialTemplateId={templateParam || (mode === 'code_fix' ? 'fix_issue' : 'review')}
+      initialRunId={initialRunId}
     />
   ) : (
     <LoadingState title="Checking your session..." message="Workflow runs belong to your account." />
@@ -63,12 +67,14 @@ function AgentWorkspace({
   initialTarget,
   initialMode,
   initialTemplateId,
+  initialRunId,
 }: {
   account: string;
   isDemo: boolean;
   initialTarget: string;
   initialMode: AgentMode;
   initialTemplateId: string;
+  initialRunId:string;
 }) {
   const { colors, typography, radius } = useTheme();
   const { isDesktop } = useLayout();
@@ -158,7 +164,7 @@ function AgentWorkspace({
     return value.success ? value.data : null;
   }, [targetText, baseBranch, mode]);
 
-  const workspace = useAgentWorkspace(account, target, isDemo);
+  const workspace = useAgentWorkspace(account, target, isDemo,initialRunId);
   const busy = workspace.busy !== null;
   const consentReady = aiConsentGranted && !needsReview && !consentPending;
   const targetCompatible = !!target && (mode === 'code_fix' || (target.kind ?? 'pull_request') === 'pull_request');
@@ -874,8 +880,14 @@ function AgentWorkspace({
                 <AgentRunPanel
                   run={workspace.selectedRun}
                   cancelling={workspace.busy === 'cancel'}
+                  passkeyBusy={workspace.busy==='register_passkey'||workspace.busy==='approve_patch'}
+                  passkeysAvailable={workspace.passkeysAvailable}
+                  proposal={workspace.patchProposal}
                   onCancel={() => void workspace.cancel()}
                   onRetry={retry}
+                  onRegisterPasskey={()=>void workspace.registerPasskey()}
+                  onApprovePatch={()=>void workspace.approvePatch()}
+                  onOpenWebApproval={()=>void Linking.openURL(workflowApprovalUrl(webAppOrigin(apiMode),workspace.selectedRun!.id))}
                 />
                 {!isRunActive(workspace.selectedRun.status) && (
                   <Button title="Use this workflow again" variant="secondary" disabled={busy} onPress={retry} />

@@ -23,6 +23,7 @@
     "@expo/metro-runtime": "~58.0.15",
     "@expo/vector-icons": "15.1.1",
     "@mergemate/contracts": "*",
+    "@simplewebauthn/browser": "13.3.0",
     "expo": "~58.0.22",
     "expo-application": "58.1.2",
     "expo-audio": "58.0.10",

@@ -17,6 +17,7 @@
   },
   "dependencies": {
     "@mergemate/contracts": "*",
+    "@simplewebauthn/server": "13.3.3",
     "hono": "4.13.13",
     "zod": "4.6.7"
   },

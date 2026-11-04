@@ -4,7 +4,6 @@ import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import { AgentError, validateConfig } from './agent-policy.mjs';
 import { WorkflowBridge } from './agent-bridge.mjs';
-import { GitHubPublisher } from './agent-github.mjs';
 import { DockerExecutor } from './agent-process.mjs';
 import { executeJob } from './agent-runner.mjs';
 
@@ -19,7 +18,7 @@ export async function main(args = process.argv.slice(2), env = process.env) {
   const ready = available;
   await bridge.heartbeat({ docker: available, patch: ready, qa: ready, draftPr: ready }, undefined, policy.repositories);
   if (!available) throw new AgentError('docker_unavailable', 'Docker and the reviewed digest-pinned image must be available.');
-  if (args.includes('--check')) { console.log(JSON.stringify({ status: 'configured', repositories: policy.repositories, imagePinned: true, note: 'The API mints an exact-repository GitHub App token only when a job is claimed.' })); return 0; }
+  if (args.includes('--check')) { console.log(JSON.stringify({ status: 'configured', repositories: policy.repositories, imagePinned: true, note: 'The API proxies pinned archives and never gives GitHub credentials to the runner.' })); return 0; }
   const abort = new AbortController(); const stop = () => abort.abort(); process.once('SIGINT', stop); process.once('SIGTERM', stop);
   const heartbeat = setInterval(() => { void bridge.heartbeat({ docker: true, patch: true, qa: true, draftPr: true }, abort.signal, policy.repositories).catch(() => abort.abort()); }, 30000);
   try {
@@ -27,10 +26,9 @@ export async function main(args = process.argv.slice(2), env = process.env) {
       if (abort.signal.aborted) break;
       const job = await bridge.claim(abort.signal);
       if (job) {
-        const github = new GitHubPublisher(job.githubAccessToken, { maxArchiveBytes: policy.maxArchiveBytes });
-        const result = await executeJob(job, { policy, bridge, github, docker, signal: abort.signal });
+        const result = await executeJob(job, { policy, bridge, docker, signal: abort.signal });
         console.log(JSON.stringify({ jobId: job.id, status: result.status, stage: result.stage, code: result.code, ...(result.evidence.draftPrUrl ? { draftPrUrl: result.evidence.draftPrUrl } : {}) }));
-        if (args.includes('--once')) return result.status === 'succeeded' ? 0 : 2;
+        if (args.includes('--once')) return ['succeeded','waiting_approval'].includes(result.status) ? 0 : 2;
         if (result.code === 'container_cleanup_failed') throw new AgentError(result.code, 'Stop runner: container cleanup could not be confirmed.');
       } else if (args.includes('--once')) { console.log(JSON.stringify({ status: 'idle' })); return 0; }
       await new Promise(resolve => { const stopWaiting = () => { clearTimeout(timer); abort.signal.removeEventListener('abort', stopWaiting); resolve(); }; const timer = setTimeout(stopWaiting, policy.pollMs); abort.signal.addEventListener('abort', stopWaiting, { once: true }); });

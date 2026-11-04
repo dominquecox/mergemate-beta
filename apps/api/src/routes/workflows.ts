@@ -10,8 +10,9 @@ import { workflowCapabilities,createWorkflowRun,cancelWorkflowRun } from '../wor
 import { listRuns,loadRun } from '../workflows/store';
 import { targetSnapshot } from '../workflows/target';
 import { generateWorkflowPlan } from '../workflows/model';
-import { RunnerId,LeaseRequest,Heartbeat,PatchRequest,ReportRequest,runnerHeartbeat,claimExecutorJob,renewExecutorLease,executorPatch,executorReport } from '../workflows/executor';
+import { RunnerId,LeaseRequest,Heartbeat,PatchRequest,ReportRequest,runnerHeartbeat,claimExecutorJob,renewExecutorLease,executorArchive,executorPatch,executorReport } from '../workflows/executor';
 import { authorizeExecutor } from '../workflows/runner-auth';
+import { PasskeyRequest,registrationOptions,verifyRegistration,patchProposal,approvalOptions,approvePatch } from '../workflows/passkeys';
 import { verifyWorkflowAudit } from '../workflows/audit';
 
 function parse<T>(schema:z.ZodType<T>,value:unknown):T{const result=schema.safeParse(value);if(!result.success)throw new ApiError('validation_failed','The workflow request is invalid.');return result.data;}
@@ -38,7 +39,12 @@ export function createWorkflowRouter(){
  router.post('/plan',async c=>{const input=parse(WorkflowPlanRequest,await c.req.json().catch(()=>null));if(input.mode==='review'&&(input.target.kind??'pull_request')!=='pull_request')throw new ApiError('validation_failed','Review workflows require a pull request target.');await targetSnapshot(c.env,c.get('deps'),c.get('session'),input.target,input.mode==='code_fix');return c.json(await generateWorkflowPlan(c.env,c.get('deps'),c.get('session'),input));});
  router.post('/runs',async c=>{await ensureStorage(c);const body=parse(WorkflowRunRequest,await c.req.json().catch(()=>null));return c.json(await createWorkflowRun(c.env,c.get('deps'),c.get('session'),body.definition,body.idempotencyKey,body.confirmCodeChanges));});
  router.get('/runs',async c=>{const db=await ensureStorage(c);return c.json({runs:await listRuns(db,requireActor(c.get('session')))});});
+ router.post('/passkeys/registration/options',async c=>{await ensureStorage(c);return c.json(await registrationOptions(c.env,c.get('deps'),c.get('session')));});
+ router.post('/passkeys/registration/verify',async c=>{await ensureStorage(c);return c.json(await verifyRegistration(c.env,c.get('deps'),c.get('session'),parse(PasskeyRequest,await c.req.json().catch(()=>null))));});
  router.get('/audit/verify',async c=>{const db=await ensureStorage(c);return c.json(await verifyWorkflowAudit(db,requireActor(c.get('session')),c.env.WORKFLOW_RUNNER_SIGNING_KEY??''));});
+ router.get('/runs/:id/patch-proposal',async c=>{await ensureStorage(c);return c.json(await patchProposal(c.env,requireActor(c.get('session')),c.req.param('id')));});
+ router.post('/runs/:id/approval/options',async c=>{await ensureStorage(c);return c.json(await approvalOptions(c.env,c.get('deps'),c.get('session'),c.req.param('id')));});
+ router.post('/runs/:id/approval/verify',async c=>{await ensureStorage(c);return c.json(await approvePatch(c.env,c.get('deps'),c.get('session'),c.req.param('id'),parse(PasskeyRequest,await c.req.json().catch(()=>null))));});
  router.get('/runs/:id',async c=>{const db=await ensureStorage(c);return c.json((await loadRun(db,c.req.param('id'),requireActor(c.get('session')))).run);});
  router.post('/runs/:id/cancel',async c=>{await ensureStorage(c);return c.json(await cancelWorkflowRun(c.env,c.get('deps'),requireActor(c.get('session')),c.req.param('id')));});
  return router;
@@ -51,6 +57,7 @@ export function createWorkflowExecutorRouter(){
  router.post('/heartbeat',async c=>{const {body,claims}=await authenticated(c,Heartbeat,true);return c.json(await runnerHeartbeat(c.env,c.get('deps'),body,claims));});
  router.post('/claim',async c=>{const {body,claims}=await authenticated(c,z.object({runnerId:RunnerId}).strict());return c.json(await claimExecutorJob(c.env,c.get('deps'),body.runnerId,claims));});
  router.post('/jobs/:id/lease',async c=>{const {body,claims}=await authenticated(c,LeaseRequest.strict());return c.json(await renewExecutorLease(c.env,c.get('deps'),c.req.param('id'),body,claims));});
+ router.post('/jobs/:id/archive',async c=>{const {body,claims}=await authenticated(c,LeaseRequest.strict());const archive=await executorArchive(c.env,c.get('deps'),c.req.param('id'),body,claims);return new Response(archive,{headers:{'content-type':'application/gzip','content-length':String(archive.byteLength),'cache-control':'no-store'}});});
  router.post('/jobs/:id/patch',async c=>{const {body,claims}=await authenticated(c,PatchRequest);return c.json(await executorPatch(c.env,c.get('deps'),c.req.param('id'),body,claims));});
  router.post('/jobs/:id/report',async c=>{const {body,claims}=await authenticated(c,ReportRequest);return c.json(await executorReport(c.env,c.get('deps'),c.req.param('id'),body,claims));});
  return router;

@@ -44,7 +44,7 @@ export function makeAgentTemplate(id: string, target: WorkflowTarget): WorkflowD
   return WorkflowDefinition.parse({ name: template.name, intent: template.intent, mode: template.mode, target, steps: template.kinds.filter(kind => template.mode !== 'code_fix' || (target.kind ?? 'pull_request') === 'pull_request' || !['checks','risk'].includes(kind)).map(kind => ({ id: kind, kind, title: AGENT_STEP_META[kind].title, enabled: true })) });
 }
 export function isRunActive(status: WorkflowRun['status']): boolean {
-  return status === 'queued' || status === 'running' || status === 'waiting_executor';
+  return status === 'queued' || status === 'running' || status === 'waiting_executor' || status === 'waiting_approval';
 }
 export function moveAgentStep(definition: WorkflowDefinition, index: number, direction: -1 | 1): WorkflowDefinition | null {
   const to = index + direction;
@@ -69,7 +69,7 @@ export function safeDraftPrLink(value: unknown, target: WorkflowTarget): string 
   } catch { return null; }
 }
 export function displayRunStatus(status: WorkflowRun['status'] | WorkflowRun['steps'][number]['status']): string {
-  return ({ queued:'Queued',running:'Running',waiting_executor:'Waiting for executor',succeeded:'Succeeded',failed:'Failed',cancelled:'Cancelled',blocked:'Blocked',pending:'Not started',skipped:'Skipped' } as Record<string,string>)[status] ?? status;
+  return ({ queued:'Queued',running:'Running',waiting_executor:'Waiting for executor',waiting_approval:'Passkey approval required',succeeded:'Succeeded',failed:'Failed',cancelled:'Cancelled',blocked:'Blocked',pending:'Not started',skipped:'Skipped' } as Record<string,string>)[status] ?? status;
 }
 export function evidenceText(value: unknown, limit = 4000): string {
   try { const text = typeof value === 'string' ? value : JSON.stringify(value, null, 2); return (text ?? '').slice(0, limit); }

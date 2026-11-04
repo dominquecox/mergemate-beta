@@ -31,19 +31,24 @@ export async function validateDependencyPolicy(root) {
 }
 
 /** Dependency injection makes every host/network/container boundary adversarially testable. */
-export async function executeJob(rawJob, { policy, bridge, github, docker, signal, makeGuard = (job, s) => new LeaseGuard(bridge, job, s), tempRoot = os.tmpdir() }) {
+export async function executeJob(rawJob, { policy, bridge, docker, signal, makeGuard = (job, s) => new LeaseGuard(bridge, job, s), tempRoot = os.tmpdir() }) {
   const job = validateJob(rawJob, policy), guard = makeGuard(job, signal); let temporary, workspace, stage = 'patch', evidence = { baseSha: job.baseSha }, outcome;
   const progress = async (currentStage, extra) => { await guard.assertActive(); await bridge.jobOperation(job, 'report', { status: 'succeeded', stage: currentStage, evidence: { ...evidence, ...extra } }, guard.signal); };
   try {
     await guard.assertActive();
     if (!await docker.available()) throw new AgentError('docker_unavailable', 'The reviewed digest-pinned Docker image is not installed or Docker is unavailable.');
-    await github.verifyTarget(job, guard.signal);
     temporary = await mkdtemp(path.join(tempRoot, 'mergemate-agent-')); workspace = path.join(temporary, 'workspace'); const archive = path.join(temporary, 'source.tar.gz'); await mkdir(workspace, { mode: 0o700 });
-    await github.downloadArchive(job, archive, guard.signal); await validateArchive(archive, policy); await guard.assertActive(); await docker.extract(workspace, archive, guard.signal);
+    await writeFile(archive,await bridge.archive(job,guard.signal),{mode:0o600,flag:'wx'});await validateArchive(archive, policy); await guard.assertActive(); await docker.extract(workspace, archive, guard.signal);
     await validateDependencyPolicy(workspace);
-    const files = await selectContext(workspace, policy, job.intent); await guard.assertActive();
-    const result = await bridge.jobOperation(job, 'patch', { files }, guard.signal);
-    const validated = await validateChanges(workspace, result.changes, policy, job.limits);
+    let validated;
+    if (job.stage === 'patch') {
+      const files = await selectContext(workspace, policy, job.intent); await guard.assertActive();
+      const result = await bridge.jobOperation(job, 'patch', { files }, guard.signal);
+      validated = await validateChanges(workspace, result.changes, policy, job.limits);
+    } else {
+      validated = await validateChanges(workspace, job.approvedPatch.changes, policy, job.limits);
+      if (validated.patchHash !== job.patchHash) throw new AgentError('approval_mismatch', 'Approved patch content no longer matches its passkey binding.');
+    }
     // The host writes data only into its private scratch checkout; no repository command executes here.
     for (const change of validated.changes) {
       const target = await withinWorkspace(workspace, change.path, { mayCreate: true });
@@ -51,7 +56,12 @@ export async function executeJob(rawJob, { policy, bridge, github, docker, signa
       await writeFile(target, change.content, { flag: constants.O_WRONLY | constants.O_CREAT | constants.O_TRUNC | constants.O_NOFOLLOW, mode: 0o600 });
     }
     evidence.patchHash = validated.patchHash; evidence.summary = `Validated patch: ${validated.changes.length} source file(s).`;
-    await progress('patch'); stage = 'qa';
+    if (job.stage === 'patch') {
+      await progress('patch');
+      outcome = { status: 'waiting_approval', stage: 'patch', evidence };
+      return outcome;
+    }
+    stage = 'qa';
     const testedSource = await sourceManifest(workspace, policy);
     await guard.assertActive(); await docker.install(workspace, guard.signal);
     const tests = await docker.test(workspace, guard.signal);
@@ -61,10 +71,7 @@ export async function executeJob(rawJob, { policy, bridge, github, docker, signa
     // Tests may mutate files or npm configuration; publication reads only unchanged validated patch data.
     await validateChanges(workspace, validated.changes, policy, job.limits);
     for (const change of validated.changes) if (sha256(await readFile(await withinWorkspace(workspace, change.path))) !== sha256(change.content)) throw new AgentError('changed_after_tests', 'Source changed during tests; refusing publication.');
-    await progress('qa'); stage = 'draft_pr'; await guard.assertActive();
-    const published = await github.publish(job, workspace, validated.changes, evidence.tests, validated.patchHash, { signal: guard.signal, assertActive: () => guard.assertActive() });
-    evidence = { ...evidence, commitSha: published.commitSha, draftPrUrl: published.draftPrUrl, summary: 'Patch validated, isolated tests passed, draft PR created. Human review required.' };
-    await progress('draft_pr'); outcome = { status: 'succeeded', stage, evidence };
+    await progress('qa'); outcome = { status: 'succeeded', stage, evidence: { ...evidence, summary: 'Patch validated and isolated tests passed. The API owns exact approved draft publication.' } };
   } catch (error) {
     const status = guard.signal.aborted ? 'cancelled' : error instanceof AgentError ? error.status : 'failed';
     if (error.publicationEvidence) evidence = { ...evidence, ...error.publicationEvidence };

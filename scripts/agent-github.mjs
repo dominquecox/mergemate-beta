@@ -4,9 +4,9 @@ import { AgentError, SHA, withinWorkspace, limitedResponseText } from './agent-p
 const API = 'https://api.github.com';
 function validBranch(value) { return typeof value === 'string' && value.length > 0 && value.length <= 180 && /^[a-z\d/_.-]+$/i.test(value) && !value.includes('..') && !value.includes('//') && !value.startsWith('/') && !value.endsWith('/') && !value.endsWith('.lock') && value.split('/').every(part => part && !part.startsWith('.') && !part.endsWith('.')); }
 export class GitHubPublisher {
-  constructor(token, { fetcher = fetch, timeoutMs = 60000, maxArchiveBytes = 16777216 } = {}) {
+  constructor(token, { fetcher = fetch, timeoutMs = 60000, maxArchiveBytes = 16777216, writeAllowed = true } = {}) {
     if (!token || /[\r\n]/.test(token)) throw new AgentError('github_unconfigured', 'A host-only GitHub publishing credential is required.');
-    this.token = token; this.fetcher = fetcher; this.timeoutMs = timeoutMs; this.maxArchiveBytes = maxArchiveBytes;
+    this.token = token; this.fetcher = fetcher; this.timeoutMs = timeoutMs; this.maxArchiveBytes = maxArchiveBytes;this.writeAllowed=writeAllowed;
   }
   async request(route, { method = 'GET', body, signal, allow404 = false } = {}) {
     const url = new URL(route, API); if (url.origin !== API) throw new AgentError('github_origin', 'GitHub API origin is pinned.');
@@ -18,7 +18,8 @@ export class GitHubPublisher {
   }
   async verifyRepository(repository, signal) {
     const repo = await this.request(`/repos/${repository}`, { signal });
-    if (repo.full_name?.toLowerCase() !== repository || repo.archived || repo.disabled || !(repo.permissions?.push || repo.permissions?.maintain || repo.permissions?.admin)) throw new AgentError('github_write_unavailable', 'Current GitHub credential does not prove write access to the exact active repository.');
+    const permitted=this.writeAllowed?(repo.permissions?.push||repo.permissions?.maintain||repo.permissions?.admin):repo.permissions?.pull;
+    if (repo.full_name?.toLowerCase() !== repository || repo.archived || repo.disabled || !permitted) throw new AgentError(this.writeAllowed?'github_write_unavailable':'github_read_unavailable', `Current GitHub credential does not prove ${this.writeAllowed?'write':'read'} access to the exact active repository.`);
     return repo;
   }
   async verifyTarget(job, signal) {
@@ -57,6 +58,7 @@ export class GitHubPublisher {
     await writeFile(destination, Buffer.concat(chunks), { mode: 0o600, flag: 'wx' });
   }
   async publish(job, root, changes, tests, patchHash, { assertActive, signal }) {
+    if(!this.writeAllowed)throw new AgentError('github_write_unavailable','This job has no GitHub write credential.');
     if (!tests.length || tests.some(test => test.exitCode !== 0)) throw new AgentError('tests_required', 'Successful actual tests are required before publication.');
     const base = await this.verifyTarget(job, signal); await assertActive();
     const branch = `mergemate-agent/${job.runId}`, message = `fix: agent task ${job.runId}`;

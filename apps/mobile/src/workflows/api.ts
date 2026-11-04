@@ -3,6 +3,12 @@ import { WorkflowCapabilities, WorkflowDefinition, WorkflowRun, WorkflowPlanRequ
 import { HttpTransport } from '../api/http-transport';
 import type { HttpApiClientOptions } from '../api/http-types';
 
+const WebAuthnResponse=z.object({id:z.string().min(1),rawId:z.string().min(1),type:z.literal('public-key'),response:z.record(z.string(),z.unknown()),clientExtensionResults:z.record(z.string(),z.unknown())}).passthrough();
+const WebAuthnOptions=z.record(z.string(),z.unknown());
+const PasskeyOptions=z.object({challengeId:z.string().uuid(),options:WebAuthnOptions});
+export const PatchProposal=z.object({runId:z.string(),jobId:z.string(),repository:z.string(),repositoryId:z.number().int().positive(),headSha:z.string().regex(/^[a-f\d]{40}$/i),patchHash:z.string().regex(/^[a-f\d]{64}$/i),action:z.literal('qa_and_draft_pr'),summary:z.string(),changes:z.array(z.object({path:z.string(),content:z.string()}))});
+export type PatchProposalValue=z.infer<typeof PatchProposal>;
+
 /** Uses the same cookie/CSRF/native bearer, cancellation and session fences as the main API client. */
 export class WorkflowApiClient extends HttpTransport {
   constructor(options: HttpApiClientOptions) { super(options); }
@@ -33,4 +39,9 @@ export class WorkflowApiClient extends HttpTransport {
   cancel(id: string, signal: AbortSignal) {
     return this.request({ method:'POST', path:`/workflows/runs/${encodeURIComponent(id)}/cancel`, body:{}, schema:WorkflowRun, signal });
   }
+  passkeyRegistrationOptions(signal:AbortSignal){return this.request({method:'POST',path:'/workflows/passkeys/registration/options',body:{},schema:PasskeyOptions,signal});}
+  verifyPasskeyRegistration(challengeId:string,response:unknown,signal:AbortSignal){return this.request({method:'POST',path:'/workflows/passkeys/registration/verify',body:{challengeId,response:WebAuthnResponse.parse(response)},schema:z.object({registered:z.literal(true),credentialId:z.string()}),signal});}
+  patchProposal(id:string,signal:AbortSignal){return this.request({path:`/workflows/runs/${encodeURIComponent(id)}/patch-proposal`,schema:PatchProposal,signal});}
+  patchApprovalOptions(id:string,signal:AbortSignal){return this.request({method:'POST',path:`/workflows/runs/${encodeURIComponent(id)}/approval/options`,body:{},schema:PasskeyOptions.extend({binding:z.object({jobId:z.string(),runId:z.string(),repositoryId:z.number().int().positive(),headSha:z.string(),patchHash:z.string(),action:z.literal('qa_and_draft_pr')})}),signal});}
+  approvePatch(id:string,challengeId:string,response:unknown,signal:AbortSignal){return this.request({method:'POST',path:`/workflows/runs/${encodeURIComponent(id)}/approval/verify`,body:{challengeId,response:WebAuthnResponse.parse(response)},schema:z.object({approved:z.literal(true),run:WorkflowRun}),signal});}
 }

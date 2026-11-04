@@ -16,6 +16,11 @@ export class WorkflowBridge {
   heartbeat(capabilities, signal, repositories = this.policy.repositories) { return this.post('heartbeat', { runnerId: this.policy.runnerId, repositories, capabilities, version: '1' }, signal); }
   async claim(signal) { return (await this.post('claim', { runnerId: this.policy.runnerId }, signal)).job ?? null; }
   jobOperation(job, operation, value = {}, signal) { return this.post(`jobs/${job.id}/${operation}`, { runnerId: this.policy.runnerId, leaseToken: job.leaseToken, ...value }, signal); }
+  async archive(job,signal){
+    const response=await this.fetcher(`${this.policy.serverOrigin}/internal/workflows/jobs/${job.id}/archive`,{method:'POST',redirect:'error',signal:signal?AbortSignal.any([signal,AbortSignal.timeout(60000)]):AbortSignal.timeout(60000),headers:{authorization:`Bearer ${this.credential}`,'CF-Access-Client-Id':this.accessClientId,'CF-Access-Client-Secret':this.accessClientSecret,'content-type':'application/json'},body:JSON.stringify({runnerId:this.policy.runnerId,leaseToken:job.leaseToken})});
+    if(!response.ok)throw new AgentError(response.status===409||response.status===410?'lease_revoked':'bridge_failed',`Workflow bridge refused archive (${response.status}).`,response.status===409||response.status===410?'cancelled':'blocked');
+    const chunks=[];let size=0;if(!response.body)throw new AgentError('archive_failed','Workflow bridge returned no archive.');const reader=response.body.getReader();try{while(true){const {done,value}=await reader.read();if(done)break;size+=value.byteLength;if(size>this.policy.maxArchiveBytes){await reader.cancel();throw new AgentError('archive_limit','Archive exceeds configured byte limit.');}chunks.push(Buffer.from(value));}}finally{reader.releaseLock();}return Buffer.concat(chunks,size);
+  }
 }
 
 export class LeaseGuard {

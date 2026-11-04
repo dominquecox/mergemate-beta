@@ -30,6 +30,16 @@ describe('workflow API transport',()=>{
   const [url,init]=fetcher.mock.calls[0] as unknown as [string,RequestInit];
   expect(url).toBe('https://api.example.test/v1/workflows/capabilities?repo=owner%2Frepo');expect(init.credentials).toBe('omit');expect(new Headers(init.headers).get('authorization')).toBe('Bearer native-session-fixture');
  });
+ it('uses the protected passkey endpoints and preserves exact patch bindings',async()=>{
+  setInMemoryCsrfToken('csrf-fixture');
+  const patch={runId:'run_1',jobId:'job_1',repository:'owner/repo',repositoryId:101,headSha:'a'.repeat(40),patchHash:'b'.repeat(64),action:'qa_and_draft_pr',summary:'Update the guarded view.',changes:[{path:'apps/mobile/src/view.ts',content:'export const guarded=true;'}]};
+  const fetcher=vi.fn(async(input:RequestInfo|URL,_init?:RequestInit)=>String(input).endsWith('/patch-proposal')?Response.json(patch):Response.json({challengeId:'123e4567-e89b-12d3-a456-426614174000',options:{challenge:'fixture'},binding:{jobId:'job_1',runId:'run_1',repositoryId:101,headSha:patch.headSha,patchHash:patch.patchHash,action:'qa_and_draft_pr'}}));
+  const client=new WorkflowApiClient({baseUrl:'/__api',platform:'web',tokenStore:store(),fetch:fetcher});
+  expect((await client.patchProposal('run_1',new AbortController().signal)).patchHash).toBe(patch.patchHash);
+  const approval=await client.patchApprovalOptions('run_1',new AbortController().signal);expect(approval.binding).toMatchObject({runId:'run_1',patchHash:patch.patchHash});
+  expect(fetcher.mock.calls.map(call=>String(call[0]))).toEqual(['/__api/v1/workflows/runs/run_1/patch-proposal','/__api/v1/workflows/runs/run_1/approval/options']);
+  expect((fetcher.mock.calls[1]?.[1] as RequestInit).method).toBe('POST');expect(new Headers((fetcher.mock.calls[1]?.[1] as RequestInit).headers).get('x-csrf-token')).toBe('csrf-fixture');
+ });
  it('rejects malformed runtime responses and does not invent successful execution',async()=>{
   const client=new WorkflowApiClient({baseUrl:'/__api',platform:'web',tokenStore:store(),fetch:vi.fn(async()=>Response.json({id:'run_1',status:'succeeded'}))});
   await expect(client.run('run_1',new AbortController().signal)).rejects.toMatchObject({code:'parse_failed'});

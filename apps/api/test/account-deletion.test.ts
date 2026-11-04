@@ -49,6 +49,9 @@ async function seedOwned(ctx:TestContext,userId:string){
   ['INSERT INTO workflow_audit_events(id,user_id,event_key,sequence,previous_hash,event_hash,event_type,subject_id,body_json,created_at) VALUES(?,?,?,1,NULL,?,?,?,?,?)',[userId+':audit',userId,userId+':audit','hash-'+userId,'job_created',userId+':job','{}',stamp]],
   ['INSERT INTO workflow_audit_outbox(event_key,user_id,event_type,subject_id,body_json,created_at) VALUES(?,?,?,?,?,?)',[userId+':outbox',userId,'job_reported',userId+':job','{}',stamp]],
   ['INSERT INTO workflow_audit_checkpoints(user_id,event_count,head_hash,signature,updated_at) VALUES(?,?,?,?,?)',[userId,1,'hash-'+userId,'fixture-signature',stamp]],
+  ['INSERT INTO webauthn_credentials(id,user_id,credential_id,public_key,counter,transports_json,device_type,backed_up,created_at) VALUES(?,?,?,?,?,?,?,?,?)',[userId+':credential-row',userId,userId+':credential','AQ',0,'[]','singleDevice',0,stamp]],
+  ['INSERT INTO webauthn_challenges(id,user_id,purpose,challenge,binding_json,expires_at,created_at) VALUES(?,?,?,?,?,?,?)',[userId+':challenge',userId,'approve_patch','fixture-challenge','{}','2099-01-01T00:00:00Z',stamp]],
+  ['INSERT INTO workflow_patch_approvals(job_id,user_id,repository_id,head_sha,patch_hash,action,credential_id,expires_at,created_at) VALUES(?,?,?,?,?,?,?,?,?)',[userId+':job',userId,1,'a'.repeat(40),'b'.repeat(64),'qa_and_draft_pr',userId+':credential','2099-01-01T00:00:00Z',stamp]],
   ['INSERT INTO workflow_definitions VALUES(?,?,?,?,?)',[userId+':def',userId,'{}',stamp,stamp]],
  ];
  for(const [sql,args] of statements)await ctx.db.prepare(sql).bind(...args).run();
