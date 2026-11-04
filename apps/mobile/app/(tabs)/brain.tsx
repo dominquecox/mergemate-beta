@@ -12,6 +12,8 @@ import { CardEditor, RulesEditor } from '../../src/brain/editors';
 import { movedPosition } from '../../src/brain/cardForm';
 import { LoadingState } from '../../src/components/LoadingState';
 import { EmptyState } from '../../src/components/EmptyState';
+import { Button } from '../../src/components/Button';
+import { CreateBoardDialog } from '../../src/brain/CreateBoard';
 import { ErrorState } from '../../src/components/ErrorState';
 
 /** Brain tab: projects, board and track timeline. Shown only when the "brain" flag is on. */
@@ -28,10 +30,21 @@ export default function BrainTab() {
 
 function ProjectsView({ onSelect }: { onSelect: (p: Project) => void }) {
   const { projects, loading, error, retry } = useProjectsList({ api });
+  const [creating, setCreating] = useState(false);
+  const dialog = creating ? <CreateBoardDialog api={api} onOpened={(project) => { setCreating(false); onSelect(project); }} onClose={() => setCreating(false)} /> : null;
   if (error) return <ErrorState title="Could not load projects" message={error.message} onRetry={retry} />;
   if (loading && projects.length === 0) return <LoadingState title="Loading projects" message="Fetching your boards." />;
-  if (projects.length === 0) return <EmptyState icon="albums-outline" title="No projects" message="Create a board for a repository to see it here." />;
+  if (projects.length === 0) {
+    return (
+      <>
+        <EmptyState icon="albums-outline" title="No projects" message="Create a board for a repository to see it here." />
+        <View style={{ alignItems: 'center' }}><Button title="Create board" variant="primary" onPress={() => setCreating(true)} /></View>
+        {dialog}
+      </>
+    );
+  }
   return (
+    <>
     <ProjectsListScreen
       projects={projects}
       selectedProjectId={null}
@@ -42,7 +55,10 @@ function ProjectsView({ onSelect }: { onSelect: (p: Project) => void }) {
       loading={false}
       error={null}
       onRetry={retry}
+      onNewBoard={() => setCreating(true)}
     />
+    {dialog}
+    </>
   );
 }
 

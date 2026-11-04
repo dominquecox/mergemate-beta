@@ -480,12 +480,21 @@ export class MockApiClient implements ApiClient {
   private brainCards: Card[] = [
     { id: "card-1", projectId: "proj-1", position: 0, title: "MM-117 Board UI", details: "Implement board screens", priority: "P0", status: "open", doneWhen: "Screens render with real data", updatedAt: new Date().toISOString() },
   ];
+  private extraBrainProjects: Project[] = [];
+  async createBrainProject(input: { owner: string; repo: string }) {
+    const same = (p: Project) => p.owner.toLowerCase() === input.owner.toLowerCase() && p.repo.toLowerCase() === input.repo.toLowerCase();
+    if ([this.brainProject(), ...this.extraBrainProjects].some(same)) throw new ApiClientError("state_conflict", "You already have a board for this repository.");
+    const project: Project = { id: `proj-${this.extraBrainProjects.length + 2}`, owner: input.owner, repo: input.repo, rules: this.brainRules, createdAt: new Date().toISOString() };
+    this.extraBrainProjects = [...this.extraBrainProjects, project];
+    return { project };
+  }
+
   private brainProject(): Project {
     return { id: "proj-1", owner: "dominquecox", repo: "mergemate", rules: this.brainRules, createdAt: new Date().toISOString() };
   }
 
   async getBrainProjects() {
-    return { projects: [this.brainProject()] };
+    return { projects: [this.brainProject(), ...this.extraBrainProjects] };
   }
 
   async getBrainBoard(_projectId: string) {

@@ -15,7 +15,7 @@ interface ShellProps {
   children: React.ReactNode;
 }
 
-function EditorShell({ title, busy, error, saveLabel, onSave, onClose, children }: ShellProps) {
+export function EditorShell({ title, busy, error, saveLabel, onSave, onClose, children }: ShellProps) {
   const { styles } = useEditorStyles();
   return (
     <Modal visible animationType="slide" onRequestClose={onClose}>
@@ -165,7 +165,7 @@ const makeStyles = (c: EditorColors) => StyleSheet.create({
   count: { fontSize: 12, color: c.textSecondary },
 });
 
-function useEditorStyles() {
+export function useEditorStyles() {
   const { colors } = useTheme();
   return { colors, styles: useMemo(() => makeStyles(colors), [colors]) };
 }

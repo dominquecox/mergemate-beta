@@ -142,6 +142,7 @@ export interface ApiClient {
 
   // Brain Board API
   getBrainProjects(): Promise<{projects: Project[]}>;
+  createBrainProject(input: {owner: string; repo: string}): Promise<{project: Project}>;
   getBrainBoard(projectId: string): Promise<{project: Project; cards: Card[]; locks: Lock[]; trackTail: TrackEvent[]}>;
   createBrainCard(input: CreateCardRequest): Promise<Card>;
   updateBrainCard(input: UpdateCardRequest): Promise<Card>;

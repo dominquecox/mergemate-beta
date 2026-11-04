@@ -289,6 +289,12 @@ export abstract class HttpData extends HttpSession {
     return { project: res.project, cards: res.cards, locks: res.locks, trackTail: res.trackTail };
   }
 
+  async createBrainProject(input: { owner: string; repo: string }) {
+    const res = await this.request({ method: "POST", path: "/brain/projects", body: { owner: input.owner, repo: input.repo }, schema: z.object({ project: ProjectSchema }) });
+    this.reads.invalidate();
+    return res;
+  }
+
   // Owner writes. Brain paths are not in request()'s invalidation list, so drop cached reads here.
   async createBrainCard(input: CreateCardRequest) {
     const body = CreateCardRequestSchema.parse(input);

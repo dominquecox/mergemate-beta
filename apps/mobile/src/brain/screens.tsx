@@ -235,6 +235,7 @@ export function ProjectsListScreen({
   loading,
   error,
   onRetry,
+  onNewBoard,
 }: {
   projects: Project[];
   selectedProjectId: string | null;
@@ -242,6 +243,7 @@ export function ProjectsListScreen({
   loading: boolean;
   error: Error | null;
   onRetry: () => void;
+  onNewBoard?: () => void;
 }) {
   const styles = useBrainStyles();
   if (error) {
@@ -260,6 +262,11 @@ export function ProjectsListScreen({
     <SafeAreaView style={styles.container} edges={['left', 'right', 'bottom']}>
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Projects</Text>
+        {onNewBoard ? (
+          <TouchableOpacity style={{ minHeight: 44, minWidth: 44, justifyContent: 'center', paddingHorizontal: 12 }} onPress={onNewBoard} accessibilityRole="button" accessibilityLabel="New board">
+            <Text style={styles.headerTitle}>+ New board</Text>
+          </TouchableOpacity>
+        ) : null}
       </View>
 
       <FlatList
