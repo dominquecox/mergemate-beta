@@ -95,6 +95,8 @@ binding = "IMAGES"
 name = "mergemate-api-dev"
 routes = [{ pattern = "api-dev.mergemate.dev", custom_domain = true }]
 workers_dev = false
+# Workers Logs for dev: every error line carries the request id, so a failure can be found by it. Production is unchanged.
+observability = { enabled = true }
 
 [env.dev.vars]
 # Coding execution is restricted to this reviewed repository until owner policy expands it.

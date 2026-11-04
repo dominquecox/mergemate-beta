@@ -28,7 +28,7 @@ import { appendWorkflowAudit, auditOutboxStatement, flushWorkflowAuditOutbox } f
 import { mintJobToken, revokeJobToken } from "../workflows/github-app-token";
 import { generateWorkflowPatch } from "../workflows/model";
 import { permittedSource } from "../workflows/patch-boundary";
-import { publishApprovedPatch } from "../workflows/publish";
+import { publishApprovedPatch, type PublishStep } from "../workflows/publish";
 import { assertRunCurrent, workflowAllowedRepos } from "../workflows/runtime";
 import { loadRun, saveRun } from "../workflows/store";
 import { targetSnapshot } from "../workflows/target";
@@ -153,7 +153,15 @@ interface ApprovedJob { id: string; run_id: string; user_id: string; repository:
  * One atomic step consumes the approval and reserves the job, so a replay, a second click or a runner cannot
  * publish it again.
  */
-export async function publishApprovedBoardRun(env: Env, deps: Deps, userId: string, runId: string): Promise<{ run: WorkflowRun; draftPrUrl: string }> {
+export type BoardPublishStep = "load_run" | "check_run" | "mint_token" | "audit_token" | "finalize" | PublishStep;
+
+/** Log text never carries tokens, keys or contents: it is cut short and anything credential-shaped is removed. */
+export const redactLogText = (value: string): string =>
+  value.replace(/\b(?:gh[pousr]_|github_pat_)[A-Za-z0-9_]{10,}/g, "[redacted]").replace(/\bBearer\s+\S+/gi, "Bearer [redacted]")
+    .replace(/\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}/g, "[redacted]").replace(/-----BEGIN[^-]*-----[\s\S]*/g, "[redacted]")
+    .replace(/[\r\n\t]+/g, " ").slice(0, 200);
+
+export async function publishApprovedBoardRun(env: Env, deps: Deps, userId: string, runId: string, requestId?: string): Promise<{ run: WorkflowRun; draftPrUrl: string }> {
   if (!env.DB) throw new ApiError("misconfigured", "Workflow storage is unavailable.");
   // The kill switch is checked before the approval is consumed, so a stopped run keeps its approval unused.
   await assertAgentRunAllowed(env, userId);
@@ -178,21 +186,26 @@ export async function publishApprovedBoardRun(env: Env, deps: Deps, userId: stri
     await noteRunStep(env, deps.now(), { runId, userId, text: "Agent run failed at the draft PR step. No draft PR was opened." });
   };
 
-  let token: string | undefined;
+  let token: string | undefined, step: BoardPublishStep = "load_run";
   try {
-    const state = await loadRun(d, runId, userId), snapshot = await assertRunCurrent(env, deps, state.row, state.run);
+    const state = await loadRun(d, runId, userId);
+    step = "check_run";
+    const snapshot = await assertRunCurrent(env, deps, state.row, state.run);
     const patch = JSON.parse(job.patch_json) as { changes: { path: string; content: string }[] };
     if (await sha256Hex(JSON.stringify(patch.changes.map(({ path, content }) => ({ path, content })))) !== job.patch_hash || patch.changes.some((change) => !permittedSource(change.path))) {
       throw new ApiError("state_conflict", "The stored patch does not match its approval.");
     }
+    step = "mint_token";
     const minted = await mintJobToken(env, deps, job.repository, Number(job.repository_id), true);
     token = minted.token;
+    step = "audit_token";
     await appendWorkflowAudit(d, userId, `job:${job.id}:publish-token:${job.patch_hash}`, "github_publish_token_minted", job.id, { repositoryId: job.repository_id, installationId: minted.installationId, expiresAt: minted.expiresAt }, now, env.WORKFLOW_RUNNER_SIGNING_KEY ?? "");
     const stillReserved = async () => {
       const current = await d.prepare("SELECT status,lease_hash FROM workflow_jobs WHERE id=?").bind(job.id).first<{ status: string; lease_hash: string | null }>();
       if (!current || current.status !== "publishing" || current.lease_hash !== lease) throw new ApiError("state_conflict", "Draft publication was cancelled.");
     };
-    const published = await publishApprovedPatch(deps, token, { id: job.id, runId, repository: job.repository, repositoryId: Number(job.repository_id), baseSha: job.base_sha, baseBranch: snapshot.baseBranch, intent: state.run.definition.intent }, patch.changes, stillReserved, false);
+    const published = await publishApprovedPatch(deps, token, { id: job.id, runId, repository: job.repository, repositoryId: Number(job.repository_id), baseSha: job.base_sha, baseBranch: snapshot.baseBranch, intent: state.run.definition.intent }, patch.changes, stillReserved, false, (next) => { step = next; });
+    step = "finalize";
     const revoked = await revokeJobToken(deps, token);
     token = undefined;
     const at = deps.now().toISOString(), latest = await loadRun(d, runId, userId);
@@ -207,8 +220,16 @@ export async function publishApprovedBoardRun(env: Env, deps: Deps, userId: stri
     await linkCardToDraft(env, deps.now(), { runId, userId, repository: job.repository, commitSha: published.commitSha, draftPrUrl: published.draftPrUrl }).catch(() => 0);
     return { run: latest.run, draftPrUrl: published.draftPrUrl };
   } catch (error) {
-    await fail(error instanceof ApiError ? error.message : "Draft publication failed.");
-    throw error instanceof ApiError ? error : new ApiError("upstream_unavailable", "Draft publication failed.");
+    // One line per failure, so a request id finds the step. Never tokens, keys, the patch or file contents.
+    const name = error instanceof Error ? error.name : typeof error;
+    console.error(JSON.stringify({
+      requestId: requestId ?? null, event: "board_publish_failed", runId, step, errorName: name,
+      // Our own ApiError messages are fixed text; other errors may quote request data, so only their type is logged.
+      ...(error instanceof ApiError ? { errorMessage: redactLogText(error.message), code: error.code, ...(error.logDetail ? { githubStatus: redactLogText(error.logDetail) } : {}) } : {}),
+    }));
+    const message = `${error instanceof ApiError ? error.message.replace(/\.$/, "") : "Draft publication failed"} at: ${step}.`;
+    await fail(message);
+    throw new ApiError(error instanceof ApiError ? error.code : "upstream_unavailable", message, error instanceof ApiError ? error.headers : {}, error instanceof ApiError ? error.logDetail : `${name} at ${step}`);
   } finally {
     if (token) await revokeJobToken(deps, token).catch(() => false);
   }

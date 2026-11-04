@@ -52,7 +52,7 @@ export function createWorkflowRouter(){
   const approved=await approvePatch(c.env,c.get('deps'),c.get('session'),runId,parse(PasskeyRequest,await c.req.json().catch(()=>null)));
   // Board runs publish in the Worker right after their passkey approval; every other run waits for its runner as before.
   const userId=requireActor(c.get('session'));if(!await isBoardRun(c.env,userId,runId))return c.json(approved);
-  const published=await publishApprovedBoardRun(c.env,c.get('deps'),userId,runId);return c.json({...approved,run:published.run,draftPrUrl:published.draftPrUrl});});
+  const published=await publishApprovedBoardRun(c.env,c.get('deps'),userId,runId,c.get('requestId'));return c.json({...approved,run:published.run,draftPrUrl:published.draftPrUrl});});
  router.get('/runs/:id',async c=>{const db=await ensureStorage(c);return c.json((await loadRun(db,c.req.param('id'),requireActor(c.get('session')))).run);});
  router.post('/runs/:id/cancel',async c=>{await ensureStorage(c);return c.json(await cancelWorkflowRun(c.env,c.get('deps'),requireActor(c.get('session')),c.req.param('id')));});
  return router;

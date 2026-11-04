@@ -84,9 +84,10 @@ export async function appGitHub(env: Env, deps: Deps, repo: string, repoId: numb
   const { token } = await mintJobToken(env, deps, repo.toLowerCase(), repoId, false);
   const get = async <T>(path: string, schema: z.ZodType<T>): Promise<T> => {
     const response = await deps.fetch(new URL(path, API), {
-      redirect: "error",
+      redirect: "manual",
       headers: { accept: "application/vnd.github+json", authorization: `Bearer ${token}`, "x-github-api-version": "2022-11-28", "user-agent": "MergeMate-Brain-Verifier" },
     });
+    if (response.status >= 300 && response.status < 400) { await response.body?.cancel().catch(() => undefined); throw new ApiError("upstream_unavailable", "GitHub redirected a verifier read; redirects are not followed.", {}, `github ${response.status}`); }
     if (!response.ok) { await response.body?.cancel().catch(() => undefined); throw new Error(`GitHub answered ${response.status}.`); }
     const parsed = schema.safeParse(JSON.parse(new TextDecoder().decode(await readBoundedBody(response, 1048576))) as unknown);
     if (!parsed.success) throw new Error("GitHub returned an unexpected shape.");

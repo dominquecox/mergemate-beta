@@ -1,6 +1,6 @@
 import { describe,expect,it,vi } from 'vitest';
 import type { Env } from '../src/env';
-import { fetchPinnedArchive,mintJobToken } from '../src/workflows/github-app-token';
+import { fetchPinnedArchive,mintJobToken,revokeJobToken } from '../src/workflows/github-app-token';
 
 const pem=(bytes:ArrayBuffer)=>{const value=Buffer.from(bytes).toString('base64').match(/.{1,64}/g)?.join('\n')??'';return `-----BEGIN PRIVATE KEY-----\n${value}\n-----END PRIVATE KEY-----`;};
 
@@ -9,4 +9,14 @@ describe('per-job GitHub App tokens',()=>{
  it('rejects a token response scoped to another repository',async()=>{const now=new Date('2026-11-03T12:00:00Z'),pair=await crypto.subtle.generateKey({name:'RSASSA-PKCS1-v1_5',modulusLength:2048,publicExponent:new Uint8Array([1,0,1]),hash:'SHA-256'},true,['sign','verify']) as CryptoKeyPair,env={GITHUB_APP_ID:'12345',GITHUB_APP_PRIVATE_KEY:pem(await crypto.subtle.exportKey('pkcs8',pair.privateKey) as ArrayBuffer)} satisfies Env,fetch=vi.fn(async(input:RequestInfo|URL)=>String(input).endsWith('/installation')?Response.json({id:77,app_id:12345}):Response.json({token:'ghs_fixture_installation_token',expires_at:'2026-11-03T13:00:00Z',permissions:{contents:'write',pull_requests:'write'},repositories:[{id:202,full_name:'other/repo'}]}));await expect(mintJobToken(env,{fetch:fetch as typeof globalThis.fetch,now:()=>now},'owner/repo',101,true)).rejects.toMatchObject({code:'forbidden'});});
  it('pins archive redirects and never forwards the installation token to codeload',async()=>{const calls:{url:string;authorization:string|null}[]=[],body=new Uint8Array([31,139,8,0]),fetch=vi.fn(async(input:RequestInfo|URL,init?:RequestInit)=>{const url=String(input);calls.push({url,authorization:new Headers(init?.headers).get('authorization')});return calls.length===1?new Response(null,{status:302,headers:{location:`https://codeload.github.com/owner/repo/legacy.tar.gz/${'a'.repeat(40)}`}}):new Response(body);}),archive=await fetchPinnedArchive({fetch:fetch as typeof globalThis.fetch,now:()=>new Date()},'fixture-token','owner/repo','a'.repeat(40));expect(Array.from(new Uint8Array(archive))).toEqual(Array.from(body));expect(calls[0]?.authorization).toBe('Bearer fixture-token');expect(calls[1]?.authorization).toBeNull();});
  it('rejects archive redirects outside the exact repository and commit',async()=>{const fetch=vi.fn(async()=>new Response(null,{status:302,headers:{location:`https://codeload.github.com/other/repo/legacy.tar.gz/${'a'.repeat(40)}`}}));await expect(fetchPinnedArchive({fetch:fetch as typeof globalThis.fetch,now:()=>new Date()},'fixture-token','owner/repo','a'.repeat(40))).rejects.toMatchObject({code:'forbidden'});});
+ it('never asks Workers for redirect "error", and turns a GitHub redirect into a clear error',async()=>{const now=new Date('2026-11-03T12:00:00Z'),pair=await crypto.subtle.generateKey({name:'RSASSA-PKCS1-v1_5',modulusLength:2048,publicExponent:new Uint8Array([1,0,1]),hash:'SHA-256'},true,['sign','verify']) as CryptoKeyPair,env={GITHUB_APP_ID:'12345',GITHUB_APP_PRIVATE_KEY:pem(await crypto.subtle.exportKey('pkcs8',pair.privateKey) as ArrayBuffer)} satisfies Env;
+  // Like the Workers runtime: redirect "error" is rejected before any request is sent.
+  const workers=(respond:(url:string)=>Response)=>vi.fn(async(input:RequestInfo|URL,init?:RequestInit)=>{if(init?.redirect==='error')throw new TypeError('Invalid redirect value, must be one of "follow" or "manual".');return respond(String(input));});
+  const ok=workers(url=>url.endsWith('/installation')?Response.json({id:77,app_id:12345}):Response.json({token:'ghs_fixture_installation_token',expires_at:'2026-11-03T13:00:00Z',permissions:{contents:'write',pull_requests:'write',metadata:'read'},repositories:[{id:101,full_name:'owner/repo'}]}));
+  await expect(mintJobToken(env,{fetch:ok as typeof globalThis.fetch,now:()=>now},'owner/repo',101,true)).resolves.toMatchObject({installationId:77});
+  const moved=workers(()=>new Response(null,{status:301,headers:{location:'https://api.github.com/repositories/101/installation'}}));
+  await expect(mintJobToken(env,{fetch:moved as typeof globalThis.fetch,now:()=>now},'owner/repo',101,true)).rejects.toMatchObject({code:'upstream_unavailable',logDetail:'github_app 301'});
+  const revoke=workers(()=>new Response(null,{status:204}));
+  expect(await revokeJobToken({fetch:revoke as typeof globalThis.fetch,now:()=>now},'ghs_fixture_installation_token')).toBe(true);
+ });
 });
