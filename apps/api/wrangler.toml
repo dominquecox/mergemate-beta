@@ -192,6 +192,8 @@ workers_dev = false
 # STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET, STRIPE_PRICE_PRO_MONTHLY and STRIPE_PRICE_PRO_ANNUAL in production.
 [env.production.vars]
 APP_ENV = "production"
+# Free plan: a few real AI actions a day; Pro (default 200) is the plan for daily use.
+AI_DAILY_ACTIONS_FREE = "5"
 STRIPE_MODE = "live"
 WEB_ORIGIN = "https://app.mergemate.dev"
 SITE_ORIGIN = "https://mergemate.dev"

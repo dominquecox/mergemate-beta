@@ -15,7 +15,7 @@ describe("AI notice actions", () => {
     ["network", "retry"],
     ["consent_required", "settings"],
     ["forbidden", "settings"],
-    ["rate_limited", null],
+    ["rate_limited", "upgrade"],
     ["misconfigured", null],
     [undefined, null],
   ] as const)("%s offers %s", (code, action) => {

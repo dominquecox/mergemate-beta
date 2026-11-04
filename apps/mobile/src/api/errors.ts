@@ -105,6 +105,11 @@ export function messageForCode(
   code: ClientErrorCode,
   options: { retryAfterSeconds?: number; serverMessage?: unknown } = {},
 ): string {
+  // A limit the API explains (such as the daily AI limit) keeps its wording.
+  if (code === "rate_limited") {
+    const server = usableServerMessage(options.serverMessage);
+    if (server) return server;
+  }
   if (code === "rate_limited" && options.retryAfterSeconds !== undefined && options.retryAfterSeconds > 0) {
     return `You've reached a limit for now. Try again in ${formatWait(options.retryAfterSeconds)}.`;
   }

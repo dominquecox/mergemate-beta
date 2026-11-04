@@ -200,6 +200,8 @@ export interface BillingPlan {
   trialEligible: boolean;
   /** A billing account with history exists, so the portal can be opened (also after a fall back to Free). */
   canManage: boolean;
+  /** Today's AI actions on this plan, when the API reports them. */
+  aiActions?: { limit: number; remaining: number };
 }
 
 export interface PublicPost {

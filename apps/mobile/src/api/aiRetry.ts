@@ -6,11 +6,12 @@ import { secretWarningFromRisk } from "./mappers";
 /** Failures a person can fix by trying again. Quota, consent, the AI setting and setup problems are not among them. */
 const RETRYABLE = new Set<string>(["upstream_unavailable", "timeout", "network", "internal", "rate_limit_unavailable", "parse_failed"]);
 
-/** What the AI notice offers: try again, open Settings (consent or AI turned off), or nothing (limit, setup). */
-export function aiNoticeAction(code: string | undefined): "retry" | "settings" | null {
+/** What the AI notice offers: try again, open Settings (consent or AI turned off), upgrade (daily limit), or nothing (setup). */
+export function aiNoticeAction(code: string | undefined): "retry" | "settings" | "upgrade" | null {
   if (!code) return null;
   if (RETRYABLE.has(code)) return "retry";
   if (code === "consent_required" || code === "forbidden") return "settings";
+  if (code === "rate_limited") return "upgrade";
   return null;
 }
 

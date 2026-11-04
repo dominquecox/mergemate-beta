@@ -5,6 +5,7 @@ import type { AppEnv } from "../env";
 import { ApiError } from "../errors";
 import { parseBody } from "../lib/validate";
 import { billingOperation, ensureCustomer, getBillingPlan } from "../lib/stripe-billing";
+import { actionLimits, createDbUsageStore } from "./ai-engine-gate";
 import { billingOrigin, billingUrl, expireCheckout, openCheckouts, stripePrice, stripeRequest, subscriptions } from "../lib/stripe";
 /** Matches the trial the web app advertises (apps/mobile/src/config/billing.ts). */
 export const TRIAL_DAYS = 7;
@@ -14,7 +15,12 @@ function realUser(c: Context<AppEnv>, webOnly=false) {
   return session.userId;
 }
 export const billing = new Hono<AppEnv>()
-  .get("/billing/plan",async c=>c.json(await getBillingPlan(c.env,realUser(c))))
+  .get("/billing/plan",async c=>{
+    const user=realUser(c),plan=await getBillingPlan(c.env,user),limits=actionLimits(c.env);
+    // Same read-only cap check the AI gate uses, so Settings shows what the next AI action will see.
+    const today=await createDbUsageStore(requireBinding(c.env,"DB")).check(user,plan.plan==="pro"?limits.pro:limits.free);
+    return c.json({...plan,aiActions:{limit:today.limit,remaining:today.remaining}});
+  })
   .post("/billing/checkout",async c=>{
     const user=realUser(c,true);const input=await parseBody(c,CheckoutRequest);const deps=c.get("deps");
     const price=stripePrice(c.env,input.priceKey);const origin=billingOrigin(c.env);

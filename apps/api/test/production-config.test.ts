@@ -46,6 +46,11 @@ describe("wrangler.toml [env.production]", () => {
     expect(prod("STRIPE_MODE")).toBe("live");
   });
 
+  it("keeps the free plan to a few AI actions a day and Pro at its default", () => {
+    expect(prod("AI_DAILY_ACTIONS_FREE")).toBe("5");
+    expect(prod("AI_DAILY_ACTIONS_PRO")).toBeUndefined();
+  });
+
   it("uses the same model settings as dev", () => {
     for (const name of ["MODEL_ROUTE_SUMMARY", "MODEL_ROUTE_RISK", "MODEL_ROUTE_TRIAGE", "MODEL_ROUTE_HIGHLIGHT", "MODEL_BASE_URL"]) {
       expect(prod(name)).toBeDefined();

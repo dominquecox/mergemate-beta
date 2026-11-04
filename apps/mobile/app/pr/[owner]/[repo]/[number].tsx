@@ -29,6 +29,9 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { useLayout } from "../../../../src/layout/useLayout";
 import { useTheme } from "../../../../src/context/ThemeContext";
 import { aiNoticeAction } from "../../../../src/api/aiRetry";
+import { api, apiMode } from "../../../../src/api";
+import { webAppOrigin } from "../../../../src/api/config";
+import { isExternalBillingLinkAllowed } from "../../../../src/platform/android";
 import { useConsent } from "../../../../src/context/ConsentContext";
 import { Header } from "../../../../src/components/Header";
 import { StatusPill } from "../../../../src/components/StatusPill";
@@ -63,6 +66,11 @@ function PrWorkspace({owner,repo,number}:{owner:string;repo:string;number:string
   const [assessmentOpen,setAssessmentOpen]=useState(false);
   const [expandedFiles,setExpandedFiles]=useState<string[]>([]);
   const {detail,isLoading,isRefreshing,error,loadPr,loadPage,pageBusy,pageError,capped,fileCursor,commentCursor,checkCursor,retryAi,aiRetrying}=usePrWorkspace(owner,repo,Number(number),aiConsentGranted&&aiSummaries);
+  // At the daily AI limit, a free account gets a way to Pro instead of a dead end.
+  const limitReached=aiNoticeAction(detail?.aiNotice?.code)==="upgrade";
+  const [canUpgrade,setCanUpgrade]=useState(false);
+  useEffect(()=>{if(!limitReached)return;let live=true;api.getBillingPlan().then(plan=>{if(live)setCanUpgrade(plan.plan==="free");}).catch(()=>{});return()=>{live=false;};},[limitReached]);
+  const openUpgrade=()=>{if(Platform.OS==="web")router.push("/billing");else if(isExternalBillingLinkAllowed(Platform.OS))void Linking.openURL(`${webAppOrigin(apiMode)}/billing`);};
   const guardrailFiles=useAgentGuardrails(detail);
   const [fileWrap,setFileWrap]=useState<Record<string,boolean>>({}),[collapsedThreads,setCollapsedThreads]=useState<string[]>([]),[linkError,setLinkError]=useState<string|null>(null);
   const scroll=useRef<React.ComponentRef<typeof ScrollView>>(null),scrollOffset=useRef(0),fileRows=useRef<Record<string,React.ComponentRef<typeof View>|null>>({});
@@ -526,6 +534,7 @@ function PrWorkspace({owner,repo,number}:{owner:string;repo:string;number:string
                             </Text>
                             {aiNoticeAction(detail.aiNotice.code) === "retry" && <Button title="Try again" variant="secondary" loading={aiRetrying} onPress={retryAi} style={{ marginTop: 12, alignSelf: "flex-start" }} accessibilityLabel="Try the AI summary again" />}
                             {aiNoticeAction(detail.aiNotice.code) === "settings" && <Button title="Open Settings" variant="secondary" onPress={() => router.push("/(tabs)/settings")} style={{ marginTop: 12, alignSelf: "flex-start" }} />}
+                            {limitReached && canUpgrade && (Platform.OS === "web" || isExternalBillingLinkAllowed(Platform.OS)) && <Button title="Upgrade to Pro" onPress={openUpgrade} style={{ marginTop: 12, alignSelf: "flex-start" }} accessibilityLabel="Upgrade to Pro for more AI actions" />}
                           </View>
                         )}
                       </View>

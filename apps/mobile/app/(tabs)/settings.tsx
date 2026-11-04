@@ -261,6 +261,11 @@ export default function SettingsScreen() {
                   <Text style={[typography.code, { color: colors.textSecondary, fontSize: 11 }]} numberOfLines={1}>
                     @{user?.login || "demo-developer"} · {billing.plan.toUpperCase()} PLAN
                   </Text>
+                  {!isDemo && billing.aiActions && (
+                    <Text style={[typography.caption, { color: billing.aiActions.remaining > 0 ? colors.textSecondary : colors.statusWarning, marginTop: 2 }]} accessibilityLiveRegion="polite">
+                      AI actions today: {billing.aiActions.remaining} of {billing.aiActions.limit} left
+                    </Text>
+                  )}
                 </View>
               </View>
               <View style={{ flexDirection: "row", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
