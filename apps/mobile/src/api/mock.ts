@@ -2,7 +2,7 @@ import {demoVisualAsset} from "../workspace/visual";
 import type {PrSearchFilters,PrSearchPage} from '@mergemate/contracts';
 import {disabledFeatureFlags} from "./feature-flags";
 import { ApiClientError, messageForCode } from "./errors";
-import type { AiPreferenceUpdate, AiPreferences, Project, Card, CreateCardRequest, UpdateCardRequest, ReorderCardRequest } from "@mergemate/contracts";
+import type { AiPreferenceUpdate, AiPreferences, Project, Card, CreateCardRequest, UpdateCardRequest, ReorderCardRequest, BrainRunResponse, BrainRunStatus } from "@mergemate/contracts";
 import { AI_CONSENT_VERSION } from "../config/consent";
 import { ApiClient } from "./client";
 import {
@@ -476,6 +476,7 @@ export class MockApiClient implements ApiClient {
   }
 
   private brainRules = "Default board rules";
+  private mockRunStatus: BrainRunStatus = "running";
   private brainCards: Card[] = [
     { id: "card-1", projectId: "proj-1", position: 0, title: "MM-117 Board UI", details: "Implement board screens", priority: "P0", status: "open", doneWhen: "Screens render with real data", updatedAt: new Date().toISOString() },
   ];
@@ -549,6 +550,28 @@ export class MockApiClient implements ApiClient {
     const lock = card && board.locks.find((l) => l.cardId === card.id);
     if (!card || !lock) throw new ApiClientError("not_found", "No open card is free right now.");
     return { card, lock, rules: board.project.rules, boardTop: board.cards.slice(0, 20), trackTail: board.trackTail };
+  }
+
+  /** Demo mode: pick which run outcome the next runBrain call returns. */
+  setMockRunStatus(status: BrainRunStatus): void {
+    this.mockRunStatus = status;
+  }
+
+  async runBrain(projectId: string): Promise<BrainRunResponse> {
+    const board = await this.getBrainBoard(projectId);
+    const base = board.cards[0];
+    if (!base) throw new ApiClientError("not_found", "No open card is free right now.");
+    const runId = "run-demo-1";
+    switch (this.mockRunStatus) {
+      case "pr_opened":
+        return { status: "pr_opened", card: { ...base, branch: `mergemate-agent/${runId}`, prNumber: 1 }, summary: "A draft PR is open for review.", files: ["README.md"], runId, branch: `mergemate-agent/${runId}`, prNumber: 1, prUrl: "https://github.com/dominquecox/mergemate/pull/1" };
+      case "no_change":
+        return { status: "no_change", card: base, summary: "The agent found nothing to change.", files: [], runId };
+      case "failed":
+        return { status: "failed", card: base, summary: "The agent run could not finish.", files: [], message: "The agent run could not start." };
+      default:
+        return { status: "running", card: { ...base, branch: `mergemate-agent/${runId}` }, summary: "The agent is preparing a patch.", files: [], runId, branch: `mergemate-agent/${runId}` };
+    }
   }
 }
 

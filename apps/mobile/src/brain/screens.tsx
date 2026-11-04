@@ -14,6 +14,8 @@ import { EmptyState } from '../components/EmptyState';
 import { ErrorState } from '../components/ErrorState';
 import { useTheme } from '../context/ThemeContext';
 import type { Card, Lock, Handoff, TrackEvent, Project } from '@mergemate/contracts';
+import type { ApiClient } from '../api/client';
+import { AgentPanel, type AgentPanelProps } from './AgentPanel';
 
 export function BoardScreen({
   project,
@@ -27,6 +29,7 @@ export function BoardScreen({
   onAddCard,
   onEditCard,
   onMoveCard,
+  agent,
 }: {
   project: Project;
   cards: Card[];
@@ -39,6 +42,8 @@ export function BoardScreen({
   onAddCard?: () => void;
   onEditCard?: (card: Card) => void;
   onMoveCard?: (card: Card, delta: -1 | 1) => void;
+  /** Enables Proceed / Plan with agent in the card detail. */
+  agent?: { api: ApiClient; onChanged: () => void };
 }) {
   const styles = useBrainStyles();
   const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
@@ -134,6 +139,7 @@ export function BoardScreen({
           lock={selectedLock || null}
           trackEvents={selectedEvents}
           onClose={() => setSelectedCardId(null)}
+          agent={agent ? { ...agent, project } : undefined}
         />
       )}
     </SafeAreaView>
@@ -145,11 +151,13 @@ export function CardDetailModal({
   lock,
   trackEvents,
   onClose,
+  agent,
 }: {
   card: Card;
   lock: Lock | null;
   trackEvents: TrackEvent[];
   onClose: () => void;
+  agent?: Omit<AgentPanelProps, 'card' | 'lock'>;
 }) {
   const styles = useBrainStyles();
   return (
@@ -214,6 +222,7 @@ export function CardDetailModal({
             </View>
           )}
         </ScrollView>
+        {agent ? <AgentPanel {...agent} card={card} lock={lock} /> : null}
       </SafeAreaView>
     </Modal>
   );
@@ -659,7 +668,7 @@ const makeStyles = (c: BrainColors) => StyleSheet.create({
   },
 });
 
-function useBrainStyles() {
+export function useBrainStyles() {
   const { colors } = useTheme();
   return useMemo(() => makeStyles(colors), [colors]);
 }

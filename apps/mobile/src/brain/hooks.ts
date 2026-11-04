@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
-import type { Project, Card, Lock, Handoff, TrackEvent, CreateCardRequest, UpdateCardRequest, ProceedWithTrackResponse } from '@mergemate/contracts';
+import type { Project, Card, Lock, Handoff, TrackEvent, CreateCardRequest, UpdateCardRequest } from '@mergemate/contracts';
 import type { ApiClient } from '../api/client';
 
 export interface UseBrainBoardOptions {
@@ -129,7 +129,6 @@ export interface UseBrainActionsOptions {
 export function useBrainActions({ api, projectId, onChanged }: UseBrainActionsOptions) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [proceeded, setProceeded] = useState<ProceedWithTrackResponse | null>(null);
 
   const run = useCallback(
     async (write: () => Promise<unknown>): Promise<boolean> => {
@@ -158,9 +157,6 @@ export function useBrainActions({ api, projectId, onChanged }: UseBrainActionsOp
     updateCard: (request: UpdateCardRequest) => run(() => api.updateBrainCard(request)),
     moveCard: (cardId: string, newPosition: number) => run(() => api.reorderBrainCard({ projectId, cardId, newPosition })),
     saveRules: (rules: string) => run(() => api.setBrainRules(projectId, rules)),
-    proceeded,
-    dismissProceeded: useCallback(() => setProceeded(null), []),
-    proceed: () => run(async () => setProceeded(await api.proceedBrain(projectId))),
   };
 }
 

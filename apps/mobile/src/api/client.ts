@@ -1,4 +1,4 @@
-import type {NoteContext,PrivateNote,SavePrivateNote,FeatureFlags, Project, Card, Lock, TrackEvent, CreateCardRequest, UpdateCardRequest, ReorderCardRequest, ProceedWithTrackResponse} from "@mergemate/contracts";
+import type {NoteContext,PrivateNote,SavePrivateNote,FeatureFlags, Project, Card, Lock, TrackEvent, CreateCardRequest, UpdateCardRequest, ReorderCardRequest, ProceedWithTrackResponse, BrainRunResponse} from "@mergemate/contracts";
 import type {InboxMutation,InboxReceipt} from "@mergemate/contracts";
 import type {PrSearchFilters,PrSearchPage} from '@mergemate/contracts';
 export type WorkspacePage<T>={items:T[];nextCursor:string|null;capped?:boolean;headSha?:string};
@@ -148,6 +148,7 @@ export interface ApiClient {
   reorderBrainCard(input: ReorderCardRequest): Promise<Card[]>;
   setBrainRules(projectId: string, rules: string): Promise<Project>;
   proceedBrain(projectId: string): Promise<ProceedWithTrackResponse>;
+  runBrain(projectId: string): Promise<BrainRunResponse>;
 }
 
 // In-memory CSRF token storage for web sessions (strictly never saved to disk or localStorage)

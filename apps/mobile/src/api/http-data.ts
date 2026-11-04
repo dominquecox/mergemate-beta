@@ -4,7 +4,7 @@ import { PrSearchFilters, PrSearchPage } from '@mergemate/contracts';
 import type { WorkspaceRead } from './client';
 import { PrCheck as PrCheckSchema } from '@mergemate/contracts';
 import { z } from "zod";
-import { PrivateNotes, PrivateNote, VoiceNoteResult, SavePrivateNote, type NoteContext, InboxPreference, InboxMutation, InboxReceipt, InboxUndo, ConsentState, AiPreferences, type AiPreferenceUpdate, HighlightResult as HighlightResultSchema, InstallationList as InstallationListSchema, NotificationPage, PrDetail as PrDetailSchema, PrFile as PrFileSchema, PrThread as PrThreadSchema, PrRisk as PrRiskSchema, PrSummary as PrSummarySchema, ReviewPlan as ReviewPlanSchema, AiEngineInfo as AiEngineInfoSchema, PrAnswer as PrAnswerSchema, RepoPage, RepoPullList, RepoBranchList, TriageQueue, TriageRecord, ProjectSchema, CardSchema, LockSchema, TrackEventSchema, ProceedWithTrackResponseSchema } from "@mergemate/contracts";
+import { PrivateNotes, PrivateNote, VoiceNoteResult, SavePrivateNote, type NoteContext, InboxPreference, InboxMutation, InboxReceipt, InboxUndo, ConsentState, AiPreferences, type AiPreferenceUpdate, HighlightResult as HighlightResultSchema, InstallationList as InstallationListSchema, NotificationPage, PrDetail as PrDetailSchema, PrFile as PrFileSchema, PrThread as PrThreadSchema, PrRisk as PrRiskSchema, PrSummary as PrSummarySchema, ReviewPlan as ReviewPlanSchema, AiEngineInfo as AiEngineInfoSchema, PrAnswer as PrAnswerSchema, RepoPage, RepoPullList, RepoBranchList, TriageQueue, TriageRecord, ProjectSchema, CardSchema, LockSchema, TrackEventSchema, ProceedWithTrackResponseSchema, BrainRunResponseSchema } from "@mergemate/contracts";
 import type { HighlightResult, InstallationList, Notification, NotificationFilter, AiEngineInfo, PrAnswer, PrDetail, PrRisk, PrSummary, Repo, ReviewPlan, TriageItem, TriageLane } from "../types";
 import type { CreateCardRequest, UpdateCardRequest, ReorderCardRequest } from "@mergemate/contracts";
 import { CreateCardRequestSchema, UpdateCardRequestSchema, ReorderCardRequestSchema } from "@mergemate/contracts";
@@ -319,6 +319,12 @@ export abstract class HttpData extends HttpSession {
 
   async proceedBrain(projectId: string) {
     const res = await this.request({ method: "POST", path: `/brain/projects/${enc(projectId)}/proceed`, schema: ProceedWithTrackResponseSchema });
+    this.reads.invalidate();
+    return res;
+  }
+
+  async runBrain(projectId: string) {
+    const res = await this.request({ method: "POST", path: `/brain/projects/${enc(projectId)}/run`, schema: BrainRunResponseSchema });
     this.reads.invalidate();
     return res;
   }

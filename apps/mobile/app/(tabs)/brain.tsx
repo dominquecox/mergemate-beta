@@ -86,25 +86,7 @@ function BoardView({ project, onBack }: { project: Project; onBack: () => void }
         <TouchableOpacity style={styles.button} onPress={() => setEditor('rules')} accessibilityRole="button" accessibilityLabel="Edit project rules">
           <Text style={styles.label}>Rules</Text>
         </TouchableOpacity>
-        <TouchableOpacity
-          style={styles.button}
-          onPress={() => void actions.proceed()}
-          disabled={actions.busy}
-          accessibilityRole="button"
-          accessibilityLabel="Proceed with the track"
-          accessibilityState={{ disabled: actions.busy, busy: actions.busy }}
-        >
-          <Text style={styles.label}>{actions.busy ? 'Working' : 'Proceed'}</Text>
-        </TouchableOpacity>
       </View>
-      {actions.proceeded ? (
-        <View style={[styles.notice, styles.noticeGood]} accessibilityRole="summary" accessibilityLiveRegion="polite">
-          <Text style={[styles.noticeText, styles.noticeGoodText]}>Locked {actions.proceeded.card.id}: {actions.proceeded.card.title}</Text>
-          <TouchableOpacity style={styles.button} onPress={actions.dismissProceeded} accessibilityRole="button" accessibilityLabel="Dismiss locked card">
-            <Text style={styles.label}>Dismiss</Text>
-          </TouchableOpacity>
-        </View>
-      ) : null}
       {actions.error && !editor ? (
         <View style={[styles.notice, styles.noticeAlert]} accessibilityRole="alert">
           <Text style={[styles.noticeText, styles.noticeAlertText]}>{actions.error}</Text>
@@ -128,6 +110,7 @@ function BoardView({ project, onBack }: { project: Project; onBack: () => void }
           onAddCard={() => setEditor('add')}
           onEditCard={(card) => setEditor(card)}
           onMoveCard={move}
+          agent={{ api, onChanged: board.retry }}
         />
       ) : (
         <TrackTimelineScreen events={board.trackEvents} loading={board.loading && !board.project} />
