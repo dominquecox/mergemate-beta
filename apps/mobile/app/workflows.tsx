@@ -14,13 +14,13 @@ import { Text } from '../src/components/Text';
 import { Header } from '../src/components/Header';
 import { useFeatureFlags } from '../src/hooks/useFeatureFlags';
 import { homeHref } from '../src/navigation/items';
-import { Icon, type IconName } from '../src/components/Icon';
+import { Icon } from '../src/components/Icon';
 import { Button } from '../src/components/Button';
 import { InfoTip } from '../src/components/InfoTip';
 import { AccessGuidanceBanner } from '../src/components/AccessGuidanceBanner';
-import { EmptyState } from '../src/components/EmptyState';
 import { LoadingState } from '../src/components/LoadingState';
 import { ErrorState } from '../src/components/ErrorState';
+import { QuickActions } from '../src/workflows/QuickActions';
 import { AgentRunPanel } from '../src/workflows/AgentRunPanel';
 import { CopyDetailsButton } from '../src/components/CopyDetailsButton';
 import { WorkflowCanvas } from '../src/workflows/WorkflowCanvas';
@@ -37,7 +37,6 @@ import {
   SAVE_DESCRIPTION_MAX,
   targetFromUrl,
   isRepositoryPickerTarget,
-  displayRunStatus,
   sameTarget,
   isRunActive,
   type AgentMode,
@@ -103,18 +102,14 @@ function AgentWorkspace({
   const [savedMessage, setSavedMessage] = useState('');
   const [pendingDelete, setPendingDelete] = useState<string | null>(null);
   const [localError, setLocalError] = useState('');
-  const [searchFilter, setSearchFilter] = useState('');
-  const [showSearch, setShowSearch] = useState(false);
   const [targetModalOpen, setTargetModalOpen] = useState(false);
   const [saveSheet, setSaveSheet] = useState<null | { copy: boolean; name: string; description: string; error: string }>(null);
   const [justSavedId, setJustSavedId] = useState<string | null>(null);
-  const [showAllTemplates, setShowAllTemplates] = useState(false);
   const scrollRef = useRef<React.ComponentRef<typeof ScrollView>>(null);
   const promptRef = useRef<React.ComponentRef<typeof TextInput>>(null);
   const composerY = useRef(0);
   // The run receipt renders below the builder; bring it into view whenever a run is opened.
   const runPanelRef = useRef<React.ComponentRef<typeof View>>(null);
-  const savedLayout = useRef({ column: 0, cell: 0 });
   const [projectTargets, setProjectTargets] = useState<Array<{ label: string; sublabel: string; url: string; kind: 'pr' | 'repo' }>>([]);
   const [projectTargetsError, setProjectTargetsError] = useState('');
   const [projectTargetsLoading, setProjectTargetsLoading] = useState(true);
@@ -409,9 +404,7 @@ function AgentWorkspace({
       setConfirmCodeChanges(false);
       setSaveSheet(null);
       setJustSavedId(value.id ?? null);
-      setSavedMessage(`Saved "${value.name}". It is at the top of Saved workflows.`);
-      // Bring the saved list into view so the new item is visible right away.
-      requestAnimationFrame(() => scrollRef.current?.scrollTo({ y: Math.max(0, savedLayout.current.column + savedLayout.current.cell - 12), animated: true }));
+      setSavedMessage(`Saved "${value.name}". It is in Saved at the top of the page.`);
     }
   };
 
@@ -423,14 +416,6 @@ function AgentWorkspace({
       setSavedMessage('Saved workflow deleted. Existing run receipts are unchanged.');
     }
   };
-
-  const filteredTemplates = useMemo(() => {
-    const q = searchFilter.trim().toLowerCase(),available = AGENT_TEMPLATES.filter((t) => codingEnabled || t.mode === 'review');
-    if (!q) return available;
-    return available.filter(
-      (t) => t.name.toLowerCase().includes(q) || t.description.toLowerCase().includes(q),
-    );
-  }, [searchFilter, codingEnabled]);
 
   return (
     <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1, backgroundColor: colors.background }}>
@@ -484,36 +469,33 @@ function AgentWorkspace({
               <Icon name="add" size={16} color="#FFFFFF" />
               <Text style={[typography.caption, { color: '#FFFFFF', fontWeight: '700' }]}>Build Workflow</Text>
             </Pressable>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Toggle workflow filter"
-              onPress={() => setShowSearch((prev) => !prev)}
-              style={{
-                width: 44,
-                height: 44,
-                borderRadius: 10,
-                backgroundColor: colors.surface,
-                borderWidth: 1,
-                borderColor: showSearch ? colors.brandLight : colors.border,
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}
-            >
-              <Icon name="search-outline" size={17} color={colors.textSecondary} />
-            </Pressable>
           </View>
         </View>
 
-        {showSearch && (
-          <TextInput
-            accessibilityLabel="Filter templates and workflows"
-            value={searchFilter}
-            onChangeText={setSearchFilter}
-            placeholder="Filter workflows by name or capability..."
-            placeholderTextColor={colors.textMuted}
-            style={input}
-          />
-        )}
+        <QuickActions
+          definitions={workspace.definitions}
+          definitionsLoading={workspace.definitionsLoading}
+          definitionsError={workspace.definitionsError}
+          runs={workspace.runs}
+          historyLoading={workspace.historyLoading}
+          historyError={workspace.historyError}
+          capabilities={workspace.capabilities}
+          capabilityLoading={workspace.capabilityLoading}
+          capabilityError={workspace.capabilityError}
+          codingEnabled={codingEnabled}
+          configured={workspace.configured}
+          busy={!!busy}
+          deleting={workspace.busy === 'delete'}
+          activeDefinitionId={definition?.id}
+          pendingDelete={pendingDelete}
+          onOpenSaved={openSaved}
+          onRequestDelete={setPendingDelete}
+          onCancelDelete={() => setPendingDelete(null)}
+          onConfirmDelete={(id) => void removeSaved(id)}
+          templates={AGENT_TEMPLATES.filter((template) => codingEnabled || template.mode === 'review')}
+          onUseTemplate={chooseTemplate}
+          onOpenRun={(run) => void workspace.selectRun(run)}
+        />
 
         {!workspace.configured && (
           <View style={[surface, { gap: 4, borderColor: colors.brandMuted }]}>
@@ -526,241 +508,17 @@ function AgentWorkspace({
 
         <AccessGuidanceBanner error={localError || workspace.error || workspace.capabilityError} compact />
 
-        <View
-          onLayout={(event) => { savedLayout.current.column = event.nativeEvent.layout.y; }}
-          style={{ flexDirection: isDesktop ? 'row' : 'column', gap: 12, alignItems: 'stretch' }}
-        >
-            {/* Bento Cell 3: Saved Workflows */}
-            <View onLayout={(e) => { savedLayout.current.cell = e.nativeEvent.layout.y; }} style={[surface, { gap: 8, flex: 1, minWidth: 0 }]}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                <Text accessibilityRole="header" style={[typography.headline, { color: colors.text }]}>
-                  Saved workflows
-                </Text>
-                <InfoTip
-                  title="Saved Workflows"
-                  body="Workflows saved to your account persist across desktop and mobile sessions so you can re-run or customize them anytime."
-                  size={15}
-                />
-              </View>
-              {!!savedMessage && (
-                <Text accessibilityRole="alert" accessibilityLiveRegion="polite" style={[typography.footnote, { color: colors.brandLight }]}>
-                  {savedMessage}
-                </Text>
-              )}
-              {workspace.definitionsLoading ? (
-                <Text style={[typography.caption, { color: colors.textSecondary }]}>Loading saved workflows...</Text>
-              ) : workspace.definitionsError ? (
-                <Text accessibilityRole="alert" style={[typography.caption, { color: colors.statusAlert }]}>
-                  {workspace.definitionsError}
-                </Text>
-              ) : workspace.definitions.length ? (
-                workspace.definitions.map((value) => (
-                  <View
-                    key={value.id}
-                    style={{
-                      padding: 10,
-                      borderRadius: 12,
-                      borderWidth: 1,
-                      borderColor: definition?.id === value.id ? colors.brandLight : colors.border,
-                      backgroundColor: justSavedId === value.id ? colors.brandSubtle : colors.surfaceElevated,
-                      gap: 6,
-                    }}
-                  >
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                      <Pressable
-                        accessibilityRole="button"
-                        accessibilityLabel={`Edit saved workflow ${value.name}`}
-                        disabled={busy}
-                        onPress={() => openSaved(value)}
-                        style={{ flex: 1, minHeight: 44, justifyContent: 'center' }}
-                      >
-                        <Text style={[typography.subhead, { color: colors.text, fontWeight: '600' }]}>{value.name}</Text>
-                        <Text style={[typography.caption, { color: colors.textSecondary, marginTop: 2 }]}>
-                          {value.mode === 'review' ? 'PR review' : 'Coding workflow'} · {value.target.owner}/{value.target.repo}
-                        </Text>
-                        {!!value.description && (
-                          <Text numberOfLines={2} style={[typography.caption, { color: colors.textSecondary, marginTop: 2 }]}>
-                            {value.description}
-                          </Text>
-                        )}
-                      </Pressable>
-                      <Pressable
-                        accessibilityRole="button"
-                        accessibilityLabel={`Delete saved workflow ${value.name}`}
-                        disabled={busy}
-                        onPress={() => setPendingDelete(value.id ?? null)}
-                        style={{ width: 44, minHeight: 44, justifyContent: 'center', alignItems: 'center' }}
-                      >
-                        <Icon name="trash-outline" size={17} color={colors.textSecondary} />
-                      </Pressable>
-                    </View>
-                    {pendingDelete === value.id && (
-                      <View style={{ gap: 6 }}>
-                        <Text style={[typography.caption, { color: colors.textSecondary }]}>
-                          Delete this saved definition? Existing runs will not be cancelled or removed.
-                        </Text>
-                        <Button
-                          title="Confirm delete workflow"
-                          variant="destructive"
-                          loading={workspace.busy === 'delete'}
-                          disabled={busy}
-                          onPress={() => removeSaved(value.id!)}
-                        />
-                        <Button title="Keep saved workflow" variant="ghost" disabled={busy} onPress={() => setPendingDelete(null)} />
-                      </View>
-                    )}
-                  </View>
-                ))
-              ) : (
-                <Text style={[typography.caption, { color: colors.textSecondary }]}>
-                  Save a workflow to edit and reuse it across sessions.
-                </Text>
-              )}
-            </View>
+        {!!savedMessage && (
+          <Text accessibilityRole="alert" accessibilityLiveRegion="polite" style={[typography.footnote, { color: colors.brandLight }]}>
+            {savedMessage}
+          </Text>
+        )}
 
-            {/* Bento Cell 4: Recent Runs */}
-            <View style={[surface, { gap: 8, flex: 1, minWidth: 0 }]}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                <Text accessibilityRole="header" style={[typography.headline, { color: colors.text }]}>
-                  Recent runs
-                </Text>
-                <InfoTip
-                  title="Recent Runs"
-                  body="Execution receipts from past workflow runs. Select any run to inspect its step-by-step output, evidence, and verification status."
-                  size={15}
-                />
-              </View>
-              {workspace.historyLoading ? (
-                <Text style={[typography.caption, { color: colors.textSecondary }]}>Loading runs...</Text>
-              ) : workspace.historyError ? (
-                <Text accessibilityRole="alert" style={[typography.caption, { color: colors.statusAlert }]}>
-                  {workspace.historyError}
-                </Text>
-              ) : workspace.runs.length ? (
-                workspace.runs.map((run) => (
-                  <Pressable
-                    key={run.id}
-                    accessibilityRole="button"
-                    accessibilityLabel={`Inspect run ${run.definition.name}`}
-                    disabled={busy}
-                    onPress={() => void workspace.selectRun(run)}
-                    style={{
-                      minHeight: 54,
-                      padding: 10,
-                      borderRadius: 12,
-                      borderWidth: 1,
-                      borderColor: colors.border,
-                      backgroundColor: colors.surfaceElevated,
-                      flexDirection: 'row',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      gap: 8,
-                    }}
-                  >
-                    <View style={{ flex: 1, minWidth: 0 }}>
-                      <Text numberOfLines={1} style={[typography.subhead, { color: colors.text, fontWeight: '600' }]}>
-                        {run.definition.name}
-                      </Text>
-                      <Text style={[typography.caption, { color: colors.textSecondary }]}>
-                        {displayRunStatus(run.status)}
-                      </Text>
-                    </View>
-                    <Icon name="chevron-forward" size={15} color={colors.textMuted} />
-                  </Pressable>
-                ))
-              ) : (
-                <Text style={[typography.caption, { color: colors.textSecondary }]}>
-                  No execution receipts loaded yet.
-                </Text>
-              )}
-            </View>
-        </View>
-
-        {/* Composer is the primary action; starter workflows remain secondary. */}
+        {/* Composer is the primary action and sits directly under the header. */}
         <View
           onLayout={(event) => { composerY.current = event.nativeEvent.layout.y; }}
           style={{ flexDirection: isDesktop ? 'row-reverse' : 'column-reverse', gap: 16, alignItems: isDesktop ? 'flex-start' : 'stretch' }}
         >
-          {/* Starter workflows */}
-          <View style={{ width: isDesktop ? 330 : '100%', gap: 12 }}>
-            {/* Bento Cell 1: Starter Workflows (Mexas List Style) */}
-            <View style={[surface, { gap: 10 }]}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                  <Text accessibilityRole="header" style={[typography.headline, { color: colors.text }]}>
-                    Start with a workflow
-                  </Text>
-                  <InfoTip
-                    title="Starter Workflows"
-                    body="Tap a template to prefill the composer. Choose a target, adjust the prompt, then use Create workflow to build the plan inline."
-                    size={15}
-                  />
-                </View>
-                <Text style={[typography.caption, { color: colors.brandLight }]}>{filteredTemplates.length} templates</Text>
-              </View>
-              {(isDesktop || showAllTemplates || searchFilter.trim() ? filteredTemplates : filteredTemplates.slice(0, 3)).map((template) => {
-                const active = mode === template.mode && intent === template.intent;
-                return (
-                  <Pressable
-                    key={template.id}
-                    accessibilityRole="button"
-                    accessibilityLabel={`Use ${template.name} template`}
-                    disabled={busy}
-                    onPress={() => chooseTemplate(template.id)}
-                    style={({ pressed }) => ({
-                      padding: 12,
-                      borderRadius: 12,
-                      borderWidth: 1,
-                      borderColor: active ? colors.brandLight : colors.border,
-                      backgroundColor: active ? colors.brandSubtle : colors.surfaceElevated,
-                      opacity: pressed ? 0.82 : 1,
-                      gap: 6,
-                    })}
-                  >
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                      <View
-                        style={{
-                          width: 36,
-                          height: 36,
-                          borderRadius: 10,
-                          backgroundColor: colors.surface,
-                          borderWidth: 1,
-                          borderColor: colors.border,
-                          justifyContent: 'center',
-                          alignItems: 'center',
-                        }}
-                      >
-                        <Icon name={template.icon as IconName} size={17} color={colors.brandLight} />
-                      </View>
-                      <View style={{ flex: 1, minWidth: 0 }}>
-                        <Text numberOfLines={1} style={[typography.subhead, { color: colors.text, fontWeight: '600' }]}>
-                          {template.name}
-                        </Text>
-                        <Text style={[typography.caption, { color: colors.brandLight, fontSize: 10 }]}>
-                          {template.mode === 'review' ? 'REVIEW AGENT' : 'CODING AGENT'} · {template.kinds.length} steps
-                        </Text>
-                      </View>
-                      <Icon name="ellipsis-horizontal" size={15} color={colors.textMuted} />
-                    </View>
-                    {isDesktop && (
-                      <Text numberOfLines={2} style={[typography.caption, { color: colors.textSecondary }]}>
-                        {template.description}
-                      </Text>
-                    )}
-                  </Pressable>
-                );
-              })}
-              {!isDesktop && !searchFilter.trim() && filteredTemplates.length > 3 && (
-                <Button
-                  title={showAllTemplates ? 'Show fewer templates' : `Show all ${filteredTemplates.length} templates`}
-                  variant="ghost"
-                  onPress={() => setShowAllTemplates((value) => !value)}
-                />
-              )}
-            </View>
-
-          </View>
-
           {/* Right Bento Workspace: Prompt Builder, AI Plan Card, Visual Node Canvas & Inspector */}
           <View style={{ flex: 1, width: '100%', minWidth: 0, gap: 14 }}>
             {/* Top Bento Row: Prompt Composer + Conversational AI Plan Card */}
@@ -1194,62 +952,9 @@ function AgentWorkspace({
                   A workflow graph is a plan, not an execution receipt. Runs are processed by the configured backend; existing GitHub checks and tests executed by the coding runner are reported separately.
                 </Text>
               </View>
-            ) : (
-              <EmptyState
-                icon="git-network-outline"
-                title="Your next workflow starts here"
-                message="Choose a target, describe the task and create a workflow, or start from a template."
-              />
-            )}
+            ) : null /* EmptyState: no empty-state card on this page by design (MM-118e). */}
           </View>
         </View>
-
-            {/* Bento Cell 2: Connected Capabilities */}
-            <View style={[surface, { gap: 8 }]}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                <Text accessibilityRole="header" style={[typography.headline, { color: colors.text }]}>
-                  Connected capabilities
-                </Text>
-                <InfoTip
-                  title="Connected Capabilities"
-                  body="Shows live repository permissions and backend execution readiness. Review workflows require GitHub read access + AI consent; coding workflows also require an isolated executor and repository write scope."
-                  size={15}
-                />
-              </View>
-              {workspace.capabilityLoading ? (
-                <Text style={[typography.caption, { color: colors.textSecondary }]}>Checking this repository...</Text>
-              ) : workspace.capabilityError ? (
-                <Text accessibilityRole="alert" style={[typography.caption, { color: colors.statusAlert }]}>
-                  {workspace.capabilityError}
-                </Text>
-              ) : workspace.capabilities ? (
-                <>
-                  <CapabilityLine
-                    title="Analysis runtime"
-                    available={workspace.capabilities.analysis.available}
-                    reason={workspace.capabilities.analysis.reason}
-                  />
-                  {codingEnabled && (
-                    <CapabilityLine
-                      title="Coding executor"
-                      available={workspace.capabilities.coding.available}
-                      reason={workspace.capabilities.coding.reason}
-                    />
-                  )}
-                  <Text style={[typography.caption, { color: colors.textSecondary }]}>
-                    Limits: {workspace.capabilities.limits.maxFiles} changed files · {workspace.capabilities.limits.maxSteps} workflow steps
-                  </Text>
-                </>
-              ) : (
-                <Text style={[typography.caption, { color: colors.textSecondary }]}>
-                  Add a repository target to check the actual model, queue and executor configuration.
-                </Text>
-              )}
-              <Text style={[typography.caption, { color: colors.textSecondary }]}>
-                Coding needs a configured isolated executor and repository write authorization. Existing connection scopes are not silently expanded.
-              </Text>
-              <Button title="Manage workspace connections" variant="ghost" onPress={() => router.push('/(tabs)/settings')} />
-            </View>
 
       </ScrollView>
 
@@ -1427,24 +1132,6 @@ function targetUrl(definition: WorkflowDefinition) {
   return (t.kind ?? 'pull_request') === 'repository'
     ? root
     : `${root}/${t.kind === 'issue' ? 'issues' : 'pull'}/${t.number}`;
-}
-function CapabilityLine({ title, available, reason }: { title: string; available: boolean; reason?: string }) {
-  const { colors, typography } = useTheme();
-  return (
-    <View style={{ gap: 2 }}>
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-        <Icon
-          name={available ? 'checkmark-circle-outline' : 'alert-circle-outline'}
-          size={15}
-          color={available ? colors.statusGood : colors.statusWarning}
-        />
-        <Text style={[typography.caption, { color: available ? colors.statusGood : colors.statusWarning, fontWeight: '700' }]}>
-          {title}: {available ? 'Ready' : 'Needs setup'}
-        </Text>
-      </View>
-      {!!reason && <Text style={[typography.caption, { color: colors.textSecondary }]}>{reason}</Text>}
-    </View>
-  );
 }
 
 function withoutId(definition: WorkflowDefinition): WorkflowDefinition {
