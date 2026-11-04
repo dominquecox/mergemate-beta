@@ -1,12 +1,13 @@
 import React from 'react';
 import { Linking, Text, TouchableOpacity, View } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import type { Card, Lock, Project } from '@mergemate/contracts';
 import type { ApiClient } from '../api/client';
 import { approveRunPath, draftPrUrl, primaryAction, runIdFromBranch, runSummary, safeHttpsUrl, useAgentRun } from './agentRun';
 import { useTheme } from '../context/ThemeContext';
 import { useBrainStyles } from './screens';
 import { CopyDetailsButton } from '../components/CopyDetailsButton';
+import { agentErrorCopy } from './agentErrors';
 
 export interface AgentPanelProps {
   api: ApiClient;
@@ -30,6 +31,10 @@ export function AgentPanel({ api, project, card, lock, onChanged, onLeave }: Age
   const prNumber = watch?.state === 'pr' ? watch.prNumber : run?.status === 'pr_opened' ? run.prNumber : undefined;
   const prLink = (run?.status === 'pr_opened' ? safeHttpsUrl(run.prUrl) : null) ?? (prNumber ? draftPrUrl(project, prNumber) : null);
   const [approveError, setApproveError] = React.useState<string | null>(null);
+  // One tap opens the run: further taps are ignored until this screen is focused again.
+  const [leaving, setLeaving] = React.useState(false);
+  const leavingRef = React.useRef(false);
+  useFocusEffect(React.useCallback(() => { leavingRef.current = false; setLeaving(false); }, []));
   // The run id comes from this screen's run, or else from the card's agent branch, so a reload keeps the way to approve.
   const runId = run?.runId ?? runIdFromBranch(watch?.card.branch ?? card.branch);
   const approve = () => {
@@ -37,9 +42,12 @@ export function AgentPanel({ api, project, card, lock, onChanged, onLeave }: Age
       setApproveError('This run could not be found. Open it from Recent runs on the Workflows page.');
       return;
     }
+    if (leavingRef.current) return;
+    leavingRef.current = true;
+    setLeaving(true);
     setApproveError(null);
     onLeave?.();
-    router.push(approveRunPath(runId));
+    router.push(approveRunPath(runId, project.id));
   };
   const summary = runSummary({
     planning: agent.planning,
@@ -60,7 +68,8 @@ export function AgentPanel({ api, project, card, lock, onChanged, onLeave }: Age
 
   return (
     <View style={styles.section}>
-      {action && !summary?.primary ? (
+      {/* Plan stays available beside "Open the agent run": the server returns the run that is still waiting, or plans afresh. */}
+      {action && (!summary?.primary || (!run && summary.primary.kind === 'approve')) ? (
         <TouchableOpacity
           style={[styles.retryButton, { minHeight: 44, justifyContent: 'center', alignItems: 'center' }]}
           onPress={() => void (action === 'proceed' ? agent.proceed() : agent.plan())}
@@ -69,14 +78,14 @@ export function AgentPanel({ api, project, card, lock, onChanged, onLeave }: Age
           accessibilityLabel={action === 'proceed' ? 'Proceed' : 'Plan with agent'}
           accessibilityState={{ disabled: agent.busy, busy: agent.busy }}
         >
-          <Text style={styles.retryText}>{agent.busy ? 'Working' : action === 'proceed' ? 'Proceed' : 'Plan with agent'}</Text>
+          <Text style={styles.retryText}>{agent.busy ? (action === 'proceed' ? 'Locking the card…' : 'Planning…') : action === 'proceed' ? 'Proceed' : summary?.primary ? 'Plan again' : 'Plan with agent'}</Text>
         </TouchableOpacity>
       ) : null}
 
       {agent.lockedId && !lock ? <Text style={styles.text}>Locked{agent.lockedTitle ? ` "${agent.lockedTitle}"` : ''}. Open that card to plan with the agent.</Text> : null}
       {agent.error ? (
         <>
-          <Text style={styles.errorText} accessibilityRole="alert">{agent.error}</Text>
+          <Text style={styles.errorText} accessibilityRole="alert">{agentErrorCopy(agent.error, agent.errorInfo?.code).message}</Text>
           <CopyDetailsButton report={{ at: new Date(), ...(agent.errorInfo ?? {}), message: agent.error, runId: runId ?? undefined }} />
         </>
       ) : null}
@@ -102,11 +111,12 @@ export function AgentPanel({ api, project, card, lock, onChanged, onLeave }: Age
             <TouchableOpacity
               style={[styles.retryButton, { minHeight: 44, justifyContent: 'center', alignItems: 'center' }]}
               onPress={onPrimary}
-              disabled={summary.primary.kind === 'retry' && agent.busy}
+              disabled={agent.busy || leaving}
+              accessibilityState={{ disabled: agent.busy || leaving, busy: agent.busy || leaving }}
               accessibilityRole={summary.primary.kind === 'open_pr' ? 'link' : 'button'}
               accessibilityLabel={summary.primary.kind === 'open_pr' && prNumber ? `Open draft PR ${prNumber}` : summary.primary.label}
             >
-              <Text style={styles.retryText}>{summary.primary.label}</Text>
+              <Text style={styles.retryText}>{leaving ? 'Opening the run…' : agent.busy && summary.primary.kind === 'retry' ? 'Planning…' : summary.primary.label}</Text>
             </TouchableOpacity>
           ) : null}
           {run?.status === 'failed' ? (

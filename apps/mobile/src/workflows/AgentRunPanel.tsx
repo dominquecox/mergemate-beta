@@ -11,8 +11,9 @@ import { allPatchFilesReviewed } from './patch-review';
 import { diffForPath } from './patch-diff';
 import { PatchDiff } from './PatchDiff';
 import { CopyDetailsButton } from '../components/CopyDetailsButton';
+import { agentErrorCopy } from '../brain/agentErrors';
 
-export function AgentRunPanel({ run, cancelling, passkeyBusy, passkeysAvailable, proposal, onCancel, onRetry, onRegisterPasskey, onApprovePatch, onOpenWebApproval }: { run: WorkflowRun; cancelling: boolean; passkeyBusy:boolean; passkeysAvailable:boolean; proposal:PatchProposalValue|null; onCancel: () => void; onRetry: () => void; onRegisterPasskey:()=>void; onApprovePatch:()=>void; onOpenWebApproval:()=>void }) {
+export function AgentRunPanel({ run, cancelling, passkeyBusy, passkeysAvailable, proposal, onCancel, onRetry, onRegisterPasskey, onApprovePatch, onOpenWebApproval, onPlanAgain, planningAgain = false }: { onPlanAgain?: () => void; planningAgain?: boolean; run: WorkflowRun; cancelling: boolean; passkeyBusy:boolean; passkeysAvailable:boolean; proposal:PatchProposalValue|null; onCancel: () => void; onRetry: () => void; onRegisterPasskey:()=>void; onApprovePatch:()=>void; onOpenWebApproval:()=>void }) {
   const { colors, typography } = useTheme();
   const [expanded, setExpanded] = useState<string[]>([]);
   const [reviewedPatchPaths,setReviewedPatchPaths]=useState<string[]>([]);
@@ -36,7 +37,7 @@ export function AgentRunPanel({ run, cancelling, passkeyBusy, passkeysAvailable,
       <Text style={[typography.caption, { color: colors.textSecondary }]}>{complete} of {run.steps.length} steps finished · {run.definition.target.owner}/{run.definition.target.repo}</Text>
       <Text selectable style={[typography.code, { color: colors.textSecondary, fontSize: 11 }]}>Pinned target commit {run.headSha}</Text>
       <Text selectable style={[typography.caption, { color: colors.textSecondary }]}>Run {run.id}</Text>
-      {!!run.error && <><Text accessibilityRole="alert" style={[typography.footnote, { color: colors.riskHigh }]}>{run.error}</Text><CopyDetailsButton report={{ code: `run_${run.status}`, message: run.error, runId: run.id, step: run.steps.find(step => step.status === 'failed' || step.status === 'blocked')?.title, at: new Date(run.updatedAt) }} /></>}
+      {!!run.error && <><Text accessibilityRole="alert" style={[typography.footnote, { color: colors.riskHigh }]}>{agentErrorCopy(run.error).message}</Text><CopyDetailsButton report={{ code: `run_${run.status}`, message: run.error, runId: run.id, step: run.steps.find(step => step.status === 'failed' || step.status === 'blocked')?.title, at: new Date(run.updatedAt) }} /></>}
       {run.status==='waiting_approval'&&<View style={{gap:10,padding:12,borderRadius:12,backgroundColor:colors.surface,borderWidth:1,borderColor:colors.brandMuted}}>
         <View style={{flexDirection:'row',alignItems:'center',gap:8}}><Icon name="finger-print-outline" size={20} color={colors.brandLight}/><Text style={[typography.subhead,{color:colors.text,fontWeight:'700'}]}>Approve the exact generated patch</Text></View>
         {proposal?<>
@@ -57,9 +58,10 @@ export function AgentRunPanel({ run, cancelling, passkeyBusy, passkeysAvailable,
           </View>;})}</View>
           <Text accessibilityLiveRegion="polite" style={[typography.caption,{color:patchReviewed?colors.riskLow:colors.textSecondary}]}>{reviewedPatchPaths.length} of {proposal.changes.length} exact files inspected</Text>
         </>:<Text style={[typography.footnote,{color:colors.textSecondary}]}>Loading the patch contents and binding...</Text>}
-        {passkeysAvailable?<View style={{gap:8}}><Button title="Approve exact patch" disabled={!patchReviewed||passkeyBusy} loading={passkeyBusy} onPress={onApprovePatch}/><Button title="Register a passkey" variant="secondary" disabled={passkeyBusy} onPress={onRegisterPasskey}/></View>:<Button title="Open web app to inspect and approve" disabled={!proposal} onPress={onOpenWebApproval}/>}<Text style={[typography.caption,{color:colors.textSecondary}]}>{copy.note}</Text>
+        {passkeysAvailable?<View style={{gap:8}}><Button title={passkeyBusy?"Approving and opening the draft PR…":"Approve exact patch"} disabled={!patchReviewed||passkeyBusy} loading={passkeyBusy} onPress={onApprovePatch}/><Button title="Register a passkey" variant="secondary" disabled={passkeyBusy} onPress={onRegisterPasskey}/></View>:<Button title="Open web app to inspect and approve" disabled={!proposal} onPress={onOpenWebApproval}/>}<Text style={[typography.caption,{color:colors.textSecondary}]}>{copy.note}</Text>
       </View>}
-      {isRunActive(run.status) ? <Button title="Cancel run" variant="secondary" loading={cancelling} onPress={onCancel} /> : ['failed','blocked','cancelled'].includes(run.status) ? <Button title="Review and retry workflow" variant="secondary" onPress={onRetry} /> : null}
+      {onPlanAgain && ['cancelled','blocked'].includes(run.status) && !run.error ? <Text style={[typography.footnote, { color: colors.textSecondary }]}>This run was stopped before a draft PR was opened. Plan again to get a fresh patch.</Text> : null}
+      {isRunActive(run.status) ? <Button title="Cancel run" variant="secondary" loading={cancelling} onPress={onCancel} /> : ['failed','blocked','cancelled'].includes(run.status) && onPlanAgain ? <Button title={planningAgain ? 'Planning...' : 'Plan again'} loading={planningAgain} disabled={planningAgain} onPress={onPlanAgain} /> : ['failed','blocked','cancelled'].includes(run.status) ? <Button title="Review and retry workflow" variant="secondary" onPress={onRetry} /> : null}
     </View>
     {run.steps.map((step, index) => {
       const open = expanded.includes(step.id);

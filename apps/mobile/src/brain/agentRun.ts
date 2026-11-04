@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { BrainRunResponse, Card, Lock, Project } from '@mergemate/contracts';
 import type { ApiClient } from '../api/client';
+import { agentErrorCopy } from './agentErrors';
 import { errorDetailsOf, type ErrorDetails } from '../api/error-details';
 
 export const POLL_INTERVAL_MS = 5000;
@@ -22,7 +23,9 @@ export function safeHttpsUrl(url: string | undefined): string | null {
 export const draftPrUrl = (project: Pick<Project, 'owner' | 'repo'>, prNumber: number): string =>
   `https://github.com/${encodeURIComponent(project.owner)}/${encodeURIComponent(project.repo)}/pull/${prNumber}`;
 
-export const approveRunPath = (runId: string): string => `/workflows?run=${encodeURIComponent(runId)}`;
+/** The run receipt. From a board card it also carries the board, so the receipt can return there and plan again. */
+export const approveRunPath = (runId: string, projectId?: string): string =>
+  `/workflows?run=${encodeURIComponent(runId)}${projectId ? `&from=board&project=${encodeURIComponent(projectId)}` : ''}`;
 
 /** The run a card's agent branch belongs to: `mergemate-agent/<runId>`. Anything else names no run. */
 export function runIdFromBranch(branch: string | null | undefined): string | null {
@@ -161,21 +164,21 @@ export function runSummary(input: {
 }): RunSummary | null {
   const { run } = input;
   if (input.planning && !run) {
-    return { heading: 'Planning', tone: 'info', summary: 'The agent is reading the repository and preparing a patch.', files: [], branch: null, primary: null };
+    return { heading: 'Planning', tone: 'info', summary: 'The agent is reading the repo and writing a patch. This takes about a minute.', files: [], branch: null, primary: null };
   }
   if (!run) {
     if (!input.resumableBranch) return null;
-    return { heading: 'Agent run', tone: 'info', summary: 'Open the run to see where it stands and approve the patch if it is waiting.', files: [], branch: input.resumableBranch, primary: { kind: 'approve', label: 'Open the agent run' } };
+    return { heading: 'Agent run', tone: 'info', summary: 'This card has an agent run. Open it to approve the patch, or plan again if it was cancelled or failed.', files: [], branch: input.resumableBranch, primary: { kind: 'approve', label: 'Open the agent run' } };
   }
   const branch = input.watchBranch ?? run.branch ?? null;
   if (input.prNumber) {
     return { heading: `Draft PR #${input.prNumber}`, tone: 'good', summary: 'Merging stays with you on GitHub.', files: run.files, branch, primary: input.prLink ? { kind: 'open_pr', label: 'Open PR' } : null };
   }
   if (run.status === 'failed') {
-    return { heading: 'Failed', tone: 'bad', summary: run.message ?? run.summary, files: [], branch: null, primary: { kind: 'retry', label: 'Retry' } };
+    return { heading: 'Failed', tone: 'bad', summary: agentErrorCopy(run.message ?? run.summary).message, files: [], branch: null, primary: { kind: 'retry', label: 'Plan again' } };
   }
   if (run.status === 'no_change') {
     return { heading: 'No change needed', tone: 'info', summary: run.summary, files: [], branch: null, primary: null };
   }
-  return { heading: 'Patch ready', tone: 'info', summary: run.summary || 'Approve the exact patch with a passkey to open a draft PR.', files: run.files, branch, primary: { kind: 'approve', label: 'Approve the patch' } };
+  return { heading: 'Patch ready', tone: 'info', summary: run.summary || 'Approve it to open a draft PR.', files: run.files, branch, primary: { kind: 'approve', label: 'Approve the patch' } };
 }

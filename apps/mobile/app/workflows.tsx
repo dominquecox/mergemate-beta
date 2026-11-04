@@ -39,15 +39,19 @@ import {
   isRepositoryPickerTarget,
   sameTarget,
   isRunActive,
+  isBoardCardRun,
   type AgentMode,
 } from '../src/workflows/agent-model';
+import { approveRunPath } from '../src/brain/agentRun';
 
 export default function AgentWorkflowsScreen() {
   const { user, isDemo } = useAuth();
-  const params = useLocalSearchParams<{ target?: string; mode?: string; template?: string; run?:string }>();
+  const params = useLocalSearchParams<{ target?: string; mode?: string; template?: string; run?:string; from?: string; project?: string }>();
   const target = typeof params.target === 'string' && targetFromUrl(params.target) ? params.target : '';
   const templateParam = typeof params.template === 'string' && AGENT_TEMPLATES.some((t) => t.id === params.template) ? params.template : '';
   const initialRunId=workflowRunParam(params.run);
+  // Opened from a board card: the receipt returns to the board and can plan the card again.
+  const boardProjectId = params.from === 'board' && typeof params.project === 'string' && /^[A-Za-z0-9_-]{1,128}$/.test(params.project) ? params.project : '';
   const mode: AgentMode =
     templateParam
       ? AGENT_TEMPLATES.find((t) => t.id === templateParam)!.mode
@@ -63,6 +67,7 @@ export default function AgentWorkflowsScreen() {
       initialMode={mode}
       initialTemplateId={templateParam}
       initialRunId={initialRunId}
+      boardProjectId={boardProjectId}
     />
   ) : (
     <LoadingState title="Checking your session..." message="Workflow runs belong to your account." />
@@ -76,6 +81,7 @@ function AgentWorkspace({
   initialMode,
   initialTemplateId,
   initialRunId,
+  boardProjectId,
 }: {
   account: string;
   isDemo: boolean;
@@ -83,12 +89,32 @@ function AgentWorkspace({
   initialMode: AgentMode;
   initialTemplateId: string;
   initialRunId:string;
+  boardProjectId:string;
 }) {
   const { colors, typography, radius } = useTheme();
   const { isDesktop } = useLayout();
   const { aiConsentGranted, needsReview, pending: consentPending } = useConsent();
   const router = useRouter();
   const flags = useFeatureFlags();
+  // Board runs: "Back to board" and "Plan again" replace the PR builder actions. One tap only; the lock resets after.
+  const [planAgainBusy, setPlanAgainBusy] = useState(false);
+  const [planAgainError, setPlanAgainError] = useState('');
+  const planAgainLock = useRef(false);
+  const backToBoard = () => (boardProjectId && router.canGoBack() ? router.back() : router.replace('/(tabs)/brain'));
+  const planAgain = async () => {
+    if (!boardProjectId) { backToBoard(); return; }
+    if (planAgainLock.current) return;
+    planAgainLock.current = true; setPlanAgainBusy(true); setPlanAgainError('');
+    try {
+      const res = await api.runBrain(boardProjectId);
+      if (res.status === 'running' && res.runId) router.replace(approveRunPath(res.runId, boardProjectId));
+      else setPlanAgainError(res.message ?? res.summary);
+    } catch (cause) {
+      setPlanAgainError(toUserMessage(cause, 'Could not plan the card again. Open it from the board.'));
+    } finally {
+      planAgainLock.current = false; setPlanAgainBusy(false);
+    }
+  };
   const starterTemplate = AGENT_TEMPLATES.find((t) => t.id === initialTemplateId)
     ?? AGENT_TEMPLATES.find((t) => t.id === (initialMode === 'code_fix' ? 'fix_issue' : 'review'))
     ?? AGENT_TEMPLATES[0]!;
@@ -823,7 +849,11 @@ function AgentWorkspace({
 
             {workspace.selectedRun ? (
               <View ref={runPanelRef} style={{ gap: 14 }}>
-                <Button title="Back to workflow builder" variant="ghost" disabled={busy} onPress={workspace.clearRun} />
+                {isBoardCardRun(workspace.selectedRun) ? (
+                  <Button title="Back to board" variant="ghost" disabled={planAgainBusy} onPress={backToBoard} />
+                ) : (
+                  <Button title="Back to workflow builder" variant="ghost" disabled={busy} onPress={workspace.clearRun} />
+                )}
                 <AgentRunPanel
                   run={workspace.selectedRun}
                   cancelling={workspace.busy === 'cancel'}
@@ -832,11 +862,15 @@ function AgentWorkspace({
                   proposal={workspace.patchProposal}
                   onCancel={() => void workspace.cancel()}
                   onRetry={retry}
+                  onPlanAgain={isBoardCardRun(workspace.selectedRun) ? () => void planAgain() : undefined}
+                  planningAgain={planAgainBusy}
                   onRegisterPasskey={()=>void workspace.registerPasskey()}
                   onApprovePatch={()=>void workspace.approvePatch()}
                   onOpenWebApproval={()=>void Linking.openURL(workflowApprovalUrl(webAppOrigin(apiMode),workspace.selectedRun!.id))}
                 />
-                {!isRunActive(workspace.selectedRun.status) && (
+                {planAgainError ? <Text accessibilityRole="alert" style={[typography.footnote, { color: colors.riskHigh }]}>{planAgainError}</Text> : null}
+                {/* A board run is not a PR workflow: it never goes back into the builder. */}
+                {!isRunActive(workspace.selectedRun.status) && !isBoardCardRun(workspace.selectedRun) && (
                   <Button title="Use this workflow again" variant="secondary" disabled={busy} onPress={retry} />
                 )}
               </View>
