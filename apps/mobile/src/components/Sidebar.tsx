@@ -149,7 +149,7 @@ export function Sidebar() {
       <Link href="/workflows" asChild>
         <Pressable
           accessibilityRole="link"
-          accessibilityLabel="Agent workflows"
+          accessibilityLabel="Workflows"
           style={StyleSheet.flatten({
             minHeight: 44,
             marginTop: 12,
@@ -167,7 +167,7 @@ export function Sidebar() {
           <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
             <Icon name="git-network-outline" size={18} color={segments[0] === "workflows" ? "#FFFFFF" : colors.brandLight} />
             <Text style={[typography.subhead, { color: segments[0] === "workflows" ? "#FFFFFF" : colors.brandLight, fontWeight: "600" }]}>
-              Agent workflows
+              Workflows
             </Text>
           </View>
           <Icon name="add-circle-outline" size={16} color={segments[0] === "workflows" ? "#FFFFFF" : colors.brandLight} />

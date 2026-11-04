@@ -111,8 +111,8 @@ export function InboxOverview({ count, needsReview, items = [] }: InboxOverviewP
       run: () => router.push("/(tabs)/triage"),
     },
     {
-      label: "Agents",
-      detail: "Visual node workflows",
+      label: "Workflows",
+      detail: "Visual agent workflows",
       icon: "git-network-outline",
       help: "Open the Agent Workflow Studio to build, customize, and execute multi-step review and coding workflows.",
       run: () => router.push("/workflows"),

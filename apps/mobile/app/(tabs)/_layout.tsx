@@ -1,6 +1,6 @@
 import React from "react";
 import { Platform } from "react-native";
-import { Tabs } from "expo-router";
+import { Tabs, useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "../../src/context/ThemeContext";
 import { useAlerts } from "../../src/context/AlertsContext";
@@ -14,7 +14,9 @@ export default function TabsLayout() {
   // On desktop the sidebar is the navigation, so the bottom tab bar goes away.
   const { isDesktop } = useLayout();
   const insets = useSafeAreaInsets();
-  const bottomInset = Platform.OS === "web" ? 0 : insets.bottom;
+  const router = useRouter();
+  // On iPhone the home indicator overlaps the bar; the web build reads it from env(safe-area-inset-bottom).
+  const bottomInset = insets.bottom;
 
   return (
     <Tabs
@@ -34,7 +36,7 @@ export default function TabsLayout() {
               marginHorizontal: 12,
               marginBottom: Platform.OS === "web" ? 12 : 4,
               paddingHorizontal: 6,
-              height: (Platform.OS === "web" ? 72 : 60) + bottomInset,
+              height: (Platform.OS === "web" ? 76 : 62) + bottomInset,
               paddingBottom: (Platform.OS === "web" ? 12 : 6) + bottomInset,
               paddingTop: 8,
             },
@@ -47,9 +49,10 @@ export default function TabsLayout() {
           lineHeight: Math.ceil((typography.caption.fontSize ?? 12) * 1.4),
           paddingBottom: 2,
         },
+        tabBarItemStyle: { minHeight: 44 },
       }}
     >
-      {NAV_ITEMS.map((item) => (
+      {NAV_ITEMS.flatMap((item) => [
         <Tabs.Screen
           key={item.name}
           name={item.name}
@@ -67,8 +70,28 @@ export default function TabsLayout() {
               <Icon name={focused ? item.iconActive : item.icon} size={22} color={color as string} />
             ),
           }}
-        />
-      ))}
+        />,
+        ...(item.name === "triage"
+          ? [
+              // Workflows lives at /workflows (shared with desktop and deep links); this tab opens it.
+              <Tabs.Screen
+                key="workflows-tab"
+                name="workflows-tab"
+                options={{
+                  title: "Workflows",
+                  tabBarAccessibilityLabel: "Workflows tab",
+                  tabBarIcon: ({ color }) => <Icon name="git-network-outline" size={22} color={color as string} />,
+                }}
+                listeners={{
+                  tabPress: (event) => {
+                    event.preventDefault();
+                    router.push("/workflows");
+                  },
+                }}
+              />,
+            ]
+          : []),
+      ])}
     </Tabs>
   );
 }
