@@ -8,8 +8,8 @@ import {Button} from "../../src/components/Button";
 import {useFeatureFlags} from "../../src/hooks/useFeatureFlags";
 import {ReadoutControls} from "../../src/components/ReadoutControls";
 import {inboxNarration} from "../../src/readout/text";
-import React, { useState, useRef,useEffect,useCallback } from "react";
-import {AppState,Platform, View, FlatList, RefreshControl, TouchableOpacity, Pressable, StyleSheet } from "react-native";
+import React, { useState, useRef,useEffect,useCallback,useMemo } from "react";
+import {AppState,Platform, View, FlatList, RefreshControl, ScrollView, TouchableOpacity, Pressable, StyleSheet } from "react-native";
 import { androidRipple } from "../../src/platform/android";
 import { Text } from "../../src/components/Text";
 import { useRouter,useFocusEffect } from "expo-router";
@@ -26,6 +26,9 @@ import { ErrorState } from "../../src/components/ErrorState";
 import { LoadingState } from "../../src/components/LoadingState";
 import { Icon } from "../../src/components/Icon";
 import { useLayout } from "../../src/layout/useLayout";
+import { CompactControl } from "../../src/components/CompactControl";
+import { controlDensity } from "../../src/theme";
+import { useTopBarActionSetters } from "../../src/context/TopBarActionsContext";
 
 import { usePagedList } from "../../src/hooks/usePagedList";
 import { attentionFirst, groupByRepo, type InboxRow } from "../../src/workspace/inboxGroups";
@@ -53,6 +56,8 @@ function InboxWorkspace({initialFilter}:{initialFilter:NotificationFilter}) {
   const flags=useFeatureFlags();
   const { colors, typography, spacing, radius } = useTheme();
   const { isDesktop } = useLayout();
+  const density = controlDensity[isDesktop ? "desktop" : "narrow"];
+  const {setActions:setTopBarActions,clearActions:clearTopBarActions}=useTopBarActionSetters();
 
   const {isDemo,user}=useAuth();
   const { syncItems } = useAlerts();
@@ -66,8 +71,11 @@ function InboxWorkspace({initialFilter}:{initialFilter:NotificationFilter}) {
   useEffect(()=>{const version=view.current,generation=undoGeneration.current;api.getInboxUndo().then(saved=>{if(version===view.current&&generation===undoGeneration.current&&saved)setUndoItem(saved);},()=>{});},[]);
   const items=sourceItems.filter(item=>{const removed=hidden[item.id];return !removed||Date.parse(item.updatedAt)>Date.parse(removed.revision)||(removed.until!==undefined&&removed.until<=Date.now());}).sort((a,b)=>Date.parse(b.updatedAt)-Date.parse(a.updatedAt)||(a.id<b.id?-1:a.id>b.id?1:0));
   useEffect(()=>{if(filter==="all"&&sourceItems.length>0)syncItems(items);},[filter,items,sourceItems.length,syncItems]);
-  const [grouped,setGrouped]=useState(false);
+  const [grouped,setGrouped]=useState(false),[groupMenuOpen,setGroupMenuOpen]=useState(false);
   const rows:InboxRow[]=grouped?groupByRepo(items):attentionFirst(items);
+  const needsYouCount=items.filter(item=>item.kind==="review").length;
+  const fyiCount=items.filter(item=>item.kind==="mention").length;
+  const mineCount=items.filter(item=>item.kind==="mine").length;
   const persist=(next:NotificationFilter)=>{
     if(isDemo)return;setPrefSaving(true);setPrefMessage("");const version=view.current;
     preferenceQueue.current=preferenceQueue.current.catch(()=>{}).then(async()=>{if(version!==view.current)return;try{await api.setInboxPreference(next);if(version===view.current){setPrefError(false);setPrefMessage("Filter saved for next time.");}}catch{if(version===view.current)setPrefError(true);}finally{if(version===view.current)setPrefSaving(false);}});
@@ -138,6 +146,15 @@ function InboxWorkspace({initialFilter}:{initialFilter:NotificationFilter}) {
   };
   useEffect(()=>()=>{for(const node of tabNodes.current.values())node.onkeydown=null;tabNodes.current.clear();},[]);
 
+  // Keyed on the narration text: `items` is a new array every render, and a new element would re-run the focus effect.
+  const narration=inboxNarration(items).join("\n");
+  const inboxReadout=useMemo(()=><ReadoutControls variant="toolbar" label="Inbox overview" sentences={narration?narration.split("\n"):[]}/>,[narration]);
+  useFocusEffect(useCallback(()=>{
+    if(Platform.OS!=="web"||isDesktop)return;
+    setTopBarActions(inboxReadout);
+    return clearTopBarActions;
+  },[clearTopBarActions,inboxReadout,isDesktop,setTopBarActions]));
+
   const navigateToPr = (item: Notification) => {
     const parts = item.repo.split("/");
     const owner = parts[0] || "owner";
@@ -151,7 +168,7 @@ function InboxWorkspace({initialFilter}:{initialFilter:NotificationFilter}) {
         title="Inbox"
         rightAction={
           <View style={styles.headerIcons}>
-            <ReadoutControls variant="toolbar" label="Inbox overview" sentences={inboxNarration(items)}/>
+            {(Platform.OS!=="web"||isDesktop)&&<ReadoutControls variant="toolbar" label="Inbox overview" sentences={inboxNarration(items)}/>}
             <TouchableOpacity
               onPress={onRefresh}
               disabled={isRefreshing}
@@ -199,7 +216,7 @@ function InboxWorkspace({initialFilter}:{initialFilter:NotificationFilter}) {
             accessibilityRole="button"
             accessibilityLabel={undoItem.item?`Undo moving ${undoItem.item.title}`:"Undo last Inbox change"}
           >
-            <Text style={[typography.footnote, { color: colors.brandLight, fontWeight: "700" }]}>Undo</Text>
+            <Text style={[typography.footnote, { color: colors.brandLight, fontWeight: "600" }]}>Undo</Text>
           </TouchableOpacity>
         </View>
       )}
@@ -218,9 +235,14 @@ function InboxWorkspace({initialFilter}:{initialFilter:NotificationFilter}) {
       <AccessGuidanceBanner error={error} compact />
 
       {/* The Inbox opens on filters and counts, then the PR list. Voice controls live in the top bar. */}
-      <View style={{ flexDirection: isDesktop ? "row" : "column", alignItems: isDesktop ? "center" : "stretch", justifyContent: "space-between", gap: 8, marginBottom: 10 }}>
-      <View style={{ flexDirection: "row", alignItems: "center", gap: 6, flexWrap: "wrap", flex: isDesktop ? 1 : undefined, justifyContent: isDesktop ? "flex-end" : "space-between" }}>
-        <View style={[styles.filterBar, { flex: isDesktop ? undefined : 1, minWidth: isDesktop ? 260 : 210, borderBottomWidth: 0, paddingHorizontal: 3, paddingVertical: 2, backgroundColor: colors.surface, borderColor: colors.border, borderWidth: 1, borderRadius: radius.sm }]} accessibilityRole="tablist">
+      <View style={[styles.inboxToolbar, isDesktop && styles.inboxToolbarDesktop]}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={styles.filterScroller}
+          contentContainerStyle={styles.filterRow}
+          accessibilityRole="tablist"
+        >
           {(["all", "review", "mentions", "mine"] as NotificationFilter[]).map((tab) => {
             const isSelected = filter === tab;
             let label = "All";
@@ -229,71 +251,90 @@ function InboxWorkspace({initialFilter}:{initialFilter:NotificationFilter}) {
             if (tab === "mine") label = "Mine";
 
             return (
-              <TouchableOpacity
+              <Pressable
                 key={tab}
                 ref={node=>bindFilterTab(tab,node,isSelected)}
                 aria-selected={isSelected}
                 onPress={() => selectFilter(tab)}
-                style={[
-                  styles.filterTab,
-                  {
-                    backgroundColor: isSelected ? colors.brandSubtle : "transparent",
-                    borderRadius: 6,
-                  },
+                style={({pressed})=>[
+                  styles.filterHit,
+                  {minHeight:density.chip.hitHeight,opacity:pressed?0.82:1},
                 ]}
                 accessibilityRole="tab"
                 accessibilityLabel={tab === "review" ? "Needs review pull requests" : `${label} pull requests`}
                 accessibilityState={{ selected: isSelected }}
               >
-                <Text numberOfLines={1} ellipsizeMode="tail"
-                  style={[
-                    typography.caption,
-                    {
-                      fontSize: 11,
-                      color: isSelected ? colors.brandLight : colors.textSecondary,
-                      fontWeight: isSelected ? "700" : "500",
-                    },
-                  ]}
-                >
-                  {label}
-                </Text>
-              </TouchableOpacity>
+                <View style={{height:density.chip.visualHeight,paddingHorizontal:density.chip.paddingHorizontal,borderRadius:radius.full,borderWidth:1,borderColor:isSelected?colors.brandMuted:colors.border,backgroundColor:isSelected?colors.brandSubtle:colors.surface,alignItems:"center",justifyContent:"center"}} pointerEvents="none">
+                  <Text numberOfLines={1} ellipsizeMode="tail"
+                    style={[
+                      typography.caption,
+                      {
+                        color: isSelected ? colors.brandLight : colors.textSecondary,
+                        fontWeight: isSelected ? "600" : "500",
+                      },
+                    ]}
+                  >
+                    {label}
+                  </Text>
+                </View>
+              </Pressable>
             );
           })}
-        </View>
+        </ScrollView>
 
-        <TouchableOpacity onPress={()=>setGrouped(value=>!value)} accessibilityRole="switch" accessibilityLabel="Group by repository" accessibilityState={{checked:grouped}} style={{flexDirection:'row',alignItems:'center',gap:5,minHeight:32,paddingHorizontal:10,paddingVertical:4,borderRadius:radius.sm,borderWidth:1,borderColor:grouped?colors.brandMuted:colors.border,backgroundColor:grouped?colors.brandSubtle:colors.surface}}><Icon name="folder-outline" size={13} color={grouped?colors.brandLight:colors.textSecondary}/><Text style={[typography.caption,{fontSize:11,color:grouped?colors.brandLight:colors.textSecondary,fontWeight:'600'}]}>{grouped?"Grouped":"Group by repo"}</Text></TouchableOpacity>
+        <View style={styles.inboxMetaRow}>
+          <Text
+            style={[typography.caption,{color:colors.textSecondary,fontWeight:"500"}]}
+            accessibilityLabel={`Summary: ${needsYouCount} needs you, ${fyiCount} FYI, ${mineCount} mine`}
+          >
+            <Text style={{color:needsYouCount>0?colors.statusWarning:colors.statusGood,fontWeight:"600"}}>{needsYouCount} needs you</Text>
+            {` · ${fyiCount} FYI · ${mineCount} mine`}
+          </Text>
 
-        {/* Compact Summary Strip */}
-        <View
-          style={[styles.summaryStrip, { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.sm, paddingVertical: 4, paddingHorizontal: 10, marginBottom: 0, gap: 10 }]}
-          accessibilityLabel={`Summary: ${items.filter((i) => i.kind === "review").length} needs you, ${items.filter((i) => i.kind === "mention").length} FYI, ${items.filter((i) => i.kind === "mine").length} mine`}
-        >
-          <View style={styles.stripCol}>
-            <Text style={[typography.caption, { color: items.some((i) => i.kind === "review") ? colors.statusWarning : colors.statusGood, fontWeight: "700", fontSize: 12 }]}>
-              {items.filter((i) => i.kind === "review").length}
-            </Text>
-            <Text style={[typography.caption, { color: colors.textSecondary, fontSize: 10 }]}>Needs you</Text>
-          </View>
-          <View style={styles.stripCol}>
-            <Text style={[typography.caption, { color: colors.statusInfo, fontWeight: "700", fontSize: 12 }]}>
-              {items.filter((i) => i.kind === "mention").length}
-            </Text>
-            <Text style={[typography.caption, { color: colors.textSecondary, fontSize: 10 }]}>FYI</Text>
-          </View>
-          <View style={styles.stripCol}>
-            <Text style={[typography.caption, { color: colors.text, fontWeight: "700", fontSize: 12 }]}>
-              {items.filter((i) => i.kind === "mine").length}
-            </Text>
-            <Text style={[typography.caption, { color: colors.textSecondary, fontSize: 10 }]}>Mine</Text>
-          </View>
+          {isDesktop ? (
+            <CompactControl
+              onPress={()=>setGrouped(value=>!value)}
+              isDesktop
+              variant="secondary"
+              selected={grouped}
+              accessibilityRole="switch"
+              accessibilityLabel="Group by repository"
+            >
+              <Icon name="folder-outline" size={16} color={grouped?colors.brandLight:colors.textSecondary}/>
+              <Text style={[typography.caption,{color:grouped?colors.brandLight:colors.textSecondary,fontWeight:"600"}]}>{grouped?"Grouped":"Group by repo"}</Text>
+            </CompactControl>
+          ) : (
+            <View style={styles.groupMenuAnchor}>
+              <CompactControl
+                onPress={()=>setGroupMenuOpen(open=>!open)}
+                isDesktop={false}
+                variant="icon"
+                selected={groupMenuOpen}
+                accessibilityLabel="More Inbox options"
+              >
+                <Icon name="ellipsis-horizontal" size={density.icon.iconSize} color={colors.textSecondary}/>
+              </CompactControl>
+              {groupMenuOpen&&(
+                <Pressable
+                  onPress={()=>{setGrouped(value=>!value);setGroupMenuOpen(false);}}
+                  accessibilityRole="switch"
+                  accessibilityLabel="Group by repository"
+                  accessibilityState={{checked:grouped}}
+                  style={({pressed})=>[styles.groupMenu,{backgroundColor:colors.surfaceElevated,borderColor:colors.border,opacity:pressed?0.86:1}]}
+                >
+                  <Icon name="folder-outline" size={16} color={grouped?colors.brandLight:colors.textSecondary}/>
+                  <Text style={[typography.caption,{color:grouped?colors.brandLight:colors.text,fontWeight:"600"}]}>Group by repository</Text>
+                  <Icon name={grouped?"checkmark-circle":"ellipse-outline"} size={16} color={grouped?colors.statusGood:colors.textMuted}/>
+                </Pressable>
+              )}
+            </View>
+          )}
         </View>
-      </View>
       </View>
 
 </>}
           ListFooterComponent={hasMore || error?<TouchableOpacity disabled={isRefreshing} onPress={()=>void more()} accessibilityRole="button" style={{padding:16,minHeight:44}}><Text style={{color:colors.brandLight}}>{isRefreshing?'Loading…':error?'Retry loading pull requests':'Load more pull requests'}</Text></TouchableOpacity>:undefined}
-          renderItem={({item:row})=>row.type==='header'?(<View testID={`inbox-repo-${row.repo}`} accessibilityRole="header" accessibilityLabel={`${row.repo}, ${row.count} pull request${row.count===1?'':'s'}`} style={{flexDirection:'row',alignItems:'center',gap:8,marginBottom:8,marginTop:4}}><Icon name="folder-outline" size={14} color={colors.brandLight}/><Text style={[typography.subhead,{color:colors.text,fontWeight:'700',flexShrink:1}]}>{row.repo}</Text><Text style={[typography.caption,{color:colors.textSecondary}]}>{row.count}</Text></View>):row.type==='section'?(<View style={{flexDirection:'row',alignItems:'center',gap:8,marginBottom:8,marginTop:12}} accessibilityRole="header" accessibilityLabel={row.label}><Text style={[typography.subhead,{color:colors.brandLight,fontWeight:'600',fontSize:14}]}>{row.label}</Text></View>):((item:Notification)=>(
+          renderItem={({item:row})=>row.type==='header'?(<View testID={`inbox-repo-${row.repo}`} accessibilityRole="header" accessibilityLabel={`${row.repo}, ${row.count} pull request${row.count===1?'':'s'}`} style={{flexDirection:'row',alignItems:'center',gap:8,marginBottom:8,marginTop:4}}><Icon name="folder-outline" size={14} color={colors.brandLight}/><Text style={[typography.subhead,{color:colors.text,fontWeight:'600',flexShrink:1}]}>{row.repo}</Text><Text style={[typography.caption,{color:colors.textSecondary}]}>{row.count}</Text></View>):row.type==='section'?(<View style={{flexDirection:'row',alignItems:'center',gap:8,marginBottom:8,marginTop:12}} accessibilityRole="header" accessibilityLabel={row.label}><Text style={[typography.subhead,{color:colors.brandLight,fontWeight:'600',fontSize:14}]}>{row.label}</Text></View>):((item:Notification)=>(
               <View
                 key={item.id}
                 style={[
@@ -378,32 +419,47 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  filterBar: {
-    flexDirection: "row",
-    paddingHorizontal: 6,
-    paddingVertical: 3,
-    borderBottomWidth: 1,
-    gap: 3,
+  inboxToolbar: {
+    gap: 4,
+    marginBottom: 10,
   },
-  filterTab: {
-    flex: 1,
-    minHeight: 44,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
+  inboxToolbarDesktop: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+  },
+  filterScroller: { flexGrow: 0, flexShrink: 1 },
+  filterRow: { flexDirection: "row", gap: 6 },
+  filterHit: {
+    minWidth: 44,
     alignItems: "center",
     justifyContent: "center",
   },
-  summaryStrip: {
-    flexDirection: "row",
-    paddingVertical: 4,
-    paddingHorizontal: 10,
-    borderWidth: 1,
-    marginBottom: 8,
-  },
-  stripCol: {
+  inboxMetaRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 4,
+    justifyContent: "space-between",
+    minHeight: 44,
+    gap: 8,
+  },
+  groupMenuAnchor: {
+    position: "relative",
+    zIndex: 10,
+  },
+  groupMenu: {
+    position: "absolute",
+    right: 0,
+    top: 42,
+    width: 190,
+    minHeight: 44,
+    paddingHorizontal: 12,
+    borderWidth: 1,
+    borderRadius: 8,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 8,
   },
   summaryIcon: {
     marginTop: 2,

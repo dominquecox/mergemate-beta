@@ -6,6 +6,7 @@ import { useAuth } from "../context/AuthContext";
 import { useAlerts } from "../context/AlertsContext";
 import { useFeatureFlags } from "../hooks/useFeatureFlags";
 import { useReducedMotion } from "../hooks/useReducedMotion";
+import { useTopBarActions } from "../context/TopBarActionsContext";
 import { Text } from "./Text";
 import { Icon, type IconName } from "./Icon";
 
@@ -17,6 +18,7 @@ export function TopBar() {
   const { colors, typography } = useTheme();
   const { unreadCount } = useAlerts();
   const flags = useFeatureFlags();
+  const { actions } = useTopBarActions();
   const [menuOpen, setMenuOpen] = useState(false);
   const menuButton = useRef<React.ElementRef<typeof Pressable>>(null);
 
@@ -81,6 +83,7 @@ export function TopBar() {
         <Icon name="menu" size={24} color={colors.text} />
       </Pressable>
       <View style={{ flexDirection: "row", alignItems: "center" }}>
+        {actions}
         {iconButton("file-tray-outline", "Inbox", () => router.push("/(tabs)/inbox"))}
         {iconButton("notifications-outline", "Alerts", () => router.push("/(tabs)/notifications"), unreadCount)}
         {flags.highlight && iconButton("camera-outline", "Highlight screenshot", () => router.push("/highlight"))}

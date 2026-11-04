@@ -17,6 +17,7 @@ import { ConfigErrorScreen, SampleDataBanner, isApiMisconfigured } from "../src/
 import { AppFonts } from "../src/components/AppFonts";
 import { Sidebar } from "../src/components/Sidebar";
 import { TopBar } from "../src/components/TopBar";
+import { TopBarActionsProvider } from "../src/context/TopBarActionsContext";
 import { SIDEBAR_WIDTH, resolveShell, requiresSession } from "../src/layout/breakpoints";
 import { resolveHardwareBackAction, useAndroidBackHandler } from "../src/platform/android";
 import { registerServiceWorker } from "../src/platform/serviceWorker";
@@ -178,7 +179,7 @@ export default function RootLayout() {
         <AuthProvider>
           <ConsentProvider>
             <AlertsProvider>
-              <ReadoutProvider><AppContent /></ReadoutProvider>
+              <ReadoutProvider><TopBarActionsProvider><AppContent /></TopBarActionsProvider></ReadoutProvider>
             </AlertsProvider>
           </ConsentProvider>
         </AuthProvider>

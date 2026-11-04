@@ -42,7 +42,7 @@ export function CompactControl({
       disabled={disabled}
       accessibilityRole={accessibilityRole}
       accessibilityLabel={accessibilityLabel}
-      accessibilityState={accessibilityRole === "tab" || accessibilityRole === "radio" ? { disabled, selected } : { disabled }}
+      accessibilityState={accessibilityRole === "tab" || accessibilityRole === "radio" ? { disabled, selected } : accessibilityRole === "switch" || accessibilityRole === "checkbox" ? { disabled, checked: !!selected } : { disabled }}
       style={({ pressed }) => [
         {
           minHeight: metric.hitHeight,
