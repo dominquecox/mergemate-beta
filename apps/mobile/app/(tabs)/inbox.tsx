@@ -1,5 +1,3 @@
-import { InboxOverview } from "../../src/components/InboxOverview";
-import { InfoTip } from "../../src/components/InfoTip";
 import { AccessGuidanceBanner } from "../../src/components/AccessGuidanceBanner";
 import { useAlerts } from "../../src/context/AlertsContext";
 import * as Crypto from "expo-crypto";
@@ -30,7 +28,16 @@ import { Icon } from "../../src/components/Icon";
 import { useLayout } from "../../src/layout/useLayout";
 
 import { usePagedList } from "../../src/hooks/usePagedList";
-import { groupByRepo, type InboxRow } from "../../src/workspace/inboxGroups";
+import { attentionFirst, groupByRepo, type InboxRow } from "../../src/workspace/inboxGroups";
+
+/** Short "updated" stamp: time today, otherwise month and day. */
+function updatedLabel(iso: string): string {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return "";
+  return date.toDateString() === new Date().toDateString()
+    ? date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+    : date.toLocaleDateString([], { month: "short", day: "numeric" });
+}
 
 export default function InboxScreen(){const {user}=useAuth();return user?<InboxBootstrap key={user.id}/>:<LoadingState title="Loading your inbox..." message="Checking your account."/>;}
 function InboxBootstrap(){
@@ -60,7 +67,7 @@ function InboxWorkspace({initialFilter}:{initialFilter:NotificationFilter}) {
   const items=sourceItems.filter(item=>{const removed=hidden[item.id];return !removed||Date.parse(item.updatedAt)>Date.parse(removed.revision)||(removed.until!==undefined&&removed.until<=Date.now());}).sort((a,b)=>Date.parse(b.updatedAt)-Date.parse(a.updatedAt)||(a.id<b.id?-1:a.id>b.id?1:0));
   useEffect(()=>{if(filter==="all"&&sourceItems.length>0)syncItems(items);},[filter,items,sourceItems.length,syncItems]);
   const [grouped,setGrouped]=useState(false);
-  const rows:InboxRow[]=grouped?groupByRepo(items):items.map(item=>({type:"item",item}));
+  const rows:InboxRow[]=grouped?groupByRepo(items):attentionFirst(items);
   const persist=(next:NotificationFilter)=>{
     if(isDemo)return;setPrefSaving(true);setPrefMessage("");const version=view.current;
     preferenceQueue.current=preferenceQueue.current.catch(()=>{}).then(async()=>{if(version!==view.current)return;try{await api.setInboxPreference(next);if(version===view.current){setPrefError(false);setPrefMessage("Filter saved for next time.");}}catch{if(version===view.current)setPrefError(true);}finally{if(version===view.current)setPrefSaving(false);}});
@@ -144,7 +151,7 @@ function InboxWorkspace({initialFilter}:{initialFilter:NotificationFilter}) {
         title="Inbox"
         rightAction={
           <View style={styles.headerIcons}>
-            <TouchableOpacity onPress={() => router.push("/workflows")} style={styles.iconBtn} accessibilityRole="button" accessibilityLabel="Review playbooks"><Icon name="git-network-outline" size={22} color={colors.brandLight}/></TouchableOpacity>
+            <ReadoutControls variant="toolbar" label="Inbox overview" sentences={inboxNarration(items)}/>
             <TouchableOpacity
               onPress={onRefresh}
               disabled={isRefreshing}
@@ -200,7 +207,7 @@ function InboxWorkspace({initialFilter}:{initialFilter:NotificationFilter}) {
         <FlatList
           ref={listRef}
           onScroll={event=>{if(listActive.current)scrollOffset.current=event.nativeEvent.contentOffset.y;}} scrollEventThrottle={16}
-          key={`${isDesktop?'desktop':'phone'}:${grouped?'grouped':'flat'}`} numColumns={isDesktop&&!grouped?2:1} columnWrapperStyle={isDesktop&&!grouped?{gap:16}:undefined}
+          key={`${isDesktop?'desktop':'phone'}:${grouped?'grouped':'flat'}`}
           data={isLoading?[]:rows}
           ListEmptyComponent={isLoading?<LoadingState title="Loading your inbox..." message="Fetching accessible pull requests and your Inbox state."/>:error?<ErrorState title="Could not load your inbox" message={error} onRetry={hasMore?more:fetchItems}/>:<EmptyState icon="checkmark-done-outline" title={hasMore?"More results are available":"Inbox Zero"} message={hasMore?"No visible items on this page. Load more to continue checking your queue.":"No pull requests need your attention in this view."} actionTitle={hasMore?"Load more pull requests":undefined} onAction={hasMore?more:undefined}/>}
           keyExtractor={row=>row.type==='header'?`repo:${row.repo}`:row.type==='section'?`section:${row.label}`:row.item.id} initialNumToRender={8} maxToRenderPerBatch={8} windowSize={5}
@@ -208,35 +215,10 @@ function InboxWorkspace({initialFilter}:{initialFilter:NotificationFilter}) {
           refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} tintColor={colors.brandLight}/>}
           onEndReached={()=>{if(!error)void more();}} onEndReachedThreshold={0.4}
           ListHeaderComponent={<>
-          <InboxOverview count={items.length} needsReview={items.filter(item=>item.kind==="review").length} items={items}/>
       <AccessGuidanceBanner error={error} compact />
-      <ReadoutControls label="Inbox overview" sentences={inboxNarration(items)}/>
 
-      {/* Sleek Compact Control Toolbar: Section Header + Segmented Filter + Repo Grouping + Live Counts */}
+      {/* The Inbox opens on filters and counts, then the PR list. Voice controls live in the top bar. */}
       <View style={{ flexDirection: isDesktop ? "row" : "column", alignItems: isDesktop ? "center" : "stretch", justifyContent: "space-between", gap: 8, marginBottom: 10 }}>
-      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 6 }}>
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
-          <Text accessibilityRole="header" style={[typography.subhead, { color: colors.text, fontWeight: "700", fontSize: 13 }]}>
-            Upcoming & Active Reviews
-          </Text>
-          <InfoTip
-            title="Upcoming & Active Reviews"
-            body="Filter your queue by All activity, Review requests, @Mentions, or your own PRs. Use Snooze (24h) or Done to keep your workspace clean without altering GitHub state."
-            size={14}
-          />
-        </View>
-        {!isDesktop && (
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Open all workflows"
-            onPress={() => router.push("/workflows")}
-            style={{ flexDirection: "row", alignItems: "center", gap: 3, minHeight: 44, paddingHorizontal: 4 }}
-          >
-            <Text style={[typography.caption, { color: colors.brandLight, fontWeight: "700", fontSize: 11 }]}>Workflows →</Text>
-          </Pressable>
-        )}
-      </View>
-
       <View style={{ flexDirection: "row", alignItems: "center", gap: 6, flexWrap: "wrap", flex: isDesktop ? 1 : undefined, justifyContent: isDesktop ? "flex-end" : "space-between" }}>
         <View style={[styles.filterBar, { flex: isDesktop ? undefined : 1, minWidth: isDesktop ? 260 : 210, borderBottomWidth: 0, paddingHorizontal: 3, paddingVertical: 2, backgroundColor: colors.surface, borderColor: colors.border, borderWidth: 1, borderRadius: radius.sm }]} accessibilityRole="tablist">
           {(["all", "review", "mentions", "mine"] as NotificationFilter[]).map((tab) => {
@@ -311,18 +293,22 @@ function InboxWorkspace({initialFilter}:{initialFilter:NotificationFilter}) {
 
 </>}
           ListFooterComponent={hasMore || error?<TouchableOpacity disabled={isRefreshing} onPress={()=>void more()} accessibilityRole="button" style={{padding:16,minHeight:44}}><Text style={{color:colors.brandLight}}>{isRefreshing?'Loading…':error?'Retry loading pull requests':'Load more pull requests'}</Text></TouchableOpacity>:undefined}
-          renderItem={({item:row})=>row.type==='header'?(<View testID={`inbox-repo-${row.repo}`} accessibilityRole="header" accessibilityLabel={`${row.repo}, ${row.count} pull request${row.count===1?'':'s'}`} style={{flexDirection:'row',alignItems:'center',gap:8,marginBottom:8,marginTop:4}}><Icon name="folder-outline" size={14} color={colors.brandLight}/><Text style={[typography.subhead,{color:colors.text,fontWeight:'700',flexShrink:1}]}>{row.repo}</Text><Text style={[typography.caption,{color:colors.textSecondary}]}>{row.count}</Text></View>):row.type==='section'?(<View style={{flexDirection:'row',alignItems:'center',gap:8,marginBottom:8,marginTop:12}} accessibilityRole="header" accessibilityLabel={row.label}><Text style={[typography.subhead,{color:colors.brandLight,fontWeight:'700',fontSize:15}]}>{row.label}</Text></View>):((item:Notification)=>(
+          renderItem={({item:row})=>row.type==='header'?(<View testID={`inbox-repo-${row.repo}`} accessibilityRole="header" accessibilityLabel={`${row.repo}, ${row.count} pull request${row.count===1?'':'s'}`} style={{flexDirection:'row',alignItems:'center',gap:8,marginBottom:8,marginTop:4}}><Icon name="folder-outline" size={14} color={colors.brandLight}/><Text style={[typography.subhead,{color:colors.text,fontWeight:'700',flexShrink:1}]}>{row.repo}</Text><Text style={[typography.caption,{color:colors.textSecondary}]}>{row.count}</Text></View>):row.type==='section'?(<View style={{flexDirection:'row',alignItems:'center',gap:8,marginBottom:8,marginTop:12}} accessibilityRole="header" accessibilityLabel={row.label}><Text style={[typography.subhead,{color:colors.brandLight,fontWeight:'600',fontSize:14}]}>{row.label}</Text></View>):((item:Notification)=>(
               <View
                 key={item.id}
                 style={[
                   styles.itemCard,
-                  isDesktop && {flex:1,maxWidth:"50%"},
-                  { padding: 12, marginBottom: 10 },
                   {
+                    flexDirection: isDesktop ? "row" : "column",
+                    alignItems: isDesktop ? "center" : "stretch",
+                    gap: isDesktop ? 12 : 4,
+                    paddingVertical: 8,
+                    paddingHorizontal: 12,
+                    marginBottom: 6,
                     backgroundColor: colors.surface,
-                    borderColor: item.risk === "high" ? colors.statusAlert : colors.border,
-                    borderRadius: 12,
-                    borderLeftColor: item.risk === "high" ? colors.statusAlert : colors.brandMuted,
+                    borderColor: colors.border,
+                    borderRadius: 10,
+                    borderLeftColor: item.risk === "high" ? colors.statusAlert : colors.border,
                     borderLeftWidth: item.risk === "high" ? 3 : 1,
                   },
                 ]}
@@ -330,67 +316,45 @@ function InboxWorkspace({initialFilter}:{initialFilter:NotificationFilter}) {
                 <Pressable
                   onPress={() => navigateToPr(item)}
                   android_ripple={androidRipple()}
-                  style={({ pressed }) => [styles.cardMainTouch, pressed && { opacity: 0.85 }]}
+                  style={({ pressed }) => [{ flex: 1, minWidth: 0, minHeight: 44, justifyContent: "center", flexDirection: isDesktop ? "row" : "column", alignItems: isDesktop ? "center" : "stretch", gap: isDesktop ? 12 : 2 }, pressed && { opacity: 0.85 }]}
                   accessibilityRole="button"
                   accessibilityLabel={`Open pull request #${item.number}: ${item.title} in ${item.repo}, ${item.risk || "normal"} risk`}
                 >
-                  <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-                    <View style={{ width: 32, height: 32, borderRadius: 8, backgroundColor: colors.surfaceElevated, borderWidth: 1, borderColor: colors.border, alignItems: "center", justifyContent: "center" }}>
-                      <Icon name="git-pull-request-outline" size={15} color={colors.brandLight} />
-                    </View>
-                    <View style={{ flex: 1, minWidth: 0 }}>
-                      <View style={[styles.cardTop, { gap: 6 }]}>
-                        <Text style={[typography.caption, { color: colors.textMuted, fontFamily: typography.code.fontFamily, flexShrink: 1, fontSize: 11 }]} numberOfLines={1}>
-                          {item.repo} #{item.number}
-                        </Text>
-                        <View style={styles.badgeGroup}>
-                          {item.status && <StatusPill status={item.status} />}
-                          {item.risk && <RiskBadge level={item.risk} compact />}
-                        </View>
-                      </View>
-                      <Text style={[typography.subhead, { color: colors.text, fontWeight: "600", marginTop: 2, fontSize: 13 }]} numberOfLines={1} ellipsizeMode="tail" accessibilityLabel={item.title}>
-                        {item.title}
-                      </Text>
-                    </View>
-                    <Icon name="chevron-forward" size={15} color={colors.textMuted} />
+                  <Text style={[typography.code, { color: colors.textSecondary, width: isDesktop ? 200 : undefined }]} numberOfLines={1}>
+                    {item.repo}#{item.number}
+                  </Text>
+                  <Text style={[typography.subhead, { color: colors.text, flex: isDesktop ? 1 : undefined, minWidth: 0 }]} numberOfLines={isDesktop ? 1 : 2} accessibilityLabel={item.title}>
+                    {item.title}
+                  </Text>
+                  <View style={[styles.badgeGroup, { flexShrink: 0 }]}>
+                    {item.status && <StatusPill status={item.status} />}
+                    {item.risk && <RiskBadge level={item.risk} compact />}
                   </View>
-
-                  {!!item.summaryLine && (
-                    <View style={[styles.summaryRow,{paddingHorizontal:8,paddingVertical:5,backgroundColor:colors.surfaceElevated,borderRadius:8,marginTop:6}]}>
-                      <Icon name="sparkles" size={11} color={colors.brandLight} style={styles.summaryIcon} />
-                      <Text style={[typography.caption, { color: colors.textSecondary, flex: 1, fontSize: 11 }]} numberOfLines={1}>
-                        {item.summaryLine}
-                      </Text>
-                    </View>
-                  )}
-                </Pressable>
-
-                <View style={[styles.cardBottom,{flexWrap:"wrap",gap:8,borderTopColor:colors.border,marginTop:6,paddingTop:6}]}>
-                  <View style={{flexDirection:"row",alignItems:"center",gap:6,flex:1}}>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 6, width: isDesktop ? 170 : undefined }}>
                     <Avatar login={item.author} size={15} />
-                    <Text style={[typography.caption, { color: colors.textMuted, fontSize: 11 }]} numberOfLines={1}>
-                      @{item.author} · {new Date(item.updatedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                    <Text style={[typography.caption, { color: colors.textSecondary, flexShrink: 1 }]} numberOfLines={1}>
+                      @{item.author} · {updatedLabel(item.updatedAt)}
                     </Text>
                   </View>
+                </Pressable>
 
-                  <View style={styles.quickActions}>
-                    <TouchableOpacity
-                      disabled={acting||isDemo} onPress={() => handleSnooze(item)}
-                      style={[styles.actionBtn, { borderColor: colors.border, backgroundColor: colors.surfaceElevated, borderRadius: 6 }]}
-                      accessibilityRole="button"
-                      accessibilityLabel={`Snooze ${item.title}`}
-                    >
-                      <Text style={[typography.caption, { color: colors.textSecondary, fontWeight: "600", fontSize: 11 }]}>Snooze</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      disabled={acting||isDemo} onPress={() => handleDone(item)}
-                      style={[styles.actionBtn, { borderColor: colors.statusGood, backgroundColor: colors.statusGoodBg, borderRadius: 6 }]}
-                      accessibilityRole="button"
-                      accessibilityLabel={`Mark ${item.title} as done`}
-                    >
-                      <Text style={[typography.caption, { color: colors.statusGood, fontWeight: "700", fontSize: 11 }]}>Done</Text>
-                    </TouchableOpacity>
-                  </View>
+                <View style={[styles.quickActions, { alignSelf: isDesktop ? "center" : "flex-end" }]}>
+                  <TouchableOpacity
+                    disabled={acting||isDemo} onPress={() => handleSnooze(item)}
+                    style={[styles.actionBtn, { borderColor: colors.border, backgroundColor: colors.surfaceElevated, borderRadius: 6 }]}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Snooze ${item.title}`}
+                  >
+                    <Text style={[typography.caption, { color: colors.textSecondary, fontWeight: "500" }]}>Snooze</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    disabled={acting||isDemo} onPress={() => handleDone(item)}
+                    style={[styles.actionBtn, { borderColor: colors.statusGood, backgroundColor: colors.statusGoodBg, borderRadius: 6 }]}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Mark ${item.title} as done`}
+                  >
+                    <Text style={[typography.caption, { color: colors.statusGood, fontWeight: "600" }]}>Done</Text>
+                  </TouchableOpacity>
                 </View>
               </View>
 ))(row.item)}

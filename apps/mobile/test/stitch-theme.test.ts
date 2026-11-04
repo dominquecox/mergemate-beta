@@ -11,7 +11,7 @@ describe('Shared Stitch theme',()=>{
   it('maps explicit UI weights to bundled faces and preserves code families',()=>{
     expect(fontFamilyForWeight(undefined)).toBe('Geist_400Regular');
     expect(fontFamilyForWeight('Geist_400Regular','600')).toBe('Geist_600SemiBold');
-    expect(fontFamilyForWeight('Geist_500Medium','bold')).toBe('Geist_700Bold');
+    expect(fontFamilyForWeight('Geist_500Medium','bold')).toBe('Geist_600SemiBold');
     expect(fontFamilyForWeight('Geist_600SemiBold','normal')).toBe('Geist_400Regular');
     expect(fontFamilyForWeight('JetBrainsMono_400Regular','700')).toBe('JetBrainsMono_400Regular');
   });

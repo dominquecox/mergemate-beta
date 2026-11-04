@@ -55,3 +55,13 @@ export function groupByRepo(items: readonly Notification[]): InboxRow[] {
   
   return rows;
 }
+
+/** Ungrouped Inbox: "Needs attention" first (most urgent first), then every other pull request, newest first. */
+export function attentionFirst(items: readonly Notification[]): InboxRow[] {
+  const attention = items.filter(needsAttention).sort((a, b) => urgencyScore(b) - urgencyScore(a));
+  const others = items.filter(item => !needsAttention(item)).sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt));
+  const rows: InboxRow[] = [];
+  if (attention.length > 0) rows.push({type: "section", label: "Needs attention"}, ...attention.map((item): InboxRow => ({type: "item", item})));
+  if (others.length > 0) rows.push({type: "section", label: attention.length > 0 ? "Other pull requests" : "Pull requests"}, ...others.map((item): InboxRow => ({type: "item", item})));
+  return rows;
+}

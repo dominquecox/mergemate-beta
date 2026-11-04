@@ -30,15 +30,16 @@ export const palette = {
 
 export const spacing = {xs:4,sm:8,md:12,base:16,lg:20,xl:24,xxl:32,gutter:16};
 export const typography = {
-  largeTitle:{fontFamily:'Geist_700Bold',fontSize:26,lineHeight:32,fontWeight:'700' as const,letterSpacing:-0.5},
-  title1:{fontFamily:'Geist_700Bold',fontSize:22,lineHeight:28,fontWeight:'700' as const,letterSpacing:-0.4},
-  title2:{fontFamily:'Geist_600SemiBold',fontSize:18,lineHeight:24,fontWeight:'600' as const,letterSpacing:-0.2},
-  headline:{fontFamily:'Geist_600SemiBold',fontSize:15,lineHeight:20,fontWeight:'600' as const},
+  // Headings at most SemiBold; no negative tracking; every line height at least 1.4x its size for legibility.
+  largeTitle:{fontFamily:'Geist_600SemiBold',fontSize:26,lineHeight:34,fontWeight:'600' as const,letterSpacing:0},
+  title1:{fontFamily:'Geist_600SemiBold',fontSize:22,lineHeight:30,fontWeight:'600' as const,letterSpacing:0},
+  title2:{fontFamily:'Geist_600SemiBold',fontSize:18,lineHeight:26,fontWeight:'600' as const,letterSpacing:0},
+  headline:{fontFamily:'Geist_600SemiBold',fontSize:15,lineHeight:21,fontWeight:'600' as const},
   body:{fontFamily:'Geist_400Regular',fontSize:14,lineHeight:20,fontWeight:'400' as const},
-  callout:{fontFamily:'Geist_400Regular',fontSize:13,lineHeight:18,fontWeight:'400' as const},
-  subhead:{fontFamily:'Geist_500Medium',fontSize:13,lineHeight:18,fontWeight:'500' as const},
+  callout:{fontFamily:'Geist_400Regular',fontSize:13,lineHeight:19,fontWeight:'400' as const},
+  subhead:{fontFamily:'Geist_500Medium',fontSize:13,lineHeight:19,fontWeight:'500' as const},
   footnote:{fontFamily:'Geist_400Regular',fontSize:12,lineHeight:17,fontWeight:'400' as const},
-  caption:{fontFamily:'Geist_500Medium',fontSize:11,lineHeight:15,fontWeight:'500' as const},
-  code:{fontFamily:'JetBrainsMono_400Regular',fontSize:12,lineHeight:16,fontVariant:['tabular-nums'] as 'tabular-nums'[]},
+  caption:{fontFamily:'Geist_400Regular',fontSize:11,lineHeight:16,fontWeight:'400' as const},
+  code:{fontFamily:'JetBrainsMono_400Regular',fontSize:12,lineHeight:17,fontVariant:['tabular-nums'] as 'tabular-nums'[]},
 };
 export const radius = {sm:8,md:12,lg:16,xl:16,full:9999};
