@@ -20,6 +20,7 @@ import { EmptyState } from '../src/components/EmptyState';
 import { LoadingState } from '../src/components/LoadingState';
 import { ErrorState } from '../src/components/ErrorState';
 import { AgentRunPanel } from '../src/workflows/AgentRunPanel';
+import { CopyDetailsButton } from '../src/components/CopyDetailsButton';
 import { WorkflowCanvas } from '../src/workflows/WorkflowCanvas';
 import { WorkflowNodeInspector } from '../src/workflows/WorkflowNodeInspector';
 import { WorkflowPlanCard } from '../src/workflows/WorkflowPlanCard';
@@ -108,6 +109,8 @@ function AgentWorkspace({
   const scrollRef = useRef<React.ComponentRef<typeof ScrollView>>(null);
   const promptRef = useRef<React.ComponentRef<typeof TextInput>>(null);
   const composerY = useRef(0);
+  // The run receipt renders below the builder; bring it into view whenever a run is opened.
+  const runPanelRef = useRef<React.ComponentRef<typeof View>>(null);
   const savedLayout = useRef({ column: 0, cell: 0 });
   const [projectTargets, setProjectTargets] = useState<Array<{ label: string; sublabel: string; url: string; kind: 'pr' | 'repo' }>>([]);
   const [projectTargetsError, setProjectTargetsError] = useState('');
@@ -200,6 +203,16 @@ function AgentWorkspace({
   const { branches, defaultBranch, loading: branchLoading, error: branchError } = useRepoBranches(isRepoOnly && mode === 'code_fix' ? targetOwner : null, isRepoOnly && mode === 'code_fix' ? targetRepo : null);
 
   const workspace = useAgentWorkspace(account, target, isDemo,initialRunId);
+  const selectedRunId = workspace.selectedRun?.id;
+  useEffect(() => {
+    if (!selectedRunId) return;
+    const frame = requestAnimationFrame(() => {
+      const node = runPanelRef.current as unknown as { scrollIntoView?: (options: ScrollIntoViewOptions) => void } | null;
+      if (Platform.OS === 'web' && typeof node?.scrollIntoView === 'function') node.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      else scrollRef.current?.scrollTo({ y: Math.max(0, composerY.current - 12), animated: true });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [selectedRunId]);
   const busy = workspace.busy !== null;
   const consentReady = aiConsentGranted && !needsReview && !consentPending;
   
@@ -1042,9 +1055,12 @@ function AgentWorkspace({
                 retryLabel="Refresh capabilities"
               />
             )}
+            {!!workspace.error && !localError && (
+              <CopyDetailsButton report={{ at: new Date(), ...(workspace.errorInfo ?? {}), message: workspace.error, runId: workspace.selectedRun?.id }} />
+            )}
 
             {workspace.selectedRun ? (
-              <>
+              <View ref={runPanelRef} style={{ gap: 14 }}>
                 <Button title="Back to workflow builder" variant="ghost" disabled={busy} onPress={workspace.clearRun} />
                 <AgentRunPanel
                   run={workspace.selectedRun}
@@ -1061,7 +1077,7 @@ function AgentWorkspace({
                 {!isRunActive(workspace.selectedRun.status) && (
                   <Button title="Use this workflow again" variant="secondary" disabled={busy} onPress={retry} />
                 )}
-              </>
+              </View>
             ) : definition ? (
               <View style={{ gap: 12 }}>
                 <View style={[surface, { gap: 10 }]}>

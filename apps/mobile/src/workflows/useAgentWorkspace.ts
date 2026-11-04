@@ -5,6 +5,7 @@ import { useFocusEffect } from 'expo-router';
 import type { WorkflowCapabilities, WorkflowDefinition, WorkflowRun, WorkflowTarget } from '@mergemate/contracts';
 import { apiMode } from '../api';
 import { toUserMessage } from '../api/errors';
+import { errorDetailsOf, type ErrorDetails } from '../api/error-details';
 import { StorageService } from '../storage';
 import { onSessionChange } from '../auth/session-events';
 import { WorkflowApiClient } from './api';
@@ -30,7 +31,10 @@ export function useAgentWorkspace(account: string, target: WorkflowTarget | null
   const [definitionsError, setDefinitionsError] = useState('');
   const definitionVersion = useRef(0);
   const [busy, setBusy] = useState<'plan' | 'start' | 'cancel' | 'save' | 'delete' | 'register_passkey' | 'approve_patch' | null>(null);
-  const [error, setError] = useState('');
+  const [error, setErrorText] = useState('');
+  const [errorInfo, setErrorInfo] = useState<ErrorDetails | null>(null);
+  /** Keeps the code and request id of an API failure next to its message, for "Copy details". */
+  const setError = useCallback((message: string, cause?: unknown) => { setErrorText(message); setErrorInfo(message ? errorDetailsOf(cause) : null); }, []);
   const [refreshKey, setRefreshKey] = useState(0);
   const generation = useRef(0), alive = useRef(false), actionLock = useRef(false), actionVersion = useRef(0);
   const controllers = useRef(new Set<AbortController>());
@@ -90,7 +94,7 @@ export function useAgentWorkspace(account: string, target: WorkflowTarget | null
       if (!valid(epoch)) return null;
       ++definitionVersion.current; setDefinitions(old => [value, ...old.filter(item => item.id !== value.id)].slice(0, 20)); setDefinitionsError('');
       return value;
-    } catch (cause) { if (valid(epoch) && !request.signal.aborted) setError(toUserMessage(cause, 'Could not save the workflow. Your draft is unchanged.')); return null; }
+    } catch (cause) { if (valid(epoch) && !request.signal.aborted) setError(toUserMessage(cause, 'Could not save the workflow. Your draft is unchanged.'), cause); return null; }
     finally { done(request); if (operation === actionVersion.current) { actionLock.current = false; if (valid(epoch)) setBusy(null); } }
   };
   const deleteDefinition = async (id: string): Promise<boolean> => {
@@ -101,7 +105,7 @@ export function useAgentWorkspace(account: string, target: WorkflowTarget | null
       await client.deleteDefinition(id, request.signal);
       if (!valid(epoch)) return false;
       ++definitionVersion.current; setDefinitions(old => old.filter(item => item.id !== id)); setDefinitionsError(''); return true;
-    } catch (cause) { if (valid(epoch) && !request.signal.aborted) setError(toUserMessage(cause, 'Could not delete the saved workflow. It remains in your list.')); return false; }
+    } catch (cause) { if (valid(epoch) && !request.signal.aborted) setError(toUserMessage(cause, 'Could not delete the saved workflow. It remains in your list.'), cause); return false; }
     finally { done(request); if (operation === actionVersion.current) { actionLock.current = false; if (valid(epoch)) setBusy(null); } }
   };
   const receive = useCallback((run: WorkflowRun) => {
@@ -112,7 +116,7 @@ export function useAgentWorkspace(account: string, target: WorkflowTarget | null
   useEffect(()=>{
     if(!client||!initialRunId||initialRunRequested.current===initialRunId)return;
     initialRunRequested.current=initialRunId;const epoch=generation.current,request=controller();let current=true;
-    client.run(initialRunId,request.signal).then(run=>{if(current&&valid(epoch))receive(run);}).catch(cause=>{if(current&&valid(epoch)&&!request.signal.aborted)setError(toUserMessage(cause,'Could not open this workflow run.'));}).finally(()=>done(request));
+    client.run(initialRunId,request.signal).then(run=>{if(current&&valid(epoch))receive(run);}).catch(cause=>{if(current&&valid(epoch)&&!request.signal.aborted)setError(toUserMessage(cause,'Could not open this workflow run.'), cause);}).finally(()=>done(request));
     return()=>{current=false;request.abort();done(request);};
   },[client,initialRunId,receive]);
   useFocusEffect(useCallback(() => {
@@ -124,7 +128,7 @@ export function useAgentWorkspace(account: string, target: WorkflowTarget | null
         if (!focused || !valid(epoch) || selected.current?.id !== id) return;
         receive(run);
         if (isRunActive(run.status)) timer = setTimeout(poll, 2000);
-      } catch (cause) { if (focused && valid(epoch) && !request.signal.aborted) { setError(toUserMessage(cause, 'Run updates paused. Refresh to reconnect.')); timer = setTimeout(poll, 5000); } }
+      } catch (cause) { if (focused && valid(epoch) && !request.signal.aborted) { setError(toUserMessage(cause, 'Run updates paused. Refresh to reconnect.'), cause); timer = setTimeout(poll, 5000); } }
     };
     timer = setTimeout(poll, 1500);
     return () => { focused = false; if (timer) clearTimeout(timer); request.abort(); done(request); };
@@ -133,7 +137,7 @@ export function useAgentWorkspace(account: string, target: WorkflowTarget | null
     setPatchProposal(null);
     if(!client||selectedRun?.status!=='waiting_approval')return;
     const epoch=generation.current,runId=selectedRun.id,request=controller();let current=true;
-    client.patchProposal(runId,request.signal).then(value=>{if(current&&valid(epoch)&&selected.current?.id===runId)setPatchProposal(value);}).catch(cause=>{if(current&&valid(epoch)&&!request.signal.aborted)setError(toUserMessage(cause,'Could not load the exact patch awaiting approval.'));}).finally(()=>done(request));
+    client.patchProposal(runId,request.signal).then(value=>{if(current&&valid(epoch)&&selected.current?.id===runId)setPatchProposal(value);}).catch(cause=>{if(current&&valid(epoch)&&!request.signal.aborted)setError(toUserMessage(cause,'Could not load the exact patch awaiting approval.'), cause);}).finally(()=>done(request));
     return()=>{current=false;request.abort();done(request);};
   },[client,selectedRun?.id,selectedRun?.status]);
   const generate = async (intent: string, mode: WorkflowDefinition['mode']): Promise<WorkflowDefinition | null> => {
@@ -141,7 +145,7 @@ export function useAgentWorkspace(account: string, target: WorkflowTarget | null
     actionLock.current = true; const operation = ++actionVersion.current; setBusy('plan'); setError('');
     const epoch = generation.current, request = controller();
     try { const value = await client.plan({ intent, target, mode }, request.signal); return valid(epoch) ? value : null; }
-    catch (cause) { if (valid(epoch) && !request.signal.aborted) setError(toUserMessage(cause, 'Could not generate a workflow.')); return null; }
+    catch (cause) { if (valid(epoch) && !request.signal.aborted) setError(toUserMessage(cause, 'Could not generate a workflow.'), cause); return null; }
     finally { done(request); if (operation === actionVersion.current) { actionLock.current = false; if (valid(epoch)) setBusy(null); } }
   };
   const start = async (definition: WorkflowDefinition, confirmCodeChanges: boolean) => {
@@ -154,7 +158,7 @@ export function useAgentWorkspace(account: string, target: WorkflowTarget | null
     try {
       const run = await client.start({ definition, idempotencyKey: key, ...(definition.mode === 'code_fix' ? { confirmCodeChanges } : {}) }, request.signal);
       if (valid(epoch)) { uncertainStart.current = null; receive(run); }
-    } catch (cause) { if (valid(epoch) && !request.signal.aborted) setError(toUserMessage(cause, 'Could not start the workflow. Retry uses the same request key to avoid duplicate runs.')); }
+    } catch (cause) { if (valid(epoch) && !request.signal.aborted) setError(toUserMessage(cause, 'Could not start the workflow. Retry uses the same request key to avoid duplicate runs.'), cause); }
     finally { done(request); if (operation === actionVersion.current) { actionLock.current = false; if (valid(epoch)) setBusy(null); } }
   };
   const cancel = async () => {
@@ -163,7 +167,7 @@ export function useAgentWorkspace(account: string, target: WorkflowTarget | null
     actionLock.current = true; const operation = ++actionVersion.current; setBusy('cancel'); setError('');
     const epoch = generation.current, request = controller();
     try { const value = await client.cancel(run.id, request.signal); if (valid(epoch) && selected.current?.id === run.id) receive(value); }
-    catch (cause) { if (valid(epoch) && !request.signal.aborted) setError(toUserMessage(cause, 'Could not cancel the run. Its status has not been changed locally.')); }
+    catch (cause) { if (valid(epoch) && !request.signal.aborted) setError(toUserMessage(cause, 'Could not cancel the run. Its status has not been changed locally.'), cause); }
     finally { done(request); if (operation === actionVersion.current) { actionLock.current = false; if (valid(epoch)) setBusy(null); } }
   };
   const selectRun = async (run: WorkflowRun) => {
@@ -171,7 +175,7 @@ export function useAgentWorkspace(account: string, target: WorkflowTarget | null
     if (!client) return;
     const epoch = generation.current, request = controller();
     try { const value = await client.run(run.id, request.signal); if (valid(epoch) && selected.current?.id === run.id) receive(value); }
-    catch (cause) { if (valid(epoch) && !request.signal.aborted) setError(toUserMessage(cause, 'Could not refresh this run.')); }
+    catch (cause) { if (valid(epoch) && !request.signal.aborted) setError(toUserMessage(cause, 'Could not refresh this run.'), cause); }
     finally { done(request); }
   };
   const passkeyAction=async(kind:'register_passkey'|'approve_patch')=>{
@@ -181,8 +185,8 @@ export function useAgentWorkspace(account: string, target: WorkflowTarget | null
     try{
       if(kind==='register_passkey'){const value=await client.passkeyRegistrationOptions(request.signal),response=await createPasskeyCredential(value.options);await client.verifyPasskeyRegistration(value.challengeId,response,request.signal);}
       else{const value=await client.patchApprovalOptions(run.id,request.signal);if(value.binding.runId!==run.id||patchProposal&&value.binding.patchHash!==patchProposal.patchHash)throw new Error('Patch approval binding changed.');const response=await getPasskeyCredential(value.options),approved=await client.approvePatch(run.id,value.challengeId,response,request.signal);if(valid(epoch)&&selected.current?.id===run.id)receive(approved.run);}
-    }catch(cause){if(valid(epoch)&&!request.signal.aborted)setError(toUserMessage(cause,kind==='register_passkey'?'Passkey registration was not completed.':'Exact patch approval was not completed.'));}
+    }catch(cause){if(valid(epoch)&&!request.signal.aborted)setError(toUserMessage(cause,kind==='register_passkey'?'Passkey registration was not completed.':'Exact patch approval was not completed.'), cause);}
     finally{done(request);if(operation===actionVersion.current){actionLock.current=false;if(valid(epoch))setBusy(null);}}
   };
-  return { configured: !!client, capabilities, capabilityLoading, capabilityError, runs, selectedRun, patchProposal, passkeysAvailable, historyLoading, historyError, definitions, definitionsLoading, definitionsError, saveDefinition, deleteDefinition, busy, error, generate, start, cancel, registerPasskey:()=>passkeyAction('register_passkey'), approvePatch:()=>passkeyAction('approve_patch'), selectRun, clearRun: () => setSelectedRun(null), clearError: () => setError(''), refresh: () => setRefreshKey(value => value + 1) };
+  return { configured: !!client, capabilities, capabilityLoading, capabilityError, runs, selectedRun, patchProposal, passkeysAvailable, historyLoading, historyError, definitions, definitionsLoading, definitionsError, saveDefinition, deleteDefinition, busy, error, errorInfo, generate, start, cancel, registerPasskey:()=>passkeyAction('register_passkey'), approvePatch:()=>passkeyAction('approve_patch'), selectRun, clearRun: () => setSelectedRun(null), clearError: () => setError(''), refresh: () => setRefreshKey(value => value + 1) };
 }

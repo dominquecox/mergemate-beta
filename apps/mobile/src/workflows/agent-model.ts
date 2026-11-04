@@ -98,3 +98,14 @@ export function applySaveDraft(definition: WorkflowDefinition, draft: { name: st
   const { description: _old, ...rest } = definition;
   return { definition: description ? { ...rest, name, description } : { ...rest, name } };
 }
+/** Board card runs are planned in the Worker and run no tests in this beta; the server names their QA step so. */
+export const BOARD_RUN_QA_TITLE = 'Tests (not run in this version)';
+export function isBoardCardRun(run: Pick<WorkflowRun, 'definition' | 'steps'>): boolean {
+  return run.definition.name.startsWith('Board card: ') && run.steps.some((step) => step.kind === 'qa' && step.title === BOARD_RUN_QA_TITLE);
+}
+/** The receipt's action line and approval note, honest about whether tests run. */
+export function approvalCopy(run: Pick<WorkflowRun, 'definition' | 'steps'>): { action: string; note: string } {
+  return isBoardCardRun(run)
+    ? { action: 'Action create a draft PR (no tests are run in this beta)', note: 'Approval binds this repository, commit and patch hash. MergeMate publishes only a draft PR; no tests are run in this beta.' }
+    : { action: 'Action QA and create a draft PR', note: 'Approval binds this repository, commit and patch hash. MergeMate publishes only a draft PR after QA passes.' };
+}

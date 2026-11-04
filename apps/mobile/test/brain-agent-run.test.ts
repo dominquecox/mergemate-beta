@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { BrainRunResponseSchema, type BrainRunStatus, type Card, type Lock } from '@mergemate/contracts';
-import { POLL_INTERVAL_MS, POLL_LIMIT_MS, approveRunPath, draftPrUrl, nextWatch, primaryAction, safeHttpsUrl } from '../src/brain/agentRun';
+import { POLL_INTERVAL_MS, POLL_LIMIT_MS, approveRunPath, draftPrUrl, nextWatch, primaryAction, runIdFromBranch, safeHttpsUrl } from '../src/brain/agentRun';
 import { mockClient } from '../src/api/mock';
 
 const card = { id: 'c1', title: 'T', status: 'open', branch: 'mergemate-agent/r1' } as Card;
@@ -38,5 +38,16 @@ describe('mock runBrain', () => {
     const res = await mockClient.runBrain('proj-1');
     expect(res.status).toBe(status);
     expect(BrainRunResponseSchema.safeParse(res).success).toBe(true);
+  });
+});
+
+describe('run id from the card branch', () => {
+  it('reads the run id only from a mergemate-agent branch', () => {
+    expect(runIdFromBranch('mergemate-agent/f58315bf-353b-4688-94ff-cd2ec6c42de3')).toBe('f58315bf-353b-4688-94ff-cd2ec6c42de3');
+    expect(runIdFromBranch('feature/x')).toBeNull();
+    expect(runIdFromBranch('mergemate-agent/')).toBeNull();
+    expect(runIdFromBranch('mergemate-agent/a/b')).toBeNull();
+    expect(runIdFromBranch('mergemate-agent/../x')).toBeNull();
+    expect(runIdFromBranch(undefined)).toBeNull();
   });
 });

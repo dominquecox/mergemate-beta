@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { WorkflowDefinition } from '@mergemate/contracts';
-import { AGENT_TEMPLATES, makeAgentTemplate, moveAgentStep, toggleAgentStep, targetFromPrUrl, targetFromUrl, sameTarget, safeDraftPrLink, isRunActive, evidenceText, isRepositoryPickerTarget } from '../src/workflows/agent-model';
+import { AGENT_TEMPLATES, makeAgentTemplate, moveAgentStep, toggleAgentStep, targetFromPrUrl, targetFromUrl, sameTarget, safeDraftPrLink, isRunActive, evidenceText, isRepositoryPickerTarget, approvalCopy } from '../src/workflows/agent-model';
 const target={owner:'owner',repo:'repo',number:7};
 describe('agent builder model',()=>{
  it('creates executable validated review and code-fix templates without claiming execution',()=>{
@@ -32,5 +32,16 @@ describe('agent builder model',()=>{
  it('treats waiting as active, blocked/failed as terminal, and bounds output text',()=>{
   expect(isRunActive('waiting_executor')).toBe(true);expect(isRunActive('blocked')).toBe(false);expect(isRunActive('failed')).toBe(false);
   expect(evidenceText('x'.repeat(5000))).toHaveLength(4000);
+ });
+});
+describe('approval copy for board card runs',()=>{
+ const steps=(qaTitle:string)=>[{id:'qa',kind:'qa' as const,title:qaTitle,status:'pending' as const}];
+ it('says no tests run for a board card run, and keeps the QA line for other runs',()=>{
+  const board={definition:{name:'Board card: Fix README'} as never,steps:steps('Tests (not run in this version)')};
+  expect(approvalCopy(board).action).toBe('Action create a draft PR (no tests are run in this beta)');
+  expect(approvalCopy(board).note).not.toMatch(/after QA passes/);
+  const other={definition:{name:'Board card: look-alike'} as never,steps:steps('Run tests')};
+  expect(approvalCopy(other).action).toBe('Action QA and create a draft PR');
+  expect(approvalCopy({definition:{name:'Fix bug'} as never,steps:steps('Tests (not run in this version)')}).note).toMatch(/after QA passes/);
  });
 });

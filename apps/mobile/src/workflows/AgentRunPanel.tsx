@@ -5,9 +5,10 @@ import { Text } from '../components/Text';
 import { Icon, type IconName } from '../components/Icon';
 import { Button } from '../components/Button';
 import { useTheme } from '../context/ThemeContext';
-import { AGENT_STEP_META, displayRunStatus, evidenceText, isRunActive, safeDraftPrLink } from './agent-model';
+import { AGENT_STEP_META, approvalCopy, displayRunStatus, evidenceText, isRunActive, safeDraftPrLink } from './agent-model';
 import type { PatchProposalValue } from './api';
 import { allPatchFilesReviewed } from './patch-review';
+import { CopyDetailsButton } from '../components/CopyDetailsButton';
 
 export function AgentRunPanel({ run, cancelling, passkeyBusy, passkeysAvailable, proposal, onCancel, onRetry, onRegisterPasskey, onApprovePatch, onOpenWebApproval }: { run: WorkflowRun; cancelling: boolean; passkeyBusy:boolean; passkeysAvailable:boolean; proposal:PatchProposalValue|null; onCancel: () => void; onRetry: () => void; onRegisterPasskey:()=>void; onApprovePatch:()=>void; onOpenWebApproval:()=>void }) {
   const { colors, typography } = useTheme();
@@ -17,6 +18,7 @@ export function AgentRunPanel({ run, cancelling, passkeyBusy, passkeysAvailable,
   const complete = run.steps.filter(step => step.status === 'succeeded' || step.status === 'skipped').length;
   const statusColor = run.status === 'succeeded' ? colors.riskLow : run.status === 'failed' ? colors.riskHigh : colors.brandLight;
   const patchReviewed=allPatchFilesReviewed(proposal,reviewedPatchPaths);
+  const copy=approvalCopy(run);
   return <View style={{ gap: 10 }}>
     <View style={{ padding: 14, backgroundColor: colors.brandSubtle, borderColor: colors.brandMuted, borderWidth: 1, borderRadius: 16, gap: 8 }}>
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
@@ -32,7 +34,7 @@ export function AgentRunPanel({ run, cancelling, passkeyBusy, passkeysAvailable,
       <Text style={[typography.caption, { color: colors.textSecondary }]}>{complete} of {run.steps.length} steps finished · {run.definition.target.owner}/{run.definition.target.repo}</Text>
       <Text selectable style={[typography.code, { color: colors.textSecondary, fontSize: 11 }]}>Pinned target commit {run.headSha}</Text>
       <Text selectable style={[typography.caption, { color: colors.textSecondary }]}>Run {run.id}</Text>
-      {!!run.error && <Text accessibilityRole="alert" style={[typography.footnote, { color: colors.riskHigh }]}>{run.error}</Text>}
+      {!!run.error && <><Text accessibilityRole="alert" style={[typography.footnote, { color: colors.riskHigh }]}>{run.error}</Text><CopyDetailsButton report={{ code: `run_${run.status}`, message: run.error, runId: run.id, step: run.steps.find(step => step.status === 'failed' || step.status === 'blocked')?.title, at: new Date(run.updatedAt) }} /></>}
       {run.status==='waiting_approval'&&<View style={{gap:10,padding:12,borderRadius:12,backgroundColor:colors.surface,borderWidth:1,borderColor:colors.brandMuted}}>
         <View style={{flexDirection:'row',alignItems:'center',gap:8}}><Icon name="finger-print-outline" size={20} color={colors.brandLight}/><Text style={[typography.subhead,{color:colors.text,fontWeight:'700'}]}>Approve the exact generated patch</Text></View>
         {proposal?<>
@@ -40,7 +42,7 @@ export function AgentRunPanel({ run, cancelling, passkeyBusy, passkeysAvailable,
           <View style={{gap:3,padding:10,borderRadius:10,backgroundColor:colors.surfaceElevated}}>
             <Text selectable style={[typography.code,{color:colors.textSecondary,fontSize:11}]}>Repository {proposal.repository}</Text>
             <Text selectable style={[typography.code,{color:colors.textSecondary,fontSize:11}]}>Pinned head {proposal.headSha}</Text>
-            <Text style={[typography.code,{color:colors.textSecondary,fontSize:11}]}>Action QA and create a draft PR</Text>
+            <Text style={[typography.code,{color:colors.textSecondary,fontSize:11}]}>{copy.action}</Text>
             <Text selectable style={[typography.code,{color:colors.textSecondary,fontSize:10}]}>Patch {proposal.patchHash}</Text>
           </View>
           <View style={{gap:8}}>{proposal.changes.map((change,index)=>{const open=reviewedPatchPaths.includes(change.path);return <View key={change.path} style={{borderWidth:1,borderColor:open?colors.brandMuted:colors.border,borderRadius:10,overflow:'hidden'}}>
@@ -53,7 +55,7 @@ export function AgentRunPanel({ run, cancelling, passkeyBusy, passkeysAvailable,
           </View>;})}</View>
           <Text accessibilityLiveRegion="polite" style={[typography.caption,{color:patchReviewed?colors.riskLow:colors.textSecondary}]}>{reviewedPatchPaths.length} of {proposal.changes.length} exact files inspected</Text>
         </>:<Text style={[typography.footnote,{color:colors.textSecondary}]}>Loading the patch contents and binding...</Text>}
-        {passkeysAvailable?<View style={{gap:8}}><Button title="Approve exact patch" disabled={!patchReviewed||passkeyBusy} loading={passkeyBusy} onPress={onApprovePatch}/><Button title="Register a passkey" variant="secondary" disabled={passkeyBusy} onPress={onRegisterPasskey}/></View>:<Button title="Open web app to inspect and approve" disabled={!proposal} onPress={onOpenWebApproval}/>}<Text style={[typography.caption,{color:colors.textSecondary}]}>Approval binds this repository, commit and patch hash. MergeMate publishes only a draft PR after QA passes.</Text>
+        {passkeysAvailable?<View style={{gap:8}}><Button title="Approve exact patch" disabled={!patchReviewed||passkeyBusy} loading={passkeyBusy} onPress={onApprovePatch}/><Button title="Register a passkey" variant="secondary" disabled={passkeyBusy} onPress={onRegisterPasskey}/></View>:<Button title="Open web app to inspect and approve" disabled={!proposal} onPress={onOpenWebApproval}/>}<Text style={[typography.caption,{color:colors.textSecondary}]}>{copy.note}</Text>
       </View>}
       {isRunActive(run.status) ? <Button title="Cancel run" variant="secondary" loading={cancelling} onPress={onCancel} /> : ['failed','blocked','cancelled'].includes(run.status) ? <Button title="Review and retry workflow" variant="secondary" onPress={onRetry} /> : null}
     </View>
