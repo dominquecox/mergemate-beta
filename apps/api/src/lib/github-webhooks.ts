@@ -2,6 +2,7 @@ import { ActivityEvent } from "@mergemate/contracts";
 import { z } from "zod";
 import type { Deps, Env } from "../env";
 import { deliverGitHubPush } from "./github-push";
+import { verifyMergedPullRequest } from "../brain/verifier";
 import { timingSafeEqual } from "./crypto";
 
 const encoder = new TextEncoder();
@@ -43,8 +44,15 @@ interface Account {
 export type WebhookData =
   | { kind: "installation"; action: string; installationId: string; account: Account; repos: RepoRef[] }
   | { kind: "installation_repositories"; installationId: string; added: RepoRef[]; removed: RepoRef[] }
-  | { kind: "pr"; installationId: string | null; repo: string; numbers: number[]; headSha: string | null; event: ActivityEvent }
+  | { kind: "pr"; installationId: string | null; repo: string; numbers: number[]; headSha: string | null; event: ActivityEvent; merge?: MergeRef | undefined }
   | { kind: "status"; installationId: string | null; repo: string; sha: string };
+
+/** Ids of a merged pull request, so the brain verifier can check it. No body or file content is kept. */
+export interface MergeRef {
+  repoId: number;
+  mergeCommitSha: string;
+  headRef: string;
+}
 
 export interface RepoRef {
   id: string;
@@ -67,7 +75,8 @@ const messageSchema = z.object({
   data: z.discriminatedUnion("kind", [
     z.object({ kind: z.literal("installation"), action: z.string(), installationId: z.string(), account: z.object({ login: z.string(), type: z.string() }), repos: z.array(reference).max(1000) }),
     z.object({ kind: z.literal("installation_repositories"), installationId: z.string(), added: z.array(reference).max(1000), removed: z.array(reference).max(1000) }),
-    z.object({ kind: z.literal("pr"), installationId: z.string().nullable(), repo: z.string(), numbers: z.array(z.number().int().positive()).max(100), headSha: z.string().nullable(), event: ActivityEvent }),
+    z.object({ kind: z.literal("pr"), installationId: z.string().nullable(), repo: z.string(), numbers: z.array(z.number().int().positive()).max(100), headSha: z.string().nullable(), event: ActivityEvent,
+      merge: z.object({ repoId: z.number().int().positive(), mergeCommitSha: z.string().regex(/^[0-9a-f]{40}$/), headRef: z.string().min(1).max(255) }).optional() }),
     z.object({ kind: z.literal("status"), installationId: z.string().nullable(), repo: z.string(), sha: z.string() }),
   ]),
 });
@@ -133,6 +142,9 @@ export const toWebhookData = (event: string, payload: unknown): WebhookData | nu
     const pull = obj(p.pull_request);
     const number = num(pull?.number);
     if (number === null) return null;
+    const repoId = num(obj(p.repository)?.id), mergeCommitSha = str(pull?.merge_commit_sha), headRef = str(obj(pull?.head)?.ref);
+    const merge: MergeRef | null = event === "pull_request" && action === "closed" && pull?.merged === true && repoId !== null && mergeCommitSha && /^[0-9a-f]{40}$/.test(mergeCommitSha) && headRef && headRef.length <= 255
+      ? { repoId, mergeCommitSha, headRef } : null;
     return {
       kind: "pr",
       installationId: installationId(p),
@@ -140,6 +152,7 @@ export const toWebhookData = (event: string, payload: unknown): WebhookData | nu
       numbers: [number],
       headSha: str(obj(pull?.head)?.sha),
       event: pr(action),
+      ...(merge ? { merge } : {}),
     };
   }
   if (event === "issue_comment") {
@@ -241,8 +254,11 @@ export const consumeGitHubEvents = async (batch: MessageBatch<GitHubEventMessage
     try {
       const message = messageSchema.parse(msg.body);
       await applyGitHubEvent(db, message);
-      // Event writes can retry; push delivery is best effort and independently claimed.
+      // Event writes can retry; push delivery and the brain verifier are best effort and idempotent.
       try { await deliverGitHubPush(env, deps, msg.body); } catch { /* Never retry an applied event for push failures. */ }
+      if (message.data.kind === "pr" && message.data.merge) {
+        try { await verifyMergedPullRequest(env, deps, { deliveryId: message.deliveryId, repo: message.data.repo, number: message.data.numbers[0] ?? 0, merge: message.data.merge }); } catch { /* Recorded on the card when it can be; never blocks the event. */ }
+      }
       msg.ack();
     } catch {
       msg.retry({ delaySeconds: Math.min(300, 10 * 2 ** Math.min(5, Math.max(0, (msg.attempts ?? 1) - 1))) });
