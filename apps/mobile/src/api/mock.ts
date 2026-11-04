@@ -474,6 +474,69 @@ export class MockApiClient implements ApiClient {
   async sendSupportMessage(_email: string, _message: string): Promise<void> {
     // no-op in mock
   }
+
+  async getBrainProjects() {
+    return {
+      projects: [
+        {
+          id: "proj-1",
+          owner: "dominquecox",
+          repo: "mergemate",
+          rules: "Default board rules",
+          createdAt: new Date().toISOString(),
+        },
+      ],
+    };
+  }
+
+  async getBrainBoard(_projectId: string) {
+    const now = new Date();
+    return {
+      project: {
+        id: "proj-1",
+        owner: "dominquecox",
+        repo: "mergemate",
+        rules: "Default board rules",
+        createdAt: now.toISOString(),
+      },
+      cards: [
+        {
+          id: "card-1",
+          projectId: "proj-1",
+          position: 0,
+          title: "MM-117 Board UI",
+          details: "Implement board screens",
+          priority: "P0" as const,
+          status: "open" as const,
+          doneWhen: "Screens render with real data",
+          branch: undefined,
+          prNumber: undefined,
+          head: undefined,
+          updatedAt: now.toISOString(),
+        },
+      ],
+      locks: [
+        {
+          cardId: "card-1",
+          agent: "Copilot",
+          tool: "copilot" as const,
+          since: now.toISOString(),
+          expiresAt: new Date(now.getTime() + 3600000).toISOString(),
+        },
+      ],
+      trackTail: [
+        {
+          id: "event-1",
+          projectId: "proj-1",
+          kind: "note" as const,
+          actor: "owner",
+          text: "Board initialized",
+          at: now.toISOString(),
+        },
+      ],
+    };
+  }
+
 }
 
 export const mockClient = new MockApiClient();

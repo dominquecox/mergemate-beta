@@ -5,7 +5,8 @@ import { Link, useRouter, useSegments } from "expo-router";
 import { useTheme } from "../context/ThemeContext";
 import { useAuth } from "../context/AuthContext";
 import { useAlerts } from "../context/AlertsContext";
-import { NAV_ITEMS, type NavItem } from "../navigation/items";
+import { navItemsFor, type NavItem } from "../navigation/items";
+import { useFeatureFlags } from "../hooks/useFeatureFlags";
 import { SIDEBAR_WIDTH } from "../layout/breakpoints";
 import { Icon, IconName } from "./Icon";
 
@@ -91,8 +92,9 @@ export function Sidebar() {
 
   const inTabs = segments[0] === "(tabs)";
   const searchActive = segments[0] === "search";
-  const topNavItems = NAV_ITEMS.filter((item) => item.name !== "settings");
-  const settingsItem = NAV_ITEMS.find((item) => item.name === "settings");
+  const navItems = navItemsFor(useFeatureFlags());
+  const topNavItems = navItems.filter((item) => item.name !== "settings");
+  const settingsItem = navItems.find((item) => item.name === "settings");
 
   return (
     <View

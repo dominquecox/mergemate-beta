@@ -4,19 +4,23 @@ import { Tabs, useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "../../src/context/ThemeContext";
 import { useAlerts } from "../../src/context/AlertsContext";
+import { useFeatureFlags } from "../../src/hooks/useFeatureFlags";
 import { useLayout } from "../../src/layout/useLayout";
-import { NAV_ITEMS } from "../../src/navigation/items";
+import { navItemsFor } from "../../src/navigation/items";
 import { Icon } from "../../src/components/Icon";
 
 export default function TabsLayout() {
   const { colors, typography } = useTheme();
   const { unreadCount } = useAlerts();
+  const flags = useFeatureFlags();
   // On desktop the sidebar is the navigation, so the bottom tab bar goes away.
   const { isDesktop } = useLayout();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   // On iPhone the home indicator overlaps the bar; the web build reads it from env(safe-area-inset-bottom).
   const bottomInset = insets.bottom;
+
+  const allItems = navItemsFor(flags);
 
   return (
     <Tabs
@@ -52,7 +56,7 @@ export default function TabsLayout() {
         tabBarItemStyle: { minHeight: 44 },
       }}
     >
-      {NAV_ITEMS.flatMap((item) => [
+      {allItems.flatMap((item) => [
         <Tabs.Screen
           key={item.name}
           name={item.name}
@@ -92,6 +96,8 @@ export default function TabsLayout() {
             ]
           : []),
       ])}
+      {/* Expo Router adds every file in this folder as a tab, so the Board route is hidden while its flag is off. */}
+      {!flags.brain && <Tabs.Screen key="brain" name="brain" options={{ href: null }} />}
     </Tabs>
   );
 }

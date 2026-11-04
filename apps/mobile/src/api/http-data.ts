@@ -4,8 +4,9 @@ import { PrSearchFilters, PrSearchPage } from '@mergemate/contracts';
 import type { WorkspaceRead } from './client';
 import { PrCheck as PrCheckSchema } from '@mergemate/contracts';
 import { z } from "zod";
-import { PrivateNotes, PrivateNote, VoiceNoteResult, SavePrivateNote, type NoteContext, InboxPreference, InboxMutation, InboxReceipt, InboxUndo, ConsentState, AiPreferences, type AiPreferenceUpdate, HighlightResult as HighlightResultSchema, InstallationList as InstallationListSchema, NotificationPage, PrDetail as PrDetailSchema, PrFile as PrFileSchema, PrThread as PrThreadSchema, PrRisk as PrRiskSchema, PrSummary as PrSummarySchema, ReviewPlan as ReviewPlanSchema, AiEngineInfo as AiEngineInfoSchema, PrAnswer as PrAnswerSchema, RepoPage, RepoPullList, RepoBranchList, TriageQueue, TriageRecord } from "@mergemate/contracts";
+import { PrivateNotes, PrivateNote, VoiceNoteResult, SavePrivateNote, type NoteContext, InboxPreference, InboxMutation, InboxReceipt, InboxUndo, ConsentState, AiPreferences, type AiPreferenceUpdate, HighlightResult as HighlightResultSchema, InstallationList as InstallationListSchema, NotificationPage, PrDetail as PrDetailSchema, PrFile as PrFileSchema, PrThread as PrThreadSchema, PrRisk as PrRiskSchema, PrSummary as PrSummarySchema, ReviewPlan as ReviewPlanSchema, AiEngineInfo as AiEngineInfoSchema, PrAnswer as PrAnswerSchema, RepoPage, RepoPullList, RepoBranchList, TriageQueue, TriageRecord, ProjectSchema, CardSchema, LockSchema, TrackEventSchema, ProceedWithTrackResponse } from "@mergemate/contracts";
 import type { HighlightResult, InstallationList, Notification, NotificationFilter, AiEngineInfo, PrAnswer, PrDetail, PrRisk, PrSummary, Repo, ReviewPlan, TriageItem, TriageLane } from "../types";
+import type { Project, Card, Lock, TrackEvent } from "@mergemate/contracts";
 import { AI_CONSENT_VERSION } from "../config/consent";
 import { ApiClientError, messageForCode } from "./errors";
 import { mapHighlight, mapInstallations, mapPrDetail, mapFile, mapCheck, mapComments, secretWarningFromRisk } from "./mappers";
@@ -273,4 +274,18 @@ export abstract class HttpData extends HttpSession {
     });
     return mapHighlight(res);
   }
+
+  // Brain board API
+  async getBrainProjects() {
+    return this.request({ path: "/brain/projects", schema: z.object({ projects: z.array(ProjectSchema) }) });
+  }
+
+  async getBrainBoard(projectId: string) {
+    const res = await this.request({
+      path: `/brain/projects/${enc(projectId)}`,
+      schema: z.object({ project: ProjectSchema, cards: z.array(CardSchema), locks: z.array(LockSchema), trackTail: z.array(TrackEventSchema) }),
+    });
+    return { project: res.project, cards: res.cards, locks: res.locks, trackTail: res.trackTail };
+  }
 }
+

@@ -1,4 +1,4 @@
-import type {NoteContext,PrivateNote,SavePrivateNote,FeatureFlags} from "@mergemate/contracts";
+import type {NoteContext,PrivateNote,SavePrivateNote,FeatureFlags, Project, Card, Lock, TrackEvent} from "@mergemate/contracts";
 import type {InboxMutation,InboxReceipt} from "@mergemate/contracts";
 import type {PrSearchFilters,PrSearchPage} from '@mergemate/contracts';
 export type WorkspacePage<T>={items:T[];nextCursor:string|null;capped?:boolean;headSha?:string};
@@ -139,6 +139,10 @@ export interface ApiClient {
   getPublicPostPage(type:"news"|"changelog",cursor?:string|null):Promise<{items:PublicPost[];nextCursor:string|null}>;
   getPublicPost(slug:string):Promise<PublicPost>;
   sendSupportMessage(email: string, message: string): Promise<void>;
+
+  // Brain Board API
+  getBrainProjects(): Promise<{projects: Project[]}>;
+  getBrainBoard(projectId: string): Promise<{project: Project; cards: Card[]; locks: Lock[]; trackTail: TrackEvent[]}>;
 }
 
 // In-memory CSRF token storage for web sessions (strictly never saved to disk or localStorage)
