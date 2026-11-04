@@ -66,6 +66,8 @@ export interface ApiClient {
 
   // Repos & Orgs
   getRepos(): Promise<Repo[]>;
+  getRepoPulls(owner: string, repo: string, signal?: AbortSignal): Promise<import("@mergemate/contracts").RepoPullList>;
+  getRepoBranches(owner: string, repo: string, signal?: AbortSignal): Promise<import("@mergemate/contracts").RepoBranchList>;
   toggleWatchRepo(id: string, watching: boolean): Promise<Repo>;
   getOrgInstallations(): Promise<InstallationList>;
 

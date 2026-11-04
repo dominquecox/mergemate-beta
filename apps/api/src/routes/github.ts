@@ -9,6 +9,8 @@ import {
   type PrStatus,
   type PrThread,
   type RepoPage,
+  type RepoBranchList,
+  type RepoPullList,
   RepoWatchRequest,
 } from "@mergemate/contracts";
 import { type Context, Hono } from "hono";
@@ -19,7 +21,7 @@ import { base64url,sha256Hex } from "../lib/crypto";
 import { GITHUB_WEB, githubGet } from "../lib/github";
 import { getAccessToken } from "../lib/github-tokens";
 import { parseBody } from "../lib/validate";
-import { DEMO_INSTALLATIONS, DEMO_PRS, DEMO_REPOS } from "./github.fixtures";
+import { DEMO_BRANCHES, DEMO_INSTALLATIONS, DEMO_PRS, DEMO_REPOS } from "./github.fixtures";
 
 const PAGE_SIZE = 50;
 const FILE_PAGES = 3; // up to 300 files
@@ -92,6 +94,26 @@ interface GhPull {
   mergeable?: boolean | null;
   mergeable_state?: string;
 }
+
+interface GhRepoAccess {
+  full_name: string;
+  default_branch: string;
+}
+
+interface GhBranch {
+  name: string;
+}
+
+const validRepoRef = (owner: string, repo: string) =>
+  NAME.test(owner) && NAME.test(repo) && ![owner, repo].some((value) => value === "." || value === "..");
+
+const repoAccess = async (c: Context<AppEnv>, token: string, owner: string, repo: string) => {
+  const access = await githubGet<GhRepoAccess>(workspaceDeps(c), token, `/repos/${owner}/${repo}`);
+  if (access.full_name.toLowerCase() !== `${owner}/${repo}`.toLowerCase()) {
+    throw new ApiError("not_found", "Repository not found.");
+  }
+  return access;
+};
 
 interface GhFile {
   filename: string;
@@ -338,6 +360,57 @@ export const github = new Hono<AppEnv>()
       nextCursor: next ? encodeCursor(next) : null,
     };
     return c.json(res);
+  })
+
+  .get("/repos/:owner/:repo/pulls", async (c) => {
+    const { owner, repo } = c.req.param();
+    if (!validRepoRef(owner, repo)) throw new ApiError("validation_failed", "The repository reference is not valid.");
+    const fullName = `${owner}/${repo}`;
+    if (c.get("session").demo) {
+      const exists = DEMO_REPOS.some((item) => item.fullName.toLowerCase() === fullName.toLowerCase());
+      if (!exists) throw new ApiError("not_found", "Repository not found.");
+      const result: RepoPullList = {
+        items: DEMO_PRS.filter((pr) => pr.repo.toLowerCase() === fullName.toLowerCase() && (pr.status === "open" || pr.status === "draft"))
+          .slice(0, 100)
+          .map((pr) => ({ number: pr.number, title: pr.title, author: pr.author, status: pr.status as "open" | "draft" })),
+      };
+      return c.json(result);
+    }
+    const token = await userToken(c);
+    await repoAccess(c, token, owner, repo);
+    const rows = await githubGet<GhPull[]>(workspaceDeps(c), token, `/repos/${owner}/${repo}/pulls?state=open&sort=updated&direction=desc&per_page=100`);
+    const result: RepoPullList = {
+      items: rows.slice(0, 100).map((pr) => ({
+        number: pr.number,
+        title: pr.title,
+        author: pr.user?.login ?? "ghost",
+        status: pr.draft ? "draft" : "open",
+      })),
+    };
+    return c.json(result);
+  })
+
+  .get("/repos/:owner/:repo/branches", async (c) => {
+    const { owner, repo } = c.req.param();
+    if (!validRepoRef(owner, repo)) throw new ApiError("validation_failed", "The repository reference is not valid.");
+    const fullName = `${owner}/${repo}`;
+    if (c.get("session").demo) {
+      const items = DEMO_BRANCHES[fullName];
+      if (!items) throw new ApiError("not_found", "Repository not found.");
+      const result: RepoBranchList = { items, defaultBranch: items.find((item) => item.isDefault)?.name ?? "main" };
+      return c.json(result);
+    }
+    const token = await userToken(c);
+    const access = await repoAccess(c, token, owner, repo);
+    const rows = await githubGet<GhBranch[]>(workspaceDeps(c), token, `/repos/${owner}/${repo}/branches?per_page=100`);
+    const result: RepoBranchList = {
+      defaultBranch: access.default_branch,
+      items: rows
+        .slice(0, 100)
+        .map((branch) => ({ name: branch.name, isDefault: branch.name === access.default_branch }))
+        .sort((a, b) => Number(b.isDefault) - Number(a.isDefault)),
+    };
+    return c.json(result);
   })
 
   .put("/repos/:id/watch", async (c) => {

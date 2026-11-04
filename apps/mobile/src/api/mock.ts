@@ -214,6 +214,18 @@ export class MockApiClient implements ApiClient {
     return [...this.repos];
   }
 
+  async getRepoPulls(owner: string, repo: string) {
+    return {
+      items: this.notifications
+        .filter((item) => item.repo.toLowerCase() === `${owner}/${repo}`.toLowerCase() && (item.status === "open" || item.status === "draft"))
+        .map((item) => ({ number: item.number, title: item.title, author: item.author, status: item.status as "open" | "draft" })),
+    };
+  }
+
+  async getRepoBranches(_owner: string, _repo: string) {
+    return { defaultBranch: "main", items: [{ name: "main", isDefault: true }, { name: "develop", isDefault: false }] };
+  }
+
   async toggleWatchRepo(id: string, watching: boolean): Promise<Repo> {
     const r = this.repos.find((x) => x.id === id);
     if (r) {

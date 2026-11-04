@@ -1,4 +1,4 @@
-import type { Installation, Notification, PrDetail, Repo, User } from "@mergemate/contracts";
+import type { Installation, Notification, PrDetail, Repo, RepoBranchOption, User } from "@mergemate/contracts";
 
 // Seeded demo data. Fictional accounts and repositories; served to demo sessions only.
 
@@ -24,6 +24,16 @@ export const DEMO_REPOS: Repo[] = [
   { id: "1002", fullName: "acme-demo/payments-api", private: true, watching: true },
   { id: "1003", fullName: "acme-demo/docs", private: false, watching: false },
 ];
+
+export const DEMO_BRANCHES: Record<string, RepoBranchOption[]> = Object.fromEntries(
+  DEMO_REPOS.map((repo) => [
+    repo.fullName,
+    [
+      { name: "main", isDefault: true },
+      { name: "develop", isDefault: false },
+    ],
+  ]),
+);
 
 const at = (iso: string) => iso;
 

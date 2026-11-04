@@ -4,7 +4,7 @@ import { PrSearchFilters, PrSearchPage } from '@mergemate/contracts';
 import type { WorkspaceRead } from './client';
 import { PrCheck as PrCheckSchema } from '@mergemate/contracts';
 import { z } from "zod";
-import { PrivateNotes, PrivateNote, VoiceNoteResult, SavePrivateNote, type NoteContext, InboxPreference, InboxMutation, InboxReceipt, InboxUndo, ConsentState, AiPreferences, type AiPreferenceUpdate, HighlightResult as HighlightResultSchema, InstallationList as InstallationListSchema, NotificationPage, PrDetail as PrDetailSchema, PrFile as PrFileSchema, PrThread as PrThreadSchema, PrRisk as PrRiskSchema, PrSummary as PrSummarySchema, ReviewPlan as ReviewPlanSchema, AiEngineInfo as AiEngineInfoSchema, PrAnswer as PrAnswerSchema, RepoPage, TriageQueue, TriageRecord } from "@mergemate/contracts";
+import { PrivateNotes, PrivateNote, VoiceNoteResult, SavePrivateNote, type NoteContext, InboxPreference, InboxMutation, InboxReceipt, InboxUndo, ConsentState, AiPreferences, type AiPreferenceUpdate, HighlightResult as HighlightResultSchema, InstallationList as InstallationListSchema, NotificationPage, PrDetail as PrDetailSchema, PrFile as PrFileSchema, PrThread as PrThreadSchema, PrRisk as PrRiskSchema, PrSummary as PrSummarySchema, ReviewPlan as ReviewPlanSchema, AiEngineInfo as AiEngineInfoSchema, PrAnswer as PrAnswerSchema, RepoPage, RepoPullList, RepoBranchList, TriageQueue, TriageRecord } from "@mergemate/contracts";
 import type { HighlightResult, InstallationList, Notification, NotificationFilter, AiEngineInfo, PrAnswer, PrDetail, PrRisk, PrSummary, Repo, ReviewPlan, TriageItem, TriageLane } from "../types";
 import { AI_CONSENT_VERSION } from "../config/consent";
 import { ApiClientError, messageForCode } from "./errors";
@@ -57,6 +57,14 @@ export abstract class HttpData extends HttpSession {
   }
 
   async getRepos(): Promise<Repo[]> { return (await this.getRepoPage()).items; }
+
+  getRepoPulls(owner: string, repo: string, signal?: AbortSignal) {
+    return this.request({ path: `/repos/${enc(owner)}/${enc(repo)}/pulls`, schema: RepoPullList, signal });
+  }
+
+  getRepoBranches(owner: string, repo: string, signal?: AbortSignal) {
+    return this.request({ path: `/repos/${enc(owner)}/${enc(repo)}/branches`, schema: RepoBranchList, signal });
+  }
 
   async toggleWatchRepo(id: string, watching: boolean): Promise<Repo> {
     const res = await this.request({

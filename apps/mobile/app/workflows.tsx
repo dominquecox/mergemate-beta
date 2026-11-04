@@ -24,10 +24,13 @@ import { WorkflowNodeInspector } from '../src/workflows/WorkflowNodeInspector';
 import { WorkflowPlanCard } from '../src/workflows/WorkflowPlanCard';
 import { useAgentWorkspace } from '../src/workflows/useAgentWorkspace';
 import { workflowApprovalUrl,workflowRunParam } from '../src/workflows/run-handoff';
+import { useRepoPrList } from '../src/hooks/useRepoPrList';
+import { useRepoBranches } from '../src/hooks/useRepoBranches';
 import {
   AGENT_TEMPLATES,
   makeAgentTemplate,
   targetFromUrl,
+  isRepositoryPickerTarget,
   displayRunStatus,
   sameTarget,
   isRunActive,
@@ -107,6 +110,10 @@ function AgentWorkspace({
   const [showSearch, setShowSearch] = useState(false);
   const [targetModalOpen, setTargetModalOpen] = useState(false);
   const [projectTargets, setProjectTargets] = useState<Array<{ label: string; sublabel: string; url: string; kind: 'pr' | 'repo' }>>([]);
+  const [selectedPr, setSelectedPr] = useState<number | null>(null);
+  const [selectedBranch, setSelectedBranch] = useState<string | null>(null);
+  const [showBranchInput, setShowBranchInput] = useState(false);
+  const [branchInput, setBranchInput] = useState('');
   const draftVersion = useRef(0);
 
   useEffect(() => {
@@ -164,10 +171,28 @@ function AgentWorkspace({
     return value.success ? value.data : null;
   }, [targetText, baseBranch, mode]);
 
+  // Extract owner/repo from target for PR/branch pickers
+  const { owner: targetOwner, repo: targetRepo } = useMemo(() => {
+    if (!target) return { owner: null, repo: null };
+    return { owner: target.owner, repo: target.repo };
+  }, [target]);
+
+  const isRepoOnly = useMemo(() => {
+    return isRepositoryPickerTarget(target);
+  }, [target]);
+
+  const { prs, loading: prLoading, error: prError } = useRepoPrList(isRepoOnly ? targetOwner : null, isRepoOnly ? targetRepo : null);
+  const { branches, defaultBranch, loading: branchLoading, error: branchError } = useRepoBranches(isRepoOnly && mode === 'code_fix' ? targetOwner : null, isRepoOnly && mode === 'code_fix' ? targetRepo : null);
+
   const workspace = useAgentWorkspace(account, target, isDemo,initialRunId);
   const busy = workspace.busy !== null;
   const consentReady = aiConsentGranted && !needsReview && !consentPending;
-  const targetCompatible = !!target && (mode === 'code_fix' || (target.kind ?? 'pull_request') === 'pull_request');
+  
+  // Check if PR or branch is selected when repo-only target
+  const prSelected = !isRepoOnly || mode !== 'review' || selectedPr !== null;
+  const branchSelected = !isRepoOnly || mode !== 'code_fix' || selectedBranch !== null;
+  
+  const targetCompatible = !!target && (mode === 'code_fix' || (target.kind ?? 'pull_request') === 'pull_request') && prSelected && branchSelected;
   const capability = mode === 'code_fix' ? workspace.capabilities?.coding : workspace.capabilities?.analysis;
   const canRun =
     !!definition &&
@@ -177,7 +202,9 @@ function AgentWorkspace({
     workspace.configured &&
     consentReady &&
     (!confirmRequired(definition) || confirmCodeChanges) &&
-    !busy;
+    !busy &&
+    prSelected &&
+    branchSelected;
 
   const surface = {
     backgroundColor: colors.surface,
@@ -208,6 +235,40 @@ function AgentWorkspace({
     setSavedMessage('');
     workspace.clearError();
     workspace.clearRun();
+  };
+
+  const selectPr = (prNumber: number) => {
+    if (!targetOwner || !targetRepo) return;
+    const prUrl = `https://github.com/${targetOwner}/${targetRepo}/pull/${prNumber}`;
+    setSelectedPr(prNumber);
+    setTargetText(prUrl);
+    const nextParsed = targetFromUrl(prUrl);
+    if (definition && nextParsed) {
+      const nextTarget = TargetSchema.safeParse({
+        ...nextParsed,
+        ...(definition.mode === 'code_fix' && baseBranch.trim() ? { baseBranch: baseBranch.trim() } : {}),
+      });
+      if (nextTarget.success) {
+        setDefinition({ ...definition, target: nextTarget.data });
+        setConfirmCodeChanges(false);
+        setLocalError('');
+      }
+    }
+  };
+
+  const selectBranch = (branchName: string) => {
+    if (!targetOwner || !targetRepo) return;
+    setSelectedBranch(branchName);
+    setBaseBranch(branchName);
+    resetDraft();
+  };
+
+  const submitBranchInput = () => {
+    if (branchInput.trim()) {
+      selectBranch(branchInput.trim());
+      setShowBranchInput(false);
+      setBranchInput('');
+    }
   };
 
   const chooseTemplate = (id: string) => {
@@ -766,6 +827,132 @@ function AgentWorkspace({
                     </Pressable>
                   ))}
                 </View>
+
+                {/* PR Picker for Review Mode with Repo Target */}
+                {isRepoOnly && mode === 'review' && (
+                  <View style={{ gap: 8 }}>
+                    <Text style={[typography.caption, { color: colors.textSecondary, fontWeight: '600' }]}>
+                      SELECT A PULL REQUEST
+                    </Text>
+                    {prLoading ? (
+                      <Text style={[typography.caption, { color: colors.textMuted }]}>Loading pull requests...</Text>
+                    ) : prError ? (
+                      <Text accessibilityRole="alert" style={[typography.caption, { color: colors.riskHigh }]}>{prError}</Text>
+                    ) : prs.length === 0 ? (
+                      <Text style={[typography.caption, { color: colors.textSecondary }]}>
+                        No open pull requests found for this repository.
+                      </Text>
+                    ) : (
+                      <ScrollView style={{ maxHeight: 200 }} nestedScrollEnabled>
+                        {prs.map((pr) => (
+                          <Pressable
+                            key={pr.number}
+                            onPress={() => selectPr(pr.number)}
+                            style={({ pressed }) => ({
+                              padding: 10,
+                              borderRadius: 8,
+                              borderWidth: 1,
+                              borderColor: selectedPr === pr.number ? colors.brandLight : colors.border,
+                              backgroundColor: selectedPr === pr.number ? colors.brandSubtle : colors.surfaceElevated,
+                              marginBottom: 6,
+                              opacity: pressed ? 0.85 : 1,
+                            })}
+                          >
+                            <Text style={[typography.code, { color: colors.text, fontWeight: '600', fontSize: 12 }]}>
+                              #{pr.number}
+                            </Text>
+                            <Text style={[typography.caption, { color: colors.text, marginTop: 4 }]} numberOfLines={1}>
+                              {pr.title}
+                            </Text>
+                            <Text style={[typography.code, { color: colors.textSecondary, fontSize: 10, marginTop: 2 }]}>
+                              {pr.author} · {pr.status}
+                            </Text>
+                          </Pressable>
+                        ))}
+                      </ScrollView>
+                    )}
+                  </View>
+                )}
+
+                {/* Branch Picker for Code Fix Mode with Repo Target */}
+                {isRepoOnly && mode === 'code_fix' && (
+                  <View style={{ gap: 8 }}>
+                    <Text style={[typography.caption, { color: colors.textSecondary, fontWeight: '600' }]}>
+                      SELECT A BRANCH
+                    </Text>
+                    {branchLoading ? (
+                      <Text style={[typography.caption, { color: colors.textMuted }]}>Loading branches...</Text>
+                    ) : branchError ? (
+                      <Text accessibilityRole="alert" style={[typography.caption, { color: colors.riskHigh }]}>{branchError}</Text>
+                    ) : branches.length === 0 ? (
+                      <Text style={[typography.caption, { color: colors.textSecondary }]}>
+                        No branches found for this repository.
+                      </Text>
+                    ) : (
+                      <>
+                        <ScrollView style={{ maxHeight: 150 }} nestedScrollEnabled>
+                          {branches.map((branch) => (
+                            <Pressable
+                              key={branch.name}
+                              onPress={() => selectBranch(branch.name)}
+                              style={({ pressed }) => ({
+                                padding: 10,
+                                borderRadius: 8,
+                                borderWidth: 1,
+                                borderColor: selectedBranch === branch.name ? colors.brandLight : colors.border,
+                                backgroundColor: selectedBranch === branch.name ? colors.brandSubtle : colors.surfaceElevated,
+                                marginBottom: 6,
+                                opacity: pressed ? 0.85 : 1,
+                              })}
+                            >
+                              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                <Text style={[typography.code, { color: colors.text, fontWeight: '600', fontSize: 12, flex: 1 }]} numberOfLines={1}>
+                                  {branch.name}
+                                </Text>
+                                {branch.isDefault && (
+                                  <Text style={[typography.code, { color: colors.brandLight, fontSize: 9, fontWeight: '600' }]}>
+                                    DEFAULT
+                                  </Text>
+                                )}
+                              </View>
+                            </Pressable>
+                          ))}
+                        </ScrollView>
+                        <Pressable
+                          onPress={() => setShowBranchInput(!showBranchInput)}
+                          style={({ pressed }) => ({
+                            padding: 10,
+                            borderRadius: 8,
+                            borderWidth: 1,
+                            borderColor: colors.border,
+                            backgroundColor: colors.surfaceElevated,
+                            opacity: pressed ? 0.85 : 1,
+                          })}
+                        >
+                          <Text style={[typography.caption, { color: colors.brandLight, textAlign: 'center' }]}>
+                            {showBranchInput ? 'Cancel' : 'Enter branch manually'}
+                          </Text>
+                        </Pressable>
+                        {showBranchInput && (
+                          <View style={{ gap: 6 }}>
+                            <TextInput
+                              accessibilityLabel="Enter branch name"
+                              value={branchInput}
+                              onChangeText={setBranchInput}
+                              placeholder="Enter branch name..."
+                              placeholderTextColor={colors.textMuted}
+                              autoCapitalize="none"
+                              autoCorrect={false}
+                              style={input}
+                            />
+                            <Button title="Confirm branch" onPress={submitBranchInput} variant="secondary" />
+                          </View>
+                        )}
+                      </>
+                    )}
+                  </View>
+                )}
+
                 <TextInput
                   accessibilityLabel="GitHub workflow target URL"
                   value={targetText}
@@ -825,9 +1012,19 @@ function AgentWorkspace({
                     Use a direct HTTPS GitHub repository, issue or PR link without a query or fragment.
                   </Text>
                 )}
-                {!!target && !targetCompatible && (
+                {!!target && !targetCompatible && !isRepoOnly && (
                   <Text accessibilityRole="alert" style={[typography.caption, { color: colors.riskHigh }]}>
                     Review workflows need a PR. Choose Prepare a fix for an issue or repository task.
+                  </Text>
+                )}
+                {isRepoOnly && mode === 'review' && selectedPr === null && (
+                  <Text accessibilityRole="alert" style={[typography.caption, { color: colors.riskHigh }]}>
+                    Select a pull request from the list above.
+                  </Text>
+                )}
+                {isRepoOnly && mode === 'code_fix' && selectedBranch === null && (
+                  <Text accessibilityRole="alert" style={[typography.caption, { color: colors.riskHigh }]}>
+                    Select a branch or enter one manually.
                   </Text>
                 )}
                 <Button

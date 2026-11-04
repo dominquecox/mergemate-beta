@@ -235,6 +235,26 @@ describe("inbox, triage, consent and settings", () => {
 });
 
 describe("repositories and installations", () => {
+  it("loads picker data through the authenticated shared client and validates both contracts", async () => {
+    const { client, calls } = native((request) => request.path.endsWith("/pulls")
+      ? jsonResponse({ items: [{ number: 7, title: "Fix cache", author: "octo", status: "open" }] })
+      : jsonResponse({ defaultBranch: "main", items: [{ name: "main", isDefault: true }] }));
+    const pulls = await client.getRepoPulls("octo", "review app");
+    const branches = await client.getRepoBranches("octo", "review app");
+    expect(pulls.items[0]).toMatchObject({ number: 7, author: "octo" });
+    expect(branches).toEqual({ defaultBranch: "main", items: [{ name: "main", isDefault: true }] });
+    expect(calls.map((call) => call.path)).toEqual([
+      "/repos/octo/review%20app/pulls",
+      "/repos/octo/review%20app/branches",
+    ]);
+    expect(calls.every((call) => call.headers.authorization === `Bearer ${TOKEN}`)).toBe(true);
+  });
+
+  it("rejects malformed picker responses instead of passing raw GitHub-shaped data to hooks", async () => {
+    const { client } = native(() => jsonResponse([{ number: 7, title: "raw response" }]));
+    await expect(client.getRepoPulls("octo", "repo")).rejects.toMatchObject({ code: "parse_failed" });
+  });
+
   it("follows repo pages and keeps whether a repo is private when watch is toggled", async () => {
     const repo = (id: string, priv: boolean) => ({ id, fullName: `octo/r${id}`, private: priv, watching: true });
     const { client, calls } = native((req) => {

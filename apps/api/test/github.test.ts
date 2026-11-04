@@ -1,8 +1,9 @@
-import { ErrorBody, PrDetail, RepoPage } from "@mergemate/contracts";
+import { ErrorBody, PrDetail, RepoBranchList, RepoPage, RepoPullList } from "@mergemate/contracts";
 import { describe, expect, it } from "vitest";
 import { sha256Hex } from "../src/lib/crypto";
 import { json, testContext } from "./helpers";
 import { appFor, post, signIn, tokenResponse } from "./sign-in";
+import { demoHeaders } from "./demo-session";
 
 const GH = "https://api.github.com";
 
@@ -80,6 +81,68 @@ describe("GET /v1/repos", () => {
     const ctx = testContext();
     const { headers } = await signIn(ctx);
     expect((await appFor(ctx)("/v1/repos?cursor=%%%", { headers })).status).toBe(422);
+  });
+});
+
+describe("repository picker routes", () => {
+  it("revalidates current access, uses the user's token, and returns bounded shared contracts", async () => {
+    const ctx = testContext();
+    const { headers } = await signIn(ctx);
+    const beforeLimits = ctx.sessionLimiter.keys.length;
+    ctx.net
+      .on("GET", `${GH}/repos/acme/api`, { full_name: "acme/api", default_branch: "develop" })
+      .on("GET", `${GH}/repos/acme/api/pulls?state=open&sort=updated&direction=desc&per_page=100`, [
+        { number: 8, title: "Draft API", user: { login: "alice" }, draft: true },
+        { number: 7, title: "Fix cache", user: null, draft: false },
+      ])
+      .on("GET", `${GH}/repos/acme/api/branches?per_page=100`, [{ name: "main" }, { name: "develop" }]);
+
+    const call = appFor(ctx);
+    const pulls = RepoPullList.parse(await (await call("/v1/repos/acme/api/pulls", { headers })).json());
+    const branches = RepoBranchList.parse(await (await call("/v1/repos/acme/api/branches", { headers })).json());
+
+    expect(pulls.items).toEqual([
+      { number: 8, title: "Draft API", author: "alice", status: "draft" },
+      { number: 7, title: "Fix cache", author: "ghost", status: "open" },
+    ]);
+    expect(branches).toEqual({
+      defaultBranch: "develop",
+      items: [{ name: "develop", isDefault: true }, { name: "main", isDefault: false }],
+    });
+    expect(ctx.net.calls.filter((item) => item.url === `${GH}/repos/acme/api`)).toHaveLength(2);
+    for (const request of ctx.net.calls.filter((item) => item.url.startsWith(`${GH}/repos/acme/api`))) {
+      expect(request.headers.get("authorization")).toBe(`Bearer ${tokenResponse().access_token}`);
+    }
+    expect(ctx.sessionLimiter.keys.length - beforeLimits).toBe(2);
+  });
+
+  it("does not list data when GitHub says current repository access is gone", async () => {
+    const ctx = testContext();
+    const { headers } = await signIn(ctx);
+    ctx.net.on("GET", `${GH}/repos/acme/private`, () => json({ message: "Not Found" }, 404));
+    const response = await appFor(ctx)("/v1/repos/acme/private/pulls", { headers });
+    expect(response.status).toBe(404);
+    expect(ctx.net.calls.some((item) => item.url.includes("/pulls?"))).toBe(false);
+  });
+
+  it("serves deterministic demo rows without contacting GitHub", async () => {
+    const ctx = testContext();
+    const headers = await demoHeaders(ctx);
+    const before = ctx.net.calls.length;
+    const call = appFor(ctx);
+    const pulls = RepoPullList.parse(await (await call("/v1/repos/acme-demo/storefront/pulls", { headers })).json());
+    const branches = RepoBranchList.parse(await (await call("/v1/repos/acme-demo/storefront/branches", { headers })).json());
+    expect(pulls.items.map((item) => item.number)).toEqual([318, 321]);
+    expect(branches.items[0]).toEqual({ name: "main", isDefault: true });
+    expect(ctx.net.calls).toHaveLength(before);
+  });
+
+  it("rejects invalid repository references before any GitHub call", async () => {
+    const ctx = testContext();
+    const { headers } = await signIn(ctx);
+    const before = ctx.net.calls.length;
+    expect((await appFor(ctx)("/v1/repos/bad!/api/branches", { headers })).status).toBe(422);
+    expect(ctx.net.calls).toHaveLength(before);
   });
 });
 

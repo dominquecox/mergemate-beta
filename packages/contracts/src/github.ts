@@ -50,6 +50,32 @@ export type Repo = z.infer<typeof Repo>;
 export const RepoPage = pageOf(Repo);
 export type RepoPage = z.infer<typeof RepoPage>;
 
+/** A bounded open pull request row used by repository-scoped pickers. */
+export const RepoPullOption = z.object({
+  number: z.number().int().positive(),
+  title: z.string().min(1).max(512),
+  author: z.string().min(1).max(100),
+  status: z.enum(["open", "draft"]),
+});
+export type RepoPullOption = z.infer<typeof RepoPullOption>;
+
+export const RepoPullList = z.object({
+  items: z.array(RepoPullOption).max(100),
+});
+export type RepoPullList = z.infer<typeof RepoPullList>;
+
+export const RepoBranchOption = z.object({
+  name: z.string().min(1).max(255),
+  isDefault: z.boolean(),
+});
+export type RepoBranchOption = z.infer<typeof RepoBranchOption>;
+
+export const RepoBranchList = z.object({
+  items: z.array(RepoBranchOption).max(100),
+  defaultBranch: z.string().min(1).max(255),
+});
+export type RepoBranchList = z.infer<typeof RepoBranchList>;
+
 export const RepoWatchRequest = z.object({
   watching: z.boolean(),
 });

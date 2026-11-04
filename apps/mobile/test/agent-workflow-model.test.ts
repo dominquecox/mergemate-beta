@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { WorkflowDefinition } from '@mergemate/contracts';
-import { AGENT_TEMPLATES, makeAgentTemplate, moveAgentStep, toggleAgentStep, targetFromPrUrl, targetFromUrl, sameTarget, safeDraftPrLink, isRunActive, evidenceText } from '../src/workflows/agent-model';
+import { AGENT_TEMPLATES, makeAgentTemplate, moveAgentStep, toggleAgentStep, targetFromPrUrl, targetFromUrl, sameTarget, safeDraftPrLink, isRunActive, evidenceText, isRepositoryPickerTarget } from '../src/workflows/agent-model';
 const target={owner:'owner',repo:'repo',number:7};
 describe('agent builder model',()=>{
  it('creates executable validated review and code-fix templates without claiming execution',()=>{
@@ -23,6 +23,7 @@ describe('agent builder model',()=>{
   const repo=targetFromUrl('https://github.com/owner/repo')!;
   expect(issue).toEqual({owner:'owner',repo:'repo',kind:'issue',number:9});
   expect(repo).toEqual({owner:'owner',repo:'repo',kind:'repository'});
+  expect(isRepositoryPickerTarget(repo)).toBe(true);expect(isRepositoryPickerTarget(target)).toBe(false);
   for(const t of [issue,repo]){const fix=makeAgentTemplate('fix',t);expect(fix.steps.map(s=>s.kind)).toEqual(['context','patch','qa','draft_pr','route']);}
   expect(()=>makeAgentTemplate('review',issue)).toThrow();
   for(const url of ['https://github.com/owner/repo/issues/0','https://github.com/owner/repo?token=x','https://github.com/owner/repo/tree/main','https://github.com/owner/repo/pull/1#x'])expect(targetFromUrl(url)).toBeNull();

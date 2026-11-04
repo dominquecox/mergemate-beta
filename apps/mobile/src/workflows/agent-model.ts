@@ -32,6 +32,9 @@ export function targetFromUrl(value: string): WorkflowTarget | null {
     return parsed.success ? parsed.data : null;
   } catch { return null; }
 }
+export function isRepositoryPickerTarget(target: WorkflowTarget | null): target is WorkflowTarget & { kind: 'repository' } {
+  return target?.kind === 'repository';
+}
 export function targetFromPrUrl(value: string): WorkflowTarget | null {
   const parsed = parseReviewPr(value);
   return parsed ? { ...parsed, number: Number(parsed.number) } : null;
