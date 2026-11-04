@@ -12,7 +12,7 @@ describe('UI segment evidence contract',()=>{
   const ctx=testContext({...validModelEnv(),MODEL_ROUTE_HIGHLIGHT:'meta:muse-spark-1.2',IMAGES:fixtureImages()});ctx.kv.set('flags:v1',JSON.stringify({highlight:true}));
   ctx.net.on('POST','https://api.meta.ai/v1/responses',()=>json({object:'response',output:[{type:'message',content:[{type:'output_text',text:JSON.stringify({explanation:'Toggle needs review.',segments:[region]})}]}]}));
   const call=appFor(ctx),{headers}=await signIn(ctx,'ios');
-  await call('/v1/consent',{method:'PUT',headers:{...headers,'content-type':'application/json'},body:JSON.stringify({ai:{granted:true,version:'1'}})});
+  await call('/v1/consent',{method:'PUT',headers:{...headers,'content-type':'application/json'},body:JSON.stringify({ai:{granted:true,version:'2'}})});
   const form=new FormData();form.append('image',new File([imagePng()],'shot.png',{type:'image/png'}));
   const res=await call('/v1/highlight',{method:'POST',headers,body:form});expect(res.status).toBe(200);
   const body=await res.json() as {segments:{touchTargetCompliant:boolean;higViolation:string}[]};expect(body.segments[0]?.touchTargetCompliant).toBe(false);expect(body.segments[0]?.higViolation).toContain('44pt');

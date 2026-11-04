@@ -22,6 +22,7 @@ const SENT = [
 
 const LIMITS = [
   "Known credential patterns are masked in PR text before it is sent. This is pattern matching, not a guarantee: it can miss secrets, and it does not look inside screenshots or audio.",
+  "Without your own Meta key, Meta-routed AI requests run on MergeMate's shared daily allowance on Meta's Model API, which uses Meta's free credits. Meta says: \"While using free credits your content may be used for product improvement.\" If you add your own Meta key in Settings, those requests run on your key under your own Meta account and Meta's terms for that account; if your account also uses Meta's free credits, the same statement applies there.",
   "MergeMate does not use your content to train its own models. How the AI provider handles requests is set by that provider's terms; MergeMate has not verified more than that.",
   "MergeMate is read-only: AI never changes anything in GitHub.",
 ];

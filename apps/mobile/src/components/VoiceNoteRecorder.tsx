@@ -2,6 +2,7 @@ import React,{useCallback,useEffect,useRef,useState} from 'react';
 import {AppState,Platform,View} from 'react-native';
 import {useFocusEffect} from 'expo-router';
 import {api} from '../api';
+import {AI_CONSENT_VERSION} from '../config/consent';
 import {onSessionChange} from '../auth/session-events';
 import {useTheme} from '../context/ThemeContext';
 import {startVoiceCapture,createVoicePreview} from '../voice/driver';
@@ -47,7 +48,7 @@ export function VoiceNoteRecorder({onTranscript,onBusyChange}:{onTranscript:(tex
   try{
    const [flags,consent]=await Promise.all([api.getFeatureFlags(true),api.getConsent()]);
    if(version!==generation.current)return;
-   if(!flags.voice_notes || !consent.ai.granted || consent.ai.version!=='1')throw new Error('Voice notes are unavailable. Check AI consent in Settings.');
+   if(!flags.voice_notes || !consent.ai.granted || consent.ai.version!==AI_CONSENT_VERSION)throw new Error('Voice notes are unavailable. Check AI consent in Settings.');
    const active=await startVoiceCapture(()=>{void stopRef.current();},value=>{if(version===generation.current)setSeconds(Math.floor(value));},abort.signal);
    if(version!==generation.current){await active.dispose();return;}capture.current=active;set('recording');
   }catch(error){if(version===generation.current){set('idle');setError(error instanceof Error ? error.message : 'Microphone unavailable. Type a private note instead.');}}

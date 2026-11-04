@@ -25,7 +25,7 @@ const grant = async (call: ReturnType<typeof appFor>, headers: Record<string, st
   const res = await call("/v1/consent", {
     method: "PUT",
     headers: { "content-type": "application/json", ...headers },
-    body: JSON.stringify({ ai: { granted: true, version: "1" } }),
+    body: JSON.stringify({ ai: { granted: true, version: "2" } }),
   });
   if (res.status !== 200) throw new Error(`consent grant failed: ${res.status}`);
 };

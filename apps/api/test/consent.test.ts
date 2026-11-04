@@ -22,7 +22,7 @@ describe("consent routes", () => {
     const ctx = testContext();
     const res = await appFor(ctx)("/v1/consent", { headers: await demoHeaders(ctx) });
     expect(res.status).toBe(200);
-    expect(ConsentState.parse(await res.json())).toEqual({ ai: { granted: false, version: "1", currentVersion: "1" } });
+    expect(ConsentState.parse(await res.json())).toEqual({ ai: { granted: false, version: "2", currentVersion: "2" } });
     expect(res.headers.get("Cache-Control")).toBe("no-store");
   });
 
@@ -30,7 +30,7 @@ describe("consent routes", () => {
     const ctx = testContext();
     const res = await appFor(ctx)(
       "/v1/consent",
-      put({ ai: { granted: true, version: "1" } }, await demoHeaders(ctx)),
+      put({ ai: { granted: true, version: "2" } }, await demoHeaders(ctx)),
     );
     expect(res.status).toBe(403);
     expect(ErrorBody.parse(await res.json()).error.code).toBe("forbidden");
@@ -40,7 +40,7 @@ describe("consent routes", () => {
     const ctx = testContext();
     const call = appFor(ctx);
     const { headers } = await signIn(ctx, "ios");
-    const saved = await call("/v1/consent", put({ ai: { granted: true, version: "1" } }, headers));
+    const saved = await call("/v1/consent", put({ ai: { granted: true, version: "2" } }, headers));
     expect(saved.status).toBe(200);
     const state = ConsentState.parse(await saved.json());
     expect(state.ai.granted).toBe(true);

@@ -12,12 +12,12 @@ describe("MM-040 API follow-ups", () => {
     const ctx = testContext();
     const call = appFor(ctx);
     const { headers, csrf } = await signIn(ctx, "web");
-    const missing = await call("/v1/consent", { method: "PUT", headers: { ...headers, "content-type": "application/json" }, body: JSON.stringify({ ai: { granted: true, version: "1" } }) });
+    const missing = await call("/v1/consent", { method: "PUT", headers: { ...headers, "content-type": "application/json" }, body: JSON.stringify({ ai: { granted: true, version: "2" } }) });
     expect(missing.status).toBe(403);
     expect(ErrorBody.parse(await missing.json()).error.code).toBe("csrf_invalid");
-    const stale = await call("/v1/consent", { method: "PUT", headers: { ...headers, "content-type": "application/json", "x-csrf-token": "stale" }, body: JSON.stringify({ ai: { granted: true, version: "1" } }) });
+    const stale = await call("/v1/consent", { method: "PUT", headers: { ...headers, "content-type": "application/json", "x-csrf-token": "stale" }, body: JSON.stringify({ ai: { granted: true, version: "2" } }) });
     expect(ErrorBody.parse(await stale.json()).error.code).toBe("csrf_invalid");
-    const ok = await call("/v1/consent", { method: "PUT", headers: { ...headers, "content-type": "application/json", "x-csrf-token": csrf ?? "" }, body: JSON.stringify({ ai: { granted: true, version: "1" } }) });
+    const ok = await call("/v1/consent", { method: "PUT", headers: { ...headers, "content-type": "application/json", "x-csrf-token": csrf ?? "" }, body: JSON.stringify({ ai: { granted: true, version: "2" } }) });
     expect(ok.status).toBe(200);
   });
 
@@ -33,7 +33,7 @@ describe("MM-040 API follow-ups", () => {
     const ctx = testContext();
     const { headers } = await signIn(ctx, "ios");
     const body = ConsentState.parse(await (await appFor(ctx)("/v1/consent", { headers })).json());
-    expect(body.ai.currentVersion).toBe("1");
+    expect(body.ai.currentVersion).toBe("2");
   });
 
   it("undoes a triage choice for the signed-in user only, idempotently", async () => {

@@ -43,7 +43,7 @@ describe('durable private notes',()=>{
  it('requires web CSRF for confirmation',async()=>{const ctx=testContext(),call=appFor(ctx),{headers}=await signIn(ctx,'web');expect((await call('/v1/notes',post(input(),headers))).status).toBe(403);});
  it('transcribes bounded raw PCM, reviews before saving, meters one action without audio/text retention',async()=>{
   const ctx=testContext(validModelEnv()),call=appFor(ctx),{headers,userId}=await signIn(ctx);ctx.kv.set('flags:v1',JSON.stringify({voice_notes:true}));
-  await call('/v1/consent',{...post({ai:{granted:true,version:'1'}},headers),method:'PUT'});
+  await call('/v1/consent',{...post({ai:{granted:true,version:'2'}},headers),method:'PUT'});
   ctx.net.on('POST','https://api.meta.ai/v1/asr/transcribe',()=>json({text:'provider transcript'}));
   const res=await call('/v1/voice-notes',{method:'POST',headers:{...headers,'content-type':'audio/wav'},body:wav()});
   expect(res.status).toBe(200);expect(res.headers.get('x-actions-remaining')).toBe('29');const transcript=VoiceNoteResult.parse(await res.json());

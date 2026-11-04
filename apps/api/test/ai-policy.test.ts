@@ -113,7 +113,7 @@ describe('AI choices API', () => {
   it('starts with AI off, summaries on and a revision', async () => {
     const { call, headers } = await start();
     const prefs = await readPrefs(call, headers);
-    expect(prefs.ai).toMatchObject({ granted: false, currentVersion: '1' });
+    expect(prefs.ai).toMatchObject({ granted: false, currentVersion: '2' });
     expect(prefs.aiSummaries).toBe(true);
     expect(prefs.revision.length).toBeGreaterThan(0);
   });
@@ -124,7 +124,7 @@ describe('AI choices API', () => {
     const wrongVersion = await putPrefs(call, headers, { action: 'grant', version: '0' });
     expect(wrongVersion.status).toBe(403);
     expect(ErrorBody.parse(await wrongVersion.json()).error.code).toBe('consent_required');
-    expect((await putPrefs(call, headers, { action: 'grant', version: '1' })).status).toBe(200);
+    expect((await putPrefs(call, headers, { action: 'grant', version: '2' })).status).toBe(200);
     const granted = await readPrefs(call, headers);
     expect(granted.ai.granted).toBe(true);
     expect(granted.revision).not.toBe(old.revision);
@@ -139,15 +139,15 @@ describe('AI choices API', () => {
     const { call, headers } = await start();
     const { revision } = await readPrefs(call, headers);
     const [a, b] = await Promise.all([
-      putPrefs(call, headers, { action: 'grant', version: '1' }, revision),
-      putPrefs(call, headers, { action: 'grant', version: '1' }, revision),
+      putPrefs(call, headers, { action: 'grant', version: '2' }, revision),
+      putPrefs(call, headers, { action: 'grant', version: '2' }, revision),
     ]);
     expect([a.status, b.status].sort()).toEqual([200, 409]);
   });
 
   it('revoke always works and also stops summaries; revoking twice is safe', async () => {
     const { call, headers } = await start();
-    await putPrefs(call, headers, { action: 'grant', version: '1' });
+    await putPrefs(call, headers, { action: 'grant', version: '2' });
     const before = await readPrefs(call, headers);
     expect((await putPrefs(call, headers, { action: 'revoke' })).status).toBe(200);
     const after = await readPrefs(call, headers);
@@ -163,7 +163,7 @@ describe('AI choices API', () => {
     expect((await off.json() as { aiSummaries: boolean }).aiSummaries).toBe(false);
     const early = await setSummaries(call, headers, true);
     expect(early.status).toBe(403);
-    await putPrefs(call, headers, { action: 'grant', version: '1' });
+    await putPrefs(call, headers, { action: 'grant', version: '2' });
     expect((await readPrefs(call, headers)).aiSummaries).toBe(true);
     expect((await setSummaries(call, headers, false)).status).toBe(200);
     expect(await readPrefs(call, headers)).toMatchObject({ ai: { granted: true }, aiSummaries: false });
@@ -188,7 +188,7 @@ describe('AI choices API', () => {
     const a = await signIn(ctx);
     const b = await signIn(ctx, 'ios', { id: 9, login: 'other', name: null, avatar_url: 'https://avatars.githubusercontent.com/u/9' });
     const call = appFor(ctx);
-    await putPrefs(call, a.headers, { action: 'grant', version: '1' });
+    await putPrefs(call, a.headers, { action: 'grant', version: '2' });
     expect((await readPrefs(call, b.headers)).ai.granted).toBe(false);
   });
 });

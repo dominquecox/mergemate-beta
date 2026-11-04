@@ -43,7 +43,7 @@ describe("AI summary and risk routes", () => {
     const ctx = testContext();
     const call = appFor(ctx);
     const { headers } = await signIn(ctx, "ios");
-    await call("/v1/consent", put({ ai: { granted: true, version: "1" } }, headers));
+    await call("/v1/consent", put({ ai: { granted: true, version: "2" } }, headers));
     const res = await call("/v1/prs/octo/demo/7/summary", { method: "POST", headers });
     expect(res.status).toBe(502);
     expect(ErrorBody.parse(await res.json()).error.code).toBe("upstream_unavailable");

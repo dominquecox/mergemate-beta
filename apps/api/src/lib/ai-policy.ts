@@ -2,7 +2,7 @@ import { AiPreferences, Settings } from "@mergemate/contracts";
 import { ApiError } from "../errors";
 import { defaultSettings } from "./settings";
 
-export const CURRENT_AI_CONSENT_VERSION = "1";
+export const CURRENT_AI_CONSENT_VERSION = "2";
 
 export interface AiPolicyFence {
   userId: string;

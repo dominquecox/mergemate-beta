@@ -6,7 +6,7 @@ import { MockApiClient } from "../src/api/mock";
 import { errorResponse, jsonResponse, makeClient } from "./helpers";
 
 const prefs = (over: Partial<AiPreferences> & { granted?: boolean; version?: string } = {}): AiPreferences => ({
-  ai: { granted: over.granted ?? false, version: over.version ?? "1", currentVersion: "1" },
+  ai: { granted: over.granted ?? false, version: over.version ?? "2", currentVersion: "2" },
   aiSummaries: over.aiSummaries ?? true,
   revision: over.revision ?? "r1",
 });
@@ -63,7 +63,7 @@ describe("AI choices store", () => {
     await choices.refresh();
     s.writes.push(ok(prefs({ granted: true, revision: "r8" })));
     expect(await choices.grant()).toBe(true);
-    expect(s.sent).toEqual([{ action: "grant", version: "1", expectedRevision: "r7" }]);
+    expect(s.sent).toEqual([{ action: "grant", version: "2", expectedRevision: "r7" }]);
     expect(choices.getState().prefs?.revision).toBe("r8");
   });
 
@@ -255,9 +255,9 @@ describe("AI choices over HTTP", () => {
   it("reads canonical state and sends the revision with each change", async () => {
     const { client, calls } = makeClient((req) => jsonResponse(body), { platform: "native", token: "tok_aaaaaaaaaaaaaaaaaaaaaa" });
     await expect(client.getAiPreferences()).resolves.toEqual(body);
-    await client.updateAiPreferences({ action: "grant", version: "1", expectedRevision: "r1" });
+    await client.updateAiPreferences({ action: "grant", version: "2", expectedRevision: "r1" });
     expect(calls[0]?.path).toBe("/consent/preferences");
-    expect(calls[1]).toMatchObject({ method: "PUT", path: "/consent/preferences", body: { action: "grant", version: "1", expectedRevision: "r1" } });
+    expect(calls[1]).toMatchObject({ method: "PUT", path: "/consent/preferences", body: { action: "grant", version: "2", expectedRevision: "r1" } });
   });
 
   it("surfaces a changed-elsewhere conflict as its own code", async () => {
@@ -275,7 +275,7 @@ describe("AI choices in the sample-data client", () => {
   it("grants, toggles summaries and revokes with revision checks", async () => {
     const mock = new MockApiClient();
     const start = await mock.getAiPreferences();
-    const granted = await mock.updateAiPreferences({ action: "grant", version: "1", expectedRevision: start.revision });
+    const granted = await mock.updateAiPreferences({ action: "grant", version: "2", expectedRevision: start.revision });
     expect(granted.revision).not.toBe(start.revision);
     await expect(mock.updateAiPreferences({ action: "summaries", enabled: false, expectedRevision: start.revision })).rejects.toMatchObject({ code: "consent_changed" });
     const off = await mock.updateAiPreferences({ action: "summaries", enabled: false, expectedRevision: granted.revision });

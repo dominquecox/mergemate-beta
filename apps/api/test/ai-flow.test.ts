@@ -76,7 +76,7 @@ describe("AI flow with real GitHub data", () => {
     await call("/v1/consent", {
       method: "PUT",
       headers: { "content-type": "application/json", ...headers },
-      body: JSON.stringify({ ai: { granted: true, version: "1" } }),
+      body: JSON.stringify({ ai: { granted: true, version: "2" } }),
     });
 
     const first = await call("/v1/prs/acme/api/7/summary", { method: "POST", headers });
@@ -113,7 +113,7 @@ describe("AI flow with real GitHub data", () => {
     await call("/v1/consent", {
       method: "PUT",
       headers: { "content-type": "application/json", ...headers },
-      body: JSON.stringify({ ai: { granted: true, version: "1" } }),
+      body: JSON.stringify({ ai: { granted: true, version: "2" } }),
     });
 
     const risk = await call("/v1/prs/acme/api/8/risk", { method: "POST", headers });
@@ -147,7 +147,7 @@ describe("AI flow with real GitHub data", () => {
     await call("/v1/consent", {
       method: "PUT",
       headers: { "content-type": "application/json", ...headers },
-      body: JSON.stringify({ ai: { granted: true, version: "1" } }),
+      body: JSON.stringify({ ai: { granted: true, version: "2" } }),
     });
     expect((await call("/v1/prs/acme/api/7/summary", { method: "POST", headers })).status).toBe(200);
     // Risk keeps its rule-based checks when AI is paused; only the AI part stops.
@@ -168,7 +168,7 @@ describe("AI flow with real GitHub data", () => {
     await call("/v1/consent", {
       method: "PUT",
       headers: { "content-type": "application/json", ...headers },
-      body: JSON.stringify({ ai: { granted: true, version: "1" } }),
+      body: JSON.stringify({ ai: { granted: true, version: "2" } }),
     });
     expect((await call("/v1/prs/acme/api/7/summary", { method: "POST", headers })).status).toBe(200);
     expect(ctx.db.rows("SELECT * FROM consent_grants")).toHaveLength(1);
@@ -205,7 +205,7 @@ describe("diagnosable AI failures", () => {
     await call("/v1/consent", {
       method: "PUT",
       headers: { "content-type": "application/json", ...headers },
-      body: JSON.stringify({ ai: { granted: true, version: "1" } }),
+      body: JSON.stringify({ ai: { granted: true, version: "2" } }),
     });
     const logs: string[] = [];
     vi.spyOn(console, "error").mockImplementation((line: unknown) => void logs.push(String(line)));

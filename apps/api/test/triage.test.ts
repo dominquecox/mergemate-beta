@@ -134,7 +134,7 @@ const stubAll = (ctx: TestContext) => {
 const putJson = (body: unknown, headers: Record<string, string>): RequestInit => ({ ...post(body, headers), method: "PUT" });
 
 const grantConsent = async (ctx: TestContext, headers: Record<string, string>) =>
-  expect((await appFor(ctx)("/v1/consent", putJson({ ai: { granted: true, version: "1" } }, headers))).status).toBe(200);
+  expect((await appFor(ctx)("/v1/consent", putJson({ ai: { granted: true, version: "2" } }, headers))).status).toBe(200);
 
 type Answer = { lane: string; reasons: string[] } | string;
 
@@ -347,7 +347,7 @@ describe("AI lane scoring", () => {
     expect(ai.runs).toHaveLength(0);
 
     expect((await setSummaries(appFor(ctx), headers, true)).status).toBe(200);
-    await appFor(ctx)("/v1/consent", putJson({ ai: { granted: false, version: "1" } }, headers));
+    await appFor(ctx)("/v1/consent", putJson({ ai: { granted: false, version: "2" } }, headers));
     expect((await queue(ctx, headers)).every((i) => i.source === "rules")).toBe(true);
     expect(ai.runs).toHaveLength(0);
   });

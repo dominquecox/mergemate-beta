@@ -202,12 +202,12 @@ describe("inbox, triage, consent and settings", () => {
 
   it("reads and writes AI consent with the app's consent version", async () => {
     const { client, calls } = native((req) =>
-      jsonResponse({ ai: { granted: req.method === "PUT", version: "1", ...(req.method === "PUT" ? { at: NOW } : {}) } }),
+      jsonResponse({ ai: { granted: req.method === "PUT", version: "2", ...(req.method === "PUT" ? { at: NOW } : {}) } }),
     );
-    await expect(client.getConsent()).resolves.toEqual({ ai: { granted: false, version: "1" } });
+    await expect(client.getConsent()).resolves.toEqual({ ai: { granted: false, version: "2" } });
     await client.setConsent(true);
     expect(calls[1]?.method).toBe("PUT");
-    expect(calls[1]?.body).toEqual({ ai: { granted: true, version: "1" } });
+    expect(calls[1]?.body).toEqual({ ai: { granted: true, version: "2" } });
   });
 
   it("sends the full settings object when one setting changes", async () => {

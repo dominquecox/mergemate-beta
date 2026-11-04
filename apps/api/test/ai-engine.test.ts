@@ -358,7 +358,7 @@ describe("D1 consent store", () => {
     expect((await first.read("u1")).granted).toBe(false);
     await first.write("u1", true);
     const second = createDbConsentStore(db);
-    expect(await second.read("u1")).toMatchObject({ granted: true, version: "1" });
+    expect(await second.read("u1")).toMatchObject({ granted: true, version: "2" });
   });
 });
 
@@ -897,7 +897,9 @@ describe("misc engine helpers", () => {
 
 describe("consent helpers", () => {
   it("parses updates and rejects stale versions", () => {
-    expect(parseConsentUpdate({ ai: { granted: true, version: "1" } })).toEqual({ granted: true });
+    expect(parseConsentUpdate({ ai: { granted: true, version: "2" } })).toEqual({ granted: true });
+    // Consent given under the previous text (version 1) no longer counts, so people agree again to the free-credit wording.
+    expect(() => parseConsentUpdate({ ai: { granted: true, version: "1" } })).toThrowError(expect.objectContaining({ code: "validation_failed" }));
     expect(() => parseConsentUpdate({ ai: { granted: true, version: "0" } })).toThrowError(
       expect.objectContaining({ code: "validation_failed" }),
     );
@@ -913,6 +915,13 @@ describe("consent helpers", () => {
     await expect(requireConsent(store, "u1")).rejects.toMatchObject({ code: "consent_required" });
     await store.write("u1", true);
     await expect(requireConsent(store, "u1")).resolves.toBeUndefined();
+  });
+
+  it("asks again when the saved grant is from the previous consent text", async () => {
+    const db = testDb();
+    await seedUser(db, "u1", 4242);
+    await db.prepare("INSERT INTO consent_grants(user_id,granted,version,at) VALUES(?,1,?,?)").bind("u1", "1", "2026-11-01T00:00:00.000Z").run();
+    await expect(requireConsent(createDbConsentStore(db), "u1")).rejects.toMatchObject({ code: "consent_required" });
   });
 });
 

@@ -5,6 +5,7 @@ import { DemoHighlightGallery } from "../src/components/DemoHighlightGallery";
 import {PrivateNotes} from "../src/components/PrivateNotes";
 import {useFocusEffect,useRouter} from "expo-router";
 import {useConsent} from "../src/context/ConsentContext";
+import {AI_CONSENT_VERSION} from "../src/config/consent";
 import {useAuth} from "../src/context/AuthContext";
 import {onSessionChange} from "../src/auth/session-events";
 import {releasePickedImage} from "../src/highlight/cleanup";
@@ -79,7 +80,7 @@ export default function HighlightScreen() {
     try{
       const [latest,consent]=await Promise.all([api.getFeatureFlags(true),api.getConsent()]);if(version!==sequence.current)return;
       if(!latest.highlight){setFlagBlocked(true);clear();setImage(null);return;}
-      if(!consent.ai.granted||consent.ai.version!=="1")throw new Error("Consent required");
+      if(!consent.ai.granted||consent.ai.version!==AI_CONSENT_VERSION)throw new Error("Consent required");
       const res=await api.analyzeHighlight(image.uri,note,image.mimeType??undefined,controller.signal);
       if(version===sequence.current)setResult(res);
     }catch(e){if(version===sequence.current)setError(toUserMessage(e,"Could not analyze this screenshot. Check AI consent or try again."));}

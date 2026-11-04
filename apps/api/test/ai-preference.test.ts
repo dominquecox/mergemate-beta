@@ -22,7 +22,7 @@ describe('AI summaries preference',()=>{
     prepare.mockRestore();
     const early=await setSummaries(call,session.headers,true);
     expect(early.status).toBe(403);expect(ErrorBody.parse(await early.json()).error.code).toBe('consent_required');
-    expect((await putPrefs(call,session.headers,{action:'grant',version:'1'})).status).toBe(200);
+    expect((await putPrefs(call,session.headers,{action:'grant',version:'2'})).status).toBe(200);
     expect((await setSummaries(call,session.headers,false)).status).toBe(200);
     expect((await setSummaries(call,session.headers,true)).status).toBe(200);
     // The generic settings save cannot turn it back off or on: it only changes through the AI choices.

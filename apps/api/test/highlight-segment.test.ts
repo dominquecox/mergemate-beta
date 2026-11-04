@@ -38,7 +38,7 @@ const setup = (samText: string | (() => Response), extraEnv: Record<string, unkn
 const run = async (ctx: ReturnType<typeof baseContext>) => {
   const call = appFor(ctx);
   const { headers } = await signIn(ctx, "ios");
-  await call("/v1/consent", { method: "PUT", headers: { "content-type": "application/json", ...headers }, body: JSON.stringify({ ai: { granted: true, version: "1" } }) });
+  await call("/v1/consent", { method: "PUT", headers: { "content-type": "application/json", ...headers }, body: JSON.stringify({ ai: { granted: true, version: "2" } }) });
   const form = new FormData();
   form.append("image", new File([imagePng()], "shot.png", { type: "image/png" }));
   form.append("note", "checkout button");
