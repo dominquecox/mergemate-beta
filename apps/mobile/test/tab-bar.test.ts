@@ -8,7 +8,8 @@ describe("bottom tab bar", () => {
   const layout = read("app/(tabs)/_layout.tsx");
 
   it("adds a Workflows tab after Triage that opens the shared Workflows screen", () => {
-    expect(layout).toMatch(/item\.name === "triage"[\s\S]*name="workflows-tab"[\s\S]*title: "Workflows"/);
+    expect(layout).toMatch(/name="workflows-tab"[\s\S]*title: "Workflows"/);
+    expect(layout).toMatch(/item\.name === "triage" \? \[workflowsScreen\]/);
     expect(layout).toMatch(/tabPress: \(event\) => \{\s*event\.preventDefault\(\);\s*router\.push\("\/workflows"\);/);
     expect(read("app/(tabs)/workflows-tab.tsx")).toContain('<Redirect href="/workflows" />');
   });

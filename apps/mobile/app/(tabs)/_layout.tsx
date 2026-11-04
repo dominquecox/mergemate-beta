@@ -6,7 +6,7 @@ import { useTheme } from "../../src/context/ThemeContext";
 import { useAlerts } from "../../src/context/AlertsContext";
 import { useFeatureFlags } from "../../src/hooks/useFeatureFlags";
 import { useLayout } from "../../src/layout/useLayout";
-import { navItemsFor } from "../../src/navigation/items";
+import { navItemsFor, compactTabOrder, type NavItem } from "../../src/navigation/items";
 import { Icon } from "../../src/components/Icon";
 
 export default function TabsLayout() {
@@ -21,6 +21,57 @@ export default function TabsLayout() {
   const bottomInset = insets.bottom;
 
   const allItems = navItemsFor(flags);
+  // Narrow web shows only Board, Workflows and Triage; Inbox, Alerts and Settings move to the top bar and side menu.
+  const compact = Platform.OS === "web" && !isDesktop;
+
+  const itemScreen = (item: NavItem) => (
+    <Tabs.Screen
+      key={item.name}
+      name={item.name}
+      options={{
+        title: item.label,
+        tabBarAccessibilityLabel: item.tabLabel,
+        tabBarBadge: item.name === "notifications" && unreadCount > 0 ? (unreadCount > 99 ? "99+" : unreadCount) : undefined,
+        tabBarBadgeStyle: {
+          backgroundColor: colors.statusAlertBg,
+          color: colors.statusAlert,
+          fontSize: 10,
+          fontWeight: "700",
+        },
+        tabBarIcon: ({ color, focused }) => (
+          <Icon name={focused ? item.iconActive : item.icon} size={22} color={color as string} />
+        ),
+      }}
+    />
+  );
+
+  // Workflows lives at /workflows (shared with desktop and deep links); this tab opens it.
+  const workflowsScreen = (
+    <Tabs.Screen
+      key="workflows-tab"
+      name="workflows-tab"
+      options={{
+        title: "Workflows",
+        tabBarAccessibilityLabel: "Workflows tab",
+        tabBarIcon: ({ color }) => <Icon name="git-network-outline" size={22} color={color as string} />,
+      }}
+      listeners={{
+        tabPress: (event) => {
+          event.preventDefault();
+          router.push("/workflows");
+        },
+      }}
+    />
+  );
+
+  const compactScreens = [
+    ...compactTabOrder(flags).map((name) =>
+      name === "workflows-tab" ? workflowsScreen : itemScreen(allItems.find((item) => item.name === name)!),
+    ),
+    ...allItems
+      .filter((item) => item.name === "inbox" || item.name === "notifications" || item.name === "settings")
+      .map((item) => <Tabs.Screen key={`hidden-${item.name}`} name={item.name} options={{ href: null }} />),
+  ];
 
   return (
     <Tabs
@@ -56,45 +107,9 @@ export default function TabsLayout() {
         tabBarItemStyle: { minHeight: 44 },
       }}
     >
-      {allItems.flatMap((item) => [
-        <Tabs.Screen
-          key={item.name}
-          name={item.name}
-          options={{
-            title: item.label,
-            tabBarAccessibilityLabel: item.tabLabel,
-            tabBarBadge: item.name === "notifications" && unreadCount > 0 ? (unreadCount > 99 ? "99+" : unreadCount) : undefined,
-            tabBarBadgeStyle: {
-              backgroundColor: colors.statusAlertBg,
-              color: colors.statusAlert,
-              fontSize: 10,
-              fontWeight: "700",
-            },
-            tabBarIcon: ({ color, focused }) => (
-              <Icon name={focused ? item.iconActive : item.icon} size={22} color={color as string} />
-            ),
-          }}
-        />,
-        ...(item.name === "triage"
-          ? [
-              // Workflows lives at /workflows (shared with desktop and deep links); this tab opens it.
-              <Tabs.Screen
-                key="workflows-tab"
-                name="workflows-tab"
-                options={{
-                  title: "Workflows",
-                  tabBarAccessibilityLabel: "Workflows tab",
-                  tabBarIcon: ({ color }) => <Icon name="git-network-outline" size={22} color={color as string} />,
-                }}
-                listeners={{
-                  tabPress: (event) => {
-                    event.preventDefault();
-                    router.push("/workflows");
-                  },
-                }}
-              />,
-            ]
-          : []),
+      {compact ? compactScreens : allItems.flatMap((item) => [
+        itemScreen(item),
+        ...(item.name === "triage" ? [workflowsScreen] : []),
       ])}
       {/* Expo Router adds every file in this folder as a tab, so the Board route is hidden while its flag is off. */}
       {!flags.brain && <Tabs.Screen key="brain" name="brain" options={{ href: null }} />}

@@ -52,6 +52,8 @@ export interface ShellLayout {
   kind: ShellKind;
   /** Left sidebar nav replaces the bottom tab bar. */
   sidebar: boolean;
+  /** Narrow web layouts (below 1024px) show a global top bar with the side-menu button. */
+  topBar: boolean;
   /** Auth screens sit in a centered card on tablet and desktop. */
   card: boolean;
   /** Max width of the content column. undefined means unconstrained (native). */
@@ -70,12 +72,13 @@ export function resolveShell({ width, segments, signedIn, isWeb }: ResolveShellI
 
   // Native layout must not change: no shell, no column, no sidebar.
   if (!isWeb) {
-    return { mode: "phone", kind, sidebar: false, card: false, columnMaxWidth: undefined };
+    return { mode: "phone", kind, sidebar: false, topBar: false, card: false, columnMaxWidth: undefined };
   }
 
   const mode = getLayoutMode(width);
+  const topBar = mode !== "desktop" && kind === "app" && signedIn;
   if (mode === "phone") {
-    return { mode, kind, sidebar: false, card: false, columnMaxWidth: COLUMN_WIDTH.phone };
+    return { mode, kind, sidebar: false, topBar, card: false, columnMaxWidth: COLUMN_WIDTH.phone };
   }
 
   const card = kind === "auth";
@@ -89,5 +92,5 @@ export function resolveShell({ width, segments, signedIn, isWeb }: ResolveShellI
     columnMaxWidth = undefined;
   }
 
-  return { mode, kind, sidebar, card, columnMaxWidth };
+  return { mode, kind, sidebar, topBar, card, columnMaxWidth };
 }

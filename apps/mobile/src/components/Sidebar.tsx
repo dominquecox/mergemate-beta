@@ -5,7 +5,7 @@ import { Link, useRouter, useSegments } from "expo-router";
 import { useTheme } from "../context/ThemeContext";
 import { useAuth } from "../context/AuthContext";
 import { useAlerts } from "../context/AlertsContext";
-import { navItemsFor, type NavItem } from "../navigation/items";
+import { navItemsFor, isTabActive, type NavItem } from "../navigation/items";
 import { useFeatureFlags } from "../hooks/useFeatureFlags";
 import { SIDEBAR_WIDTH } from "../layout/breakpoints";
 import { Icon, IconName } from "./Icon";
@@ -15,7 +15,7 @@ interface SidebarRowProps {
   icon: IconName;
   iconActive: IconName;
   active: boolean;
-  href: NavItem["href"];
+  href: NavItem["href"] | "/workflows";
   accessibilityLabel: string;
   badgeCount?: number;
 }
@@ -140,41 +140,21 @@ export function Sidebar() {
             label={item.label}
             icon={item.icon}
             iconActive={item.iconActive}
-            active={inTabs && segments[1] === item.name}
+            active={isTabActive(segments, item.name)}
             accessibilityLabel={item.label}
             href={item.href}
             badgeCount={item.name === "notifications" ? unreadCount : undefined}
           />
         ))}
-      </View>
-
-      <Link href="/workflows" asChild>
-        <Pressable
-          accessibilityRole="link"
+        <SidebarRow
+          label="Workflows"
+          icon="git-network-outline"
+          iconActive="git-network"
+          active={segments[0] === "workflows"}
           accessibilityLabel="Workflows"
-          style={StyleSheet.flatten({
-            minHeight: 44,
-            marginTop: 12,
-            paddingHorizontal: 12,
-            borderRadius: 12,
-            borderWidth: 1,
-            borderColor: segments[0] === "workflows" ? colors.brandLight : colors.brandMuted,
-            flexDirection: "row",
-            alignItems: "center",
-            justifyContent: "space-between",
-            gap: 10,
-            backgroundColor: segments[0] === "workflows" ? colors.brand : colors.brandSubtle,
-          })}
-        >
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-            <Icon name="git-network-outline" size={18} color={segments[0] === "workflows" ? "#FFFFFF" : colors.brandLight} />
-            <Text style={[typography.subhead, { color: segments[0] === "workflows" ? "#FFFFFF" : colors.brandLight, fontWeight: "600" }]}>
-              Workflows
-            </Text>
-          </View>
-          <Icon name="add-circle-outline" size={16} color={segments[0] === "workflows" ? "#FFFFFF" : colors.brandLight} />
-        </Pressable>
-      </Link>
+          href="/workflows"
+        />
+      </View>
 
       <View style={{ flex: 1 }} />
 
@@ -184,7 +164,7 @@ export function Sidebar() {
             label={settingsItem.label}
             icon={settingsItem.icon}
             iconActive={settingsItem.iconActive}
-            active={inTabs && segments[1] === settingsItem.name}
+            active={isTabActive(segments, settingsItem.name)}
             accessibilityLabel={settingsItem.label}
             href={settingsItem.href}
           />

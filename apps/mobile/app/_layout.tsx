@@ -16,6 +16,7 @@ import { DemoBanner } from "../src/components/DemoBanner";
 import { ConfigErrorScreen, SampleDataBanner, isApiMisconfigured } from "../src/components/ConfigBanner";
 import { AppFonts } from "../src/components/AppFonts";
 import { Sidebar } from "../src/components/Sidebar";
+import { TopBar } from "../src/components/TopBar";
 import { SIDEBAR_WIDTH, resolveShell, requiresSession } from "../src/layout/breakpoints";
 import { resolveHardwareBackAction, useAndroidBackHandler } from "../src/platform/android";
 import { registerServiceWorker } from "../src/platform/serviceWorker";
@@ -159,6 +160,7 @@ function AppContent() {
               ]}
             >
               {!bannersAbove && banners}
+              {shell.topBar && <TopBar />}
               {stack}
             </View>
           </View>

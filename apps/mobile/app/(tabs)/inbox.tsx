@@ -169,7 +169,7 @@ function InboxWorkspace({initialFilter}:{initialFilter:NotificationFilter}) {
             >
               <Icon name="search-outline" size={22} color={colors.textSecondary} />
             </TouchableOpacity>}
-            {flags.highlight && <TouchableOpacity
+            {flags.highlight && (Platform.OS !== "web" || isDesktop) && <TouchableOpacity
               onPress={() => router.push("/highlight")}
               style={styles.iconBtn}
               accessibilityRole="button"
