@@ -14,6 +14,8 @@ import { RunnerId,LeaseRequest,Heartbeat,PatchRequest,ReportRequest,runnerHeartb
 import { authorizeExecutor } from '../workflows/runner-auth';
 import { PasskeyRequest,registrationOptions,verifyRegistration,patchProposal,approvalOptions,approvePatch } from '../workflows/passkeys';
 import { verifyWorkflowAudit } from '../workflows/audit';
+import { isBoardRun,publishApprovedBoardRun } from '../brain/worker-agent';
+import { assertAgentRunAllowed } from '../brain/kill-switch';
 
 function parse<T>(schema:z.ZodType<T>,value:unknown):T{const result=schema.safeParse(value);if(!result.success)throw new ApiError('validation_failed','The workflow request is invalid.');return result.data;}
 const ensureStorage=async(c:Context<AppEnv>)=>{const db=requireBinding(c.env,'DB');const row=await db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='workflow_runs'").first();if(!row)throw new ApiError('misconfigured','Apply the workflow database migration before starting runs.');return db;};
@@ -44,7 +46,13 @@ export function createWorkflowRouter(){
  router.get('/audit/verify',async c=>{const db=await ensureStorage(c);return c.json(await verifyWorkflowAudit(db,requireActor(c.get('session')),c.env.WORKFLOW_RUNNER_SIGNING_KEY??''));});
  router.get('/runs/:id/patch-proposal',async c=>{await ensureStorage(c);return c.json(await patchProposal(c.env,requireActor(c.get('session')),c.req.param('id')));});
  router.post('/runs/:id/approval/options',async c=>{await ensureStorage(c);return c.json(await approvalOptions(c.env,c.get('deps'),c.get('session'),c.req.param('id')));});
- router.post('/runs/:id/approval/verify',async c=>{await ensureStorage(c);return c.json(await approvePatch(c.env,c.get('deps'),c.get('session'),c.req.param('id'),parse(PasskeyRequest,await c.req.json().catch(()=>null))));});
+ router.post('/runs/:id/approval/verify',async c=>{await ensureStorage(c);const runId=c.req.param('id'),actor=requireActor(c.get('session'));
+  // Board runs stop before the approval is recorded when agent runs are switched off or the account is blocked.
+  if(await isBoardRun(c.env,actor,runId))await assertAgentRunAllowed(c.env,actor);
+  const approved=await approvePatch(c.env,c.get('deps'),c.get('session'),runId,parse(PasskeyRequest,await c.req.json().catch(()=>null)));
+  // Board runs publish in the Worker right after their passkey approval; every other run waits for its runner as before.
+  const userId=requireActor(c.get('session'));if(!await isBoardRun(c.env,userId,runId))return c.json(approved);
+  const published=await publishApprovedBoardRun(c.env,c.get('deps'),userId,runId);return c.json({...approved,run:published.run,draftPrUrl:published.draftPrUrl});});
  router.get('/runs/:id',async c=>{const db=await ensureStorage(c);return c.json((await loadRun(db,c.req.param('id'),requireActor(c.get('session')))).run);});
  router.post('/runs/:id/cancel',async c=>{await ensureStorage(c);return c.json(await cancelWorkflowRun(c.env,c.get('deps'),requireActor(c.get('session')),c.req.param('id')));});
  return router;

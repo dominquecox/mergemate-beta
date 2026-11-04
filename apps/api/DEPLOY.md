@@ -87,6 +87,20 @@ npm exec -w @mergemate/api -- wrangler queues create mergemate-github-events-dev
 
 Public posts are read from the KV namespace the staff tool publishes to. Add it to `wrangler.toml` as a `[[env.dev.kv_namespaces]]` block with binding `POSTS` and that namespace's id.
 
+## Agent run kill switch and per-user block
+
+Operator-only KV keys in the `POSTS` namespace. They are not part of the public `flags:v1` document and are never served by `/v1/flags`. Agent runs are off unless `agent_runs:v1` is exactly `on`; any other value, a missing key or a KV error means off.
+
+```bash
+# turn agent runs on / off
+npx wrangler kv key put --binding=POSTS --env dev --remote "agent_runs:v1" "on"
+npx wrangler kv key put --binding=POSTS --env dev --remote "agent_runs:v1" "off"
+
+# block / unblock one user (any non-empty value blocks)
+npx wrangler kv key put --binding=POSTS --env dev --remote "agent_blocked:<userId>" "1"
+npx wrangler kv key delete --binding=POSTS --env dev --remote "agent_blocked:<userId>"
+```
+
 ## GitHub App webhook
 
 In the GitHub App settings, set the webhook URL to `https://api-dev.mergemate.dev/v1/webhooks/github` (production: `https://api.mergemate.dev/v1/webhooks/github`), set the secret to the `GITHUB_WEBHOOK_SECRET` value, mark it active, and subscribe to: Pull request, Pull request review, Pull request review comment, Issue comment, Check suite, Status. Installation events are always sent.

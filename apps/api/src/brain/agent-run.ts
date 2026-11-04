@@ -13,12 +13,14 @@
  *
  * When that draft PR is published, the card on the run's branch is linked to it.
  */
-import { WorkflowDefinition, type WorkflowRun } from "@mergemate/contracts";
+import type { WorkflowRun } from "@mergemate/contracts";
 import type { Deps, Env } from "../env";
 import { ApiError } from "../errors";
 import type { SessionRecord } from "../lib/sessions";
-import { cancelWorkflowRun, createWorkflowRun } from "../workflows/runtime";
-import { sha256Hex } from "../lib/crypto";
+import { cancelWorkflowRun } from "../workflows/runtime";
+import { boardRunDefinition, prepareBoardRun } from "./worker-agent";
+import { noteRunStep } from "./run-events";
+import { assertAgentRunAllowed } from "./kill-switch";
 import { newAgentSecret } from "./agent-auth";
 import { LOCK_TTL_SECONDS, acquireLock, cardIn, db, lockOnCard, ownedProject } from "./store";
 
@@ -27,20 +29,15 @@ const RUN_BRANCH = (runId: string) => `mergemate-agent/${runId}`;
 export const MAX_RUNS_PER_BOARD_PER_DAY = 10;
 export const MAX_RUNS_PER_USER_PER_DAY = 20;
 const ACTIVE_RUN_STATUSES = new Set(["queued", "running", "waiting_executor", "waiting_approval"]);
-const STEPS = [
-  { id: "context", kind: "context", title: "Load target context" },
-  { id: "patch", kind: "patch", title: "Prepare a code fix" },
-  { id: "qa", kind: "qa", title: "Run isolated tests" },
-  { id: "draft_pr", kind: "draft_pr", title: "Create a draft pull request" },
-] as const;
 
 /** The card, its done-when and the project rules, as the run's task. Bounded to the workflow intent limit. */
 export function cardIntent(card: { title: string; details: string; done_when: string }, rules: string): string {
   return [`Board card: ${card.title}`, card.details, `Done when: ${card.done_when}`, `Project rules: ${rules}`].join("\n\n").slice(0, 2000).trim();
 }
 
-export async function startCardAgentRun(env: Env, deps: Deps, session: SessionRecord, projectId: string, cardId: string): Promise<{ run: WorkflowRun; branch: string | null }> {
+export async function startCardAgentRun(env: Env, deps: Deps, session: SessionRecord, projectId: string, cardId: string): Promise<{ run: WorkflowRun | null; branch: string | null; summary?: string; files?: string[] }> {
   if (!session.userId || session.demo) throw new ApiError("forbidden", "Sign in with GitHub to use boards.");
+  await assertAgentRunAllowed(env, session.userId);
   const project = await ownedProject(env, session.userId, projectId), card = await cardIn(env, project.id, cardId), now = deps.now();
   if (card.status !== "open" && card.status !== "active") throw new ApiError("state_conflict", "Only an open or active card can be worked by an agent.");
 
@@ -62,18 +59,11 @@ export async function startCardAgentRun(env: Env, deps: Deps, session: SessionRe
   if ((counts?.board ?? 0) >= MAX_RUNS_PER_BOARD_PER_DAY) throw new ApiError("rate_limited", `A board can start at most ${MAX_RUNS_PER_BOARD_PER_DAY} agent runs a day.`);
   if ((counts?.user ?? 0) >= MAX_RUNS_PER_USER_PER_DAY) throw new ApiError("rate_limited", `You can start at most ${MAX_RUNS_PER_USER_PER_DAY} agent runs a day.`);
 
-  const definition = WorkflowDefinition.parse({
-    name: `Board card: ${card.title}`.slice(0, 80).trim(),
-    intent: cardIntent(card, project.rules),
-    mode: "code_fix",
-    target: { owner: project.owner, repo: project.repo, kind: "repository" },
-    steps: STEPS.map((step) => ({ ...step, enabled: true })),
-  });
-  // The run is created first, so a refused run (no write access, no consent, no runner) leaves the card untouched.
-  // Keyed to this card's state and the minute, so simultaneous clicks start one run and a refused run can be retried.
-  const key = `brain-${(await sha256Hex(`${card.id}\n${card.updated_at}\n${Math.floor(now.getTime() / 60_000)}`)).slice(0, 48)}`;
-  const run = await createWorkflowRun(env, deps, session, definition, key, true);
-  if (run.status === "blocked" || run.status === "failed") return { run, branch: null };
+  const definition = boardRunDefinition({ title: card.title, intent: cardIntent(card, project.rules), owner: project.owner, repo: project.repo });
+  // The agent plans in the Worker before anything on the board changes, so a refused or empty plan leaves the card untouched.
+  const prepared = await prepareBoardRun(env, deps, session, definition);
+  if (prepared.kind === "no_change") return { run: null, branch: null, summary: prepared.summary, files: [] };
+  const run = prepared.run;
 
   // The owner works the card through their seat, on the same lock rules as an agent.
   if (holder) {
@@ -93,9 +83,10 @@ export async function startCardAgentRun(env: Env, deps: Deps, session: SessionRe
   await db(env).batch([
     db(env).prepare("UPDATE brain_cards SET branch=?,status='active',updated_at=? WHERE id=? AND project_id=?").bind(branch, at, card.id, project.id),
     db(env).prepare("INSERT INTO brain_events(id,project_id,card_id,kind,actor,text,at) VALUES(?,?,?,'note','owner',?,?)")
-      .bind(crypto.randomUUID(), project.id, card.id, `Agent run started (${run.status}). Approve the exact patch with a passkey to open a draft PR.`, at),
+      .bind(crypto.randomUUID(), project.id, card.id, "Agent run started. The agent planned a patch; approve it with a passkey to open a draft PR.", at),
   ]);
-  return { run, branch };
+  await noteRunStep(env, deps.now(), { runId: run.id, userId: session.userId, text: `Agent planned patch (${prepared.files.length} files). Review and approve it with a passkey to open a draft PR.` });
+  return { run, branch, summary: prepared.summary, files: prepared.files };
 }
 
 /**

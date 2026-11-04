@@ -111,18 +111,14 @@ export function createBrainRouter() {
     const user = realUser(c), project = await ownedProject(c.env, user, c.req.param("id")), now = nowOf(c);
     const held = await liveLockFor(c.env, `owner:${project.id}`, now);
     if (!held) throw new ApiError("state_conflict", "Proceed with the track first, so you hold a card for the agent.");
-    const { run, branch } = await startCardAgentRun(c.env, c.get("deps"), c.get("session"), project.id, held.card_id);
+    const started = await startCardAgentRun(c.env, c.get("deps"), c.get("session"), project.id, held.card_id);
     const card = toCard(await cardIn(c.env, project.id, held.card_id));
-    const running = branch !== null;
-    const response: BrainRunResponse = {
-      status: running ? "running" : "failed",
-      card,
-      summary: running ? "The agent is preparing a patch from the repository. Approve the exact patch with a passkey to open a draft PR." : "The agent run could not start.",
-      files: [],
-      runId: run.id,
-      ...(branch ? { branch } : {}),
-      ...(run.error ? { message: run.error.slice(0, 2000) } : {}),
-    };
+    const response: BrainRunResponse = !started.run
+      ? { status: "no_change", card, summary: (started.summary ?? "The agent found nothing to change.").slice(0, 2000), files: [] }
+      : started.branch
+        ? { status: "running", card, summary: (started.summary || "The agent prepared a patch.").slice(0, 2000), files: (started.files ?? []).slice(0, 8), runId: started.run.id, branch: started.branch,
+          message: "Review the patch and approve it with a passkey to open a draft PR. MergeMate never merges." }
+        : { status: "failed", card, summary: "The agent run could not start.", files: [], runId: started.run.id, ...(started.run.error ? { message: started.run.error.slice(0, 2000) } : {}) };
     return c.json(BrainRunResponseSchema.parse(response));
   });
 

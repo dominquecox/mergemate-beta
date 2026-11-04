@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { permittedSource } from './patch-boundary';
 import { linkCardToDraft } from '../brain/agent-run';
 import { noteRunStep } from '../brain/run-events';
 import { WorkflowExecutorEvidence } from '@mergemate/contracts';
@@ -34,7 +35,8 @@ export async function claimExecutorJob(env:Env,deps:Deps,runnerId:string,claims?
  if(!runner||Date.parse(runner.last_seen_at)<deps.now().getTime()-180000)throw new ApiError('forbidden','Send a current runner heartbeat first.');
  const caps=JSON.parse(runner.capabilities_json);if(!caps.docker||!caps.patch||!caps.qa||!caps.draftPr)return {job:null};
  const repos=(JSON.parse(runner.repositories_json) as string[]).filter(repo=>workflowAllowedRepos(env).has(repo)&&(!claims||claims.sub===runnerId&&claims.repositories.includes(repo)));
- const jobs=await db.prepare("SELECT * FROM workflow_jobs WHERE status='pending' AND (stage='patch' OR approval_expires_at>?) ORDER BY created_at LIMIT 50").bind(deps.now().toISOString()).all<Job>();
+ // Board runs are carried out in the API Worker, never by a runner.
+ const jobs=await db.prepare("SELECT * FROM workflow_jobs WHERE status='pending' AND (stage='patch' OR approval_expires_at>?) AND run_id NOT IN (SELECT id FROM workflow_runs WHERE idempotency_key LIKE 'brain-w-%') ORDER BY created_at LIMIT 50").bind(deps.now().toISOString()).all<Job>();
  for(const job of jobs.results??[]){
   if(!repos.includes(job.repository))continue;
   const {row,run}=await loadRun(db,job.run_id);
@@ -91,7 +93,6 @@ export async function renewExecutorLease(env:Env,deps:Deps,id:string,request:z.i
  if(result.meta.changes!==1)throw new ApiError('state_conflict','Executor lease was revoked.');
  return {active:true,cancelled:false,leaseExpiresAt:expires};
 }
-const permittedSource=(path:string)=>/^(?:apps\/(?:mobile|web)\/(?:src|app|test)|packages\/contracts\/(?:src|test))\/[a-zA-Z\d_./()[\]-]+\.(?:[cm]?[jt]sx?|css|md)$/.test(path)&&!path.split('/').some(x=>!x||x==='.'||x==='..')&&!/(?:^|\/)(?:\.git(?:hub)?|\.mergemate|auth|oauth|session|billing|migrations?|secrets?|credentials?|deploy(?:ment)?s?)(?:\/|[._-]|$)|AuthContext|(?:auth|oauth|session|token|secret|credential|wrangler|package(?:-lock)?|app\.config|tsconfig|eas|dockerfile|compose\.ya?ml)\./i.test(path);
 export async function executorPatch(env:Env,deps:Deps,id:string,value:z.infer<typeof PatchRequest>,claims?:RunnerClaims){
  const db=requireDb(env),state=await activeExecutorJob(env,deps,id,value,claims),{job,run}=state;
  if(job.stage!=='patch')throw new ApiError('state_conflict','The patch step has already finished.');

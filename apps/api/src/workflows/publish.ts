@@ -20,7 +20,8 @@ async function request<T>(deps:Deps,token:string,repository:string,path:string,s
  const parsed=schema.safeParse(value);if(!parsed.success)throw new ApiError('upstream_unavailable','GitHub returned invalid publication evidence.');return parsed.data;
 }
 
-export async function publishApprovedPatch(deps:Deps,token:string,job:Job,changes:Change[],beforeCreatePull:()=>Promise<void>=async()=>undefined){
+/** `testsRan` is false for board runs, which publish without isolated tests; the draft PR text then says so. */
+export async function publishApprovedPatch(deps:Deps,token:string,job:Job,changes:Change[],beforeCreatePull:()=>Promise<void>=async()=>undefined,testsRan=true){
  if(!changes.length||changes.length>8||changes.some(change=>!change.path||typeof change.content!=='string'))throw new ApiError('validation_failed','Approved patch is invalid.');
  const branch=`mergemate-agent/${job.runId}`,message=`fix: agent task ${job.runId}`;
  const base=await request(deps,token,job.repository,`/git/commits/${job.baseSha}`,Commit);if(!base||base.sha!==job.baseSha)throw new ApiError('pr_changed','The pinned base commit changed.');
@@ -31,7 +32,7 @@ export async function publishApprovedPatch(deps:Deps,token:string,job:Job,change
  else{const created=await request(deps,token,job.repository,'/git/commits',Commit,{method:'POST',body:{message,tree:tree.sha,parents:[job.baseSha]}});if(!created)throw new ApiError('upstream_unavailable','GitHub did not create the approved commit.');await request(deps,token,job.repository,'/git/refs',Ref,{method:'POST',body:{ref:`refs/heads/${branch}`,sha:created.sha}});commit=created;ref={object:{sha:created.sha}};}
  const owner=job.repository.split('/')[0]??'',list=await request(deps,token,job.repository,`/pulls?state=all&head=${encodeURIComponent(`${owner}:${branch}`)}&per_page=10`,z.array(Pull).max(2));if(!list||list.length>1)throw new ApiError('state_conflict','Draft publication is ambiguous.');
  if(!list.length)await beforeCreatePull();
- const pull=list[0]??await request(deps,token,job.repository,'/pulls',Pull,{method:'POST',body:{title:`Agent fix: ${job.intent.slice(0,100).replace(/[\r\n]/g,' ')}`,head:branch,base:job.baseBranch,draft:true,body:`Automated code-fix workflow ${job.runId}.\n\nPinned source: ${job.baseSha}\n\nThe API published only the exact passkey-approved patch after isolated tests passed. Human review is required.`}});if(!pull)throw new ApiError('upstream_unavailable','GitHub did not create the draft pull request.');
+ const pull=list[0]??await request(deps,token,job.repository,'/pulls',Pull,{method:'POST',body:{title:`Agent fix: ${job.intent.slice(0,100).replace(/[\r\n]/g,' ')}`,head:branch,base:job.baseBranch,draft:true,body:testsRan?`Automated code-fix workflow ${job.runId}.\n\nPinned source: ${job.baseSha}\n\nThe API published only the exact passkey-approved patch after isolated tests passed. Human review is required.`:`Automated code-fix workflow ${job.runId}.\n\nPinned source: ${job.baseSha}\n\nThe API published only the exact passkey-approved patch. No tests were run by MergeMate for this draft. Review it and run your checks before merging. MergeMate never merges.`}});if(!pull)throw new ApiError('upstream_unavailable','GitHub did not create the draft pull request.');
  if(!pull.draft||pull.state!=='open'||pull.head.sha!==commit.sha||pull.head.repo.full_name.toLowerCase()!==job.repository||pull.base.repo.full_name.toLowerCase()!==job.repository)throw new ApiError('validation_failed','GitHub did not confirm the exact approved draft pull request.');
  return {commitSha:commit.sha,draftPrUrl:pull.html_url,treeSha:tree.sha,branch};
 }

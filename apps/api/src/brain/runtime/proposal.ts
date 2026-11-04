@@ -24,6 +24,9 @@ const permittedSource = (path: string): boolean =>
 const SECRET_SHAPE =
   /(sk[-_]live[-_]|rk_live_|sk_test_|rk_test_|ghp_[A-Za-z\d]{20,}|github_pat_|xox[bpas]-|-----BEGIN [A-Z ]*PRIVATE KEY-----|AIza[0-9A-Za-z_-]{20,}|AKIA[0-9A-Z]{10,})/;
 
+/** True when text contains a credential-shaped value. */
+export const hasSecretShape = (text: string): boolean => SECRET_SHAPE.test(text);
+
 const invalid = (message: string, logDetail?: string): ApiError =>
   new ApiError("validation_failed", message, {}, logDetail);
 
