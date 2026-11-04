@@ -1,3 +1,4 @@
+import { createBrainAgentRouter, createBrainRouter } from "./routes/brain";
 import { createWorkflowRouter,createWorkflowExecutorRouter } from "./routes/workflows";
 import {prDependencies} from './routes/pr-dependencies';
 import {prVisual} from "./routes/pr-visual";
@@ -70,6 +71,8 @@ export const createApp = (deps: Deps = defaultDeps) => {
 
   app.route("/internal/workflows", createWorkflowExecutorRouter());
   app.route("/v1/workflows", createWorkflowRouter());
+  app.route("/v1/brain", createBrainRouter());
+  app.route("/agent/v1/brain", createBrainAgentRouter());
   app.route("/v1/health", health);
   // Flags rides the same IP limit as every other public route via authenticate().
   app.route("/v1", flags);

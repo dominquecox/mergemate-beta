@@ -53,6 +53,10 @@ async function seedOwned(ctx:TestContext,userId:string){
   ['INSERT INTO webauthn_challenges(id,user_id,purpose,challenge,binding_json,expires_at,created_at) VALUES(?,?,?,?,?,?,?)',[userId+':challenge',userId,'approve_patch','fixture-challenge','{}','2099-01-01T00:00:00Z',stamp]],
   ['INSERT INTO workflow_patch_approvals(job_id,user_id,repository_id,head_sha,patch_hash,action,credential_id,expires_at,created_at) VALUES(?,?,?,?,?,?,?,?,?)',[userId+':job',userId,1,'a'.repeat(40),'b'.repeat(64),'qa_and_draft_pr',userId+':credential','2099-01-01T00:00:00Z',stamp]],
   ['INSERT INTO workflow_definitions VALUES(?,?,?,?,?)',[userId+':def',userId,'{}',stamp,stamp]],
+  ['INSERT INTO brain_projects(id,user_id,owner,repo,rules,created_at) VALUES(?,?,?,?,?,?)',[userId+':bp',userId,'acme','api','rules',stamp]],
+  ["INSERT INTO brain_cards(id,project_id,position,title,details,priority,status,done_when,updated_at) VALUES(?,?,0,'t','d','P1','open','w',?)",[userId+':bc',userId+':bp',stamp]],
+  ["INSERT INTO brain_agent_tokens(id,project_id,name,tool,token_hash,created_at) VALUES(?,?,'a','codex',?,?)",[userId+':bt',userId+':bp',userId+':hash',stamp]],
+  ["INSERT INTO brain_events(id,project_id,card_id,kind,actor,text,at) VALUES(?,?,?,'note','a','t',?)",[userId+':be',userId+':bp',userId+':bc',stamp]],
  ];
  for(const [sql,args] of statements)await ctx.db.prepare(sql).bind(...args).run();
  for(const scope of [userId,`${userId}:triage`,`${userId}:metakey`])await ctx.db.prepare('INSERT INTO ai_usage_daily VALUES(?,?,?)').bind(scope,'2026-10-27',1).run();
@@ -69,6 +73,7 @@ describe('complete account deletion',()=>{
   for(const name of tables)expect(ctx.db.rows(`SELECT * FROM ${name} WHERE user_id=?`,a.userId),name).not.toHaveLength(0);
   expect((await appFor(ctx)('/v1/account',{method:'DELETE',headers:a.headers})).status).toBe(204);
   for(const name of tables){expect(ctx.db.rows(`SELECT * FROM ${name} WHERE user_id=?`,a.userId),name).toEqual([]);expect(ctx.db.rows(`SELECT * FROM ${name} WHERE user_id=?`,b.userId),name).not.toHaveLength(0);}
+  for(const table of ['brain_cards','brain_agent_tokens','brain_events'])expect(ctx.db.rows(`SELECT id FROM ${table} WHERE project_id=?`,a.userId+':bp'),table).toEqual([]);
   expect(ctx.db.rows('SELECT * FROM users WHERE id=?',a.userId)).toEqual([]);expect(ctx.db.rows('SELECT used FROM ai_usage_daily WHERE scope=?','global')).toEqual([{used:5}]);
   expect(ctx.db.rows('SELECT * FROM ai_usage_daily WHERE scope IN (?,?,?)',a.userId,a.userId+':triage',a.userId+':metakey')).toEqual([]);expect(ctx.db.rows('SELECT * FROM webhook_dead_letters')).toHaveLength(1);expect(storage.keys).toEqual(new Set([b.userId+'/kept']));
   expect(ctx.db.rows('SELECT state,grant_token_hash,lease_token FROM account_deletions WHERE user_id=?',a.userId)).toEqual([{state:'completed',grant_token_hash:null,lease_token:null}]);

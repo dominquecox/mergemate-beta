@@ -5,6 +5,7 @@ import { ApiError } from "../errors";
 import { timingSafeEqual } from "../lib/crypto";
 import { readSessionCookie, resolveSession, resolveSpentSessionForLogout } from "../lib/sessions";
 import { clientIp, limit } from "./rate-limit";
+import { brainEnabled } from "../brain/flag";
 
 const PUBLIC_PATHS = [
   /^\/v1\/health$/,
@@ -63,6 +64,12 @@ export const authenticate = (): MiddlewareHandler<AppEnv> => async (c, next) => 
   if (!path.startsWith("/v1/") || PUBLIC_PATHS.some((p) => p.test(path))) {
     await limitIp(c);
     return next();
+  }
+
+  // The brain answers as if absent while its flag is off, before any session lookup.
+  if (path.startsWith("/v1/brain/") && !(await brainEnabled(c.env))) {
+    await limitIp(c);
+    throw new ApiError("not_found", "Not found.");
   }
 
   const credential = readCredential(c);
