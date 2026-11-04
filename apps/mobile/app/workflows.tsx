@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { View, ScrollView, Pressable, TextInput, KeyboardAvoidingView, Platform, Modal, Linking } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import type { WorkflowDefinition } from '@mergemate/contracts';
@@ -9,6 +9,7 @@ import { useTheme } from '../src/context/ThemeContext';
 import { useLayout } from '../src/layout/useLayout';
 import { api, apiMode } from '../src/api';
 import { webAppOrigin } from '../src/api/config';
+import { toUserMessage } from '../src/api/errors';
 import { Text } from '../src/components/Text';
 import { Header } from '../src/components/Header';
 import { Icon, type IconName } from '../src/components/Icon';
@@ -118,56 +119,71 @@ function AgentWorkspace({
   const scrollRef = useRef<React.ComponentRef<typeof ScrollView>>(null);
   const savedLayout = useRef({ column: 0, cell: 0 });
   const [projectTargets, setProjectTargets] = useState<Array<{ label: string; sublabel: string; url: string; kind: 'pr' | 'repo' }>>([]);
+  const [projectTargetsError, setProjectTargetsError] = useState('');
+  const [projectTargetsLoading, setProjectTargetsLoading] = useState(true);
+  const projectTargetsVersion = useRef(0);
   const [selectedPr, setSelectedPr] = useState<number | null>(null);
   const [selectedBranch, setSelectedBranch] = useState<string | null>(null);
   const [showBranchInput, setShowBranchInput] = useState(false);
   const [branchInput, setBranchInput] = useState('');
   const draftVersion = useRef(0);
 
-  useEffect(() => {
-    let active = true;
-    Promise.all([
-      api.getNotificationPage('all').catch(() => ({ items: [] })),
-      api.getRepos().catch(() => []),
-    ]).then(([page, repos]) => {
-      if (!active) return;
-      const list: Array<{ label: string; sublabel: string; url: string; kind: 'pr' | 'repo' }> = [];
-      const seen = new Set<string>();
-      for (const item of page.items) {
-        const key = `${item.repo}#${item.number}`;
-        if (seen.has(key)) continue;
-        seen.add(key);
-        list.push({
-          label: `${item.repo} #${item.number}`,
-          sublabel: item.title,
-          url: `https://github.com/${item.repo}/pull/${item.number}`,
-          kind: 'pr',
-        });
+  const loadProjectTargets = useCallback(async () => {
+    const version = ++projectTargetsVersion.current;
+    setProjectTargetsLoading(true);
+    setProjectTargetsError('');
+    const [pageResult, reposResult] = await Promise.allSettled([
+      api.getNotificationPage('all'),
+      api.getRepos(),
+    ]);
+    if (version !== projectTargetsVersion.current) return;
+    const page = pageResult.status === 'fulfilled' ? pageResult.value : { items: [] };
+    const repos = reposResult.status === 'fulfilled' ? reposResult.value : [];
+    const failure = pageResult.status === 'rejected' ? pageResult.reason : reposResult.status === 'rejected' ? reposResult.reason : null;
+    if (failure) {
+      setProjectTargetsError(toUserMessage(failure, 'Could not load all pull requests and repositories. Try again.'));
+    }
+    const list: Array<{ label: string; sublabel: string; url: string; kind: 'pr' | 'repo' }> = [];
+    const seen = new Set<string>();
+    for (const item of page.items) {
+      const key = `${item.repo}#${item.number}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      list.push({
+        label: `${item.repo} #${item.number}`,
+        sublabel: item.title,
+        url: `https://github.com/${item.repo}/pull/${item.number}`,
+        kind: 'pr',
+      });
+    }
+    for (const r of repos) {
+      if (!r.watching || seen.has(r.fullName)) continue;
+      seen.add(r.fullName);
+      list.push({
+        label: r.fullName,
+        sublabel: 'Watched repository',
+        url: `https://github.com/${r.fullName}`,
+        kind: 'repo',
+      });
+    }
+    setProjectTargets(list);
+    if (!initialTarget && list[0]?.kind === 'pr') {
+      const firstUrl = list[0].url;
+      setTargetText(firstUrl);
+      const parsed = targetFromUrl(firstUrl);
+      if (parsed) {
+        setDefinition((prev) => (prev ? { ...prev, target: parsed } : prev));
       }
-      for (const r of repos) {
-        if (!r.watching || seen.has(r.fullName)) continue;
-        seen.add(r.fullName);
-        list.push({
-          label: r.fullName,
-          sublabel: 'Watched repository',
-          url: `https://github.com/${r.fullName}`,
-          kind: 'repo',
-        });
-      }
-      setProjectTargets(list);
-      if (!initialTarget && list[0]?.kind === 'pr') {
-        const firstUrl = list[0].url;
-        setTargetText(firstUrl);
-        const parsed = targetFromUrl(firstUrl);
-        if (parsed) {
-          setDefinition((prev) => (prev ? { ...prev, target: parsed } : prev));
-        }
-      }
-    });
-    return () => {
-      active = false;
-    };
+    }
+    setProjectTargetsLoading(false);
   }, [initialTarget]);
+
+  useEffect(() => {
+    void loadProjectTargets();
+    return () => {
+      projectTargetsVersion.current++;
+    };
+  }, [loadProjectTargets]);
 
   const target = useMemo(() => {
     const parsed = targetFromUrl(targetText);
@@ -1333,8 +1349,18 @@ function AgentWorkspace({
             <Text style={[typography.caption, { color: colors.textSecondary }]}>
               Choose an open pull request or watched repository from your connected projects.
             </Text>
+            {!!projectTargetsError && (
+              <ErrorState
+                title="Some projects could not be loaded"
+                message={projectTargetsError}
+                onRetry={() => void loadProjectTargets()}
+                retryLabel="Reload projects"
+              />
+            )}
             <ScrollView style={{ maxHeight: 300 }} contentContainerStyle={{ gap: 6 }}>
-              {projectTargets.length === 0 ? (
+              {projectTargetsLoading ? (
+                <LoadingState title="Loading projects..." message="Checking open pull requests and watched repositories." />
+              ) : projectTargets.length === 0 ? (
                 <Text style={[typography.caption, { color: colors.textSecondary, paddingVertical: 12 }]}>
                   No active pull requests or watched repositories loaded yet.
                 </Text>

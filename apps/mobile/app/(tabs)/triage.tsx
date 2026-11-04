@@ -44,15 +44,22 @@ export default function TriageScreen() {
   const [queue, setQueue] = useState<TriageItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [notificationError, setNotificationError] = useState<string | null>(null);
   const [undoStack, setUndoStack] = useState<TriageItem[]>([]);
 
   const loadQueue = useCallback(async () => {
     setIsLoading(true);
     setError(null);
+    setNotificationError(null);
     try {
-      const [items, notifications] = await Promise.all([api.getTriageQueue(), api.getNotifications('all').catch(() => [])]);
-      setInbox(notifications);
-      setQueue(items);
+      const [queueResult, notificationResult] = await Promise.allSettled([api.getTriageQueue(), api.getNotifications('all')]);
+      if (queueResult.status === 'rejected') throw queueResult.reason;
+      if (notificationResult.status === 'fulfilled') setInbox(notificationResult.value);
+      else {
+        setInbox([]);
+        setNotificationError(toUserMessage(notificationResult.reason, "We couldn't load notification context for this deck. Retry to restore authors, risk and timing details."));
+      }
+      setQueue(queueResult.value);
       setUndoStack([]); setReviewed([]); setCompletedAt(null); startedAt.current = Date.now();
     } catch (e) {
       setError(toUserMessage(e, "We couldn't load your triage deck right now. Please try again."));
@@ -178,6 +185,14 @@ export default function TriageScreen() {
       <AudioCommuteBar sentences={triageExecutiveNarration(queue.map(item => { const note = inbox.find(n => `${n.repo}#${n.number}` === item.prRef), agent = detectAgentProvenance({ author: note?.author ?? item.author }); return { prRef: item.prRef, title: item.title ?? note?.title ?? 'Title unavailable', agent: agent.agentName ?? note?.author ?? 'Author unavailable', level: item.prRef === currentItem?.prRef ? verdict.level : note?.risk === 'high' ? 'blocked' : note?.risk === 'low' ? 'safe' : 'caution' }; }))} />
       <ScrollView contentContainerStyle={{ padding: isDesktop ? 24 : 16, paddingBottom: 96, flexGrow: 1 }}>
         <AccessGuidanceBanner error={error} compact />
+        {!!notificationError && (
+          <ErrorState
+            title="Some triage context is unavailable"
+            message={notificationError}
+            onRetry={() => void loadQueue()}
+            retryLabel="Reload triage context"
+          />
+        )}
         {/* Top Bento Command Header */}
         <View style={[styles.topHeaderBento, isDesktop && { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }]}>
           <View style={{ flex: 1, minWidth: 260 }}>

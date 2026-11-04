@@ -6,7 +6,8 @@ import type { Notification } from "../types";
 export interface AlertsContextValue {
   unreadCount: number;
   isRead: (item: Pick<Notification, "id" | "read">) => boolean;
-  markRead: (id: string, isHistory?: boolean) => void;
+  markRead: (id: string) => void;
+  markUnread: (ids: string[]) => void;
   markAllRead: (ids: string[]) => void;
   syncItems: (items: Notification[]) => void;
 }
@@ -15,6 +16,7 @@ const AlertsContext = createContext<AlertsContextValue>({
   unreadCount: 0,
   isRead: (item) => Boolean(item.read),
   markRead: () => {},
+  markUnread: () => {},
   markAllRead: () => {},
   syncItems: () => {},
 });
@@ -77,26 +79,31 @@ export function AlertsProvider({ children }: { children: React.ReactNode }) {
     });
   }, []);
 
-  const markRead = useCallback((id: string, isHistory = false) => {
+  const markRead = useCallback((id: string) => {
     setReadIds((prev) => {
       if (prev.has(id)) return prev;
       const next = new Set(prev);
       next.add(id);
       return next;
     });
-    if (isHistory) {
-      void api.markActivityRead(id).catch(() => {});
-    }
+  }, []);
+
+  const markUnread = useCallback((ids: string[]) => {
+    if (!ids.length) return;
+    setReadIds((prev) => {
+      const next = new Set(prev);
+      for (const id of ids) next.delete(id);
+      return next;
+    });
   }, []);
 
   const markAllRead = useCallback((ids: string[]) => {
     setReadIds((prev) => {
       const next = new Set(prev);
       for (const id of ids) next.add(id);
-      for (const item of knownItems) next.add(item.id);
       return next;
     });
-  }, [knownItems]);
+  }, []);
 
   const isRead = useCallback(
     (item: Pick<Notification, "id" | "read">) => Boolean(item.read) || readIds.has(item.id),
@@ -113,10 +120,11 @@ export function AlertsProvider({ children }: { children: React.ReactNode }) {
       unreadCount,
       isRead,
       markRead,
+      markUnread,
       markAllRead,
       syncItems,
     }),
-    [unreadCount, isRead, markRead, markAllRead, syncItems],
+    [unreadCount, isRead, markRead, markUnread, markAllRead, syncItems],
   );
 
   return <AlertsContext.Provider value={value}>{children}</AlertsContext.Provider>;

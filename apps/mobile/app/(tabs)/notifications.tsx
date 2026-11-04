@@ -9,6 +9,7 @@ import { useRouter } from "expo-router";
 import { useTheme } from "../../src/context/ThemeContext";
 import { useAlerts } from "../../src/context/AlertsContext";
 import { api } from "../../src/api";
+import { toUserMessage } from "../../src/api/errors";
 import { NotificationFilter } from "../../src/types";
 import { Header } from "../../src/components/Header";
 import { StatusPill } from "../../src/components/StatusPill";
@@ -26,10 +27,11 @@ export default function NotificationsScreen() {
   const { colors, typography, radius } = useTheme();
   const { isDesktop } = useLayout();
   const router = useRouter();
-  const { isRead, markRead, markAllRead: markAllAlertsRead, syncItems } = useAlerts();
+  const { isRead, markRead, markUnread, markAllRead: markAllAlertsRead, syncItems } = useAlerts();
 
   const [history, setHistory] = useState(false);
   const [filter, setFilter] = useState<NotificationFilter>("all");
+  const [mutationError, setMutationError] = useState<string | null>(null);
   const {
     items,
     setItems,
@@ -56,20 +58,40 @@ export default function NotificationsScreen() {
 
   const unreadItems = items.filter((item) => !isRead(item));
 
-  const handleMarkItemRead = (id: string) => {
-    markRead(id, history);
+  const handleMarkItemRead = async (id: string) => {
+    const item = items.find((value) => value.id === id);
+    const wasRead = item ? isRead(item) : false;
+    setMutationError(null);
+    markRead(id);
     setItems((prev) => prev.map((item) => (item.id === id ? { ...item, read: true } : item)));
+    if (!history) return;
+    try {
+      await api.markActivityRead(id);
+    } catch (cause) {
+      if (!wasRead) markUnread([id]);
+      setItems((prev) => prev.map((value) => (value.id === id ? { ...value, read: item?.read ?? false } : value)));
+      setMutationError(toUserMessage(cause, "We couldn't mark that activity as read. Refresh and try again."));
+    }
   };
 
-  const handleMarkAllRead = () => {
-    const ids = items.map((item) => item.id);
+  const handleMarkAllRead = async () => {
+    const unread = items.filter((item) => !isRead(item));
+    const ids = unread.map((item) => item.id);
+    setMutationError(null);
     markAllAlertsRead(ids);
+    setItems((prev) => prev.map((item) => ({ ...item, read: true })));
     if (history) {
-      for (const item of items) {
-        if (!item.read) void api.markActivityRead(item.id).catch(() => undefined);
+      const results = await Promise.allSettled(unread.map((item) => api.markActivityRead(item.id)));
+      const failed = results.flatMap((result, index) => result.status === "rejected" ? [unread[index]!] : []);
+      if (failed.length) {
+        const failedIds = failed.map((item) => item.id);
+        markUnread(failedIds);
+        const failedSet = new Set(failedIds);
+        setItems((prev) => prev.map((item) => failedSet.has(item.id) ? { ...item, read: failed.find((value) => value.id === item.id)?.read ?? false } : item));
+        const firstFailure = results.find((result) => result.status === "rejected");
+        setMutationError(toUserMessage(firstFailure?.status === "rejected" ? firstFailure.reason : null, `We couldn't mark ${failed.length} activities as read. Refresh and try again.`));
       }
     }
-    setItems((prev) => prev.map((item) => ({ ...item, read: true })));
   };
 
   return (
@@ -241,6 +263,15 @@ export default function NotificationsScreen() {
             Last 7 days of received repository events. Actor is the event sender, not the PR or commit author. Earlier events and current PR status may be unavailable.
           </Text>
         </View>
+      )}
+
+      {!!(mutationError || (error && items.length > 0)) && (
+        <ErrorState
+          title={mutationError ? "Read status was not saved" : "Notifications could not refresh"}
+          message={mutationError ?? error ?? "Refresh and try again."}
+          onRetry={loadNotifications}
+          retryLabel="Refresh notifications"
+        />
       )}
 
       {isLoading ? (
