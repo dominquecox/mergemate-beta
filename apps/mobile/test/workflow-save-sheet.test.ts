@@ -29,11 +29,11 @@ describe('save workflow sheet', () => {
     expect(WorkflowDefinition.safeParse({ ...base(), description: 'x'.repeat(SAVE_DESCRIPTION_MAX + 1) }).success).toBe(false);
   });
 
-  it('Save opens the sheet rather than saving silently, and phones stack Save and Run', () => {
+  it('Save opens the sheet, the composer precedes templates, and phones stack Save and Run', () => {
     const source = fs.readFileSync(path.resolve(__dirname, '../app/workflows.tsx'), 'utf8');
     expect(source).toContain("onPress={() => openSaveSheet()}");
     expect(source).not.toMatch(/onPress=\{\(\) => saveWorkflow\(/);
-    expect(source).toContain("flexDirection: isDesktop ? 'row' : 'column-reverse'");
+    expect(source).toContain("flexDirection: isDesktop ? 'row-reverse' : 'column-reverse'");
     expect(source).toContain(": { flexDirection: 'column', gap: 10, alignItems: 'stretch' }");
   });
 });

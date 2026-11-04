@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Pressable } from 'react-native';
+import { View } from 'react-native';
 import type { WorkflowDefinition } from '@mergemate/contracts';
 import { Text } from '../components/Text';
 import { Icon, type IconName } from '../components/Icon';
@@ -7,10 +7,8 @@ import { useTheme } from '../context/ThemeContext';
 
 export function WorkflowPlanCard({
   definition,
-  onInspectCanvas,
 }: {
   definition: WorkflowDefinition;
-  onInspectCanvas?: () => void;
 }) {
   const { colors, typography } = useTheme();
   const enabledCount = definition.steps.filter((s) => s.enabled).length;
@@ -117,27 +115,6 @@ export function WorkflowPlanCard({
           ))}
         </View>
 
-        {onInspectCanvas && (
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Inspect workflow graph"
-            onPress={onInspectCanvas}
-            style={({ pressed }) => ({
-              minHeight: 44,
-              borderRadius: 10,
-              backgroundColor: colors.brand,
-              alignItems: 'center',
-              justifyContent: 'center',
-              flexDirection: 'row',
-              gap: 6,
-              marginTop: 2,
-              opacity: pressed ? 0.85 : 1,
-            })}
-          >
-            <Icon name="git-network-outline" size={15} color="#FFFFFF" />
-            <Text style={[typography.subhead, { color: '#FFFFFF', fontWeight: '700' }]}>Create Automation</Text>
-          </Pressable>
-        )}
       </View>
     </View>
   );
