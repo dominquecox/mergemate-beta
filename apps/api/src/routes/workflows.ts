@@ -46,7 +46,8 @@ export function createWorkflowRouter(){
 export function createWorkflowExecutorRouter(){
  const router=new Hono<AppEnv>();
  router.use('*',async(c,next)=>{await ensureStorage(c);c.header('Cache-Control','no-store');return next();});
- const authenticated=async<T extends {runnerId:string}>(c:Context<AppEnv>,schema:z.ZodType<T>,allowEnrollment=false)=>{const body=parse(schema,await c.req.json().catch(()=>null)),claims=await authorizeExecutor(c.env,c.get('deps'),c.req.header('authorization'),c.req.header('origin'),c.req.header('cf-access-jwt-assertion'),body.runnerId,allowEnrollment);return {body,claims};};
+ // Authenticate before validating, so an unauthenticated caller learns nothing about the request shape.
+ const authenticated=async<T extends {runnerId:string}>(c:Context<AppEnv>,schema:z.ZodType<T>,allowEnrollment=false)=>{const raw:unknown=await c.req.json().catch(()=>null),runnerId=raw&&typeof raw==='object'&&typeof (raw as {runnerId?:unknown}).runnerId==='string'?(raw as {runnerId:string}).runnerId:'';const claims=await authorizeExecutor(c.env,c.get('deps'),c.req.header('authorization'),c.req.header('origin'),c.req.header('cf-access-jwt-assertion'),runnerId,allowEnrollment),body=parse(schema,raw);return {body,claims};};
  router.post('/heartbeat',async c=>{const {body,claims}=await authenticated(c,Heartbeat,true);return c.json(await runnerHeartbeat(c.env,c.get('deps'),body,claims));});
  router.post('/claim',async c=>{const {body,claims}=await authenticated(c,z.object({runnerId:RunnerId}).strict());return c.json(await claimExecutorJob(c.env,c.get('deps'),body.runnerId,claims));});
  router.post('/jobs/:id/lease',async c=>{const {body,claims}=await authenticated(c,LeaseRequest.strict());return c.json(await renewExecutorLease(c.env,c.get('deps'),c.req.param('id'),body,claims));});

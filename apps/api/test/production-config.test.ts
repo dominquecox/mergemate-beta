@@ -96,6 +96,7 @@ describe("agent runtime stays off in production", () => {
     const production = inEnv("production").map((t) => `[${t.header}]\n${t.body}`).join("\n");
     expect(production).not.toMatch(/WORKFLOW_/);
     expect(production).not.toMatch(/mergemate-workflows/);
+    expect(production).not.toMatch(/CF_ACCESS_/);
     expect(vars("production")("WORKFLOW_RUNNER_REPOS")).toBeUndefined();
     expect(all("production", "queues.producers").map((t) => value(t, "binding"))).not.toContain("WORKFLOW_QUEUE");
   });
@@ -105,6 +106,19 @@ describe("agent runtime stays off in production", () => {
     expect(toml).not.toMatch(/^\[\[queues\.producers\]\][^[]*WORKFLOW_QUEUE/m);
   });
 
+  it("refuses a malformed runner call with 401 before validating it", async () => {
+    const { testContext } = await import("./helpers");
+    const { appFor } = await import("./sign-in");
+    for (const body of [JSON.stringify({ runnerId: "runner-1", repositories: ["not a repo"], capabilities: [] }), "{not json", JSON.stringify({ runnerId: 7 })]) {
+      const res = await appFor(testContext())("/internal/workflows/heartbeat", {
+        method: "POST",
+        headers: { "content-type": "application/json", authorization: `Bearer ${"x".repeat(40)}` },
+        body,
+      });
+      expect(res.status).toBe(401);
+    }
+  });
+
   it("refuses runner calls when no runner credential is configured", async () => {
     const { testContext } = await import("./helpers");
     const { appFor } = await import("./sign-in");
@@ -112,7 +126,13 @@ describe("agent runtime stays off in production", () => {
     const res = await appFor(ctx)("/internal/workflows/heartbeat", {
       method: "POST",
       headers: { "content-type": "application/json", authorization: `Bearer ${"x".repeat(40)}` },
-      body: JSON.stringify({ runnerId: "runner-1", repositories: ["dominquecox/mergemate"], capabilities: [] }),
+      // A well-formed heartbeat, so the request reaches runner authentication rather than body validation.
+      body: JSON.stringify({
+        runnerId: "runner-1",
+        repositories: ["dominquecox/mergemate"],
+        capabilities: { docker: true, patch: true, qa: true, draftPr: true },
+        version: "1",
+      }),
     });
     expect(res.status).toBe(401);
   });
