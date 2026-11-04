@@ -203,7 +203,7 @@ function InboxWorkspace({initialFilter}:{initialFilter:NotificationFilter}) {
           key={`${isDesktop?'desktop':'phone'}:${grouped?'grouped':'flat'}`} numColumns={isDesktop&&!grouped?2:1} columnWrapperStyle={isDesktop&&!grouped?{gap:16}:undefined}
           data={isLoading?[]:rows}
           ListEmptyComponent={isLoading?<LoadingState title="Loading your inbox..." message="Fetching accessible pull requests and your Inbox state."/>:error?<ErrorState title="Could not load your inbox" message={error} onRetry={hasMore?more:fetchItems}/>:<EmptyState icon="checkmark-done-outline" title={hasMore?"More results are available":"Inbox Zero"} message={hasMore?"No visible items on this page. Load more to continue checking your queue.":"No pull requests need your attention in this view."} actionTitle={hasMore?"Load more pull requests":undefined} onAction={hasMore?more:undefined}/>}
-          keyExtractor={row=>row.type==='header'?`repo:${row.repo}`:row.item.id} initialNumToRender={8} maxToRenderPerBatch={8} windowSize={5}
+          keyExtractor={row=>row.type==='header'?`repo:${row.repo}`:row.type==='section'?`section:${row.label}`:row.item.id} initialNumToRender={8} maxToRenderPerBatch={8} windowSize={5}
           contentContainerStyle={{padding:isDesktop?24:spacing.base,paddingBottom:96}}
           refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} tintColor={colors.brandLight}/>}
           onEndReached={()=>{if(!error)void more();}} onEndReachedThreshold={0.4}
@@ -311,7 +311,7 @@ function InboxWorkspace({initialFilter}:{initialFilter:NotificationFilter}) {
 
 </>}
           ListFooterComponent={hasMore || error?<TouchableOpacity disabled={isRefreshing} onPress={()=>void more()} accessibilityRole="button" style={{padding:16,minHeight:44}}><Text style={{color:colors.brandLight}}>{isRefreshing?'Loading…':error?'Retry loading pull requests':'Load more pull requests'}</Text></TouchableOpacity>:undefined}
-          renderItem={({item:row})=>row.type==='header'?(<View testID={`inbox-repo-${row.repo}`} accessibilityRole="header" accessibilityLabel={`${row.repo}, ${row.count} pull request${row.count===1?'':'s'}`} style={{flexDirection:'row',alignItems:'center',gap:8,marginBottom:8,marginTop:4}}><Icon name="folder-outline" size={14} color={colors.brandLight}/><Text style={[typography.subhead,{color:colors.text,fontWeight:'700',flexShrink:1}]}>{row.repo}</Text><Text style={[typography.caption,{color:colors.textSecondary}]}>{row.count}</Text></View>):((item:Notification)=>(
+          renderItem={({item:row})=>row.type==='header'?(<View testID={`inbox-repo-${row.repo}`} accessibilityRole="header" accessibilityLabel={`${row.repo}, ${row.count} pull request${row.count===1?'':'s'}`} style={{flexDirection:'row',alignItems:'center',gap:8,marginBottom:8,marginTop:4}}><Icon name="folder-outline" size={14} color={colors.brandLight}/><Text style={[typography.subhead,{color:colors.text,fontWeight:'700',flexShrink:1}]}>{row.repo}</Text><Text style={[typography.caption,{color:colors.textSecondary}]}>{row.count}</Text></View>):row.type==='section'?(<View style={{flexDirection:'row',alignItems:'center',gap:8,marginBottom:8,marginTop:12}} accessibilityRole="header" accessibilityLabel={row.label}><Text style={[typography.subhead,{color:colors.brandLight,fontWeight:'700',fontSize:15}]}>{row.label}</Text></View>):((item:Notification)=>(
               <View
                 key={item.id}
                 style={[

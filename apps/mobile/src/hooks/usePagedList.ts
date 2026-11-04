@@ -9,7 +9,9 @@ export function mergePageItems<T extends {id:string}>(items:T[]):T[]{
  for(const item of items){const old=rows.get(item.id);if(old&&'updatedAt'in old&&'updatedAt'in item&&typeof old.updatedAt==='string'&&typeof item.updatedAt==='string'&&Date.parse(old.updatedAt)>Date.parse(item.updatedAt))continue;rows.set(item.id,item);}return [...rows.values()];
 }
 /** One append in flight; reset supersedes it. Revalidation preserves loaded pages for Back. 
- * Focus/snooze refresh: show previous items while fetching, then replace with fresh result.
+ * Focus/snooze refresh (revalidation): show previous items while fetching, then replace with fresh result (items removed upstream disappear).
+ * Append (more): keep previous items and append new.
+ * Cold reset: replace all items.
  */
 export function usePagedList<T extends {id:string}>(key:string,load:(cursor?:string|null)=>Promise<Page<T>>,invalidate?:()=>void){
  const invalidator=useRef(invalidate);invalidator.current=invalidate;
@@ -32,10 +34,19 @@ export function usePagedList<T extends {id:string}>(key:string,load:(cursor?:str
    }
    cursor.current=next;pages.current=reset?fetched:pages.current+1;setHasMore(!!next);
    if(first?.refreshAt&&first.serverTime)setRefreshAfterMs(Math.max(0,Date.parse(first.refreshAt)-Date.parse(first.serverTime)));else setRefreshAfterMs(null);
-   // On revalidation (focus/snooze refresh), replace items with fresh result (items removed upstream disappear).
-   // During fetch, previous items remain visible (no loading flash).
-   // On cold reset, replace all items.
-   setItems(mergePageItems(gathered));
+   // Use updater form: on revalidation/reset, replace with fresh result; on more(), append to old items.
+   setItems(old=>{
+    if(isRevalidation){
+     // Replace list with fresh result: items removed upstream disappear, previous items visible during fetch (stable keys).
+     return mergePageItems(gathered);
+    }else if(reset){
+     // Cold reset: replace all items.
+     return mergePageItems(gathered);
+    }else{
+     // Append: keep old items and append new ones.
+     return mergePageItems([...old,...gathered]);
+    }
+   });
   }catch(error){if(version===generation.current)setError(toUserMessage(error,'Could not load this page. Try again.'));}
   finally{if(version===generation.current){pending.current=false;setBusy(false);setLoading(false);}}
  },[]);
