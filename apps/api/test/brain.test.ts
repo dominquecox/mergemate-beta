@@ -126,4 +126,35 @@ describe("brain API", () => {
     await card("first"); const { secret } = await token("A");
     expect((await json(await call("/agent/v1/brain/proceed", post({ projectId: project.id }, agent(secret))))).rules).toBe("Gates green; squash with expectedHeadSha.");
   });
+
+  it("lets the owner proceed with the track on the same lock rules, from a seat no agent can use", async () => {
+    const { ctx, call, owner, project, card, token, agent } = await setup();
+    const first = await card("first"), second = await card("second");
+    const proceed = (headers = owner.headers) => call(`/v1/brain/projects/${project.id}/proceed`, post({}, headers));
+    const res = await json(await proceed());
+    expect(res.card.id).toBe(first.id);
+    expect(res.lock).toMatchObject({ cardId: first.id, agent: "owner", tool: "mergemate" });
+    expect(Date.parse(res.lock.expiresAt) - Date.parse(res.lock.since)).toBe(900 * 1000);
+    expect(res.rules).toBeTruthy();
+    // Proceeding again resumes the owner's card; an agent gets the next free one.
+    expect((await json(await proceed())).card.id).toBe(first.id);
+    const { secret } = await token("Agent A");
+    expect((await json(await call("/agent/v1/brain/proceed", post({ projectId: project.id }, agent(secret))))).card.id).toBe(second.id);
+    // The seat is not an agent token: hidden from the list, outside the cap, and not revocable.
+    const listed = await json(await call(`/v1/brain/projects/${project.id}/tokens`, { headers: owner.headers })) as unknown as { tokens: { id: string }[] };
+    expect(listed.tokens.map((t) => t.id)).not.toContain(`owner:${project.id}`);
+    expect((await call(`/v1/brain/projects/${project.id}/tokens/${encodeURIComponent(`owner:${project.id}`)}`, { method: "DELETE", headers: owner.headers })).status).toBe(404);
+    expect(ctx.db.rows("SELECT * FROM brain_locks WHERE token_id=?", `owner:${project.id}`)).toHaveLength(1);
+    // Another user cannot proceed on this board, and nothing is free once every card is locked.
+    const other = await signIn(ctx, "ios", { ...ghUser, id: ghUser.id + 1, login: "other-user" });
+    expect((await proceed(other.headers)).status).toBe(404);
+    const { secret: third } = await token("Agent C", "muse");
+    expect((await call("/agent/v1/brain/proceed", post({ projectId: project.id }, agent(third)))).status).toBe(404);
+  });
+
+  it("keeps the owner proceed route behind the brain flag", async () => {
+    const { ctx, call, owner, project } = await setup();
+    ctx.kv.set("flags:v1", JSON.stringify({ brain: false }));
+    expect((await call(`/v1/brain/projects/${project.id}/proceed`, post({}, owner.headers))).status).toBe(404);
+  });
 });

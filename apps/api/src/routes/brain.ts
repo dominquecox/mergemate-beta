@@ -1,7 +1,7 @@
 import {
   CardHandoffRequestSchema, CardHeartbeatRequestSchema, CardLockRequestSchema, CreateCardRequestSchema, LinkPrRequestSchema,
   ProceedWithTrackRequestSchema, ReorderCardRequestSchema, ToolSchema, TrackLogRequestSchema, UpdateCardRequestSchema,
-  type ProceedWithTrackResponse,
+  type ProceedWithTrackResponse, type Tool,
 } from "@mergemate/contracts";
 import { Hono, type Context } from "hono";
 import { z } from "zod";
@@ -38,6 +38,34 @@ const realUser = (c: Context<AppEnv>) => {
 };
 const agentName = (token: TokenRow) => token.name.slice(0, 60);
 
+/** The owner's own seat on a board: a token row that only the owner's signed-in session uses. Its secret is never kept, so it cannot sign an agent request. */
+const ownerSeatId = (projectId: string) => `owner:${projectId}`;
+async function ownerSeat(c: Context<AppEnv>, projectId: string) {
+  const { hash } = await newAgentSecret();
+  await db(c.env).prepare("INSERT INTO brain_agent_tokens(id,project_id,name,tool,token_hash,created_at) VALUES(?,?,'owner','mergemate',?,?) ON CONFLICT(id) DO NOTHING")
+    .bind(ownerSeatId(projectId), projectId, hash, nowOf(c).toISOString()).run();
+  return { tokenId: ownerSeatId(projectId), agent: "owner", tool: "mergemate" as const };
+}
+
+/** Resume the card this seat already holds; otherwise take the top open card without a live lock. */
+async function proceed(c: Context<AppEnv>, project: Parameters<typeof toProject>[0], seat: { tokenId: string; agent: string; tool: Tool }): Promise<ProceedWithTrackResponse> {
+  const now = nowOf(c), held = await liveLockFor(c.env, seat.tokenId, now);
+  let lock = held ? toLock(held) : null, cardId = held?.card_id ?? null;
+  if (!lock) {
+    const candidates = await db(c.env).prepare("SELECT c.id FROM brain_cards c WHERE c.project_id=? AND c.status IN ('open','active') AND NOT EXISTS(SELECT 1 FROM brain_locks l WHERE l.card_id=c.id AND l.expires_at>?) ORDER BY c.position LIMIT 5")
+      .bind(project.id, now.toISOString()).all<{ id: string }>();
+    for (const candidate of candidates.results ?? []) {
+      lock = await acquireLock(c.env, { projectId: project.id, cardId: candidate.id, ...seat, now, ttlSeconds: LOCK_TTL_SECONDS });
+      if (lock) { cardId = candidate.id; break; }
+    }
+  }
+  if (!lock || !cardId) throw new ApiError("not_found", "No open card is free right now.");
+  return {
+    card: toCard(await cardIn(c.env, project.id, cardId)), lock, rules: project.rules,
+    boardTop: await boardCards(c.env, project.id, BOARD_TOP), trackTail: await trackTail(c.env, project.id),
+  };
+}
+
 /** Signed-in owners: projects, rules, cards and agent tokens. Every route checks that the project is theirs. */
 export function createBrainRouter() {
   const r = new Hono<AppEnv>();
@@ -62,6 +90,12 @@ export function createBrainRouter() {
     const user = realUser(c), project = await ownedProject(c.env, user, c.req.param("id")), body = await parseBody(c, RulesBody);
     await db(c.env).prepare("UPDATE brain_projects SET rules=? WHERE id=? AND user_id=?").bind(body.rules, project.id, user).run();
     return c.json({ project: toProject({ ...project, rules: body.rules }) });
+  });
+
+  /** The owner's "Proceed with the track": locks the top free card for the owner, on the same rules and lock time as an agent. */
+  r.post("/projects/:id/proceed", async (c) => {
+    const project = await ownedProject(c.env, realUser(c), c.req.param("id"));
+    return c.json(await proceed(c, project, await ownerSeat(c, project.id)));
   });
 
   r.post("/cards", async (c) => {
@@ -94,14 +128,14 @@ export function createBrainRouter() {
 
   r.get("/projects/:id/tokens", async (c) => {
     const project = await ownedProject(c.env, realUser(c), c.req.param("id"));
-    const rows = await db(c.env).prepare("SELECT id,project_id,name,tool,created_at,last_used_at,revoked_at FROM brain_agent_tokens WHERE project_id=? AND revoked_at IS NULL ORDER BY created_at").bind(project.id).all<TokenRow>();
+    const rows = await db(c.env).prepare("SELECT id,project_id,name,tool,created_at,last_used_at,revoked_at FROM brain_agent_tokens WHERE project_id=? AND id<>? AND revoked_at IS NULL ORDER BY created_at").bind(project.id, ownerSeatId(project.id)).all<TokenRow>();
     return c.json({ tokens: (rows.results ?? []).map(toToken) });
   });
   r.post("/projects/:id/tokens", async (c) => {
     const project = await ownedProject(c.env, realUser(c), c.req.param("id")), body = await parseBody(c, CreateTokenBody), now = nowOf(c).toISOString(), id = crypto.randomUUID();
     const { secret, hash } = await newAgentSecret();
-    const created = await db(c.env).prepare("INSERT INTO brain_agent_tokens(id,project_id,name,tool,token_hash,created_at) SELECT ?,?,?,?,?,? WHERE (SELECT COUNT(*) FROM brain_agent_tokens WHERE project_id=? AND revoked_at IS NULL)<?")
-      .bind(id, project.id, body.name, body.tool, hash, now, project.id, MAX_TOKENS_PER_PROJECT).run();
+    const created = await db(c.env).prepare("INSERT INTO brain_agent_tokens(id,project_id,name,tool,token_hash,created_at) SELECT ?,?,?,?,?,? WHERE (SELECT COUNT(*) FROM brain_agent_tokens WHERE project_id=? AND id<>? AND revoked_at IS NULL)<?")
+      .bind(id, project.id, body.name, body.tool, hash, now, project.id, ownerSeatId(project.id), MAX_TOKENS_PER_PROJECT).run();
     if (created.meta.changes !== 1) throw new ApiError("state_conflict", `A board holds at most ${MAX_TOKENS_PER_PROJECT} active agent tokens. Revoke one first.`);
     // The secret is returned this once and never stored or shown again.
     return c.json({ token: toToken({ id, project_id: project.id, name: body.name, tool: body.tool, created_at: now, last_used_at: null, revoked_at: null }), secret }, 201);
@@ -109,8 +143,8 @@ export function createBrainRouter() {
   r.delete("/projects/:id/tokens/:tokenId", async (c) => {
     const project = await ownedProject(c.env, realUser(c), c.req.param("id")), now = nowOf(c).toISOString();
     const result = await db(c.env).batch([
-      db(c.env).prepare("UPDATE brain_agent_tokens SET revoked_at=? WHERE id=? AND project_id=? AND revoked_at IS NULL").bind(now, c.req.param("tokenId"), project.id),
-      db(c.env).prepare("DELETE FROM brain_locks WHERE token_id=? AND project_id=?").bind(c.req.param("tokenId"), project.id),
+      db(c.env).prepare("UPDATE brain_agent_tokens SET revoked_at=? WHERE id=? AND id<>? AND project_id=? AND revoked_at IS NULL").bind(now, c.req.param("tokenId"), ownerSeatId(project.id), project.id),
+      db(c.env).prepare("DELETE FROM brain_locks WHERE token_id=? AND token_id<>? AND project_id=?").bind(c.req.param("tokenId"), ownerSeatId(project.id), project.id),
     ]);
     if (result[0]?.meta.changes !== 1) throw new ApiError("not_found", "That token does not exist.");
     return c.body(null, 204);
@@ -139,24 +173,8 @@ export function createBrainAgentRouter() {
   });
 
   r.post("/proceed", async (c) => {
-    const body = await parseBody(c, ProceedWithTrackRequestSchema), { token, project } = await scoped(c, body.projectId), now = nowOf(c);
-    // Resume the card this agent already holds; otherwise take the top card without a live lock.
-    const held = await liveLockFor(c.env, token.id, now);
-    let lock = held ? toLock(held) : null, cardId = held?.card_id ?? null;
-    if (!lock) {
-      const candidates = await db(c.env).prepare("SELECT c.id FROM brain_cards c WHERE c.project_id=? AND c.status IN ('open','active') AND NOT EXISTS(SELECT 1 FROM brain_locks l WHERE l.card_id=c.id AND l.expires_at>?) ORDER BY c.position LIMIT 5")
-        .bind(project.id, now.toISOString()).all<{ id: string }>();
-      for (const candidate of candidates.results ?? []) {
-        lock = await acquireLock(c.env, { projectId: project.id, cardId: candidate.id, tokenId: token.id, agent: agentName(token), tool: token.tool, now, ttlSeconds: LOCK_TTL_SECONDS });
-        if (lock) { cardId = candidate.id; break; }
-      }
-    }
-    if (!lock || !cardId) throw new ApiError("not_found", "No open card is free right now.");
-    const response: ProceedWithTrackResponse = {
-      card: toCard(await cardIn(c.env, project.id, cardId)), lock, rules: project.rules,
-      boardTop: (await boardCards(c.env, project.id, BOARD_TOP)), trackTail: await trackTail(c.env, project.id),
-    };
-    return c.json(response);
+    const body = await parseBody(c, ProceedWithTrackRequestSchema), { token, project } = await scoped(c, body.projectId);
+    return c.json(await proceed(c, project, { tokenId: token.id, agent: agentName(token), tool: token.tool }));
   });
 
   r.post("/lock", async (c) => {
