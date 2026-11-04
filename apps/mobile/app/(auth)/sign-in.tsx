@@ -29,7 +29,7 @@ export default function SignInScreen() {
     setLastAttempt("github");
     clearError();
     const result = await signInWithGithub(Platform.OS === "web" ? "web" : "ios");
-    if (result === "signed_in") router.replace("/(tabs)/inbox");
+    if (result === "signed_in") router.replace("/getting-started");
   };
 
   const handleDemo = async () => {

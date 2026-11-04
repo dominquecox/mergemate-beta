@@ -11,6 +11,7 @@ const PENDING_SIGN_IN_KEY = "mergemate_pending_sign_in";
 const DEMO_FLAG_KEY = "mergemate_demo_session";
 const DEVICE_ID_KEY = "mergemate_device_id";
 const PUSH_ENABLED_KEY = "mergemate_push_enabled";
+const FIRST_RUN_KEY = "mergemate_first_run_walkthrough";
 
 // Fallback in-memory map for environments where neither SecureStore nor localStorage is accessible
 const memoryStorage = new Map<string, string>();
@@ -60,7 +61,7 @@ export const StorageService = {
   async clearAccountData():Promise<void>{
     await pendingOperations;
     let failed=false;
-    for(const key of [REVIEW_PLAYBOOK_KEY,AI_CONSENT_KEY,RECENT_SEARCHES_KEY,DEMO_FLAG_KEY,DEVICE_ID_KEY,PUSH_ENABLED_KEY,'mergemate.webPushUser']){
+    for(const key of [REVIEW_PLAYBOOK_KEY,AI_CONSENT_KEY,RECENT_SEARCHES_KEY,DEMO_FLAG_KEY,DEVICE_ID_KEY,PUSH_ENABLED_KEY,FIRST_RUN_KEY,'mergemate.webPushUser']){
       memoryStorage.delete(key);
       try{if(Platform.OS==='web'){if(typeof window!=='undefined')window.localStorage.removeItem(key);}else await SecureStore.deleteItemAsync(key);}
       catch{failed=true;}
@@ -160,6 +161,30 @@ export const StorageService = {
       await SecureStore.setItemAsync(AI_CONSENT_KEY, val);
     } catch {
       memoryStorage.set(AI_CONSENT_KEY, val);
+    }
+  },
+
+  async shouldShowFirstRun(account: string): Promise<boolean> {
+    try {
+      const raw = Platform.OS === "web" ? getWebStorage()?.getItem(FIRST_RUN_KEY) ?? memoryStorage.get(FIRST_RUN_KEY) ?? null : await SecureStore.getItemAsync(FIRST_RUN_KEY) ?? memoryStorage.get(FIRST_RUN_KEY) ?? null;
+      if (!raw) return true;
+      const value: unknown = JSON.parse(raw);
+      return !value || typeof value !== "object" || !("account" in value) || value.account !== account || !("completedAt" in value) || typeof value.completedAt !== "string";
+    } catch {
+      return true;
+    }
+  },
+
+  async completeFirstRun(account: string, now = new Date()): Promise<void> {
+    const raw = JSON.stringify({ account, completedAt: now.toISOString() });
+    try {
+      if (Platform.OS === "web") {
+        const storage = getWebStorage();
+        if (storage) storage.setItem(FIRST_RUN_KEY, raw);
+        else memoryStorage.set(FIRST_RUN_KEY, raw);
+      } else await SecureStore.setItemAsync(FIRST_RUN_KEY, raw);
+    } catch {
+      memoryStorage.set(FIRST_RUN_KEY, raw);
     }
   },
 

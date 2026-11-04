@@ -128,6 +128,7 @@ function AppContent() {
       <Stack.Screen name="search" options={{ headerShown: false }} />
       <Stack.Screen name="account/delete" options={{ presentation: "modal", headerShown: false }} />
       <Stack.Screen name="billing" options={{ headerShown: false }} />
+      <Stack.Screen name="getting-started" options={{ headerShown: false }} />
       <Stack.Screen name="(public)" options={{ headerShown: false }} />
     </Stack></View>{privatePending && <LoadingState title="Checking your session..." message="Verifying access before showing private reviews."/>}</View>
   );

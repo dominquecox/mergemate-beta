@@ -59,6 +59,15 @@ describe("StorageService", () => {
     expect(await StorageService.getAiConsent()).toBe(false);
   });
 
+  it("shows first-run once per account and records completion without hardcoded identity", async () => {
+    Platform.OS = "ios";
+    expect(await StorageService.shouldShowFirstRun("account-a")).toBe(true);
+    await StorageService.completeFirstRun("account-a", new Date("2026-11-04T05:00:00Z"));
+    expect(await StorageService.shouldShowFirstRun("account-a")).toBe(false);
+    expect(await StorageService.shouldShowFirstRun("account-b")).toBe(true);
+    expect(mockSecureStore.get("mergemate_first_run_walkthrough")).toBe(JSON.stringify({account:"account-a",completedAt:"2026-11-04T05:00:00.000Z"}));
+  });
+
   it("stores and deduplicates recent search terms", async () => {
     StorageService.setRecentSearchAccount("fixture-a");
     await StorageService.addRecentSearch("stripe auth");
@@ -104,7 +113,7 @@ describe("StorageService", () => {
 describe('account-owned local erasure',()=>{
  it('removes account preferences and recent searches while preserving device theme and separately managed credentials',async()=>{
   Object.defineProperty(Platform,'OS',{configurable:true,writable:true,value:'ios'});
-  for(const key of ['mergemate_ai_consent','mergemate_recent_searches','mergemate_demo_session','mergemate_device_id','mergemate_push_enabled','mergemate.webPushUser'])mockSecureStore.set(key,'fixture-private');
+  for(const key of ['mergemate_ai_consent','mergemate_recent_searches','mergemate_demo_session','mergemate_device_id','mergemate_push_enabled','mergemate_first_run_walkthrough','mergemate.webPushUser'])mockSecureStore.set(key,'fixture-private');
   mockSecureStore.set('mergemate_theme','dark');mockSecureStore.set('mergemate_session_token','separately-managed-fixture');await StorageService.clearAccountData();expect([...mockSecureStore.keys()].sort()).toEqual(['mergemate_session_token','mergemate_theme']);
  });
  it('reports a secure device cleanup failure after trying every account key',async()=>{

@@ -317,6 +317,7 @@ export default function SettingsScreen() {
           <View style={isDesktop ? styles.bentoGridDesktop : undefined}>
             <View style={isDesktop ? styles.bentoCol : undefined}>
               <SettingsGroup title="Agents & workflows"><SettingsRow first label="Open agent workspace" detail="Build workflows, inspect capabilities and follow each run" icon="git-network-outline" onPress={()=>router.push('/workflows')}/></SettingsGroup>
+              <SettingsGroup title="Help & onboarding"><SettingsRow first label="Replay getting started" detail="Walk through Inbox, PR insights, triage and Automate" icon="compass-outline" onPress={()=>router.push('/getting-started?replay=1')}/></SettingsGroup>
               <SettingsGroup title="GitHub authentication">
                 <View style={{flexDirection:"row",alignItems:"center",gap:12,padding:14}}><Avatar login={user?.login ?? 'demo'} size={36}/><View style={{flex:1}}><Text style={[typography.headline,{color:colors.text}]}>{user?.name || user?.login || 'Demo User'}</Text><Text style={[typography.code,{color:colors.textSecondary,fontSize:11}]}>@{user?.login || 'demo-developer'}</Text></View><View style={{paddingHorizontal:8,paddingVertical:4,borderRadius:9999,backgroundColor:isDemo?colors.demoBadgeBg:colors.statusGoodBg}}><Text style={[typography.caption,{color:isDemo?colors.demoBadge:colors.statusGood}]}>{isDemo?'Demo':'Signed in'}</Text></View></View>
                 <SettingsRow label="Sign Out" icon="log-out-outline" danger onPress={handleSignOut}/>

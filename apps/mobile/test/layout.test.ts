@@ -27,6 +27,7 @@ describe("MM-042 responsive web shell", () => {
   it("classifies route groups", () => {
     expect(getShellKind(["(tabs)", "inbox"])).toBe("app");
     expect(getShellKind(["pr", "[owner]", "[repo]", "[number]"])).toBe("app");
+    expect(getShellKind(["getting-started"])).toBe("app");
     expect(getShellKind(["(auth)", "welcome"])).toBe("auth");
     expect(getShellKind(["(public)", "privacy"])).toBe("public");
     expect(getShellKind([])).toBe("bare");

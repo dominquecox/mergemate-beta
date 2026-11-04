@@ -45,7 +45,7 @@ export default function AuthCallbackScreen() {
 
     const run = async () => {
       if(relay.current)return;
-      if(!code&&!state&&!errorParam&&session&&!(await StorageService.hasPendingSignIn().catch(()=>true))){router.replace('/(tabs)/inbox');return;}
+      if(!code&&!state&&!errorParam&&session&&!(await StorageService.hasPendingSignIn().catch(()=>true))){router.replace('/getting-started');return;}
 
       if (errorParam) {
         if(state)await StorageService.takePendingSignIn(Date.now(),state).catch(()=>null);
@@ -70,7 +70,7 @@ export default function AuthCallbackScreen() {
       // First time here, or nothing installed yet: go choose repositories. Otherwise the inbox.
       try {
         const { items } = await api.getOrgInstallations();
-        router.replace(items.some((i) => i.status === "active") ? "/(tabs)/inbox" : "/(auth)/repos");
+        router.replace(items.some((i) => i.status === "active") ? "/getting-started" : "/(auth)/repos");
       } catch {
         router.replace("/(tabs)/inbox");
       }

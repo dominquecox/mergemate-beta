@@ -75,7 +75,7 @@ export default function ReposScreen() {
         showBack
         rightAction={
           <TouchableOpacity
-            onPress={() => router.replace("/(tabs)/inbox")}
+            onPress={() => router.replace("/getting-started")}
             style={styles.doneBtn}
             accessibilityRole="button"
             accessibilityLabel="Done choosing repositories"
@@ -219,7 +219,7 @@ export default function ReposScreen() {
 
 <Text accessibilityRole="header" style={[typography.headline,{color:colors.text,marginTop:24}]}>Connected repositories · {repos.length} loaded</Text></>}
           ListEmptyComponent={repos.length===0&&!settledQuery?<EmptyState icon="folder-open-outline" title="No repositories connected yet" message="MergeMate only sees repositories you grant to its GitHub App. Choose repositories on GitHub, then refresh this list." actionTitle="Choose repositories on GitHub" onAction={openGitHubAppConfig}/>:<EmptyState icon="folder-open-outline" title="No matching repositories" message="Search the loaded repositories or load another page."/>}
-          ListFooterComponent={<View>{(hasMore || pageError) && <Button title={pageError?'Retry loading repositories':'Load more repositories'} loading={pageBusy} onPress={()=>void more()}/>}<Button title="Continue to Inbox" onPress={()=>router.replace('/(tabs)/inbox')} style={{marginVertical:24,borderRadius:16,minHeight:52}}/></View>}
+          ListFooterComponent={<View>{(hasMore || pageError) && <Button title={pageError?'Retry loading repositories':'Load more repositories'} loading={pageBusy} onPress={()=>void more()}/>}<Button title="Continue" onPress={()=>router.replace('/getting-started')} style={{marginVertical:24,borderRadius:16,minHeight:52}}/></View>}
           renderItem={({item:repo})=>(                <View
                   key={repo.id}
                   style={[

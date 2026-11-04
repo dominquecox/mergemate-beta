@@ -8,22 +8,27 @@ import { useTheme } from "../src/context/ThemeContext";
 import { LoadingState } from "../src/components/LoadingState";
 import { ErrorState } from "../src/components/ErrorState";
 import { EmptyState } from "../src/components/EmptyState";
+import { StorageService } from "../src/storage";
 
 export default function IndexScreen() {
   const router = useRouter();
-  const { session, isLoading, error, clearError } = useAuth();
+  const { session, user, isDemo, isLoading, error, clearError } = useAuth();
   const { colors,typography,isDark } = useTheme();
   const [timedOut, setTimedOut] = useState(false);
 
   useEffect(() => {
+    let current=true;
     if (!isLoading && !error) {
       if (session) {
-        router.replace("/(tabs)/inbox");
+        if(!user)return()=>{current=false;};
+        if(isDemo)router.replace("/(tabs)/inbox");
+        else void StorageService.shouldShowFirstRun(user.id).then(show=>{if(current)router.replace(show?"/getting-started":"/(tabs)/inbox");});
       } else {
         router.replace("/(auth)/welcome");
       }
     }
-  }, [session, isLoading, error, router]);
+    return()=>{current=false;};
+  }, [session, user, isDemo, isLoading, error, router]);
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
