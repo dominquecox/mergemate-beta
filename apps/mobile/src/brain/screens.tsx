@@ -180,7 +180,7 @@ export function CardDetailModal({
   lock: Lock | null;
   trackEvents: TrackEvent[];
   onClose: () => void;
-  agent?: Omit<AgentPanelProps, 'card' | 'lock'>;
+  agent?: Omit<AgentPanelProps, 'card' | 'lock' | 'onLeave'>;
 }) {
   const styles = useBrainStyles();
   return (
@@ -246,7 +246,7 @@ export function CardDetailModal({
             </View>
           )}
         </ScrollView>
-        {agent ? <AgentPanel {...agent} card={card} lock={lock} /> : null}
+        {agent ? <AgentPanel {...agent} card={card} lock={lock} onLeave={onClose} /> : null}
       </SafeAreaView>
     </Modal>
   );

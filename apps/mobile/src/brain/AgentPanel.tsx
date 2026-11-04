@@ -14,10 +14,12 @@ export interface AgentPanelProps {
   card: Card;
   lock: Lock | null;
   onChanged: () => void;
+  /** Closes whatever hosts this panel (the card detail Modal) before navigating away, so the next screen is visible. */
+  onLeave?: () => void;
 }
 
 /** Bottom of the card detail: one primary button and the "Agent run" block. Nothing here merges or approves on GitHub. */
-export function AgentPanel({ api, project, card, lock, onChanged }: AgentPanelProps) {
+export function AgentPanel({ api, project, card, lock, onChanged, onLeave }: AgentPanelProps) {
   const styles = useBrainStyles();
   const { colors } = useTheme();
   const router = useRouter();
@@ -36,6 +38,7 @@ export function AgentPanel({ api, project, card, lock, onChanged }: AgentPanelPr
       return;
     }
     setApproveError(null);
+    onLeave?.();
     router.push(approveRunPath(runId));
   };
   const summary = runSummary({
