@@ -262,7 +262,7 @@ function PrWorkspace({owner,repo,number}:{owner:string;repo:string;number:string
                           })
                         }
                         style={{
-                          minHeight: 28,
+                          minHeight: 44,
                           paddingHorizontal: 8,
                           paddingVertical: 4,
                           borderRadius: 8,

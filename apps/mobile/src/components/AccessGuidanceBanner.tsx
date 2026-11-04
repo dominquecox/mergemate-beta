@@ -94,7 +94,7 @@ export function AccessGuidanceBanner({ error, compact }: AccessGuidanceBannerPro
             accessibilityLabel="Confirm AI processing consent"
             onPress={() => router.push("/(auth)/consent")}
             style={({ pressed }) => ({
-              minHeight: 34,
+              minHeight: 44,
               paddingHorizontal: 12,
               paddingVertical: 6,
               borderRadius: radius.sm,
@@ -118,7 +118,7 @@ export function AccessGuidanceBanner({ error, compact }: AccessGuidanceBannerPro
           accessibilityLabel="Configure GitHub repositories"
           onPress={() => router.push("/(auth)/repos")}
           style={({ pressed }) => ({
-            minHeight: 34,
+            minHeight: 44,
             paddingHorizontal: 12,
             paddingVertical: 6,
             borderRadius: radius.sm,

@@ -93,7 +93,7 @@ export function InfoTip({ title, body, size = 15 }: InfoTipProps) {
                 accessibilityRole="button"
                 accessibilityLabel="Dismiss help"
                 onPress={() => setOpen(false)}
-                style={{ minWidth: 36, minHeight: 36, alignItems: "center", justifyContent: "center" }}
+                style={{ minWidth: 44, minHeight: 44, alignItems: "center", justifyContent: "center" }}
               >
                 <Icon name="close" size={18} color={colors.textSecondary} />
               </Pressable>
@@ -107,7 +107,7 @@ export function InfoTip({ title, body, size = 15 }: InfoTipProps) {
                 accessibilityLabel="Got it"
                 onPress={() => setOpen(false)}
                 style={({ pressed }) => ({
-                  minHeight: 36,
+                  minHeight: 44,
                   paddingHorizontal: 14,
                   paddingVertical: 6,
                   borderRadius: radius.sm,

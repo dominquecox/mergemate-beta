@@ -202,7 +202,7 @@ export function AskPrCard({ owner, repo, number, files = [] }: { owner: string; 
             accessibilityRole="button"
             disabled={busy}
             onPress={() => { setQuestion(text); void ask(text); }}
-            style={{ minHeight: 36, justifyContent: "center", paddingHorizontal: 12, borderRadius: 18, backgroundColor: colors.brandSubtle, opacity: busy ? 0.5 : 1 }}
+            style={{ minHeight: 44, justifyContent: "center", paddingHorizontal: 12, borderRadius: 22, backgroundColor: colors.brandSubtle, opacity: busy ? 0.5 : 1 }}
           >
             <Text style={[typography.caption, { color: colors.brandLight }]}>{text}</Text>
           </Pressable>

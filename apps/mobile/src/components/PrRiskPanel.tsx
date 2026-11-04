@@ -70,7 +70,7 @@ return <>
                                         accessibilityRole="button"
                                         accessibilityLabel={`Open ${file}, the file behind this reason`}
                                         onPress={() => jumpToFile(file)}
-                                        style={{ minHeight: 32, justifyContent: "center", marginTop: 4 }}
+                                        style={{ minHeight: 44, justifyContent: "center", marginTop: 4 }}
                                       >
                                         <Text style={[typography.caption, { color: colors.brandLight, fontWeight: "600" }]} numberOfLines={1}>
                                           View {file} ↗

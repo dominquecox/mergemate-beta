@@ -279,7 +279,7 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   row: {
-    minHeight: 42,
+    minHeight: 44,
     paddingHorizontal: 12,
     flexDirection: "row",
     alignItems: "center",

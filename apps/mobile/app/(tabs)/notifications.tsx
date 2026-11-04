@@ -367,7 +367,7 @@ export default function NotificationsScreen() {
                         accessibilityLabel={`Mark ${item.title} as read`}
                         onPress={() => handleMarkItemRead(item.id)}
                         style={{
-                          minHeight: 32,
+                          minHeight: 44,
                           paddingHorizontal: 9,
                           paddingVertical: 5,
                           borderRadius: 8,
@@ -419,7 +419,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   markReadBtn: {
-    minHeight: 34,
+    minHeight: 44,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
@@ -431,7 +431,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   modeToggleBtn: {
-    minHeight: 34,
+    minHeight: 44,
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 8,
@@ -445,7 +445,7 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   chip: {
-    minHeight: 32,
+    minHeight: 44,
     minWidth: 54,
     paddingHorizontal: 12,
     paddingVertical: 5,

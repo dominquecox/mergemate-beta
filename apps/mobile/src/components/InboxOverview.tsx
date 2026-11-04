@@ -242,7 +242,7 @@ export function InboxOverview({ count, needsReview, items = [] }: InboxOverviewP
           onPress={() => setTargetPickerOpen(true)}
           style={({ pressed }) => ({
             flex: isDesktop ? 1.3 : undefined,
-            minHeight: 42,
+            minHeight: 44,
             paddingHorizontal: 10,
             paddingVertical: 6,
             borderRadius: 10,
@@ -280,7 +280,7 @@ export function InboxOverview({ count, needsReview, items = [] }: InboxOverviewP
           onPress={() => setActionPickerOpen(true)}
           style={({ pressed }) => ({
             flex: isDesktop ? 1 : undefined,
-            minHeight: 42,
+            minHeight: 44,
             paddingHorizontal: 10,
             paddingVertical: 6,
             borderRadius: 10,
@@ -311,7 +311,7 @@ export function InboxOverview({ count, needsReview, items = [] }: InboxOverviewP
           accessibilityLabel="Open agent workflows"
           onPress={() => openWorkflowBuilder()}
           style={({ pressed }) => ({
-            minHeight: 42,
+            minHeight: 44,
             paddingHorizontal: 14,
             borderRadius: 10,
             backgroundColor: colors.brand,
@@ -334,7 +334,7 @@ export function InboxOverview({ count, needsReview, items = [] }: InboxOverviewP
           accessibilityLabel="Build PR review workflow"
           onPress={() => openWorkflowBuilder("review", "review")}
           style={({ pressed }) => ({
-            minHeight: 30,
+            minHeight: 44,
             paddingHorizontal: 9,
             paddingVertical: 4,
             borderRadius: 8,
@@ -357,7 +357,7 @@ export function InboxOverview({ count, needsReview, items = [] }: InboxOverviewP
           accessibilityLabel="Build coding fix workflow"
           onPress={() => openWorkflowBuilder("code_fix", "fix")}
           style={({ pressed }) => ({
-            minHeight: 30,
+            minHeight: 44,
             paddingHorizontal: 9,
             paddingVertical: 4,
             borderRadius: 8,
@@ -418,7 +418,7 @@ export function InboxOverview({ count, needsReview, items = [] }: InboxOverviewP
                 accessibilityRole="button"
                 accessibilityLabel="Close"
                 onPress={() => setTargetPickerOpen(false)}
-                style={{ minWidth: 32, minHeight: 32, alignItems: "center", justifyContent: "center" }}
+                style={{ minWidth: 44, minHeight: 44, alignItems: "center", justifyContent: "center" }}
               >
                 <Icon name="close" size={18} color={colors.textSecondary} />
               </Pressable>
@@ -515,7 +515,7 @@ export function InboxOverview({ count, needsReview, items = [] }: InboxOverviewP
                 accessibilityRole="button"
                 accessibilityLabel="Close"
                 onPress={() => setActionPickerOpen(false)}
-                style={{ minWidth: 32, minHeight: 32, alignItems: "center", justifyContent: "center" }}
+                style={{ minWidth: 44, minHeight: 44, alignItems: "center", justifyContent: "center" }}
               >
                 <Icon name="close" size={18} color={colors.textSecondary} />
               </Pressable>

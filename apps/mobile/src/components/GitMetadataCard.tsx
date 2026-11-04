@@ -238,6 +238,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 6,
     paddingVertical: 3,
     borderWidth: 1,
-    minHeight: 28,
+    minHeight: 44,
   },
 });

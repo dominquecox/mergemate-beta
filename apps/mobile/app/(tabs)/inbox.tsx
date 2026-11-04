@@ -230,7 +230,7 @@ function InboxWorkspace({initialFilter}:{initialFilter:NotificationFilter}) {
             accessibilityRole="button"
             accessibilityLabel="Open all workflows"
             onPress={() => router.push("/workflows")}
-            style={{ flexDirection: "row", alignItems: "center", gap: 3, minHeight: 28, paddingHorizontal: 4 }}
+            style={{ flexDirection: "row", alignItems: "center", gap: 3, minHeight: 44, paddingHorizontal: 4 }}
           >
             <Text style={[typography.caption, { color: colors.brandLight, fontWeight: "700", fontSize: 11 }]}>Workflows →</Text>
           </Pressable>
@@ -423,7 +423,7 @@ const styles = StyleSheet.create({
   },
   filterTab: {
     flex: 1,
-    minHeight: 28,
+    minHeight: 44,
     paddingHorizontal: 8,
     paddingVertical: 4,
     alignItems: "center",
@@ -462,7 +462,7 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   cardMainTouch: {
-    minHeight: 40,
+    minHeight: 44,
   },
   cardTop: {
     flexDirection: "row",
@@ -494,7 +494,7 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   actionBtn: {
-    minHeight: 28,
+    minHeight: 44,
     minWidth: 48,
     paddingHorizontal: 9,
     paddingVertical: 3,

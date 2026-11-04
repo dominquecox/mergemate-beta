@@ -798,7 +798,7 @@ function AgentWorkspace({
                   disabled={busy}
                   onPress={() => setTargetModalOpen(true)}
                   style={({ pressed }) => ({
-                    minHeight: 42,
+                    minHeight: 44,
                     paddingHorizontal: 12,
                     paddingVertical: 6,
                     borderRadius: 10,

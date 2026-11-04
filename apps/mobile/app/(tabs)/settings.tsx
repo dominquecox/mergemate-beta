@@ -287,7 +287,7 @@ export default function SettingsScreen() {
                 accessibilityRole="button"
                 accessibilityLabel="Configure watched repositories"
                 onPress={() => router.push("/(auth)/repos")}
-                style={{ minHeight: 32, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8, backgroundColor: colors.surfaceElevated, borderWidth: 1, borderColor: colors.border, flexDirection: "row", alignItems: "center", gap: 6 }}
+                style={{ minHeight: 44, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8, backgroundColor: colors.surfaceElevated, borderWidth: 1, borderColor: colors.border, flexDirection: "row", alignItems: "center", gap: 6 }}
               >
                 <Icon name="folder-open-outline" size={13} color={colors.brandLight} />
                 <Text style={[typography.caption, { color: colors.text, fontWeight: "600", fontSize: 11 }]}>Configure Repos</Text>
@@ -296,7 +296,7 @@ export default function SettingsScreen() {
                 accessibilityRole="button"
                 accessibilityLabel="Open agent workflows"
                 onPress={() => router.push("/workflows")}
-                style={{ minHeight: 32, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8, backgroundColor: colors.surfaceElevated, borderWidth: 1, borderColor: colors.border, flexDirection: "row", alignItems: "center", gap: 6 }}
+                style={{ minHeight: 44, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8, backgroundColor: colors.surfaceElevated, borderWidth: 1, borderColor: colors.border, flexDirection: "row", alignItems: "center", gap: 6 }}
               >
                 <Icon name="git-network-outline" size={13} color={colors.brandLight} />
                 <Text style={[typography.caption, { color: colors.text, fontWeight: "600", fontSize: 11 }]}>Agent Workflows</Text>
@@ -305,7 +305,7 @@ export default function SettingsScreen() {
                 accessibilityRole="button"
                 accessibilityLabel="Open unread alerts"
                 onPress={() => router.push("/(tabs)/notifications")}
-                style={{ minHeight: 32, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8, backgroundColor: colors.surfaceElevated, borderWidth: 1, borderColor: colors.border, flexDirection: "row", alignItems: "center", gap: 6 }}
+                style={{ minHeight: 44, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8, backgroundColor: colors.surfaceElevated, borderWidth: 1, borderColor: colors.border, flexDirection: "row", alignItems: "center", gap: 6 }}
               >
                 <Icon name="notifications-outline" size={13} color={colors.brandLight} />
                 <Text style={[typography.caption, { color: colors.text, fontWeight: "600", fontSize: 11 }]}>View Alerts ({unreadCount})</Text>
