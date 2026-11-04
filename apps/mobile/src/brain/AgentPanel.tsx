@@ -3,7 +3,8 @@ import { Linking, Text, TouchableOpacity, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import type { Card, Lock, Project } from '@mergemate/contracts';
 import type { ApiClient } from '../api/client';
-import { approveRunPath, draftPrUrl, primaryAction, runIdFromBranch, safeHttpsUrl, useAgentRun } from './agentRun';
+import { approveRunPath, draftPrUrl, primaryAction, runIdFromBranch, runSummary, safeHttpsUrl, useAgentRun } from './agentRun';
+import { useTheme } from '../context/ThemeContext';
 import { useBrainStyles } from './screens';
 import { CopyDetailsButton } from '../components/CopyDetailsButton';
 
@@ -18,6 +19,7 @@ export interface AgentPanelProps {
 /** Bottom of the card detail: one primary button and the "Agent run" block. Nothing here merges or approves on GitHub. */
 export function AgentPanel({ api, project, card, lock, onChanged }: AgentPanelProps) {
   const styles = useBrainStyles();
+  const { colors } = useTheme();
   const router = useRouter();
   const agent = useAgentRun({ api, project, card, onChanged });
   const action = primaryAction(card, lock);
@@ -36,17 +38,26 @@ export function AgentPanel({ api, project, card, lock, onChanged }: AgentPanelPr
     setApproveError(null);
     router.push(approveRunPath(runId));
   };
-  const approveButton = (
-    <TouchableOpacity style={styles.iconButton} onPress={approve} accessibilityRole="button" accessibilityLabel={run ? 'Approve the patch' : 'Open the agent run'}>
-      <Text style={styles.iconButtonText}>{run ? 'Approve the patch' : 'Open the agent run'}</Text>
-    </TouchableOpacity>
-  );
-  // A card the agent is still working, with no run on this screen (for example after a reload).
-  const resumable = !run && card.status === 'active' && !card.prNumber && runIdFromBranch(card.branch) !== null;
+  const summary = runSummary({
+    planning: agent.planning,
+    run,
+    watchBranch: watch?.card.branch,
+    prNumber,
+    prLink,
+    // A card the agent is still working, with no run on this screen (for example after a reload).
+    resumableBranch: !run && card.status === 'active' && !card.prNumber && runIdFromBranch(card.branch) !== null ? card.branch ?? null : null,
+  });
+  const onPrimary = () => {
+    if (!summary?.primary) return;
+    if (summary.primary.kind === 'approve') approve();
+    else if (summary.primary.kind === 'open_pr' && prLink) void Linking.openURL(prLink);
+    else if (summary.primary.kind === 'retry') void agent.retry();
+  };
+  const tone = summary?.tone === 'good' ? colors.statusGood : summary?.tone === 'bad' ? colors.statusAlert : colors.brandLight;
 
   return (
     <View style={styles.section}>
-      {action ? (
+      {action && !summary?.primary ? (
         <TouchableOpacity
           style={[styles.retryButton, { minHeight: 44, justifyContent: 'center', alignItems: 'center' }]}
           onPress={() => void (action === 'proceed' ? agent.proceed() : agent.plan())}
@@ -59,7 +70,7 @@ export function AgentPanel({ api, project, card, lock, onChanged }: AgentPanelPr
         </TouchableOpacity>
       ) : null}
 
-      {agent.lockedId && !lock ? <Text style={styles.text}>Locked {agent.lockedId}. Open that card to plan with the agent.</Text> : null}
+      {agent.lockedId && !lock ? <Text style={styles.text}>Locked{agent.lockedTitle ? ` "${agent.lockedTitle}"` : ''}. Open that card to plan with the agent.</Text> : null}
       {agent.error ? (
         <>
           <Text style={styles.errorText} accessibilityRole="alert">{agent.error}</Text>
@@ -69,46 +80,34 @@ export function AgentPanel({ api, project, card, lock, onChanged }: AgentPanelPr
 
       {approveError ? <Text style={styles.errorText} accessibilityRole="alert">{approveError}</Text> : null}
 
-      {resumable ? (
-        <View accessibilityLiveRegion="polite">
+      {summary ? (
+        <View accessibilityLiveRegion="polite" style={{ gap: 8, padding: 12, borderRadius: 12, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface }}>
           <Text style={styles.sectionLabel}>Agent run</Text>
-          <Text style={styles.text}>This card has an agent run. Open it to see where it stands, and approve the patch there if it is waiting.</Text>
-          <Text style={styles.text}>Branch: {card.branch}</Text>
-          {approveButton}
-        </View>
-      ) : null}
-
-      {run ? (
-        <View accessibilityLiveRegion="polite">
-          <Text style={styles.sectionLabel}>Agent run</Text>
-          {run.status === 'running' && watch?.state !== 'pr' ? (
-            <>
-              <Text style={styles.text}>{watch?.state === 'timeout' ? 'Waiting for your approval. Open the run to approve the patch.' : 'The agent prepared a patch. Review it and approve it with a passkey to open a draft PR.'}</Text>
-              {run.summary ? <Text style={styles.text}>{run.summary}</Text> : null}
-              {run.files.length ? <Text style={styles.text}>Files: {run.files.join(', ')}</Text> : null}
-              {watch?.card.branch ?? run.branch ? <Text style={styles.text}>Branch: {watch?.card.branch ?? run.branch}</Text> : null}
-              {approveButton}
-            </>
+          <Text accessibilityRole="header" style={{ fontSize: 17, fontWeight: '600', color: tone }}>{summary.heading}</Text>
+          <Text style={styles.text}>{summary.summary}</Text>
+          {summary.files.length ? (
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }} accessibilityLabel={`${summary.files.length} files`}>
+              {summary.files.map((file) => (
+                <View key={file} style={{ paddingHorizontal: 8, paddingVertical: 3, borderRadius: 999, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surfaceElevated, maxWidth: '100%' }}>
+                  <Text numberOfLines={1} style={{ fontSize: 11, color: colors.textSecondary }}>{file}</Text>
+                </View>
+              ))}
+            </View>
           ) : null}
-          {prNumber ? (
-            <>
-              <Text style={styles.text}>Draft PR #{prNumber}. Merging stays with you on GitHub.</Text>
-              {prLink ? (
-                <TouchableOpacity style={styles.iconButton} onPress={() => void Linking.openURL(prLink)} accessibilityRole="link" accessibilityLabel={`Open draft PR ${prNumber}`}>
-                  <Text style={styles.iconButtonText}>Open PR</Text>
-                </TouchableOpacity>
-              ) : null}
-            </>
+          {summary.branch ? <Text selectable numberOfLines={1} style={{ fontSize: 11, color: colors.textMuted }}>Branch {summary.branch}</Text> : null}
+          {summary.primary ? (
+            <TouchableOpacity
+              style={[styles.retryButton, { minHeight: 44, justifyContent: 'center', alignItems: 'center' }]}
+              onPress={onPrimary}
+              disabled={summary.primary.kind === 'retry' && agent.busy}
+              accessibilityRole={summary.primary.kind === 'open_pr' ? 'link' : 'button'}
+              accessibilityLabel={summary.primary.kind === 'open_pr' && prNumber ? `Open draft PR ${prNumber}` : summary.primary.label}
+            >
+              <Text style={styles.retryText}>{summary.primary.label}</Text>
+            </TouchableOpacity>
           ) : null}
-          {run.status === 'no_change' ? <Text style={styles.text}>{run.summary}</Text> : null}
-          {run.status === 'failed' ? (
-            <>
-              <Text style={styles.errorText}>{run.message ?? run.summary}</Text>
-              <CopyDetailsButton report={{ code: 'run_failed', message: run.message ?? run.summary, runId: run.runId, step: 'Plan with agent', at: new Date() }} />
-              <TouchableOpacity style={styles.iconButton} onPress={() => void agent.retry()} disabled={agent.busy} accessibilityRole="button" accessibilityLabel="Retry">
-                <Text style={styles.iconButtonText}>Retry</Text>
-              </TouchableOpacity>
-            </>
+          {run?.status === 'failed' ? (
+            <CopyDetailsButton report={{ code: 'run_failed', message: run.message ?? run.summary, runId: run.runId, step: 'Plan with agent', at: new Date() }} />
           ) : null}
         </View>
       ) : null}

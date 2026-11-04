@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { BrainRunResponseSchema, type BrainRunStatus, type Card, type Lock } from '@mergemate/contracts';
-import { POLL_INTERVAL_MS, POLL_LIMIT_MS, approveRunPath, draftPrUrl, nextWatch, primaryAction, runIdFromBranch, safeHttpsUrl } from '../src/brain/agentRun';
+import { BrainRunResponseSchema, type BrainRunResponse, type BrainRunStatus, type Card, type Lock } from '@mergemate/contracts';
+import { POLL_INTERVAL_MS, POLL_LIMIT_MS, approveRunPath, draftPrUrl, nextWatch, primaryAction, runIdFromBranch, runSummary, safeHttpsUrl } from '../src/brain/agentRun';
 import { mockClient } from '../src/api/mock';
 
 const card = { id: 'c1', title: 'T', status: 'open', branch: 'mergemate-agent/r1' } as Card;
@@ -49,5 +49,31 @@ describe('run id from the card branch', () => {
     expect(runIdFromBranch('mergemate-agent/a/b')).toBeNull();
     expect(runIdFromBranch('mergemate-agent/../x')).toBeNull();
     expect(runIdFromBranch(undefined)).toBeNull();
+  });
+});
+
+describe('agent run summary block', () => {
+  const base = { planning: false, prLink: null as string | null, resumableBranch: null as string | null };
+  const running = { status: 'running', card, summary: 'Rename the label', files: ['a.ts', 'b.ts'], runId: 'r1', branch: 'mergemate-agent/r1' } as BrainRunResponse;
+
+  it('says Planning while the request is in flight, with no button', () => {
+    expect(runSummary({ ...base, planning: true, run: null })).toMatchObject({ heading: 'Planning', primary: null, files: [] });
+  });
+  it('says Patch ready with the one-line summary, file chips, small branch and one Approve button', () => {
+    expect(runSummary({ ...base, run: running })).toEqual({
+      heading: 'Patch ready', tone: 'info', summary: 'Rename the label', files: ['a.ts', 'b.ts'], branch: 'mergemate-agent/r1', primary: { kind: 'approve', label: 'Approve the patch' },
+    });
+  });
+  it('says Draft PR #n with an Open PR button once the PR exists', () => {
+    expect(runSummary({ ...base, run: running, prNumber: 12, prLink: 'https://github.com/o/r/pull/12' })).toMatchObject({ heading: 'Draft PR #12', tone: 'good', primary: { kind: 'open_pr', label: 'Open PR' } });
+    expect(runSummary({ ...base, run: running, prNumber: 12 })?.primary).toBeNull();
+  });
+  it('says Failed with Retry, and No change needed with no button', () => {
+    expect(runSummary({ ...base, run: { ...running, status: 'failed', message: 'Could not start' } as BrainRunResponse })).toMatchObject({ heading: 'Failed', tone: 'bad', summary: 'Could not start', primary: { kind: 'retry' } });
+    expect(runSummary({ ...base, run: { ...running, status: 'no_change', summary: 'Nothing to do' } as BrainRunResponse })).toMatchObject({ heading: 'No change needed', primary: null });
+  });
+  it('lets a reloaded card with an agent branch reopen its run, and shows nothing otherwise', () => {
+    expect(runSummary({ ...base, run: null, resumableBranch: 'mergemate-agent/r1' })).toMatchObject({ heading: 'Agent run', primary: { kind: 'approve', label: 'Open the agent run' } });
+    expect(runSummary({ ...base, run: null })).toBeNull();
   });
 });

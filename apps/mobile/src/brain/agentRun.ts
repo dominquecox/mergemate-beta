@@ -53,6 +53,8 @@ export function useAgentRun({ api, project, card, onChanged }: UseAgentRunOption
   const [error, setError] = useState<string | null>(null);
   const [errorInfo, setErrorInfo] = useState<(ErrorDetails & { step: string }) | null>(null);
   const [lockedId, setLockedId] = useState<string | null>(null);
+  const [lockedTitle, setLockedTitle] = useState<string | null>(null);
+  const [planning, setPlanning] = useState(false);
   const [run, setRun] = useState<BrainRunResponse | null>(null);
   const [watch, setWatch] = useState<RunWatch | null>(null);
   const alive = useRef(true);
@@ -78,7 +80,10 @@ export function useAgentRun({ api, project, card, onChanged }: UseAgentRunOption
     () =>
       guarded('Proceed', async () => {
         const res = await api.proceedBrain(project.id);
-        if (alive.current) setLockedId(res.card.id);
+        if (alive.current) {
+          setLockedId(res.card.id);
+          setLockedTitle(res.card.title);
+        }
         onChanged();
       }),
     [api, project.id, guarded, onChanged],
@@ -87,11 +92,16 @@ export function useAgentRun({ api, project, card, onChanged }: UseAgentRunOption
   const plan = useCallback(
     () =>
       guarded('Plan with agent', async () => {
-        const res = await api.runBrain(project.id);
-        if (!alive.current) return;
-        setRun(res);
-        setWatch(res.status === 'running' ? nextWatch(res.card, 0) : null);
-        onChanged();
+        setPlanning(true);
+        try {
+          const res = await api.runBrain(project.id);
+          if (!alive.current) return;
+          setRun(res);
+          setWatch(res.status === 'running' ? nextWatch(res.card, 0) : null);
+          onChanged();
+        } finally {
+          if (alive.current) setPlanning(false);
+        }
       }),
     [api, project.id, guarded, onChanged],
   );
@@ -125,5 +135,47 @@ export function useAgentRun({ api, project, card, onChanged }: UseAgentRunOption
     // Restart only when a new running run starts.
   }, [api, project.id, polledCardId, run?.runId]);
 
-  return { busy, error, errorInfo, lockedId, run, watch, proceed, plan, retry: plan, card };
+  return { busy, error, errorInfo, lockedId, lockedTitle, planning, run, watch, proceed, plan, retry: plan, card };
+}
+
+export interface RunSummary {
+  heading: string;
+  tone: 'info' | 'good' | 'bad';
+  summary: string;
+  files: string[];
+  branch: string | null;
+  primary: { kind: 'approve' | 'open_pr' | 'retry'; label: string } | null;
+}
+
+/**
+ * What the "Agent run" block shows: a heading, one line, the files, the branch and at most one main button.
+ * Nothing here merges or approves on GitHub.
+ */
+export function runSummary(input: {
+  planning: boolean;
+  run: BrainRunResponse | null;
+  watchBranch?: string | null;
+  prNumber?: number;
+  prLink: string | null;
+  resumableBranch: string | null;
+}): RunSummary | null {
+  const { run } = input;
+  if (input.planning && !run) {
+    return { heading: 'Planning', tone: 'info', summary: 'The agent is reading the repository and preparing a patch.', files: [], branch: null, primary: null };
+  }
+  if (!run) {
+    if (!input.resumableBranch) return null;
+    return { heading: 'Agent run', tone: 'info', summary: 'Open the run to see where it stands and approve the patch if it is waiting.', files: [], branch: input.resumableBranch, primary: { kind: 'approve', label: 'Open the agent run' } };
+  }
+  const branch = input.watchBranch ?? run.branch ?? null;
+  if (input.prNumber) {
+    return { heading: `Draft PR #${input.prNumber}`, tone: 'good', summary: 'Merging stays with you on GitHub.', files: run.files, branch, primary: input.prLink ? { kind: 'open_pr', label: 'Open PR' } : null };
+  }
+  if (run.status === 'failed') {
+    return { heading: 'Failed', tone: 'bad', summary: run.message ?? run.summary, files: [], branch: null, primary: { kind: 'retry', label: 'Retry' } };
+  }
+  if (run.status === 'no_change') {
+    return { heading: 'No change needed', tone: 'info', summary: run.summary, files: [], branch: null, primary: null };
+  }
+  return { heading: 'Patch ready', tone: 'info', summary: run.summary || 'Approve the exact patch with a passkey to open a draft PR.', files: run.files, branch, primary: { kind: 'approve', label: 'Approve the patch' } };
 }
