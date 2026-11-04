@@ -1,7 +1,7 @@
 import {
   CardHandoffRequestSchema, CardHeartbeatRequestSchema, CardLockRequestSchema, CreateCardRequestSchema, LinkPrRequestSchema,
   ProceedWithTrackRequestSchema, ReorderCardRequestSchema, ToolSchema, TrackLogRequestSchema, UpdateCardRequestSchema,
-  type ProceedWithTrackResponse, type Tool,
+  BrainRunResponseSchema, type BrainRunResponse, type ProceedWithTrackResponse, type Tool,
 } from "@mergemate/contracts";
 import { Hono, type Context } from "hono";
 import { z } from "zod";
@@ -10,6 +10,7 @@ import { ApiError } from "../errors";
 import { parseBody } from "../lib/validate";
 import { authenticateAgent, newAgentSecret } from "../brain/agent-auth";
 import { requireBrain } from "../brain/flag";
+import { startCardAgentRun } from "../brain/agent-run";
 import {
   BOARD_TOP, DEFAULT_RULES, LOCK_TTL_MAX_SECONDS, LOCK_TTL_SECONDS, acquireLock, boardCards, cardIn, db, liveLockFor,
   liveLocks, lockOnCard, ownedProject, projectById, toCard, toLock, toProject, toToken, trackTail, type TokenRow,
@@ -100,6 +101,29 @@ export function createBrainRouter() {
   r.post("/projects/:id/proceed", async (c) => {
     const project = await ownedProject(c.env, realUser(c), c.req.param("id"));
     return c.json(await proceed(c, project, await ownerSeat(c, project.id)));
+  });
+
+  /**
+   * Run an agent on the card the owner holds after Proceed: an ordinary code-fix run on the board's repository.
+   * The owner approves the exact patch with a passkey on the run screen; then a DRAFT pull request opens. Nothing merges.
+   */
+  r.post("/projects/:id/run", async (c) => {
+    const user = realUser(c), project = await ownedProject(c.env, user, c.req.param("id")), now = nowOf(c);
+    const held = await liveLockFor(c.env, `owner:${project.id}`, now);
+    if (!held) throw new ApiError("state_conflict", "Proceed with the track first, so you hold a card for the agent.");
+    const { run, branch } = await startCardAgentRun(c.env, c.get("deps"), c.get("session"), project.id, held.card_id);
+    const card = toCard(await cardIn(c.env, project.id, held.card_id));
+    const running = branch !== null;
+    const response: BrainRunResponse = {
+      status: running ? "running" : "failed",
+      card,
+      summary: running ? "The agent is preparing a patch from the repository. Approve the exact patch with a passkey to open a draft PR." : "The agent run could not start.",
+      files: [],
+      runId: run.id,
+      ...(branch ? { branch } : {}),
+      ...(run.error ? { message: run.error.slice(0, 2000) } : {}),
+    };
+    return c.json(BrainRunResponseSchema.parse(response));
   });
 
   r.post("/cards", async (c) => {

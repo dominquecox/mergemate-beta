@@ -305,3 +305,26 @@ export const ProceedWithTrackResponseSchema = z.object({
   trackTail: z.array(TrackEventSchema).max(50),
 }).strict();
 export type ProceedWithTrackResponse = z.infer<typeof ProceedWithTrackResponseSchema>;
+
+/**
+ * POST /v1/brain/projects/:id/run (owner, brain flag)
+ * Runs an agent on the card the owner holds after Proceed. The agent prepares a patch from the repository
+ * files; the owner approves that exact patch with a passkey (open `/workflows?run=<runId>`), and then a DRAFT
+ * pull request opens on a new branch. Merging stays human. While the run works,
+ * `status` is "running" with `runId`; the card's branch is `mergemate-agent/<runId>` and its PR number
+ * appears on the board when the draft opens.
+ */
+export const BrainRunStatusSchema = z.enum(['running', 'pr_opened', 'no_change', 'failed']);
+export const BrainRunResponseSchema = z.object({
+  status: BrainRunStatusSchema,
+  card: CardSchema,
+  summary: z.string().max(2000),
+  files: z.array(z.string().min(1).max(240)).max(8),
+  runId: z.string().min(1).max(100).optional(),
+  branch: z.string().min(1).max(256).optional(),
+  prNumber: z.number().int().positive().optional(),
+  prUrl: z.string().url().max(400).refine((value) => value.startsWith('https://'), 'https only').optional(),
+  message: z.string().max(2000).optional(),
+}).strict();
+export type BrainRunStatus = z.infer<typeof BrainRunStatusSchema>;
+export type BrainRunResponse = z.infer<typeof BrainRunResponseSchema>;

@@ -1,4 +1,6 @@
 import { z } from 'zod';
+import { linkCardToDraft } from '../brain/agent-run';
+import { noteRunStep } from '../brain/run-events';
 import { WorkflowExecutorEvidence } from '@mergemate/contracts';
 import type { Env, Deps } from '../env';
 import { ApiError } from '../errors';
@@ -149,6 +151,7 @@ export async function executorReport(env:Env,deps:Deps,id:string,value:z.infer<t
   ]);
   if(result.some(item=>item.meta.changes!==1))throw new ApiError('state_conflict','Patch approval handoff was superseded.');
   await flushWorkflowAuditOutbox(db,job.user_id,env.WORKFLOW_RUNNER_SIGNING_KEY??'');
+  await noteRunStep(env,deps.now(),{runId:job.run_id,userId:job.user_id,text:`Agent planned patch ${expectedHash.slice(0,12)} (${expectedPatch?.changes.length??0} files). Review and approve it with a passkey to run tests and open a draft PR.`});
   return {accepted:true,status:run.status};
  }
  if(value.status==='succeeded'&&value.stage==='qa'){
@@ -166,6 +169,9 @@ export async function executorReport(env:Env,deps:Deps,id:string,value:z.infer<t
    qa.status='succeeded';qa.finishedAt=now;qa.evidence={...value.evidence,source:'configured-executor',reportHash};qa.output=value.evidence.summary;draft.status='succeeded';draft.startedAt=reservedAt;draft.finishedAt=now;draft.evidence={...draftEvidence,source:'api-approved-publisher'};draft.output=draftEvidence.summary;run.status=run.steps.some(step=>step.status==='pending')?'queued':'succeeded';run.revision=row.revision+1;run.updatedAt=now;
    const complete="EXISTS(SELECT 1 FROM workflow_jobs j JOIN workflow_runs r ON r.id=j.run_id WHERE j.id=? AND j.status='done' AND json_extract(r.body_json,'$.status') IN ('succeeded','queued'))",condition=[id],result=await db.batch([db.prepare(`UPDATE workflow_jobs SET stage='draft_pr',status='done',updated_at=?,patch_json=NULL,patch_claim_until=NULL WHERE id=? AND status='publishing' AND lease_hash=? AND patch_hash=? AND EXISTS(SELECT 1 FROM workflow_runs WHERE id=? AND revision=? AND ${POLICY_GUARD})`).bind(now,id,job.lease_hash,expectedHash,row.id,row.revision),db.prepare(`UPDATE workflow_runs SET body_json=?,revision=revision+1,updated_at=?,lease_until=NULL WHERE id=? AND revision=? AND ${POLICY_GUARD} AND EXISTS(SELECT 1 FROM workflow_jobs WHERE id=? AND status='done')`).bind(JSON.stringify(run),now,row.id,row.revision,id),auditOutboxStatement(db,job.user_id,`job:${id}:report:qa:${reportHash}`,'job_reported',id,{stage:'qa',status:value.status,reportHash,patchHash:expectedHash},now,complete,condition),auditOutboxStatement(db,job.user_id,`job:${id}:published:${expectedHash}`,'approved_patch_published',id,{repositoryId:job.repository_id,headSha:job.base_sha,patchHash:expectedHash,commitSha:published.commitSha,draftPrUrl:published.draftPrUrl,targetKind:target.kind??'pull_request'},now,complete,condition)]);if(result.some(item=>item.meta.changes!==1))throw new ApiError('state_conflict','Draft publication receipt was superseded.');
    await flushWorkflowAuditOutbox(db,job.user_id,env.WORKFLOW_RUNNER_SIGNING_KEY??'');
+   // A board card worked by this run now points at its draft PR. Best effort: publication already succeeded.
+   await noteRunStep(env,deps.now(),{runId:job.run_id,userId:job.user_id,kind:'validation',text:`Isolated tests passed (${value.evidence.tests?.length??0} commands).`});
+   try{await linkCardToDraft(env,deps.now(),{runId:job.run_id,userId:job.user_id,repository:job.repository,commitSha:published.commitSha,draftPrUrl:published.draftPrUrl});}catch{/* the card can still be linked by hand */}
    if(run.status==='queued'){if(!env.WORKFLOW_QUEUE)throw new ApiError('misconfigured','Workflow queue unavailable.');await env.WORKFLOW_QUEUE.send({runId:run.id});}
    return {accepted:true,status:run.status};
   }catch(error){if(github&&!tokenRevoked){tokenRevoked=await revokeWithRetry(deps,github.token);if(!tokenRevoked){const failedAt=deps.now().toISOString();await db.prepare("UPDATE workflow_jobs SET status='blocked',updated_at=? WHERE id=? AND status='publishing' AND lease_hash=?").bind(failedAt,id,job.lease_hash).run();await appendWorkflowAudit(db,job.user_id,`job:${job.id}:publish-token-revoke-failed:${job.patch_hash}`,'github_token_revoke_failed',job.id,{repositoryId,scope:'publication'},failedAt,env.WORKFLOW_RUNNER_SIGNING_KEY??'').catch(()=>undefined);throw new ApiError('state_conflict','GitHub publication credential revocation could not be confirmed.');}}await db.prepare("UPDATE workflow_jobs SET status='running',updated_at=? WHERE id=? AND status='publishing' AND lease_hash=?").bind(deps.now().toISOString(),id,job.lease_hash).run();throw error;}
@@ -185,6 +191,7 @@ export async function executorReport(env:Env,deps:Deps,id:string,value:z.infer<t
  ]);
  if(result.some(item=>item.meta.changes!==1))throw new ApiError('state_conflict','Executor report was superseded.');
  await flushWorkflowAuditOutbox(db,job.user_id,env.WORKFLOW_RUNNER_SIGNING_KEY??'');
+ if(value.status!=='succeeded')await noteRunStep(env,deps.now(),{runId:job.run_id,userId:job.user_id,kind:value.stage==='qa'?'validation':'note',text:`Agent run ${value.status} at the ${value.stage.replace('_',' ')} step. No draft PR was opened.`});
  if(run.status==='queued'){if(!env.WORKFLOW_QUEUE)throw new ApiError('misconfigured','Workflow queue unavailable.');await env.WORKFLOW_QUEUE.send({runId:run.id});}
  return {accepted:true,status:run.status};
 }

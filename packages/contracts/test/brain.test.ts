@@ -474,3 +474,13 @@ describe('brain contracts (spec-matched)', () => {
     });
   });
 });
+
+describe('BrainRunResponseSchema', () => {
+  const card = { id: 'MM-1', projectId: 'p1', position: 0, title: 't', details: 'd', priority: 'P1', status: 'active', doneWhen: 'w', updatedAt: '2026-11-04T19:00:00.000Z' };
+  it('accepts a running run and an opened draft, and refuses a non-https PR link', async () => {
+    const { BrainRunResponseSchema } = await import('../src/brain');
+    expect(BrainRunResponseSchema.safeParse({ status: 'running', card, summary: 'Agent is preparing a patch', files: [], runId: 'r1', branch: 'mergemate-agent/r1' }).success).toBe(true);
+    expect(BrainRunResponseSchema.safeParse({ status: 'pr_opened', card, summary: 's', files: ['apps/x.ts'], prNumber: 9, prUrl: 'https://github.com/o/r/pull/9' }).success).toBe(true);
+    expect(BrainRunResponseSchema.safeParse({ status: 'pr_opened', card, summary: 's', files: [], prUrl: 'http://github.com/o/r/pull/9' }).success).toBe(false);
+  });
+});
