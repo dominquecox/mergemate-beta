@@ -46,6 +46,9 @@ async function seedOwned(ctx:TestContext,userId:string){
   ['INSERT INTO session_lineage VALUES(?,?,?,?,?,?,?,?)',[userId+':spent','family',userId,0,'bearer',null,stamp,'2099-01-01T00:00:00Z']],
   ['INSERT INTO workflow_runs VALUES(?,?,?,?,?,0,NULL,?,?)',[userId+':run',userId,'key','{}','1',stamp,stamp]],
   ['INSERT INTO workflow_jobs(id,run_id,user_id,repository,base_sha,created_at,updated_at) VALUES(?,?,?,?,?,?,?)',[userId+':job',userId+':run',userId,'fixture/repo','a'.repeat(40),stamp,stamp]],
+  ['INSERT INTO workflow_audit_events(id,user_id,event_key,sequence,previous_hash,event_hash,event_type,subject_id,body_json,created_at) VALUES(?,?,?,1,NULL,?,?,?,?,?)',[userId+':audit',userId,userId+':audit','hash-'+userId,'job_created',userId+':job','{}',stamp]],
+  ['INSERT INTO workflow_audit_outbox(event_key,user_id,event_type,subject_id,body_json,created_at) VALUES(?,?,?,?,?,?)',[userId+':outbox',userId,'job_reported',userId+':job','{}',stamp]],
+  ['INSERT INTO workflow_audit_checkpoints(user_id,event_count,head_hash,signature,updated_at) VALUES(?,?,?,?,?)',[userId,1,'hash-'+userId,'fixture-signature',stamp]],
   ['INSERT INTO workflow_definitions VALUES(?,?,?,?,?)',[userId+':def',userId,'{}',stamp,stamp]],
  ];
  for(const [sql,args] of statements)await ctx.db.prepare(sql).bind(...args).run();

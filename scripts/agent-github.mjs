@@ -4,7 +4,7 @@ import { AgentError, SHA, withinWorkspace, limitedResponseText } from './agent-p
 const API = 'https://api.github.com';
 function validBranch(value) { return typeof value === 'string' && value.length > 0 && value.length <= 180 && /^[a-z\d/_.-]+$/i.test(value) && !value.includes('..') && !value.includes('//') && !value.startsWith('/') && !value.endsWith('/') && !value.endsWith('.lock') && value.split('/').every(part => part && !part.startsWith('.') && !part.endsWith('.')); }
 export class GitHubPublisher {
-  constructor(token, { fetcher = fetch, timeoutMs = 60000, maxArchiveBytes = 67108864 } = {}) {
+  constructor(token, { fetcher = fetch, timeoutMs = 60000, maxArchiveBytes = 16777216 } = {}) {
     if (!token || /[\r\n]/.test(token)) throw new AgentError('github_unconfigured', 'A host-only GitHub publishing credential is required.');
     this.token = token; this.fetcher = fetcher; this.timeoutMs = timeoutMs; this.maxArchiveBytes = maxArchiveBytes;
   }

@@ -13,25 +13,21 @@ export async function main(args = process.argv.slice(2), env = process.env) {
   if (position < 0 || !args[position + 1] || args.some((arg, index) => index !== position && index !== position + 1 && !['--once', '--check'].includes(arg))) throw new AgentError('usage', 'Usage: node scripts/agent-executor.mjs --config /absolute/trusted-policy.json [--once|--check]');
   const configPath = path.resolve(args[position + 1]);
   const policy = validateConfig(JSON.parse(await readFile(configPath, 'utf8')));
-  const bridge = new WorkflowBridge(policy, env.MERGEMATE_RUNNER_TOKEN);
-  const github = new GitHubPublisher(env.GITHUB_TOKEN, { maxArchiveBytes: policy.maxArchiveBytes });
+  const bridge = new WorkflowBridge(policy, env.MERGEMATE_RUNNER_CREDENTIAL,{accessClientId:env.CF_ACCESS_CLIENT_ID,accessClientSecret:env.CF_ACCESS_CLIENT_SECRET});
   const docker = new DockerExecutor(policy);
   const available = await docker.available();
-  const permitted = [];
-  if (available) for (const repository of policy.repositories) { try { await github.verifyRepository(repository); permitted.push(repository); } catch {} }
-  const ready = available && permitted.length > 0;
-  await bridge.heartbeat({ docker: available, patch: ready, qa: ready, draftPr: ready }, undefined, permitted.length ? permitted : policy.repositories);
+  const ready = available;
+  await bridge.heartbeat({ docker: available, patch: ready, qa: ready, draftPr: ready }, undefined, policy.repositories);
   if (!available) throw new AgentError('docker_unavailable', 'Docker and the reviewed digest-pinned image must be available.');
-  if (!ready) throw new AgentError('github_write_unavailable', 'No configured repository has verified GitHub write access.');
-  if (args.includes('--check')) { console.log(JSON.stringify({ status: 'configured', repositories: policy.repositories, imagePinned: true, note: 'Per-job repository write permission is checked before execution.' })); return 0; }
+  if (args.includes('--check')) { console.log(JSON.stringify({ status: 'configured', repositories: policy.repositories, imagePinned: true, note: 'The API mints an exact-repository GitHub App token only when a job is claimed.' })); return 0; }
   const abort = new AbortController(); const stop = () => abort.abort(); process.once('SIGINT', stop); process.once('SIGTERM', stop);
-  const heartbeat = setInterval(() => { void bridge.heartbeat({ docker: true, patch: true, qa: true, draftPr: true }, abort.signal, permitted).catch(() => abort.abort()); }, 30000);
+  const heartbeat = setInterval(() => { void bridge.heartbeat({ docker: true, patch: true, qa: true, draftPr: true }, abort.signal, policy.repositories).catch(() => abort.abort()); }, 30000);
   try {
     do {
       if (abort.signal.aborted) break;
       const job = await bridge.claim(abort.signal);
-      if (job && !permitted.includes(job.repository?.toLowerCase())) throw new AgentError('repository_unavailable', 'Claimed repository has no verified write capability.');
       if (job) {
+        const github = new GitHubPublisher(job.githubAccessToken, { maxArchiveBytes: policy.maxArchiveBytes });
         const result = await executeJob(job, { policy, bridge, github, docker, signal: abort.signal });
         console.log(JSON.stringify({ jobId: job.id, status: result.status, stage: result.stage, code: result.code, ...(result.evidence.draftPrUrl ? { draftPrUrl: result.evidence.draftPrUrl } : {}) }));
         if (args.includes('--once')) return result.status === 'succeeded' ? 0 : 2;

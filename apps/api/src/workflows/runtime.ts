@@ -12,6 +12,7 @@ import { planReview } from '../routes/ai-engine-assist';
 import { targetSnapshot } from './target';
 import { analyzeRepositoryTask } from './model';
 import { loadRun,saveRun,TERMINAL,type RunRow } from './store';
+import { auditOutboxStatement,flushWorkflowAuditOutbox } from './audit';
 export const RUNNER_HEARTBEAT_MS=180000;
 export const workflowRepo=(target:WorkflowTarget)=>`${target.owner}/${target.repo}`.toLowerCase();
 export const workflowAllowedRepos=(env:Env)=>new Set((env.WORKFLOW_RUNNER_REPOS??'').split(',').map(x=>x.trim().toLowerCase()).filter(x=>/^[a-z\d-]+\/[\w.-]+$/i.test(x)));
@@ -21,8 +22,8 @@ export async function workflowCapabilities(env:Env,repo:string,now:Date,userId?:
  try{for(const task of ['summary','risk'] as const){const modelEnv=userId?(await userModelContext(env,userId,task)).env:env;createModelProvider(modelEnv,task,{transport:createFetchTransport(fetch),...(env.AI?{ai:env.AI}:{})});}}catch{modelsReady=false;}
  const analysis=ready&&!!env.WORKFLOW_QUEUE&&modelsReady;
  let runner:{last_seen_at:string}|null=null;
- if(ready&&env.DB&&env.WORKFLOW_RUNNER_TOKEN&&env.WORKFLOW_RUNNER_TOKEN.length>=32&&workflowAllowedRepos(env).has(repo.toLowerCase())){
-  const rows=await env.DB.prepare('SELECT repositories_json,capabilities_json,last_seen_at FROM workflow_runners WHERE last_seen_at>? ORDER BY last_seen_at DESC LIMIT 50').bind(new Date(now.getTime()-RUNNER_HEARTBEAT_MS).toISOString()).all<{repositories_json:string;capabilities_json:string;last_seen_at:string}>();
+ if(ready&&env.DB&&env.WORKFLOW_RUNNER_SIGNING_KEY&&env.WORKFLOW_RUNNER_SIGNING_KEY.length>=32&&env.CF_ACCESS_AUD&&env.CF_ACCESS_TEAM_DOMAIN&&workflowAllowedRepos(env).has(repo.toLowerCase())){
+  const rows=await env.DB.prepare('SELECT repositories_json,capabilities_json,last_seen_at FROM workflow_runners WHERE last_seen_at>? AND revoked_at IS NULL AND credential_expires_at>? ORDER BY last_seen_at DESC LIMIT 50').bind(new Date(now.getTime()-RUNNER_HEARTBEAT_MS).toISOString(),now.toISOString()).all<{repositories_json:string;capabilities_json:string;last_seen_at:string}>();
   for(const row of rows.results??[]){try{const repos=JSON.parse(row.repositories_json) as string[],caps=JSON.parse(row.capabilities_json);if(repos.map(x=>x.toLowerCase()).includes(repo.toLowerCase())&&caps.docker&&caps.patch&&caps.qa&&caps.draftPr){runner=row;break;}}catch{/* invalid heartbeat cannot grant capability */}}
  }
  return {analysis:{available:analysis,...(!analysis?{reason:!ready?'Workflow database migration is not applied.':!env.WORKFLOW_QUEUE?'The durable workflow queue is not configured.':'The required AI model bindings or credentials are not configured.'}:{})},coding:{available:analysis&&!!runner,...(runner?{lastHeartbeatAt:runner.last_seen_at}:{reason:'No recent configured isolated runner with patch, test and draft-PR capabilities for this repository.'})},limits:{maxSteps:9,maxFiles:8,maxPatchBytes:131072},requiresAiConsent:true};
@@ -73,7 +74,8 @@ export async function processWorkflowMessage(env:Env,deps:Deps,id:string){
    const caps=await workflowCapabilities(env,workflowRepo(run.definition.target),deps.now(),row.user_id);
    if(!caps.coding.available)throw new ApiError('upstream_unavailable',caps.coding.reason??'Coding executor unavailable.');
    const now=deps.now().toISOString();
-   await env.DB.prepare("INSERT OR IGNORE INTO workflow_jobs(id,run_id,user_id,repository,base_sha,status,created_at,updated_at) VALUES(?,?,?,?,?,'pending',?,?)").bind(crypto.randomUUID(),id,row.user_id,workflowRepo(run.definition.target),run.headSha,now,now).run();
+   if(snapshot.repository!==workflowRepo(run.definition.target)||!Number.isSafeInteger(snapshot.repositoryId)||snapshot.repositoryId<1||snapshot.fromFork)throw new ApiError('forbidden','The coding target is not an exact same-repository GitHub identity.');
+   const jobId=crypto.randomUUID(),created=await env.DB.batch([env.DB.prepare("INSERT OR IGNORE INTO workflow_jobs(id,run_id,user_id,repository,repository_id,base_sha,status,created_at,updated_at) VALUES(?,?,?,?,?,?,'pending',?,?)").bind(jobId,id,row.user_id,snapshot.repository,snapshot.repositoryId,run.headSha,now,now),auditOutboxStatement(env.DB,row.user_id,`job:${jobId}:created`,'job_created',jobId,{runId:id,repositoryId:snapshot.repositoryId,baseSha:run.headSha},now,'EXISTS(SELECT 1 FROM workflow_jobs WHERE id=? AND user_id=?)',[jobId,row.user_id])]);if(created.some(item=>item.meta.changes!==1))throw new ApiError('state_conflict','Executor job creation was superseded.');await flushWorkflowAuditOutbox(env.DB,row.user_id,env.WORKFLOW_RUNNER_SIGNING_KEY??'');
    claimed.run.status='waiting_executor';await saveRun(env.DB,claimed.row,claimed.run,now,null,true);return;
   }
   if(step.kind==='qa'||step.kind==='draft_pr')throw new ApiError('state_conflict','Coding steps must be executed by the isolated runner.');
@@ -99,6 +101,8 @@ export async function recoverWorkflowRuns(env:Env,deps:Deps){
  const exists=await env.DB.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='workflow_runs'").first();if(!exists)return;
  await env.DB.prepare("UPDATE workflow_jobs SET patch_json=NULL,patch_claim_until=NULL WHERE updated_at<? AND (status!='running' OR lease_expires_at<=?)").bind(new Date(deps.now().getTime()-3600000).toISOString(),deps.now().toISOString()).run();
  await env.DB.prepare('DELETE FROM workflow_runs WHERE updated_at<?').bind(new Date(deps.now().getTime()-7*86400000).toISOString()).run();
+ const abandoned=await env.DB.prepare("SELECT id,user_id,runner_id,repository_id,lease_hash,lease_expires_at FROM workflow_jobs WHERE status='minting' AND lease_expires_at<=? LIMIT 20").bind(deps.now().toISOString()).all<{id:string;user_id:string;runner_id:string|null;repository_id:number|null;lease_hash:string|null;lease_expires_at:string|null}>();
+ for(const job of abandoned.results??[]){if(!job.runner_id||!job.lease_hash||!job.lease_expires_at)continue;const now=deps.now().toISOString(),results=await env.DB.batch([env.DB.prepare("UPDATE workflow_jobs SET status='pending',runner_id=NULL,lease_hash=NULL,lease_expires_at=NULL,updated_at=? WHERE id=? AND status='minting' AND runner_id=? AND lease_hash=? AND lease_expires_at<=?").bind(now,job.id,job.runner_id,job.lease_hash,now),auditOutboxStatement(env.DB,job.user_id,`job:${job.id}:reservation_expired:${job.lease_hash}`,'job_reservation_recovered',job.id,{runnerId:job.runner_id,repositoryId:job.repository_id,leaseExpiresAt:job.lease_expires_at},now,"EXISTS(SELECT 1 FROM workflow_jobs WHERE id=? AND status='pending' AND runner_id IS NULL AND lease_hash IS NULL)",[job.id])]);if(results.every(item=>item.meta.changes===1))await flushWorkflowAuditOutbox(env.DB,job.user_id,env.WORKFLOW_RUNNER_SIGNING_KEY??'');}
  if(!env.WORKFLOW_QUEUE)return;
  const rows=await env.DB.prepare("SELECT id FROM workflow_runs WHERE json_extract(body_json,'$.status') IN ('queued','running') AND (lease_until IS NULL OR lease_until<=?) ORDER BY updated_at LIMIT 20").bind(deps.now().toISOString()).all<{id:string}>();
  for(const row of rows.results??[])await env.WORKFLOW_QUEUE.send({runId:row.id});

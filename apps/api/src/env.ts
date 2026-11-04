@@ -45,6 +45,9 @@ export interface Env {
   AI_GLOBAL_DAILY_ACTIONS?: string;
   GITHUB_APP_CLIENT_ID?: string;
   GITHUB_APP_CLIENT_SECRET?: string;
+  /** GitHub App identity used only for short-lived, repository-scoped executor tokens. */
+  GITHUB_APP_ID?: string;
+  GITHUB_APP_PRIVATE_KEY?: string;
   GITHUB_APP_SLUG?: string;
   GITHUB_WEBHOOK_SECRET?: string;
   GITHUB_WEBHOOK_SECRET_NEXT?: string;
@@ -79,7 +82,11 @@ export interface Env {
   IMAGES?: ImagesBinding;
   POSTS?: KVNamespace;
   WORKFLOW_QUEUE?: Pick<Queue<{ runId: string }>, "send">;
-  WORKFLOW_RUNNER_TOKEN?: string;
+  /** HMAC key used only to validate short-lived, repo-scoped runner credentials. */
+  WORKFLOW_RUNNER_SIGNING_KEY?: string;
+  /** Exact Cloudflare Access application audience and team origin for /internal validation. */
+  CF_ACCESS_AUD?: string;
+  CF_ACCESS_TEAM_DOMAIN?: string;
   WORKFLOW_RUNNER_REPOS?: string;
   GITHUB_EVENTS?: Pick<Queue<GitHubEventMessage>, "send">;
 }

@@ -14,19 +14,19 @@ import { executeJob } from './agent-runner.mjs';
 
 const sha = c => c.repeat(40);
 const policy = () => validateConfig({serverOrigin:'https://api.example.test',repositories:['owner/repo'],image:`node@sha256:${'a'.repeat(64)}`,tests:[['npm','test']],runnerId:'fixture-runner'});
-const job = () => ({id:'job_1',runId:'run_1',repository:'owner/repo',baseSha:sha('a'),targetKind:'repository',baseBranch:'main',intent:'Fix the label',leaseToken:'x'.repeat(32),leaseExpiresAt:new Date(Date.now()+60000).toISOString()});
+const job = () => ({id:'job_1',runId:'run_1',repository:'owner/repo',repositoryId:101,baseSha:sha('a'),targetKind:'repository',baseBranch:'main',intent:'Fix the label',leaseToken:'x'.repeat(32),leaseExpiresAt:new Date(Date.now()+60000).toISOString(),githubAccessToken:'fixture-installation-token',githubTokenExpiresAt:new Date(Date.now()+3600000).toISOString()});
 async function temporary(fn){const dir=await mkdtemp(path.join(tmpdir(),'mm-agent-test-'));try{return await fn(dir);}finally{await rm(dir,{recursive:true,force:true});}}
 function tar(entries){const blocks=[];for(const item of entries){const data=Buffer.from(item.content??''),h=Buffer.alloc(512);h.write(item.path,0,100);h.write('0000644\0',100);h.write('0000000\0',108);h.write('0000000\0',116);h.write(`${data.length.toString(8).padStart(11,'0')}\0`,124);h.write('00000000000\0',136);h.fill(32,148,156);h[156]=(item.type??'0').charCodeAt(0);if(item.link)h.write(item.link,157,100);h.write('ustar\0',257);let sum=0;for(const x of h)sum+=x;h.write(`${sum.toString(8).padStart(6,'0')}\0 `,148);blocks.push(h,data,Buffer.alloc((512-data.length%512)%512));}blocks.push(Buffer.alloc(1024));return gzipSync(Buffer.concat(blocks));}
 
  test('configuration rejects unpinned images, traversal repositories, invalid IDs and unbounded limits',()=>{
- const good=policy();assert.equal(good.runnerId,'fixture-runner');
+ const good=policy();assert.equal(good.runnerId,'fixture-runner');assert.equal(good.maxArchiveBytes,16777216);
  for(const bad of [{image:'node:latest'},{repositories:['owner/..']},{runnerId:'bad/id'},{maxSandboxMb:99999},{tests:[['sh','-c','anything']]}])assert.throws(()=>validateConfig({...good,...bad}),AgentError);
  assert.throws(()=>validateJob({...job(),limits:{maxFiles:'not-a-number'}},good),/limits/);
  assert.throws(()=>validateJob({...job(),repository:'other/repo'},good),/invalid/);
  });
  test('patches reject traversal, protected files, symlinks, credentials and byte overrun',async()=>temporary(async root=>{
  await mkdir(path.join(root,'apps/mobile/src'),{recursive:true});await writeFile(path.join(root,'apps/mobile/src/a.ts'),'old');
- for(const change of [{path:'../escape.ts',content:'x'},{path:'apps/mobile/src/auth.ts',content:'x'},{path:'apps/mobile/src/a.ts',content:`ghp_${'a'.repeat(40)}`}])await assert.rejects(validateChanges(root,[change],policy()));
+ for(const change of [{path:'../escape.ts',content:'x'},{path:'apps/mobile/src/auth.ts',content:'x'},{path:'apps/mobile/src/.mergemate/policy.ts',content:'x'},{path:'apps/mobile/src/deploy/config.ts',content:'x'},{path:'apps/mobile/src/a.ts',content:`ghp_${'a'.repeat(40)}`}])await assert.rejects(validateChanges(root,[change],policy()));
  await symlink('/tmp',path.join(root,'apps/mobile/src/link'));await assert.rejects(validateChanges(root,[{path:'apps/mobile/src/link/a.ts',content:'x'}],policy()),/Symlinks/);
  await assert.rejects(validateChanges(root,[{path:'apps/mobile/src/a.ts',content:'x'.repeat(10)}],policy(),{maxPatchBytes:5}),/byte/);
  assert.equal((await validateChanges(root,[{path:'apps/mobile/src/a.ts',content:'new'}],policy())).patchHash.length,64);
@@ -59,10 +59,10 @@ function tar(entries){const blocks=[];for(const item of entries){const data=Buff
  await assert.rejects(runBounded('/bin/cat',[data],{maxOutputBytes:100,timeoutMs:5000}),e=>e.code==='output_limit');
  const controller=new AbortController();const promise=runBounded('/bin/sleep',['10'],{signal:controller.signal,timeoutMs:5000});controller.abort();await assert.rejects(promise,e=>e.code==='cancelled');
  }));
- test('bridge pins origin, requires32charsecret and rejects expired leases and oversized bodies',async()=>{
+ test('bridge pins origin, requires signed runner and Access credentials, and rejects expired leases and oversized bodies',async()=>{
  assert.throws(()=>new WorkflowBridge(policy(),'short'),/credential/);let seen;
- const bridge=new WorkflowBridge(policy(),'x'.repeat(32),{fetcher:async(url,options)=>{seen={url,options};return Response.json({active:false});}});
- const guard=new LeaseGuard(bridge,job(),undefined,{intervalMs:100000});await assert.rejects(guard.assertActive(),/lease/);guard.stop();assert(seen.url.startsWith('https://api.example.test/internal/workflows/'));assert.equal(seen.options.redirect,'error');assert(!('Origin' in seen.options.headers));
+ const bridge=new WorkflowBridge(policy(),'x'.repeat(64),{accessClientId:'fixture-id',accessClientSecret:'fixture-secret',fetcher:async(url,options)=>{seen={url,options};return Response.json({active:false});}});
+ const guard=new LeaseGuard(bridge,job(),undefined,{intervalMs:100000});await assert.rejects(guard.assertActive(),/lease/);guard.stop();assert(seen.url.startsWith('https://api.example.test/internal/workflows/'));assert.equal(seen.options.redirect,'error');assert(!('Origin' in seen.options.headers));assert.equal(seen.options.headers['CF-Access-Client-Id'],'fixture-id');assert.equal(seen.options.headers['CF-Access-Client-Secret'],'fixture-secret');
  await assert.rejects(limitedResponseText(new Response('x'.repeat(100)),20),/byte limit/);
  });
 function githubFixture({existing=false,collision=false,failDraft=false,permission=true}={}) {
