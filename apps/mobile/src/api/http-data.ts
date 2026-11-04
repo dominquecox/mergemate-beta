@@ -4,9 +4,10 @@ import { PrSearchFilters, PrSearchPage } from '@mergemate/contracts';
 import type { WorkspaceRead } from './client';
 import { PrCheck as PrCheckSchema } from '@mergemate/contracts';
 import { z } from "zod";
-import { PrivateNotes, PrivateNote, VoiceNoteResult, SavePrivateNote, type NoteContext, InboxPreference, InboxMutation, InboxReceipt, InboxUndo, ConsentState, AiPreferences, type AiPreferenceUpdate, HighlightResult as HighlightResultSchema, InstallationList as InstallationListSchema, NotificationPage, PrDetail as PrDetailSchema, PrFile as PrFileSchema, PrThread as PrThreadSchema, PrRisk as PrRiskSchema, PrSummary as PrSummarySchema, ReviewPlan as ReviewPlanSchema, AiEngineInfo as AiEngineInfoSchema, PrAnswer as PrAnswerSchema, RepoPage, RepoPullList, RepoBranchList, TriageQueue, TriageRecord, ProjectSchema, CardSchema, LockSchema, TrackEventSchema, ProceedWithTrackResponse } from "@mergemate/contracts";
+import { PrivateNotes, PrivateNote, VoiceNoteResult, SavePrivateNote, type NoteContext, InboxPreference, InboxMutation, InboxReceipt, InboxUndo, ConsentState, AiPreferences, type AiPreferenceUpdate, HighlightResult as HighlightResultSchema, InstallationList as InstallationListSchema, NotificationPage, PrDetail as PrDetailSchema, PrFile as PrFileSchema, PrThread as PrThreadSchema, PrRisk as PrRiskSchema, PrSummary as PrSummarySchema, ReviewPlan as ReviewPlanSchema, AiEngineInfo as AiEngineInfoSchema, PrAnswer as PrAnswerSchema, RepoPage, RepoPullList, RepoBranchList, TriageQueue, TriageRecord, ProjectSchema, CardSchema, LockSchema, TrackEventSchema, ProceedWithTrackResponseSchema } from "@mergemate/contracts";
 import type { HighlightResult, InstallationList, Notification, NotificationFilter, AiEngineInfo, PrAnswer, PrDetail, PrRisk, PrSummary, Repo, ReviewPlan, TriageItem, TriageLane } from "../types";
-import type { Project, Card, Lock, TrackEvent } from "@mergemate/contracts";
+import type { CreateCardRequest, UpdateCardRequest, ReorderCardRequest } from "@mergemate/contracts";
+import { CreateCardRequestSchema, UpdateCardRequestSchema, ReorderCardRequestSchema } from "@mergemate/contracts";
 import { AI_CONSENT_VERSION } from "../config/consent";
 import { ApiClientError, messageForCode } from "./errors";
 import { mapHighlight, mapInstallations, mapPrDetail, mapFile, mapCheck, mapComments, secretWarningFromRisk } from "./mappers";
@@ -286,6 +287,40 @@ export abstract class HttpData extends HttpSession {
       schema: z.object({ project: ProjectSchema, cards: z.array(CardSchema), locks: z.array(LockSchema), trackTail: z.array(TrackEventSchema) }),
     });
     return { project: res.project, cards: res.cards, locks: res.locks, trackTail: res.trackTail };
+  }
+
+  // Owner writes. Brain paths are not in request()'s invalidation list, so drop cached reads here.
+  async createBrainCard(input: CreateCardRequest) {
+    const body = CreateCardRequestSchema.parse(input);
+    const res = await this.request({ method: "POST", path: "/brain/cards", body, schema: z.object({ card: CardSchema }) });
+    this.reads.invalidate();
+    return res.card;
+  }
+
+  async updateBrainCard(input: UpdateCardRequest) {
+    const body = UpdateCardRequestSchema.parse(input);
+    const res = await this.request({ method: "PATCH", path: "/brain/cards", body, schema: z.object({ card: CardSchema }) });
+    this.reads.invalidate();
+    return res.card;
+  }
+
+  async reorderBrainCard(input: ReorderCardRequest) {
+    const body = ReorderCardRequestSchema.parse(input);
+    const res = await this.request({ method: "POST", path: "/brain/cards/reorder", body, schema: z.object({ cards: z.array(CardSchema) }) });
+    this.reads.invalidate();
+    return res.cards;
+  }
+
+  async setBrainRules(projectId: string, rules: string) {
+    const res = await this.request({ method: "PUT", path: `/brain/projects/${enc(projectId)}/rules`, body: { rules: rules.trim() }, schema: z.object({ project: ProjectSchema }) });
+    this.reads.invalidate();
+    return res.project;
+  }
+
+  async proceedBrain(projectId: string) {
+    const res = await this.request({ method: "POST", path: `/brain/projects/${enc(projectId)}/proceed`, schema: ProceedWithTrackResponseSchema });
+    this.reads.invalidate();
+    return res;
   }
 }
 

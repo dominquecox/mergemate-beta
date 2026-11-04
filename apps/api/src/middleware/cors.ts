@@ -8,7 +8,7 @@ export const cors = (): MiddlewareHandler<AppEnv> =>
   honoCors({
     origin: (origin, c) => (corsOrigins(c.env).includes(origin) ? origin : null),
     credentials: true,
-    allowMethods: ["GET", "POST", "PUT", "DELETE"],
+    allowMethods: ["GET", "POST", "PUT", "PATCH", "DELETE"],
     allowHeaders: ["authorization", "content-type", "x-csrf-token"],
     exposeHeaders: ["x-request-id", "retry-after", "x-sso-url"],
     maxAge: 600,

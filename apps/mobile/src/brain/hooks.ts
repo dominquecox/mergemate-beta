@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
-import type { Project, Card, Lock, Handoff, TrackEvent } from '@mergemate/contracts';
+import type { Project, Card, Lock, Handoff, TrackEvent, CreateCardRequest, UpdateCardRequest, ProceedWithTrackResponse } from '@mergemate/contracts';
 import type { ApiClient } from '../api/client';
 
 export interface UseBrainBoardOptions {
@@ -116,6 +116,52 @@ export function useProjectsList({ api, enabled = true }: UseProjectsListOptions)
   }, [fetchProjects]);
 
   return { projects, loading, error, retry: fetchProjects };
+}
+
+export interface UseBrainActionsOptions {
+  api: ApiClient;
+  projectId: string;
+  /** Called after a write succeeds so the board refetches. */
+  onChanged: () => void;
+}
+
+/** Owner writes: add, edit, reorder cards and edit the project rules. One write at a time. */
+export function useBrainActions({ api, projectId, onChanged }: UseBrainActionsOptions) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [proceeded, setProceeded] = useState<ProceedWithTrackResponse | null>(null);
+
+  const run = useCallback(
+    async (write: () => Promise<unknown>): Promise<boolean> => {
+      if (busy) return false;
+      setBusy(true);
+      setError(null);
+      try {
+        await write();
+        onChanged();
+        return true;
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Could not save. Try again.');
+        return false;
+      } finally {
+        setBusy(false);
+      }
+    },
+    [busy, onChanged],
+  );
+
+  return {
+    busy,
+    error,
+    clearError: useCallback(() => setError(null), []),
+    createCard: (request: CreateCardRequest) => run(() => api.createBrainCard(request)),
+    updateCard: (request: UpdateCardRequest) => run(() => api.updateBrainCard(request)),
+    moveCard: (cardId: string, newPosition: number) => run(() => api.reorderBrainCard({ projectId, cardId, newPosition })),
+    saveRules: (rules: string) => run(() => api.setBrainRules(projectId, rules)),
+    proceeded,
+    dismissProceeded: useCallback(() => setProceeded(null), []),
+    proceed: () => run(async () => setProceeded(await api.proceedBrain(projectId))),
+  };
 }
 
 // Component prop types for strict typing

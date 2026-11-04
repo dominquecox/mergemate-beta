@@ -1,13 +1,15 @@
 import React, { useMemo, useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import type { Project } from '@mergemate/contracts';
+import type { Card, Project } from '@mergemate/contracts';
 import { useAuth } from '../../src/context/AuthContext';
 import { useFeatureFlags } from '../../src/hooks/useFeatureFlags';
 import { useTheme } from '../../src/context/ThemeContext';
 import { api } from '../../src/api';
 import { BoardScreen, ProjectsListScreen, TrackTimelineScreen } from '../../src/brain/screens';
-import { useBrainBoard, useProjectsList } from '../../src/brain/hooks';
+import { useBrainActions, useBrainBoard, useProjectsList } from '../../src/brain/hooks';
+import { CardEditor, RulesEditor } from '../../src/brain/editors';
+import { movedPosition } from '../../src/brain/cardForm';
 import { LoadingState } from '../../src/components/LoadingState';
 import { EmptyState } from '../../src/components/EmptyState';
 import { ErrorState } from '../../src/components/ErrorState';
@@ -49,6 +51,16 @@ function BoardView({ project, onBack }: { project: Project; onBack: () => void }
   const board = useBrainBoard({ projectId: project.id, api });
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
+  const [editor, setEditor] = useState<'add' | 'rules' | Card | null>(null);
+  const actions = useBrainActions({ api, projectId: project.id, onChanged: board.retry });
+  const closeEditor = () => {
+    actions.clearError();
+    setEditor(null);
+  };
+  const move = (card: Card, delta: -1 | 1) => {
+    const position = movedPosition(board.cards, card.id, delta);
+    if (position !== null) void actions.moveCard(card.id, position);
+  };
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       <View style={styles.bar}>
@@ -67,7 +79,40 @@ function BoardView({ project, onBack }: { project: Project; onBack: () => void }
             <Text style={styles.label}>{value === 'board' ? 'Board' : 'Timeline'}</Text>
           </TouchableOpacity>
         ))}
+        <View style={styles.spacer} />
+        <TouchableOpacity style={styles.button} onPress={() => setEditor('add')} accessibilityRole="button" accessibilityLabel="Add card">
+          <Text style={styles.label}>Add</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.button} onPress={() => setEditor('rules')} accessibilityRole="button" accessibilityLabel="Edit project rules">
+          <Text style={styles.label}>Rules</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.button}
+          onPress={() => void actions.proceed()}
+          disabled={actions.busy}
+          accessibilityRole="button"
+          accessibilityLabel="Proceed with the track"
+          accessibilityState={{ disabled: actions.busy, busy: actions.busy }}
+        >
+          <Text style={styles.label}>{actions.busy ? 'Working' : 'Proceed'}</Text>
+        </TouchableOpacity>
       </View>
+      {actions.proceeded ? (
+        <View style={[styles.notice, styles.noticeGood]} accessibilityRole="summary" accessibilityLiveRegion="polite">
+          <Text style={[styles.noticeText, styles.noticeGoodText]}>Locked {actions.proceeded.card.id}: {actions.proceeded.card.title}</Text>
+          <TouchableOpacity style={styles.button} onPress={actions.dismissProceeded} accessibilityRole="button" accessibilityLabel="Dismiss locked card">
+            <Text style={styles.label}>Dismiss</Text>
+          </TouchableOpacity>
+        </View>
+      ) : null}
+      {actions.error && !editor ? (
+        <View style={[styles.notice, styles.noticeAlert]} accessibilityRole="alert">
+          <Text style={[styles.noticeText, styles.noticeAlertText]}>{actions.error}</Text>
+          <TouchableOpacity style={styles.button} onPress={actions.clearError} accessibilityRole="button" accessibilityLabel="Dismiss error">
+            <Text style={styles.label}>Dismiss</Text>
+          </TouchableOpacity>
+        </View>
+      ) : null}
       {board.error && !board.project ? (
         <ErrorState title="Could not load board" message={board.error.message} onRetry={board.retry} />
       ) : tab === 'board' ? (
@@ -80,10 +125,26 @@ function BoardView({ project, onBack }: { project: Project; onBack: () => void }
           loading={board.loading && !board.project}
           error={board.error}
           onRetry={board.retry}
+          onAddCard={() => setEditor('add')}
+          onEditCard={(card) => setEditor(card)}
+          onMoveCard={move}
         />
       ) : (
         <TrackTimelineScreen events={board.trackEvents} loading={board.loading && !board.project} />
       )}
+      {editor === 'rules' ? (
+        <RulesEditor rules={(board.project ?? project).rules} busy={actions.busy} error={actions.error} onSave={actions.saveRules} onClose={closeEditor} />
+      ) : editor ? (
+        <CardEditor
+          projectId={project.id}
+          card={editor === 'add' ? undefined : editor}
+          busy={actions.busy}
+          error={actions.error}
+          onCreate={actions.createCard}
+          onUpdate={actions.updateCard}
+          onClose={closeEditor}
+        />
+      ) : null}
     </SafeAreaView>
   );
 }
@@ -94,4 +155,11 @@ const makeStyles = (c: ReturnType<typeof useTheme>["colors"]) => StyleSheet.crea
   button: { minHeight: 44, minWidth: 44, paddingHorizontal: 12, justifyContent: 'center' },
   active: { borderBottomWidth: 2, borderBottomColor: c.brandLight },
   label: { fontSize: 15, fontWeight: '600', color: c.text },
+  spacer: { flex: 1 },
+  notice: { flexDirection: 'row', alignItems: 'center', paddingLeft: 12 },
+  noticeText: { flex: 1, fontSize: 14, fontWeight: '600' },
+  noticeGood: { backgroundColor: c.statusGoodBg },
+  noticeGoodText: { color: c.statusGood },
+  noticeAlert: { backgroundColor: c.statusAlertBg },
+  noticeAlertText: { color: c.statusAlert },
 });

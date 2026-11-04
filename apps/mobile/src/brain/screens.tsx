@@ -24,6 +24,9 @@ export function BoardScreen({
   loading,
   error,
   onRetry,
+  onAddCard,
+  onEditCard,
+  onMoveCard,
 }: {
   project: Project;
   cards: Card[];
@@ -33,6 +36,9 @@ export function BoardScreen({
   loading: boolean;
   error: Error | null;
   onRetry: () => void;
+  onAddCard?: () => void;
+  onEditCard?: (card: Card) => void;
+  onMoveCard?: (card: Card, delta: -1 | 1) => void;
 }) {
   const styles = useBrainStyles();
   const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
@@ -49,7 +55,7 @@ export function BoardScreen({
   }
 
   if (cards.length === 0) {
-    return <EmptyState icon="albums-outline" title="No cards yet" message={`${project.owner}/${project.repo} has no cards.`} />;
+    return <EmptyState icon="albums-outline" title="No cards yet" message={`${project.owner}/${project.repo} has no cards.`} actionTitle={onAddCard ? "Add a card" : undefined} onAction={onAddCard} />;
   }
 
   return (
@@ -62,14 +68,14 @@ export function BoardScreen({
         </View>
 
         <View style={styles.cardsSection}>
-          {cards.map((card) => {
+          {cards.map((card, index) => {
             const lock = locks.get(card.id);
             const isSelected = selectedCardId === card.id;
 
             return (
+              <View key={card.id} style={styles.cardLine}>
               <TouchableOpacity
-                key={card.id}
-                style={[styles.cardRow, isSelected && styles.cardRowSelected]}
+                style={[styles.cardRow, styles.cardRowFlex, isSelected && styles.cardRowSelected]}
                 onPress={() => setSelectedCardId(card.id)}
                 accessibilityRole="button"
                 accessibilityLabel={`${card.id}: ${card.title}`}
@@ -89,6 +95,22 @@ export function BoardScreen({
                   )}
                 </View>
               </TouchableOpacity>
+              {onMoveCard && (
+                <View style={styles.rowActions}>
+                  <TouchableOpacity style={styles.iconButton} disabled={index === 0} onPress={() => onMoveCard(card, -1)} accessibilityRole="button" accessibilityLabel={`Move ${card.title} up`} accessibilityState={{ disabled: index === 0 }}>
+                    <Text style={[styles.iconButtonText, index === 0 && styles.iconButtonDisabled]}>Up</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.iconButton} disabled={index === cards.length - 1} onPress={() => onMoveCard(card, 1)} accessibilityRole="button" accessibilityLabel={`Move ${card.title} down`} accessibilityState={{ disabled: index === cards.length - 1 }}>
+                    <Text style={[styles.iconButtonText, index === cards.length - 1 && styles.iconButtonDisabled]}>Down</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+              {onEditCard && (
+                <TouchableOpacity style={styles.iconButton} onPress={() => onEditCard(card)} accessibilityRole="button" accessibilityLabel={`Edit ${card.title}`}>
+                  <Text style={styles.iconButtonText}>Edit</Text>
+                </TouchableOpacity>
+              )}
+              </View>
             );
           })}
         </View>
@@ -400,6 +422,34 @@ const makeStyles = (c: BrainColors) => StyleSheet.create({
     borderColor: c.border,
     minHeight: 44,
     justifyContent: 'center',
+  },
+  cardLine: {
+    flexDirection: 'row',
+    alignItems: 'stretch',
+  },
+  cardRowFlex: {
+    flex: 1,
+  },
+  rowActions: {
+    flexDirection: 'column',
+    marginLeft: 4,
+    marginBottom: 8,
+  },
+  iconButton: {
+    minWidth: 44,
+    minHeight: 44,
+    paddingHorizontal: 8,
+    marginLeft: 4,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  iconButtonText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: c.brandLight,
+  },
+  iconButtonDisabled: {
+    color: c.textMuted,
   },
   cardRowSelected: {
     backgroundColor: c.brandSubtle,

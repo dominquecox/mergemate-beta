@@ -2,7 +2,7 @@ import {demoVisualAsset} from "../workspace/visual";
 import type {PrSearchFilters,PrSearchPage} from '@mergemate/contracts';
 import {disabledFeatureFlags} from "./feature-flags";
 import { ApiClientError, messageForCode } from "./errors";
-import type { AiPreferenceUpdate, AiPreferences } from "@mergemate/contracts";
+import type { AiPreferenceUpdate, AiPreferences, Project, Card, CreateCardRequest, UpdateCardRequest, ReorderCardRequest } from "@mergemate/contracts";
 import { AI_CONSENT_VERSION } from "../config/consent";
 import { ApiClient } from "./client";
 import {
@@ -475,46 +475,23 @@ export class MockApiClient implements ApiClient {
     // no-op in mock
   }
 
+  private brainRules = "Default board rules";
+  private brainCards: Card[] = [
+    { id: "card-1", projectId: "proj-1", position: 0, title: "MM-117 Board UI", details: "Implement board screens", priority: "P0", status: "open", doneWhen: "Screens render with real data", updatedAt: new Date().toISOString() },
+  ];
+  private brainProject(): Project {
+    return { id: "proj-1", owner: "dominquecox", repo: "mergemate", rules: this.brainRules, createdAt: new Date().toISOString() };
+  }
+
   async getBrainProjects() {
-    return {
-      projects: [
-        {
-          id: "proj-1",
-          owner: "dominquecox",
-          repo: "mergemate",
-          rules: "Default board rules",
-          createdAt: new Date().toISOString(),
-        },
-      ],
-    };
+    return { projects: [this.brainProject()] };
   }
 
   async getBrainBoard(_projectId: string) {
     const now = new Date();
     return {
-      project: {
-        id: "proj-1",
-        owner: "dominquecox",
-        repo: "mergemate",
-        rules: "Default board rules",
-        createdAt: now.toISOString(),
-      },
-      cards: [
-        {
-          id: "card-1",
-          projectId: "proj-1",
-          position: 0,
-          title: "MM-117 Board UI",
-          details: "Implement board screens",
-          priority: "P0" as const,
-          status: "open" as const,
-          doneWhen: "Screens render with real data",
-          branch: undefined,
-          prNumber: undefined,
-          head: undefined,
-          updatedAt: now.toISOString(),
-        },
-      ],
+      project: this.brainProject(),
+      cards: this.brainCards.map((card, position) => ({ ...card, position })),
       locks: [
         {
           cardId: "card-1",
@@ -537,6 +514,42 @@ export class MockApiClient implements ApiClient {
     };
   }
 
+  async createBrainCard(input: CreateCardRequest) {
+    const card: Card = { ...input, id: `card-${this.brainCards.length + 1}-${Date.now()}`, position: this.brainCards.length, status: "open", updatedAt: new Date().toISOString() };
+    this.brainCards = [...this.brainCards, card];
+    return card;
+  }
+
+  async updateBrainCard(input: UpdateCardRequest) {
+    const { projectId: _projectId, cardId, ...patch } = input;
+    const current = this.brainCards.find((card) => card.id === cardId);
+    if (!current) throw new ApiClientError("not_found", "That card does not exist.");
+    const next: Card = { ...current, ...patch, updatedAt: new Date().toISOString() };
+    this.brainCards = this.brainCards.map((card) => (card.id === cardId ? next : card));
+    return next;
+  }
+
+  async reorderBrainCard(input: ReorderCardRequest) {
+    const moving = this.brainCards.find((card) => card.id === input.cardId);
+    if (!moving) throw new ApiClientError("not_found", "That card does not exist.");
+    const rest = this.brainCards.filter((card) => card.id !== input.cardId);
+    rest.splice(Math.min(input.newPosition, rest.length), 0, moving);
+    this.brainCards = rest.map((card, position) => ({ ...card, position }));
+    return this.brainCards;
+  }
+
+  async setBrainRules(_projectId: string, rules: string) {
+    this.brainRules = rules.trim();
+    return this.brainProject();
+  }
+
+  async proceedBrain(projectId: string) {
+    const board = await this.getBrainBoard(projectId);
+    const card = board.cards.find((c) => c.status === "open" || c.status === "active");
+    const lock = card && board.locks.find((l) => l.cardId === card.id);
+    if (!card || !lock) throw new ApiClientError("not_found", "No open card is free right now.");
+    return { card, lock, rules: board.project.rules, boardTop: board.cards.slice(0, 20), trackTail: board.trackTail };
+  }
 }
 
 export const mockClient = new MockApiClient();

@@ -309,6 +309,15 @@ describe("CORS", () => {
     expect(res.status).toBe(204);
     expect(res.headers.get("access-control-allow-headers")).toContain("x-csrf-token");
   });
+
+  it("answers preflight for PATCH, which board card edits use", async () => {
+    const res = await appFor(testContext())("/v1/brain/cards", {
+      method: "OPTIONS",
+      headers: { origin: "https://dev.mergemate.dev", "access-control-request-method": "PATCH", "access-control-request-headers": "content-type,x-csrf-token" },
+    });
+    expect(res.status).toBe(204);
+    expect(res.headers.get("access-control-allow-methods")).toContain("PATCH");
+  });
 });
 
 // The installed app opts in; older binaries retain their existing HTTPS callback.
