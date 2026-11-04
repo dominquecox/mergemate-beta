@@ -43,3 +43,30 @@ export const typography = {
   code:{fontFamily:'JetBrainsMono_400Regular',fontSize:12,lineHeight:17,fontVariant:['tabular-nums'] as 'tabular-nums'[]},
 };
 export const radius = {sm:8,md:12,lg:16,xl:16,full:9999};
+
+/**
+ * Shared control density for web surfaces. Visual height may be compact while
+ * the containing press target remains at least 44px for pointer and touch use.
+ */
+export const controlDensity = {
+  desktop: {
+    primary: { visualHeight: 40, hitHeight: 44, paddingHorizontal: 14, fontSize: 13, lineHeight: 19, fontWeight: "600" as const },
+    secondary: { visualHeight: 32, hitHeight: 44, paddingHorizontal: 10, fontSize: 11, lineHeight: 16, fontWeight: "600" as const },
+    icon: { visualHeight: 32, hitHeight: 44, paddingHorizontal: 0, iconSize: 16 },
+    chip: { visualHeight: 28, hitHeight: 44, paddingHorizontal: 10, fontSize: 11, lineHeight: 16, fontWeight: "500" as const },
+    input: { visualHeight: 40, hitHeight: 44, paddingHorizontal: 12, fontSize: 14, lineHeight: 20, fontWeight: "400" as const },
+    pageGutter: 24,
+    sectionGap: 16,
+    surfacePadding: 16,
+  },
+  narrow: {
+    primary: { visualHeight: 44, hitHeight: 44, paddingHorizontal: 14, fontSize: 13, lineHeight: 19, fontWeight: "600" as const },
+    secondary: { visualHeight: 36, hitHeight: 44, paddingHorizontal: 8, fontSize: 11, lineHeight: 16, fontWeight: "600" as const },
+    icon: { visualHeight: 36, hitHeight: 44, paddingHorizontal: 0, iconSize: 18 },
+    chip: { visualHeight: 32, hitHeight: 44, paddingHorizontal: 10, fontSize: 11, lineHeight: 16, fontWeight: "500" as const },
+    input: { visualHeight: 44, hitHeight: 44, paddingHorizontal: 12, fontSize: 14, lineHeight: 20, fontWeight: "400" as const },
+    pageGutter: 16,
+    sectionGap: 12,
+    surfacePadding: 12,
+  },
+} as const;

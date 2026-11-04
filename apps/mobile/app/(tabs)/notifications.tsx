@@ -2,7 +2,7 @@ import { activityDay } from "../../src/format/activityDays";
 import { Avatar } from "../../src/components/Avatar";
 import { relativeTime, activityAction } from "../../src/format/activity";
 import React, { useEffect, useState } from "react";
-import { View, FlatList, TouchableOpacity, Pressable, StyleSheet } from "react-native";
+import { View, FlatList, TouchableOpacity, Pressable, ScrollView, StyleSheet } from "react-native";
 import { androidRipple } from "../../src/platform/android";
 import { Text } from "../../src/components/Text";
 import { useRouter } from "expo-router";
@@ -20,6 +20,8 @@ import { LoadingState } from "../../src/components/LoadingState";
 import { InfoTip } from "../../src/components/InfoTip";
 import { useLayout } from "../../src/layout/useLayout";
 import { Icon } from "../../src/components/Icon";
+import { CompactControl } from "../../src/components/CompactControl";
+import { controlDensity } from "../../src/theme";
 
 import { usePagedList } from "../../src/hooks/usePagedList";
 
@@ -57,6 +59,7 @@ export default function NotificationsScreen() {
   }, [history, items, syncItems]);
 
   const unreadItems = items.filter((item) => !isRead(item));
+  const density = controlDensity[isDesktop ? "desktop" : "narrow"];
 
   const handleMarkItemRead = async (id: string) => {
     const item = items.find((value) => value.id === id);
@@ -105,27 +108,16 @@ export default function NotificationsScreen() {
               body="Switch between your active Open PR Inbox alerts and your 7-day repository webhook Event History. Use 'Mark read' on any row or 'Mark all as read' to clear your unread alert badge."
             />
             {unreadItems.length > 0 && (
-              <TouchableOpacity
+              <CompactControl
                 onPress={handleMarkAllRead}
-                style={[
-                  styles.markReadBtn,
-                  {
-                    backgroundColor: colors.statusGoodBg,
-                    borderColor: colors.statusGood,
-                    borderWidth: 1,
-                    borderRadius: radius.sm,
-                    paddingHorizontal: 10,
-                    paddingVertical: 5,
-                  },
-                ]}
-                accessibilityRole="button"
+                isDesktop={isDesktop}
+                variant="secondary"
                 accessibilityLabel="Mark all notifications as read"
               >
-                <Icon name="checkmark-done-outline" size={14} color={colors.statusGood} />
-                <Text style={[typography.caption, { color: colors.statusGood, fontWeight: "700" }]}>
+                <Text style={[typography.caption, { color: colors.statusGood, fontWeight: "600" }]}>
                   Mark all as read ({unreadItems.length})
                 </Text>
-              </TouchableOpacity>
+              </CompactControl>
             )}
           </View>
         }
@@ -134,53 +126,46 @@ export default function NotificationsScreen() {
       <View
         style={[
           styles.topBentoControls,
-          isDesktop && {
-            flexDirection: "row",
-            alignItems: "center",
-            justifyContent: "space-between",
-            paddingHorizontal: 24,
-          },
+          { paddingHorizontal: density.pageGutter },
+          isDesktop && styles.desktopToolbar,
         ]}
       >
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+        <View
+          style={[styles.modeGroup, { borderColor: colors.border, backgroundColor: colors.surface }]}
+          accessibilityRole="tablist"
+        >
           {[false, true].map((value) => (
-            <TouchableOpacity
+            <CompactControl
               key={String(value)}
-              accessibilityRole="button"
-              accessibilityState={{ selected: history === value }}
+              isDesktop={isDesktop}
+              variant="segment"
+              selected={history === value}
+              accessibilityRole="tab"
+              accessibilityLabel={value ? "Event history" : "Open PR inbox"}
               onPress={() => {
                 setHistory(value);
                 setFilter("all");
               }}
-              style={[
-                styles.modeToggleBtn,
-                {
-                  backgroundColor: history === value ? colors.brandSubtle : colors.surface,
-                  borderColor: history === value ? colors.brandMuted : colors.border,
-                },
-              ]}
             >
               <Text
                 style={[
                   typography.caption,
-                  { color: history === value ? colors.brandLight : colors.textSecondary, fontWeight: "600" },
+                  { color: history === value ? colors.brandLight : colors.textSecondary, fontWeight: history === value ? "600" : "500" },
                 ]}
               >
                 {value ? "Event history" : "Open PR inbox"}
               </Text>
-            </TouchableOpacity>
+            </CompactControl>
           ))}
           <View
             style={{
+              height: density.chip.visualHeight,
               flexDirection: "row",
               alignItems: "center",
               gap: 5,
-              paddingHorizontal: 9,
-              paddingVertical: 4,
+              paddingHorizontal: density.chip.paddingHorizontal,
               borderRadius: radius.full,
               backgroundColor: unreadItems.length > 0 ? colors.statusWarningBg : colors.statusGoodBg,
-              borderWidth: 1,
-              borderColor: unreadItems.length > 0 ? colors.statusWarning : colors.statusGood,
             }}
           >
             <Icon
@@ -193,7 +178,7 @@ export default function NotificationsScreen() {
                 typography.caption,
                 {
                   color: unreadItems.length > 0 ? colors.statusWarning : colors.statusGood,
-                  fontWeight: "700",
+                  fontWeight: "600",
                 },
               ]}
             >
@@ -202,8 +187,13 @@ export default function NotificationsScreen() {
           </View>
         </View>
 
-        {/* Filter Chips */}
-        <View style={styles.chipsRow} accessibilityRole="tablist">
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={styles.filterScroller}
+          contentContainerStyle={styles.chipsRow}
+          accessibilityRole="tablist"
+        >
           {((history ? ["all", "review"] : ["all", "review", "mentions", "mine"]) as NotificationFilter[]).map(
             (tab) => {
               const active = filter === tab;
@@ -213,34 +203,28 @@ export default function NotificationsScreen() {
               if (tab === "mine") label = "Mine";
 
               return (
-                <TouchableOpacity
+                <CompactControl
                   key={tab}
                   onPress={() => setFilter(tab)}
-                  style={[
-                    styles.chip,
-                    {
-                      backgroundColor: active ? colors.brand : colors.surfaceElevated,
-                      borderColor: active ? colors.brand : colors.border,
-                      borderRadius: radius.full,
-                    },
-                  ]}
+                  isDesktop={isDesktop}
+                  variant="chip"
+                  selected={active}
                   accessibilityRole="tab"
                   accessibilityLabel={`${label} notifications`}
-                  accessibilityState={{ selected: active }}
                 >
                   <Text
                     style={[
                       typography.caption,
-                      { color: active ? "#FFFFFF" : colors.textSecondary, fontWeight: "600" },
+                      { color: active ? colors.brandLight : colors.textSecondary, fontWeight: active ? "600" : "500" },
                     ]}
                   >
                     {label}
                   </Text>
-                </TouchableOpacity>
+                </CompactControl>
               );
             },
           )}
-        </View>
+        </ScrollView>
       </View>
 
       {history && (
@@ -393,37 +377,22 @@ export default function NotificationsScreen() {
 
                   <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
                     {!itemRead ? (
-                      <TouchableOpacity
-                        accessibilityRole="button"
+                      <CompactControl
                         accessibilityLabel={`Mark ${item.title} as read`}
                         onPress={() => handleMarkItemRead(item.id)}
-                        style={{
-                          minHeight: 44,
-                          paddingHorizontal: 9,
-                          paddingVertical: 5,
-                          borderRadius: 8,
+                        isDesktop={isDesktop}
+                        variant="icon"
+                        contentStyle={{
                           backgroundColor: colors.statusGoodBg,
                           borderWidth: 1,
                           borderColor: colors.statusGood,
-                          flexDirection: "row",
-                          alignItems: "center",
-                          gap: 4,
                         }}
                       >
-                        <Icon name="checkmark" size={12} color={colors.statusGood} />
-                        <Text style={[typography.caption, { color: colors.statusGood, fontWeight: "700", fontSize: 11 }]}>
-                          Mark read
-                        </Text>
-                      </TouchableOpacity>
+                        <Icon name="checkmark" size={density.icon.iconSize} color={colors.statusGood} />
+                      </CompactControl>
                     ) : (
                       <View
                         style={{
-                          paddingHorizontal: 8,
-                          paddingVertical: 4,
-                          borderRadius: 8,
-                          backgroundColor: colors.surfaceElevated,
-                          borderWidth: 1,
-                          borderColor: colors.border,
                           flexDirection: "row",
                           alignItems: "center",
                           gap: 4,
@@ -449,39 +418,26 @@ const styles = StyleSheet.create({
   root: {
     flex: 1,
   },
-  markReadBtn: {
-    minHeight: 44,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 5,
-  },
   topBentoControls: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
+    paddingVertical: 4,
     gap: 8,
   },
-  modeToggleBtn: {
+  desktopToolbar: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  modeGroup: {
     minHeight: 44,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+    flexDirection: "row",
+    alignItems: "center",
     borderRadius: 8,
     borderWidth: 1,
-    alignItems: "center",
-    justifyContent: "center",
+    paddingHorizontal: 2,
   },
+  filterScroller: { flexGrow: 0 },
   chipsRow: {
     flexDirection: "row",
-    flexWrap: "wrap",
     gap: 6,
-  },
-  chip: {
-    minHeight: 44,
-    minWidth: 54,
-    paddingHorizontal: 12,
-    paddingVertical: 5,
-    borderWidth: 1,
-    alignItems: "center",
-    justifyContent: "center",
   },
 });
