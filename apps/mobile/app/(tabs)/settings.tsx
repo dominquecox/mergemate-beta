@@ -254,7 +254,7 @@ export default function SettingsScreen() {
                 <Avatar login={user?.login ?? "demo"} size={38} />
                 <View style={{ flex: 1, minWidth: 0 }}>
                   <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-                    <Text style={[typography.subhead, { color: colors.text, fontWeight: "700" }]} numberOfLines={1}>
+                    <Text style={[typography.subhead, { color: colors.text, fontWeight: "600" }]} numberOfLines={1}>
                       {user?.name || user?.login || "Demo User"} · Personal Workspace
                     </Text>
                   </View>
@@ -270,51 +270,55 @@ export default function SettingsScreen() {
               </View>
               <View style={{ flexDirection: "row", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
                 <View style={{ paddingHorizontal: 8, paddingVertical: 3, borderRadius: 9999, backgroundColor: isDemo ? colors.demoBadgeBg : colors.statusGoodBg, borderWidth: 1, borderColor: isDemo ? colors.demoBadge : colors.statusGood }}>
-                  <Text style={[typography.caption, { color: isDemo ? colors.demoBadge : colors.statusGood, fontWeight: "700", fontSize: 10 }]}>
+                  <Text style={[typography.caption, { color: isDemo ? colors.demoBadge : colors.statusGood, fontWeight: "600", fontSize: 10 }]}>
                     {isDemo ? "Demo Session" : "GitHub Connected"}
                   </Text>
                 </View>
                 <View style={{ paddingHorizontal: 8, paddingVertical: 3, borderRadius: 9999, backgroundColor: aiConsentGranted ? colors.statusGoodBg : colors.statusWarningBg, borderWidth: 1, borderColor: aiConsentGranted ? colors.statusGood : colors.statusWarning }}>
-                  <Text style={[typography.caption, { color: aiConsentGranted ? colors.statusGood : colors.statusWarning, fontWeight: "700", fontSize: 10 }]}>
+                  <Text style={[typography.caption, { color: aiConsentGranted ? colors.statusGood : colors.statusWarning, fontWeight: "600", fontSize: 10 }]}>
                     {aiConsentGranted ? "AI Enabled" : "AI Off"}
                   </Text>
                 </View>
                 <View style={{ paddingHorizontal: 8, paddingVertical: 3, borderRadius: 9999, backgroundColor: unreadCount > 0 ? colors.statusAlertBg : colors.statusInfoBg, borderWidth: 1, borderColor: unreadCount > 0 ? colors.statusAlert : colors.statusInfo }}>
-                  <Text style={[typography.caption, { color: unreadCount > 0 ? colors.statusAlert : colors.statusInfo, fontWeight: "700", fontSize: 10 }]}>
+                  <Text style={[typography.caption, { color: unreadCount > 0 ? colors.statusAlert : colors.statusInfo, fontWeight: "600", fontSize: 10 }]}>
                     {unreadCount} Unread Alert{unreadCount === 1 ? "" : "s"}
                   </Text>
                 </View>
               </View>
             </View>
 
-            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+            <View style={{ flexDirection: "row", flexWrap: "wrap", alignItems: "center", columnGap: 4 }}>
               <TouchableOpacity
                 accessibilityRole="button"
                 accessibilityLabel="Configure watched repositories"
                 onPress={() => router.push("/(auth)/repos")}
-                style={{ minHeight: 44, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8, backgroundColor: colors.surfaceElevated, borderWidth: 1, borderColor: colors.border, flexDirection: "row", alignItems: "center", gap: 6 }}
+                style={{ minHeight: 44, paddingHorizontal: 8, flexDirection: "row", alignItems: "center", gap: 6 }}
               >
-                <Icon name="folder-open-outline" size={13} color={colors.brandLight} />
-                <Text style={[typography.caption, { color: colors.text, fontWeight: "600", fontSize: 11 }]}>Configure Repos</Text>
+                <Icon name="folder-open-outline" size={14} color={colors.brandLight} />
+                <Text style={[typography.caption, { color: colors.brandLight, fontWeight: "600" }]}>Configure repos</Text>
               </TouchableOpacity>
-              <TouchableOpacity
-                accessibilityRole="button"
-                accessibilityLabel="Open agent workflows"
-                onPress={() => router.push("/workflows")}
-                style={{ minHeight: 44, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8, backgroundColor: colors.surfaceElevated, borderWidth: 1, borderColor: colors.border, flexDirection: "row", alignItems: "center", gap: 6 }}
-              >
-                <Icon name="git-network-outline" size={13} color={colors.brandLight} />
-                <Text style={[typography.caption, { color: colors.text, fontWeight: "600", fontSize: 11 }]}>Agent Workflows</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                accessibilityRole="button"
-                accessibilityLabel="Open unread alerts"
-                onPress={() => router.push("/(tabs)/notifications")}
-                style={{ minHeight: 44, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8, backgroundColor: colors.surfaceElevated, borderWidth: 1, borderColor: colors.border, flexDirection: "row", alignItems: "center", gap: 6 }}
-              >
-                <Icon name="notifications-outline" size={13} color={colors.brandLight} />
-                <Text style={[typography.caption, { color: colors.text, fontWeight: "600", fontSize: 11 }]}>View Alerts ({unreadCount})</Text>
-              </TouchableOpacity>
+              {isDesktop && (
+                <>
+                  <TouchableOpacity
+                    accessibilityRole="button"
+                    accessibilityLabel="Open agent workflows"
+                    onPress={() => router.push("/workflows")}
+                    style={{ minHeight: 44, paddingHorizontal: 8, flexDirection: "row", alignItems: "center", gap: 6 }}
+                  >
+                    <Icon name="git-network-outline" size={14} color={colors.brandLight} />
+                    <Text style={[typography.caption, { color: colors.brandLight, fontWeight: "600" }]}>Agent workflows</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    accessibilityRole="button"
+                    accessibilityLabel="Open unread alerts"
+                    onPress={() => router.push("/(tabs)/notifications")}
+                    style={{ minHeight: 44, paddingHorizontal: 8, flexDirection: "row", alignItems: "center", gap: 6 }}
+                  >
+                    <Icon name="notifications-outline" size={14} color={colors.brandLight} />
+                    <Text style={[typography.caption, { color: colors.brandLight, fontWeight: "600" }]}>View alerts ({unreadCount})</Text>
+                  </TouchableOpacity>
+                </>
+              )}
             </View>
           </View>
 

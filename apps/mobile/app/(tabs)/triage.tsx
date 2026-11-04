@@ -1,5 +1,4 @@
 import { ExperienceIntro } from '../../src/components/ExperienceDesign';
-import { Button } from '../../src/components/Button';
 import { InfoTip } from '../../src/components/InfoTip';
 import { AccessGuidanceBanner } from '../../src/components/AccessGuidanceBanner';
 import { AudioCommuteBar } from '../../src/components/AudioCommuteBar';
@@ -204,7 +203,17 @@ export default function TriageScreen() {
               body="Swipe cards or use hotkeys (1 Ignore, 2 FYI, 3 Needs you, Z Undo) to sort your queue in seconds. Choices organize MergeMate only and never modify GitHub."
               size={16}
             />
-            <Button title="Open agent workflows" variant="secondary" icon={<Icon name="git-network-outline" size={16} color={colors.brandLight} />} onPress={() => router.push('/workflows')} />
+            {isDesktop && (
+              <TouchableOpacity
+                accessibilityRole="link"
+                accessibilityLabel="Open agent workflows"
+                onPress={() => router.push('/workflows')}
+                style={{ minHeight: 44, paddingHorizontal: 8, flexDirection: 'row', alignItems: 'center', gap: 6 }}
+              >
+                <Icon name="git-network-outline" size={16} color={colors.brandLight} />
+                <Text style={[typography.caption, { color: colors.brandLight, fontWeight: '600' }]}>Agent workflows</Text>
+              </TouchableOpacity>
+            )}
           </View>
         </View>
 
@@ -213,7 +222,7 @@ export default function TriageScreen() {
             <View style={{ width: 56, height: 56, borderRadius: 28, backgroundColor: colors.statusGoodBg, alignItems: 'center', justifyContent: 'center', marginBottom: 14 }}>
               <Icon name="checkmark-done" size={28} color={colors.statusGood} />
             </View>
-            <Text style={[typography.title2, { color: colors.text, textAlign: 'center', fontWeight: '700' }]}>
+            <Text style={[typography.title2, { color: colors.text, textAlign: 'center', fontWeight: '600' }]}>
               All Caught Up!
             </Text>
             <Text style={[typography.body, { color: colors.textSecondary, textAlign: 'center', marginTop: 6, maxWidth: 360 }]}>
@@ -271,7 +280,7 @@ export default function TriageScreen() {
                           )}
                           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: verdict.tone === 'green' ? colors.statusGoodBg : verdict.tone === 'yellow' ? colors.statusWarningBg : colors.statusAlertBg, paddingHorizontal: 8, paddingVertical: 2, borderRadius: radius.full }}>
                             <Icon name={verdict.iconName} size={11} color={verdict.tone === 'green' ? colors.statusGood : verdict.tone === 'yellow' ? colors.statusWarning : colors.statusAlert} />
-                            <Text style={[typography.caption, { color: verdict.tone === 'green' ? colors.statusGood : verdict.tone === 'yellow' ? colors.statusWarning : colors.statusAlert, fontSize: 11, fontWeight: '700' }]}>{verdict.headline.split('·')[0].trim()}</Text>
+                            <Text style={[typography.caption, { color: verdict.tone === 'green' ? colors.statusGood : verdict.tone === 'yellow' ? colors.statusWarning : colors.statusAlert, fontSize: 11, fontWeight: '600' }]}>{verdict.headline.split('·')[0].trim()}</Text>
                           </View>
                         </View>
                       </View>
@@ -285,7 +294,7 @@ export default function TriageScreen() {
                         <View style={{ flexDirection: 'row', gap: 6, alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
                           <View style={{ flexDirection: 'row', gap: 6, alignItems: 'center' }}>
                             <Icon name="sparkles" size={14} color={colors.brandLight} />
-                            <Text style={[typography.caption, { color: colors.brandLight, fontWeight: '700', letterSpacing: 0.6 }]}>AI TRIAGE INSIGHT</Text>
+                            <Text style={[typography.caption, { color: colors.brandLight, fontWeight: '600', letterSpacing: 0.6 }]}>AI TRIAGE INSIGHT</Text>
                           </View>
                           <InfoTip
                             title="AI Triage Insight"
@@ -330,7 +339,7 @@ export default function TriageScreen() {
                       ]}
                     >
                       <Icon name={action.icon} size={16} color={action.color} />
-                      <Text style={[typography.caption, { color: action.color, fontWeight: '700' }]}>{action.label}</Text>
+                      <Text style={[typography.caption, { color: action.color, fontWeight: '600' }]}>{action.label}</Text>
                     </TouchableOpacity>
                   ))}
                 </View>
@@ -345,7 +354,7 @@ export default function TriageScreen() {
                 <View style={[styles.bentoCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
                   <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
-                      <Text style={[typography.caption, { color: colors.brandLight, fontWeight: '700', letterSpacing: 0.6 }]}>EXECUTIVE VERDICT</Text>
+                      <Text style={[typography.caption, { color: colors.brandLight, fontWeight: '600', letterSpacing: 0.6 }]}>EXECUTIVE VERDICT</Text>
                       <InfoTip
                         title="Executive Verdict"
                         body="Summarizes merge readiness based on risk level, CI check results, and sensitive file guardrails."
@@ -364,7 +373,7 @@ export default function TriageScreen() {
                       style={[styles.fastActionBtn, { backgroundColor: colors.brandSubtle, borderColor: colors.brandMuted }]}
                     >
                       <Icon name="git-network-outline" size={14} color={colors.brandLight} />
-                      <Text style={[typography.caption, { color: colors.brandLight, fontWeight: '700' }]}>Automate PR workflow →</Text>
+                      <Text style={[typography.caption, { color: colors.brandLight, fontWeight: '600' }]}>Automate PR workflow →</Text>
                     </TouchableOpacity>
                   </View>
                 </View>
@@ -372,7 +381,7 @@ export default function TriageScreen() {
                 {/* Bento Cell B: Up Next in Triage Queue */}
                 <View style={[styles.bentoCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
                   <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-                    <Text style={[typography.caption, { color: colors.textSecondary, fontWeight: '700', letterSpacing: 0.6 }]}>UP NEXT IN QUEUE</Text>
+                    <Text style={[typography.caption, { color: colors.textSecondary, fontWeight: '600', letterSpacing: 0.6 }]}>UP NEXT IN QUEUE</Text>
                     <Text style={[typography.code, { color: colors.textMuted, fontSize: 11 }]}>{Math.max(0, queue.length - 1)} waiting</Text>
                   </View>
                   {queue.length <= 1 ? (
