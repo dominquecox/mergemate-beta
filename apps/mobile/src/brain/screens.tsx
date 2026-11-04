@@ -16,6 +16,8 @@ import { useTheme } from '../context/ThemeContext';
 import type { Card, Lock, Handoff, TrackEvent, Project } from '@mergemate/contracts';
 import type { ApiClient } from '../api/client';
 import { AgentPanel, type AgentPanelProps } from './AgentPanel';
+import * as Clipboard from 'expo-clipboard';
+import { shortCardId } from './cardLabel';
 
 export function BoardScreen({
   project,
@@ -83,16 +85,16 @@ export function BoardScreen({
                 style={[styles.cardRow, styles.cardRowFlex, isSelected && styles.cardRowSelected]}
                 onPress={() => setSelectedCardId(card.id)}
                 accessibilityRole="button"
-                accessibilityLabel={`${card.id}: ${card.title}`}
+                accessibilityLabel={card.title}
               >
                 <View style={styles.cardContent}>
-                  <View style={styles.cardHeader}>
-                    <Text style={styles.cardId}>{card.id}</Text>
-                    <Text style={styles.cardPriority}>{card.priority}</Text>
-                  </View>
                   <Text style={styles.cardTitle} numberOfLines={2}>
                     {card.title}
                   </Text>
+                  <View style={styles.cardHeader}>
+                    <Text style={styles.cardPriority}>{card.priority}</Text>
+                    <Text style={styles.cardIdSmall} numberOfLines={1}>{shortCardId(card.id)}</Text>
+                  </View>
                   {lock && (
                     <Text style={styles.lockInfo}>
                       {lock.agent} · {lock.tool}
@@ -146,6 +148,27 @@ export function BoardScreen({
   );
 }
 
+/** The card id as small secondary text that can be selected or copied. */
+function CardIdLine({ id }: { id: string }) {
+  const styles = useBrainStyles();
+  const [note, setNote] = useState('Copy ID');
+  const copy = async () => {
+    try {
+      setNote((await Clipboard.setStringAsync(id)) ? 'Copied' : 'Select the ID to copy');
+    } catch {
+      setNote('Select the ID to copy');
+    }
+  };
+  return (
+    <View style={styles.idLine}>
+      <Text selectable style={styles.idText} numberOfLines={1}>ID {id}</Text>
+      <TouchableOpacity style={styles.idCopy} onPress={() => void copy()} accessibilityRole="button" accessibilityLabel="Copy card ID">
+        <Text style={styles.idCopyText}>{note}</Text>
+      </TouchableOpacity>
+    </View>
+  );
+}
+
 export function CardDetailModal({
   card,
   lock,
@@ -167,7 +190,7 @@ export function CardDetailModal({
           <TouchableOpacity onPress={onClose} style={styles.closeTarget} accessibilityRole="button" accessibilityLabel="Back to board">
             <Text style={styles.closeButton}>Back</Text>
           </TouchableOpacity>
-          <Text style={styles.modalTitle}>{card.id}</Text>
+          <Text style={styles.modalTitle} numberOfLines={1} accessibilityRole="header">{card.title}</Text>
           <View style={styles.spacer} />
         </View>
 
@@ -182,6 +205,7 @@ export function CardDetailModal({
                 <Text style={styles.badgeText}>{card.status}</Text>
               </View>
             </View>
+            <CardIdLine id={card.id} />
           </View>
 
           {card.details && (
@@ -481,11 +505,32 @@ const makeStyles = (c: BrainColors) => StyleSheet.create({
     marginBottom: 4,
     gap: 8,
   },
-  cardId: {
+  cardIdSmall: {
     fontSize: 11,
+    color: c.textMuted,
+    flexShrink: 1,
+  },
+  idLine: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 8,
+  },
+  idText: {
+    fontSize: 11,
+    color: c.textMuted,
+    flexShrink: 1,
+  },
+  idCopy: {
+    minHeight: 44,
+    minWidth: 44,
+    paddingHorizontal: 8,
+    justifyContent: 'center',
+  },
+  idCopyText: {
+    fontSize: 12,
     fontWeight: '600',
     color: c.brandLight,
-    textTransform: 'uppercase',
   },
   cardPriority: {
     fontSize: 10,
