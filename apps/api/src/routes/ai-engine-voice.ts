@@ -8,7 +8,7 @@ import { getBillingPlan } from "../lib/stripe-billing";
 import { requireConsent } from "./consent";
 import type { Env } from "../env";
 import { ApiError } from "../errors";
-import { AiActionLimits, AiStores, FREE_POOL_MESSAGE, GLOBAL_LIMIT_MESSAGE, USER_LIMIT_MESSAGE, fundingLimits, limitError, storesFor, userDailyLimit, userKey, withReservation } from "./ai-engine-gate";
+import { AiActionLimits, AiStores, USER_LIMIT_MESSAGE, fundingLimits, limitError, sharedLimitError, storesFor, userDailyLimit, userKey, withReservation } from "./ai-engine-gate";
 
 export const VOICE_NOTE_MAX_BYTES = 5 * 1024 * 1024;
 export const VOICE_NOTE_MAX_SECONDS = 120;
@@ -114,7 +114,7 @@ export const gateVoiceAction = async (
   const funded = fundingLimits(ownKey !== null, limits);
   if (funded.global !== undefined) {
     const globalCheck = await stores.globalBudget.check(funded.globalScope ?? "global", funded.global);
-    if (globalCheck.limited) throw funded.globalScope === "demo" ? new ApiError("forbidden", FREE_POOL_MESSAGE) : limitError(GLOBAL_LIMIT_MESSAGE);
+    if (globalCheck.limited) throw sharedLimitError(funded);
   }
   return { limit: userCheck.limit, remaining: userCheck.remaining, limits: funded, env: ownKey === null ? env : withUserOwnedKey(env, ownKey) };
 };

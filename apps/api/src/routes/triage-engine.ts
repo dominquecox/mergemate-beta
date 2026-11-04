@@ -6,7 +6,7 @@ import type { Deps, Env } from "../env";
 import { ApiError, ConfigError } from "../errors";
 import { createModelProvider } from "../ai/provider";
 import { userModelContext } from "../lib/user-meta-key";
-import { fundingLimits, userDailyLimit } from "./ai-engine-gate";
+import { fundingLimits, triagePoolLimit, userDailyLimit } from "./ai-engine-gate";
 import type { ModelProvider, ProviderDeps } from "../ai/provider";
 import { TRIAGE_JSON_SCHEMA } from "../ai/schemas";
 import { fetchPrDetail } from "./github";
@@ -300,7 +300,8 @@ const scoreWithModel = async (input: TriageQueueInput, stores: AiStores, candida
 
   const limits = fundingLimits(owned.ownsMetaKey, actionLimits(env));
   const plan = (await getBillingPlan(env, userId)).plan;
-  const userLimit = userDailyLimit(owned.ownsMetaKey, triageDailyLimit(env, plan));
+  const planLimit = userDailyLimit(owned.ownsMetaKey, triageDailyLimit(env, plan));
+  const userLimit = triagePoolLimit(limits, planLimit);
 
   let stopped = false;
   let failures = 0;

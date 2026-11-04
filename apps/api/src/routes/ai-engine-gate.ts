@@ -32,7 +32,7 @@ export interface AiActionLimits {
   global?: number | undefined;
   /** One shared daily pool on the shared key for everyone without their own Meta key. */
   demo?: number | undefined;
-  /** Usage scope the shared budget is counted in ("global" by default, "demo" for the free pool). */
+  /** Usage scope the shared budget is counted in ("global" by default, FREE_POOL_SCOPE for the free pool). */
   globalScope?: string | undefined;
 }
 
@@ -228,9 +228,17 @@ export const FREE_POOL_MESSAGE = "Today's free AI is used up. Add your Meta key 
 /** A user's own Meta key pays for their AI, so no plan cap applies (per-minute abuse limits still do). */
 export const OWN_KEY_DAILY_LIMIT = 1_000_000;
 
+/** Usage scope of the shared free pool. Distinct from any user id, including the demo fallback id. */
+export const FREE_POOL_SCOPE = "free_pool";
+/** One user's triage may take at most this fraction of the free pool per day, so it cannot drain the pool. */
+export const FREE_POOL_TRIAGE_DIVISOR = 8;
+
 /** The free pool running out sends people to Settings to add their key, not to an upgrade. */
-const sharedLimitError = (limits: AiActionLimits): ApiError =>
-  limits.globalScope === "demo" ? new ApiError("forbidden", FREE_POOL_MESSAGE) : limitError(GLOBAL_LIMIT_MESSAGE);
+export const freePoolExhausted = (): ApiError => new ApiError("forbidden", FREE_POOL_MESSAGE);
+export const isFreePoolExhausted = (error: unknown): boolean =>
+  error instanceof ApiError && error.code === "forbidden" && error.message === FREE_POOL_MESSAGE;
+export const sharedLimitError = (limits: AiActionLimits): ApiError =>
+  limits.globalScope === FREE_POOL_SCOPE ? freePoolExhausted() : limitError(GLOBAL_LIMIT_MESSAGE);
 
 /**
  * Who pays for an AI action. A saved Meta key always pays for its owner, with no shared budget. Where
@@ -240,8 +248,14 @@ const sharedLimitError = (limits: AiActionLimits): ApiError =>
 export const fundingLimits = (ownsMetaKey: boolean, limits: AiActionLimits): AiActionLimits => {
   if (ownsMetaKey) return { ...limits, global: undefined, globalScope: undefined };
   if (limits.demo === undefined) return limits;
-  return { ...limits, global: limits.demo, globalScope: "demo" };
+  return { ...limits, global: limits.demo, globalScope: FREE_POOL_SCOPE };
 };
+
+/** On the shared free pool, one user's triage takes only a small share of it per day. */
+export const triagePoolLimit = (limits: AiActionLimits, planLimit: number): number =>
+  limits.globalScope === FREE_POOL_SCOPE && limits.global !== undefined
+    ? Math.min(planLimit, Math.max(1, Math.floor(limits.global / FREE_POOL_TRIAGE_DIVISOR)))
+    : planLimit;
 
 /** The daily cap on the user's own counter: the plan cap on the shared key, none on their own key. */
 export const userDailyLimit = (ownsMetaKey: boolean, planLimit: number): number => (ownsMetaKey ? OWN_KEY_DAILY_LIMIT : planLimit);

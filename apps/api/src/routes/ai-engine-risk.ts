@@ -8,7 +8,7 @@ import { getSettings } from "../lib/settings";
 import type { SessionRecord } from "../lib/sessions";
 import type { Env } from "../env";
 import { ApiError, ConfigError } from "../errors";
-import { AiDeps, AiRunResult, cacheKey, gateAction, runModelTask, storesFor, userKey, withReservation } from "./ai-engine-gate";
+import { AiDeps, AiRunResult, cacheKey, gateAction, isFreePoolExhausted, runModelTask, storesFor, userKey, withReservation } from "./ai-engine-gate";
 import { RISK_MAX_TOKENS, RISK_SYSTEM, buildPrPrompt } from "./ai-engine-model";
 import { PrData, PrRefParts, prRefString } from "./ai-engine-pr-data";
 import { buildDiffContext, redactSecrets } from "./ai-engine-scan";
@@ -16,7 +16,9 @@ import { classifyPr } from "./ai-engine-classifier";
 import { assessQuality, assessRiskSignals, commonSignals, maxLevel } from "./ai-engine-signals";
 
 export const RULES_FALLBACK = new Set(["rate_limited", "upstream_unavailable", "misconfigured"]);
-export const isRulesFallback = (error: unknown): error is ApiError => error instanceof ApiError && RULES_FALLBACK.has(error.code);
+/** Includes the free AI pool running out: risk then returns its rule-based result instead of an error. */
+export const isRulesFallback = (error: unknown): error is ApiError =>
+  error instanceof ApiError && (RULES_FALLBACK.has(error.code) || isFreePoolExhausted(error));
 
 /** The rule-based part of a risk check. Needs no model, so it is always available once the PR is readable. */
 export const ruleRisk = (data: PrData, coverage: AnalysisCoverage, classifierScore: number | null = null) => {
@@ -58,7 +60,8 @@ export const assessPrRisk = async (
   let gate: Awaited<ReturnType<typeof gateAction>> | undefined;
   let data: PrData | null = null;
   const rulesOnly = async (error: ApiError): Promise<AiRunResult> => {
-    if (error.code !== "rate_limited") {
+    const poolOut = isFreePoolExhausted(error);
+    if (error.code !== "rate_limited" && !poolOut) {
       // Same content-free detail the error handler would have logged; the client sees the rule-based result.
       const detail = error instanceof ConfigError ? error.detail : error.logDetail;
       console.error(JSON.stringify({ event: "risk_rules_only", code: error.code, ...(detail ? { detail } : {}) }));
@@ -67,11 +70,13 @@ export const assessPrRisk = async (
     if (!data) throw error;
     const { coverage } = buildDiffContext(data);
     const { deterministic, rest } = ruleRisk(data, coverage);
-    const why = error.code === "rate_limited"
-      ? "AI review is paused: the daily AI limit is reached. Rule-based checks only."
-      : "AI review is unavailable right now. Rule-based checks only.";
+    const why = poolOut
+      ? "Today's free AI is used up. Add your Meta key in Settings for AI review. Rule-based checks only."
+      : error.code === "rate_limited"
+        ? "AI review is paused: the daily AI limit is reached. Rule-based checks only."
+        : "AI review is unavailable right now. Rule-based checks only.";
     const body: PrRisk = { level: deterministic.level, reasons: [...deterministic.reasons, why], ...rest, assessedBy: "rules" };
-    return { body, limit: gate?.limit ?? 0, remaining: error.code === "rate_limited" ? 0 : (gate?.remaining ?? 0) };
+    return { body, limit: gate?.limit ?? 0, remaining: error.code === "rate_limited" || poolOut ? 0 : (gate?.remaining ?? 0) };
   };
   try {
     gate = await gateAction(stores, deps.limits, session, { ...env, DB: deps.db }, "risk");
