@@ -58,6 +58,13 @@ describe('public feature flags',()=>{
     expect(FeatureFlags.safeParse({future_flag:true}).success).toBe(false);
   });
 });
+it('publishes brain only when it is literally true, so older app builds still parse the document',async()=>{
+  for(const [brain,expected] of [[true,{brain:true}],[false,{}],['true',{}],[1,{}],[undefined,{}]] as const){
+    const ctx=testContext();ctx.kv.set('flags:v1',JSON.stringify({voice_readout:true,voice_notes:true,highlight:true,brain}));
+    const body=await (await appFor(ctx)('/v1/flags')).json();
+    expect(body).toEqual({voice_readout:true,voice_notes:true,highlight:true,...expected});expect(FeatureFlags.safeParse(body).success).toBe(true);
+  }
+});
 it('publishes only a literal highlight boolean and ignores unknown fields',async()=>{
   for(const [highlight,expected] of [[true,true],[false,false],['true',false],[1,false],[null,false],[undefined,false]]){
     const ctx=testContext();ctx.kv.set('flags:v1',JSON.stringify({voice_readout:true,voice_notes:true,highlight,private_token:'fixture'}));
