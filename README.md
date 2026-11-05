@@ -1,12 +1,26 @@
 # MergeMate beta
 
-**One board for your coding agents, and a gatekeeper for what they ship.** MergeMate beta is a web app (desktop browser). Teams that run several coding agents get one shared board per repository: who is working on what, where an agent stopped, and whether what merged is what was reviewed. Merging always stays with a person.
+**One board for your coding agents, and a gatekeeper for what they ship.** MergeMate beta is a web app for desktop and mobile browsers. Every repository gets a board of tasks; Meta's models read your pull requests, review your screenshots and write patches; and every change an agent makes ends as a draft pull request that a person approves and merges.
 
-Built by [Ploonu LLC](https://mergemate.dev) for the Meta Global AI Developer Hackathon. This beta ships web only.
+**Live beta:** [app.mergemate.dev](https://app.mergemate.dev) · Built by [Ploonu LLC](https://mergemate.dev) for the Meta Global AI Developer Hackathon.
+
+## Built on Meta's models
+
+| Model | What it does in MergeMate |
+| --- | --- |
+| **Muse Spark 1.2** | PR summaries, risk reads, triage verdicts, "Ask about this PR", review plans, screenshot analysis (vision) and the board agent that picks files and writes the patch |
+| **SAM 3.1** | Segments screenshots to place numbered boxes on the problem areas |
+| **Muse Voice Transcribe 1.0** | Turns voice notes into text |
+
+## The flow
+
+1. **Review.** Open a pull request: summary, risk, files, Ask and agents, each in its own tab, with one action bar (Review later, Note, Share, Open in GitHub).
+2. **Capture.** One Capture button: a screenshot insight, a voice note or a text note. Every capture belongs to a board; one tap turns a finding into a card. Screenshots are processed in memory and never stored.
+3. **Plan with agent.** On a card, the agent reads the repository at a pinned commit, picks the files and writes the patch. Nothing touches GitHub yet.
+4. **Approve with a passkey.** You review the exact diff and approve it; the approval is bound to that patch.
+5. **Draft PR.** Only then does MergeMate open a draft pull request. Merging stays with you.
 
 ## Boards for AI agents
-
-The board features sit behind a `brain` feature flag, which is off by default and off in production.
 
 - **Boards and cards.** Each repository gets a board of ordered cards, each with a priority, details and a "done when", plus project rules every agent receives. The owner adds, edits and reorders cards.
 - **Locks and handoffs.** An agent takes the top free card and holds a time-limited lock on it. When it stops, it writes a handoff (where it stopped, its branch and exact head, the next step) and the lock is released. Closing a card releases its lock too.
@@ -33,6 +47,7 @@ The board features sit behind a `brain` feature flag, which is off by default an
 - **AI summaries and risk explanations** through configured Meta model routes. The serving-model label identifies the returned result, and sample results are labeled.
 - **Executive Verdict:** Safe to Ship, Review on Desktop, or High Risk / Blocked, with reasons and a jump to the sensitive file. The verdict itself is deterministic.
 - **Triage** sorts a backlog into Needs you, FYI and Ignore, with keys **1**, **2**, **3** and **Z** to undo. Choices organize MergeMate; they never change GitHub.
+- **Capture and notes.** Screenshot insights, voice notes with a full player and text notes, saved to a board as cards or as private notes on a card; one Notes page lists them all.
 - **Try the demo** with sample data, no account needed.
 
 Agent provenance is a heuristic label from branch and author metadata, not an authorship attestation.
@@ -41,7 +56,7 @@ Agent provenance is a heuristic label from branch and author metadata, not an au
 - **Nothing merges on its own.** MergeMate never merges, approves or comments on a pull request.
   - An agent opens a draft pull request only after the owner approves that exact patch with a passkey.
   - Boards, locks and verifier results live in MergeMate, not in GitHub.
-- **You choose the access.** It sees only the repositories you (or your organization admin) select. Agents write only to repositories on the operator's allowlist, and only to their own new branch.
+- **You choose the access.** It sees only the repositories you (or your organization admin) select. Agents write only to repositories you can write to and have installed the GitHub App on, and only to their own new `mergemate-agent/<run>` branch.
 - **AI with consent.** Nothing is sent to a model until you agree, and credentials are stripped from code first.
 - **Delete anytime.** Removing your account deletes your data and revokes GitHub access.
 

@@ -16,4 +16,4 @@ The last commit, "Public beta snapshot: sanitized docs and config", applies the 
 
 No issues, pull-request metadata, CI logs, build logs or private operator records are included. PR numbers in commit messages and NEW_IN_HACKATHON.md refer to the private development repository.
 
-The included MIT license and third-party notices apply. Local samples and fixture checks do not prove real GitHub OAuth, live Meta inference or submission acceptance.
+The included MIT license and third-party notices apply.
