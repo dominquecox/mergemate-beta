@@ -1,7 +1,7 @@
 /**
  * MM-119: MCP tool definitions and dispatch for the brain agent API.
  *
- * Seven tools, one per PIVOT_PLAN row MM-119: `board_read`,
+ * Seven tools, one per agent action: `board_read`,
  * `proceed_with_track`, `card_lock`, `card_heartbeat`, `card_handoff`,
  * `track_log`, `pr_link`. Arguments are validated with the shared
  * `@mergemate/contracts` request schemas, so client and server agree on

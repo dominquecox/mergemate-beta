@@ -1,9 +1,9 @@
 import { z } from 'zod';
 
 /**
- * Brain contracts for MergeMate's "agent board" product.
- * Exact spec in the internal plan (MM-115a contracts section).
- * The API and the MCP server implement exactly this.
+ * Brain contracts for MergeMate boards: projects, cards, locks, handoffs,
+ * track events and agent tokens. The API, the board UI and the MCP server
+ * all use exactly these.
  */
 
 // ============================================================================
@@ -154,7 +154,7 @@ export const AgentTokenSchema = z.object({
   id: z.string().min(1).max(64),
   /** Project this token is scoped to. */
   projectId: z.string().min(1).max(256),
-  /** Token name/label (e.g. 'Agent A token'). */
+  /** Token name/label (e.g. 'Board agent A'). */
   name: z.string().min(1).max(128),
   /** Tool/agent this token belongs to. */
   tool: ToolSchema,

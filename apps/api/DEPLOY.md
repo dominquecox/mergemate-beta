@@ -43,7 +43,7 @@ npm exec -w @mergemate/api -- wrangler secret put TURNSTILE_SECRET_KEY --env dev
 
 Each AI task has its own route in `wrangler.toml` `[vars]`: `MODEL_ROUTE_SUMMARY`, `MODEL_ROUTE_RISK`, `MODEL_ROUTE_TRIAGE` and `MODEL_ROUTE_HIGHLIGHT`, written `provider:model`. The code accepts only a fixed list of routes; an unset or unlisted value is a configuration error, and there is no fallback to another route. `MODEL_BASE_URL` and the `MODEL_API_KEY` secret apply to `meta:` routes only.
 
-Two more routes and one profile (names only; values are plain vars, never secrets). `MODEL_ROUTE_SEGMENT` (`meta:sam-3.1`, region boxes for Highlight; unset means off) and `MODEL_ROUTE_DECISION` (`workers-ai:@cf/cloudflare/clef` or `clef-flash`; typed-question probabilities through `createDecisionProvider().completeDecision()`, never free text). `meta:muse-spark-1.3` is also allowed on the text and highlight routes. `AI_PROFILE` is `hackathon` (the default when unset) or `prod`; any other value is a configuration error. The profile only supplies a default for a route whose var is unset: in `prod`, `MODEL_ROUTE_DECISION` defaults to `clef-flash`; in `hackathon` nothing is defaulted, so Clef is used only when `MODEL_ROUTE_DECISION` is set. Text routes always stay explicit. The risk check (`assessPrRisk`) uses the decision route as a fast classifier (`classifier` in `ai-engine-classifier.ts`): when a decision route resolves, it asks `needs_closer_look` once per head SHA (cached with the risk result, inside the same reserved action) and the "yes" probability becomes `classifierScore` (flagged at 0.7 or more). No decision route means no Clef call; any Clef failure falls back to rules-only quality. Request and answer field names are still unconfirmed against the live model, so set `MODEL_ROUTE_DECISION` and check the first call before relying on it. No `wrangler.toml` value changes with this: live routes stay on `meta:muse-spark-1.2` until the owner flips them.
+Two more routes and one profile (names only; values are plain vars, never secrets). `MODEL_ROUTE_SEGMENT` (`meta:sam-3.1`, region boxes for Highlight; unset means off) and `MODEL_ROUTE_DECISION` (`workers-ai:@cf/cloudflare/clef` or `clef-flash`; typed-question probabilities through `createDecisionProvider().completeDecision()`, never free text). `meta:muse-spark-1.3` is also allowed on the text and highlight routes. `AI_PROFILE` is `hackathon` (the default when unset) or `prod`; any other value is a configuration error. The profile only supplies a default for a route whose var is unset: in `prod`, `MODEL_ROUTE_DECISION` defaults to `clef-flash`; in `hackathon` nothing is defaulted, so Clef is used only when `MODEL_ROUTE_DECISION` is set. Text routes always stay explicit. The risk check (`assessPrRisk`) uses the decision route as a fast classifier (`classifier` in `ai-engine-classifier.ts`): when a decision route resolves, it asks `needs_closer_look` once per head SHA (cached with the risk result, inside the same reserved action) and the "yes" probability becomes `classifierScore` (flagged at 0.7 or more). No decision route means no Clef call; any Clef failure falls back to rules-only quality. Request and answer field names are still unconfirmed against the live model, so set `MODEL_ROUTE_DECISION` and check the first call before relying on it. No `wrangler.toml` value changes with this: live routes stay on `meta:muse-spark-1.2` until an authorized operator configures them.
 
 `workers-ai:` routes use the `AI` binding (`[ai]` in `wrangler.toml`), which needs no secret. To send those calls through AI Gateway, set `AI_GATEWAY_ID` as a plain var to the gateway's id (not a secret; leave it out of `wrangler.toml` until the gateway exists, and turn prompt and response logging off on the gateway). When it is unset, Workers AI is called without a gateway.
 
@@ -143,99 +143,16 @@ The analysis gate still enforces current consent, the user's plan/action cap and
 
 Owner smoke remains local. Configure ignored local values and apply local migrations only, then use a web cookie session and CSRF to inspect status, add/remove a test-account key and check that reads never return it. No real credential verification or provider request was performed during development; automated tests mock the provider. The small verification call is made only when the user submits their own key.
 
-## Production (api.mergemate.dev + app.mergemate.dev)
+## Deployment configuration in this judging snapshot
 
-Everything the owner runs, in order. Run from the repository root with the Cloudflare login already in place. `[env.production]` in `apps/api/wrangler.toml` and `apps/web/wrangler.toml` is already complete except the ids marked `OWNER-PASTE`. Production deploys `origin/main`, so the config PR and the release PR (development to main) both land before step 9. No variable name changes: production uses the names in `.dev.vars.example`.
+Owner-specific database/KV identifiers, GitHub App values and telemetry salts have been replaced by examples. The app's hosted service is not deployed from this snapshot. Production remains outside the judging setup; no production commands are provided here.
 
-If a create command offers to add the new resource to your config, answer no; the ids go in `wrangler.toml` through a PR (step 5), so none of these commands changes a file.
+For self-hosting, provision your own authorized Cloudflare account/resources, GitHub App and model credentials. Configure each environment separately and keep secret values in the platform's secret store. Apply local migrations for local verification; remote resources/migrations/releases require their own operator authorization, backups and verification. Do not deploy placeholder identifiers or reuse another organization's service identities.
 
-1. Database. Prints the `database_id`.
-
-```bash
-npm exec -w @mergemate/api -- wrangler d1 create mergemate-db
-```
-
-2. Posts store (KV). Prints the namespace `id`.
-
-```bash
-npm exec -w @mergemate/api -- wrangler kv namespace create POSTS
-```
-
-3. Queues: GitHub events and Stripe events, each with a dead-letter queue (Stripe stays disabled, but the Worker binds the queue).
-
-```bash
-npm exec -w @mergemate/api -- wrangler queues create mergemate-github-events
-npm exec -w @mergemate/api -- wrangler queues create mergemate-github-events-dlq
-npm exec -w @mergemate/api -- wrangler queues create mergemate-stripe-events
-npm exec -w @mergemate/api -- wrangler queues create mergemate-stripe-events-dlq
-```
-
-4. Highlight uploads bucket (private; never attach a public domain) and its 1-day expiry rule.
-
-```bash
-npm exec -w @mergemate/api -- wrangler r2 bucket create mergemate-highlight-uploads
-npm exec -w @mergemate/api -- wrangler r2 bucket lifecycle add mergemate-highlight-uploads expire-uploads-1d --expire-days 1 -y
-```
-
-The two Analytics Engine datasets (`mergemate_events`, `mergemate_ai_metrics`) are created on first write; there is nothing to create. Workers AI and Image Transformations need no resource.
-
-5. Send the two ids (the D1 `database_id` and the KV `id`) to the agent. They are not secrets. The agent replaces the two `OWNER-PASTE` ids in `[[env.production.d1_databases]]` and `[[env.production.kv_namespaces]]` in a small PR; merge it, then the development to main release PR.
-
-6. GitHub App. Production uses its own GitHub App, separate from the dev one (a GitHub App has one webhook URL, and tokens and installations are per App). Create it with the same read-only permissions and the same event subscriptions as the dev App (see "GitHub App webhook" above), then set:
-   - Callback URL: `https://app.mergemate.dev/auth/callback`
-   - Webhook URL: `https://api.mergemate.dev/v1/webhooks/github`, active, with a new webhook secret (the value you set as `GITHUB_WEBHOOK_SECRET` in step 7)
-   - Generate a client secret (step 7 `GITHUB_APP_CLIENT_SECRET`)
-
-   Send the App's client id and slug to the agent. They are public. The agent puts them in `GITHUB_APP_CLIENT_ID` and `GITHUB_APP_SLUG` under `[env.production.vars]` in the same PR as step 5 (or a follow-up). Until then GitHub sign-in cannot work.
-
-7. Secrets. Each command prompts for the value, so it never lands in shell history. Use values made for production, never the dev ones. For `TOKEN_ENCRYPTION_KEY`, this prints a fresh value to paste:
-
-```bash
-printf '1:%s\n' "$(openssl rand -base64 32)"
-```
-
-```bash
-npm exec -w @mergemate/api -- wrangler secret put MODEL_API_KEY --env production
-npm exec -w @mergemate/api -- wrangler secret put GITHUB_APP_CLIENT_SECRET --env production
-npm exec -w @mergemate/api -- wrangler secret put GITHUB_WEBHOOK_SECRET --env production
-npm exec -w @mergemate/api -- wrangler secret put TOKEN_ENCRYPTION_KEY --env production
-npm exec -w @mergemate/api -- wrangler secret put RESEND_API_KEY --env production
-npm exec -w @mergemate/api -- wrangler secret put EMAIL_FROM --env production
-npm exec -w @mergemate/api -- wrangler secret put SUPPORT_EMAIL --env production
-npm exec -w @mergemate/api -- wrangler secret put TURNSTILE_SECRET_KEY --env production
-```
-
-If wrangler says the Worker does not exist yet and offers to create it with the secret, answer yes; the deploy in step 9 replaces it. Not set on purpose: `STRIPE_SECRET_KEY` and `STRIPE_WEBHOOK_SECRET` (billing is disabled in production) and `EXPO_ACCESS_TOKEN` (push stays off until it is set). Check what is set (names only):
-
-```bash
-npm exec -w @mergemate/api -- wrangler secret list --env production
-```
-
-8. Turnstile. In the Cloudflare Turnstile widget that the web build and `TURNSTILE_SECRET_KEY` belong to, make sure `app.mergemate.dev` is in the hostname list (keep `mergemate.dev` and `localhost`). The web build already carries the widget's public site key; the CSP already allows `challenges.cloudflare.com`.
-
-9. Release. This builds the web export against `https://api.mergemate.dev`, deploys `origin/main` for the API then the web Worker, asks for the typed `DEPLOY PROD` confirm for each, and gates the D1 migrations behind a backup and the typed `APPLY MIGRATIONS`. The custom domains `api.mergemate.dev` and `app.mergemate.dev` are created by the deploy (the `mergemate.dev` zone is in the same account). Production is protected, so the approval word is required:
-
-```bash
-release.sh mergemate prod api web --approved release
-```
-
-If the first run stops at the backup step with "backup is missing or empty" (an empty new database), apply the migrations once by hand and run the release line again:
-
-```bash
-npm exec -w @mergemate/api -- wrangler d1 migrations apply mergemate-db --env production --remote
-```
-
-10. Verify. Each returns 200 with a small JSON body:
-
-```bash
-curl -fsS https://api.mergemate.dev/v1/health
-curl -fsS https://app.mergemate.dev/health
-```
-
-Rollback is `npm exec -w @mergemate/api -- wrangler rollback --env production` (Worker code only; database changes do not roll back, so use the backup the release line printed).
+The local sample walkthrough and fixture tests need none of those remote resources. See [JUDGE_SETUP.md](../../JUDGE_SETUP.md). Web and API must use matching public origins; register the exact GitHub callback. Native association and push require your own valid signing/project identifiers. Public example identifiers do not establish hosted-service access.
 
 ### Voice usage metrics
 
 Voice notes reuse the existing AI_METRICS binding/dataset and need no new environment variable, permission or migration. One best-effort point is written for each logical transcription, including its existing retry time: blobs remain `[task, provider, model, outcome]` with task `voice`, provider `meta` and model `muse-voice-transcribe-1.0`. Token counts are zero, and latency remains double3. Voice appends double4 (audio seconds from the validated WAV header), double5 (whole seconds rounded down per recording for the audio-rate estimate), and double6 (duration-known flag, 1 or 0). Non-voice points retain their existing three doubles. Formats without a trusted duration carry zeros with flag 0 and must be shown as unpriced, not free. No point is emitted for local validation, flag, consent, budget or configuration rejection before transcription. Audio, transcript, filename, identity, request ID and credentials are never included in the point. A missing/failing metrics binding does not fail transcription.
 
-The paired private admin metrics page weights the audio fields by sampling interval and estimates voice separately from tokens at $0.18/audio hour ([Meta pricing](https://dev.meta.ai/docs/pricing-rate-limits), checked 2026-10-27). This is an estimate from submitted audio, not reconciled provider billing: retries and provider rejections may differ. This PR does not enable voice, change its format acceptance or limits, call the provider, or deploy either Worker.
+Usage estimates from submitted audio are not reconciled provider billing; retries and provider rejections may differ. No provider call, flag activation or deployment is performed by reading this document.

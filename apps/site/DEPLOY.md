@@ -75,7 +75,7 @@ npx --no-install wrangler deploy --dry-run --config apps/site/wrangler.toml
 
 5. The routes in `wrangler.toml` attach `mergemate.dev` and `www.mergemate.dev` as custom domains during the approved release. The account must control that zone. Resolve any pre-existing conflicting DNS record in Cloudflare before release. The `www` host redirects permanently to the apex. Workers.dev and version-preview URLs are disabled. The site's web application is a separate host and is not deployed by this card.
 
-6. CTO reviews; owner merges the ready PR to `development`, then merges an approved release PR from `development` to `main`. CI remains off. Use the shared release runner's `mergemate prod site` piece from current the release tools after its release configuration is merged; production deploys from `main`. The private handoff contains the complete owner release command. Do not use a direct `wrangler deploy` to bypass the release runner.
+6. A maintainer reviews the ready change, merges to the integration branch, and follows the approved release process. Production releases require separate authorization; CI is enabled only by the maintainer. A local artifact or test result is not a deployment receipt.
 
 ## Acceptance after release
 

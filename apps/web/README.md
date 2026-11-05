@@ -33,7 +33,7 @@ Dev browser builds use `/__api`, served by the existing web Worker proxy and pin
 
 Production (`app.mergemate.dev`) ships together with the API: the ordered owner steps are in `apps/api/DEPLOY.md`, section "Production". The Turnstile widget behind the build's public site key must list `app.mergemate.dev`.
 
-Deploys go through the Brain release line, which builds the export for the stage and runs `wrangler deploy` (see the release rules). There are no owner one-time steps beyond the custom domain, and the deploy creates that: `dev.mergemate.dev` and `app.mergemate.dev` must be on a Cloudflare zone in the same account (`mergemate.dev` already is).
+Maintainer releases build the web export for the selected stage and deploy it through the approved release process. There are no owner one-time steps beyond the custom domain, and the deploy creates that: `dev.mergemate.dev` and `app.mergemate.dev` must be on a Cloudflare zone in the same account (`mergemate.dev` already is).
 
 The Expo export contains no inline scripts. It does contain an inline `<style>` and react-native-web injects styles at runtime, so `style-src` keeps `'unsafe-inline'`; `script-src` never does.
 
@@ -43,11 +43,9 @@ The Worker serves `/.well-known/assetlinks.json` and `/.well-known/apple-app-sit
 
 Set `ANDROID_SHA256_FINGERPRINTS` in the appropriate Wrangler environment to the actual SHA-256 signing certificate fingerprint(s). Production authorizes only the production Android package; dev authorizes only the dev package. Set `IOS_APP_ID` to the actual application-identifier entitlement (Apple app-ID prefix followed by the configured iOS bundle identifier). Neither value is a private key. Commit reviewed public identifiers through configuration; never invent them or copy a dev certificate into production.
 
-Native variants request only their environment's associated domain. Verified HTTPS links route OAuth callbacks and PR paths; custom-scheme auth callbacks are rejected. If the OS opens an unverified callback in the browser, sign-in fails safely and the person starts a fresh sign-in in that browser or returns to the app after association verification. Authorization codes are never forwarded through a private scheme.
+Native variants request their environment's associated domain. Verified HTTPS links support OAuth callbacks and PR paths. Native browser sessions use the registered `mergemate://auth/callback` return when HTTPS association does not open the app; the web relay forwards only code/state, with PKCE verification retained in the native secure store. The native marker is in OAuth state, not an added callback query parameter. See [the current auth lifecycle](../../docs/AUTH_LIFECYCLE.md).
 
-Release evidence still required: an operator verifies the actual signed app on a device against the deployed association files. Android: inspect `adb shell pm get-app-links <package>` for verified state and exercise both cold and warm callbacks/PR links. iOS: verify the signed application-identifier and associated-domain entitlement, then exercise universal links on a device. JS exports and local fixture certificates are not proof of native signing or domain verification. Replaying a callback must fail because its state and pending PKCE data are consumed once.
-
-For a local fixture browser check, build the web export with its dev API URL, then run `PLAYWRIGHT_BROWSERS_PATH=<installed-browser-directory> node apps/mobile/scripts/check-auth-links.mjs` from the repository root. The check intercepts API traffic locally, exercises expired and duplicate callbacks under an Android user agent at 393px and 1440px, checks that no code exchange or private-scheme bounce occurs, and saves screenshots under the configured `MM_AUTH_PROOF_DIR` (a temporary directory by default). It makes no live sign-in request. Unit tests exercise cold/warm native routing; this browser fixture does not replace signed-device verification.
+Real association, browser return, cold/warm launch and credential persistence require signed-device acceptance. Local fixtures and JavaScript exports do not certify those behaviors. Signing identifiers are intentionally unconfigured in this snapshot.
 
 ## Installable app, offline page and browser notifications
 

@@ -1,6 +1,6 @@
 # MergeMate 0.2.0 mobile and PWA release pack
 
-Owner-operated on the owner's Mac. This pack prepares source and commands; it does not build, sign, upload, submit, deploy or approve production. Production HOLD remains.
+Maintainer-operated on a configured build machine. This pack prepares source and commands; it does not build, sign, upload, submit, deploy or approve production. Production HOLD remains.
 
 ## Versions and profiles
 
@@ -19,36 +19,32 @@ The native wrapper rejects dirty/untracked source and exports full HEAD so the s
 - Fetch the merged development commit and record its SHA. Keep the working tree clean.
 - Use the repository's supported Node version and run `npm ci` at the monorepo root.
 - Install Expo's EAS CLI (`npm install --global eas-cli`) and confirm `npx eas --version` identifies eas-cli. Authenticate to the authorized Expo account locally.
-- Confirm the EAS project association belongs to Ploonu. The repository contains an EAS project association; confirm it against the authorized account. Never replace it with an invented project ID.
+- This snapshot omits the original EAS project association. Link your own authorized Expo project and credentials before any native build or push registration; never invent a project ID.
 - iOS: supported Xcode and command-line tools, CocoaPods/Fastlane requirements for local EAS builds, Apple team and signing credentials, registered device UDIDs for internal distribution. Confirm the dev.mergemate.dev association file and device entitlements.
 - Android: compatible JDK, Android SDK/NDK and local build tooling for the installed Expo SDK; authorized signing credentials. Record the APK signing fingerprint for App Links. No emulator is required.
 - Reach the Access-gated dev API through approved device/browser access. Never embed Cloudflare service credentials in EXPO_PUBLIC variables or a shipped app.
-- Check API/migration compatibility first. MM085 API0017 and site0002 were source-only at engineering handoff; verify actual deployment/migration receipts with the operator. This pack neither applies migrations nor overrides their approval process.
+- Check API/migration compatibility first. Verify actual deployment/migration receipts with the operator; source files alone do not establish the live schema. This pack neither applies migrations nor overrides their approval process.
 
-## Exact owner local build commands (with automated logging & build-host mesh sync)
+## Local build commands and logs
 
-After fetching the desired development commit and installing dependencies, run the unified build runner from monorepo root (or `apps/mobile`). It automatically captures all terminal output to a local log file, syncs the log to `build-host:~/build-mirror/build_logs/`, and records the build run into `build-host:~/build-mirror/builds.db` (`build_runs` table) so all agents across the mesh can inspect it:
+From the repository root, after dependencies, project association and signing are configured:
 
 ```bash
-cd ~/code/mergemate && ./scripts/build-and-log.sh ios
+npm run build:ios
+npm run build:android
+```
+
+The wrapper captures local output in `logs/build-<target>.log` and `apps/mobile/build-<target>.log`. `apps/mobile/scripts/build-with-log.sh` delegates to the same wrapper. A maintainer can set `MERGEMATE_BUILD_LOG_HOOK` to an absolute executable outside this checkout for a private log integration. Its arguments are target, status, commit, version, elapsed seconds and local log path. Hook failure does not change the build's exit code. No remote log destination is configured by this repository.
+
+Direct local EAS commands remain available:
+
+```bash
+cd apps/mobile && npx eas build --platform ios --local --profile ios-dev
 ```
 
 ```bash
-cd ~/code/mergemate && ./scripts/build-and-log.sh android
+cd apps/mobile && npx eas build --platform android --local --profile android-dev
 ```
-
-Or for web (PWA export) and API checks:
-```bash
-cd ~/code/mergemate && ./scripts/build-and-log.sh web
-cd ~/code/mergemate && ./scripts/build-and-log.sh api
-```
-
-Use the wrapper for owner releases so the clean-source guard and commit receipt apply. Direct dev-profile EAS builds still use remote counters and receipt hooks, but do not bypass the clean-source requirement.
-
-### Where logs are accessible to agents:
-- **Local Machine**: `logs/build-ios.log`, `logs/build-android.log`, `logs/build-web.log`, `logs/build-api.log`
-- **build host Mesh**: `ssh build-host 'cat ~/build-mirror/build_logs/mergemate-ios-latest.log'` (or `mergemate-android-latest.log`)
-- **build host DB**: Recorded in `build_runs` table in `~/build-mirror/builds.db` on `build-host` (accessible via `GET https://build-host:8443/api/builds` or python)
 
 Retain the build log, exact source SHA, artifact location, checksum and version/build values. Install the IPA through the team's authorized internal-device workflow and the APK on a physical Android device. Do not run eas submit, an App Store/TestFlight upload, or a production profile as part of these commands.
 
@@ -56,14 +52,10 @@ Retain the build log, exact source SHA, artifact location, checksum and version/
 
 Verify sign-in/callback links, PR navigation, the compact header and44pt controls, read-only confirmed GitHub handoff, share/note actions, native speech lifecycle, push permission/rotation/tap/logout and native offline/reconnect isolation. Check voice-unavailable behavior and screen-reader names. Record OS/device, source SHA, observed behavior and failures. Browser fixtures are not device acceptance.
 
-## Exact polished PWA release line
-
-After prerequisites and the normal dev release checks:
+## Web artifact and release acceptance
 
 ```bash
-the release script mergemate dev web --dry-run && the release script mergemate dev web
+npm run export:web -w @mergemate/mobile
 ```
 
-Verify dev web health, current deployed SHA, signed-in393px/desktop PR review and an installed PWA after the release. Record actual receipts. This command releases dev web only; it does not migrate databases or release API/site/production. Live Meta inference, physical devices and final hackathon submission remain separate acceptance gates.
-
-Remote version semantics: https://docs.expo.dev/build-reference/app-versions/ . Success-hook semantics: https://docs.expo.dev/build-reference/npm-hooks/ . The receipt runs after successful compilation so it reads the final generated native values, after remote version injection.
+The export prepares an artifact only. Maintainers use their approved release process and record the deployed source SHA. Verify health, signed-in phone/desktop review and an installed PWA afterward. Production release, migrations, live inference, device acceptance and submission require their own authorization/evidence.
