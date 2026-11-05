@@ -110,6 +110,11 @@ export function AgentPanel({ api, project, card, lock, onChanged, onLeave }: Age
         </TouchableOpacity>
       ) : null}
       {state.subline && !working ? <Text style={{ fontSize: 12, color: colors.textMuted, textAlign: 'center' }}>{state.subline}</Text> : null}
+      {branchRunId && (branchRun.state === 'stopped' || branchRun.state === 'failed') && !working ? (
+        <TouchableOpacity onPress={approve} accessibilityRole="link" accessibilityLabel="View the stopped run" style={{ minHeight: 44, justifyContent: 'center', alignItems: 'center' }}>
+          <Text style={{ fontSize: 14, color: colors.brandLight }}>View stopped run</Text>
+        </TouchableOpacity>
+      ) : null}
     </View>
   );
 }

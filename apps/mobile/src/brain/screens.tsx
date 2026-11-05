@@ -19,6 +19,7 @@ import { AgentPanel, type AgentPanelProps } from './AgentPanel';
 import * as Clipboard from 'expo-clipboard';
 import { shortCardId } from './cardLabel';
 import { PrivateNotes } from '../components/PrivateNotes';
+import { collapseEvents, eventText, eventTone, timeAgo } from './history';
 
 export function BoardScreen({
   project,
@@ -252,13 +253,7 @@ export function CardDetailModal({
           {trackEvents.length > 0 && (
             <View style={styles.section}>
               <Text style={styles.sectionLabel}>History</Text>
-              {trackEvents.map((event) => (
-                <View key={event.id} style={styles.historyEvent}>
-                  <Text style={styles.eventKind}>{event.kind.toUpperCase()}</Text>
-                  <Text style={styles.eventActor}>{event.actor}</Text>
-                  {event.text && <Text style={styles.text}>{event.text}</Text>}
-                </View>
-              ))}
+              {collapseEvents(trackEvents).map(({ event, count }) => <HistoryRow key={event.id} event={event} count={count} />)}
             </View>
           )}
         </ScrollView>
@@ -360,16 +355,8 @@ export function TrackTimelineScreen({
       <FlatList
         data={events}
         renderItem={({ item }) => (
-          <View style={styles.timelineEvent}>
-            <View style={styles.timeline}>
-              <View style={styles.dot} />
-              <View style={styles.line} />
-            </View>
-            <View style={styles.eventContent}>
-              <Text style={styles.eventKind}>{item.kind.toUpperCase()}</Text>
-              <Text style={styles.eventActor}>{item.actor}</Text>
-              {item.text && <Text style={styles.text}>{item.text}</Text>}
-            </View>
+          <View style={{ paddingHorizontal: 16 }}>
+            <HistoryRow event={item} count={1} />
           </View>
         )}
         keyExtractor={(e) => e.id}
@@ -462,10 +449,9 @@ const makeStyles = (c: BrainColors) => StyleSheet.create({
     marginTop: 8,
   },
   sectionLabel: {
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: '600',
     color: c.textSecondary,
-    textTransform: 'uppercase',
     marginBottom: 8,
   },
   cardRow: {
@@ -712,7 +698,7 @@ const makeStyles = (c: BrainColors) => StyleSheet.create({
     borderRadius: 6,
   },
   retryText: {
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: '600',
     color: '#FFFFFF',
   },
@@ -739,4 +725,20 @@ const makeStyles = (c: BrainColors) => StyleSheet.create({
 export function useBrainStyles() {
   const { colors } = useTheme();
   return useMemo(() => makeStyles(colors), [colors]);
+}
+
+/** One light timeline row: a coloured dot, the event in regular weight, and "actor · 2m ago" muted. */
+function HistoryRow({ event, count }: { event: TrackEvent; count: number }) {
+  const { colors } = useTheme();
+  const tone = eventTone(event);
+  const dot = tone === 'good' ? colors.statusGood : tone === 'bad' ? colors.statusAlert : tone === 'info' ? colors.brandLight : colors.textMuted;
+  return (
+    <View style={{ flexDirection: 'row', gap: 10, paddingVertical: 6 }}>
+      <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: dot, marginTop: 6 }} accessibilityElementsHidden importantForAccessibility="no" />
+      <View style={{ flex: 1, gap: 2 }}>
+        <Text style={{ fontSize: 14, lineHeight: 20, color: colors.text }}>{eventText(event)}{count > 1 ? <Text style={{ color: colors.textMuted }}>{` ×${count}`}</Text> : null}</Text>
+        <Text style={{ fontSize: 12, color: colors.textMuted }}>{event.actor} · {timeAgo(event.at)}</Text>
+      </View>
+    </View>
+  );
 }
