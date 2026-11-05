@@ -5,8 +5,8 @@ import { homeHref, isDestinationActive, menuDestinations } from "../src/navigati
 
 describe("narrow-web side menu destinations", () => {
   it("lists every main destination, Board first when it is on", () => {
-    expect(menuDestinations({ brain: true }).map((item) => item.label)).toEqual(["Board", "Workflows", "Triage", "Inbox", "Alerts"]);
-    expect(menuDestinations({ brain: false }).map((item) => item.label)).toEqual(["Workflows", "Triage", "Inbox", "Alerts"]);
+    expect(menuDestinations({ brain: true }).map((item) => item.label)).toEqual(["Board", "Workflows", "Triage", "Inbox", "Alerts", "Notes"]);
+    expect(menuDestinations({ brain: false }).map((item) => item.label)).toEqual(["Workflows", "Triage", "Inbox", "Alerts", "Notes"]);
     expect(menuDestinations({ brain: true }).find((item) => item.key === "workflows")?.href).toBe("/workflows");
   });
 

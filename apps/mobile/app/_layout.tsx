@@ -128,6 +128,7 @@ function AppContent() {
       <Stack.Screen name="pr/[owner]/[repo]/[number]" options={{ headerShown: false }} />
       <Stack.Screen name="highlight" options={{ headerShown: false }} />
       <Stack.Screen name="search" options={{ headerShown: false }} />
+      <Stack.Screen name="notes" options={{ headerShown: false }} />
       <Stack.Screen name="account/delete" options={{ presentation: "modal", headerShown: false }} />
       <Stack.Screen name="billing" options={{ headerShown: false }} />
       <Stack.Screen name="getting-started" options={{ headerShown: false }} />

@@ -138,6 +138,13 @@ export const TriageRecord = z.object({
 });
 export type TriageRecord = z.infer<typeof TriageRecord>;
 
+/** GET /triage/:prRef: the user's stored choice for one pull request, or null when they have not triaged it. */
+export const TriageChoiceRead = z.object({
+  prRef: PrRef,
+  lane: TriageLane.nullable(),
+});
+export type TriageChoiceRead = z.infer<typeof TriageChoiceRead>;
+
 /** Exact shape the model must return for a summary. Coverage is computed server-side, never trusted. */
 export const ModelSummary = z.object({
   whatChanged: z.string(),

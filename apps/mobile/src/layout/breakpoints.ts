@@ -25,7 +25,7 @@ export const COLUMN_WIDTH = {
 const WIDE_TAB_SCREENS = new Set(["inbox", "notifications", "settings"]);
 
 /** Top-level route groups that belong to a signed-in person and get the sidebar on desktop. */
-const APP_SEGMENTS = new Set(["(tabs)", "pr", "search", "highlight", "billing", "account", "workflows", "getting-started"]);
+const APP_SEGMENTS = new Set(["(tabs)", "pr", "search", "highlight", "billing", "account", "workflows", "notes", "getting-started"]);
 
 export function getLayoutMode(width: number): LayoutMode {
   if (width >= BREAKPOINT_DESKTOP) return "desktop";

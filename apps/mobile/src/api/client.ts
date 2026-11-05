@@ -105,9 +105,13 @@ export interface ApiClient {
   getTriageQueue(): Promise<TriageItem[]>;
   undoTriageChoice(prRef: string): Promise<void>;
   setTriageChoice(prRef: string, lane: TriageLane): Promise<void>;
+  /** The stored choice for one pull request, or null when it has not been triaged. */
+  getTriageChoice(prRef: string): Promise<TriageLane | null>;
 
   transcribeVoice(bytes:Uint8Array,signal?:AbortSignal):Promise<string>;
   getPrivateNotes(context:NoteContext):Promise<PrivateNote[]>;
+  /** Every private note of the signed-in user, newest first, one page at a time. */
+  getAllPrivateNotes(cursor?:string|null):Promise<import("@mergemate/contracts").NoteListPage>;
   savePrivateNote(input:SavePrivateNote):Promise<PrivateNote>;
   removePrivateNote(id:string,context:NoteContext):Promise<void>;
 

@@ -1,7 +1,6 @@
 import {QaEvidenceCard} from "../../../../src/components/QaEvidenceCard";
 import {InfoTip} from "../../../../src/components/InfoTip";
 import {AccessGuidanceBanner} from "../../../../src/components/AccessGuidanceBanner";
-import {useNoteKeyboardScroll} from "../../../../src/hooks/useNoteKeyboardScroll";
 import {MetaTelemetryModal} from '../../../../src/components/MetaTelemetryModal';
 import {useAgentGuardrails} from '../../../../src/hooks/useAgentGuardrails';
 import {PrRiskPanel} from "../../../../src/components/PrRiskPanel";
@@ -22,7 +21,7 @@ import { BlastRadiusChips } from "../../../../src/components/BlastRadiusChips";
 import { SummarySection, ExecutiveSummaryText } from "../../../../src/components/SummarySection";
 import { GitMetadataCard } from "../../../../src/components/GitMetadataCard";
 import React, { useState, useEffect, useRef } from "react";
-import { View, ScrollView, TouchableOpacity, TextInput, StyleSheet, Linking, Share, Platform, KeyboardAvoidingView } from "react-native";
+import { View, ScrollView, TouchableOpacity, TextInput, StyleSheet, Linking, Share, Platform, KeyboardAvoidingView, Modal } from "react-native";
 import { useAndroidBackHandler } from "../../../../src/platform/android";
 import { Text } from "../../../../src/components/Text";
 import { useLocalSearchParams, useRouter } from "expo-router";
@@ -78,7 +77,6 @@ function PrWorkspace({owner,repo,number}:{owner:string;repo:string;number:string
   useEffect(()=>{setExpandedFiles([]);setCollapsedThreads([]);},[detail?.headSha]);
   useEffect(()=>{if(!detail||isLoading)return;const frame=requestAnimationFrame(()=>scroll.current?.scrollTo({y:scrollOffset.current,animated:false}));return()=>cancelAnimationFrame(frame);},[isLoading]);
   const [showNoteInput, setShowNoteInput] = useState(false),[noteFocus,setNoteFocus]=useState(0);
-  const noteKeyboard=useNoteKeyboardScroll(scroll,showNoteInput);
 
 
   useAndroidBackHandler(() => {
@@ -144,7 +142,7 @@ function PrWorkspace({owner,repo,number}:{owner:string;repo:string;number:string
         />
       ) : (
         <>
-          <ScrollView onContentSizeChange={noteKeyboard.onContentSizeChange} keyboardDismissMode={Platform.OS==="ios"?"interactive":"on-drag"} keyboardShouldPersistTaps="handled" testID="pr-workspace-scroll" ref={scroll} onScroll={event=>{scrollOffset.current=event.nativeEvent.contentOffset.y;}} scrollEventThrottle={16} contentContainerStyle={{ padding:isDesktop?24:spacing.base, paddingBottom:24 }}>
+          <ScrollView keyboardDismissMode={Platform.OS==="ios"?"interactive":"on-drag"} keyboardShouldPersistTaps="handled" testID="pr-workspace-scroll" ref={scroll} onScroll={event=>{scrollOffset.current=event.nativeEvent.contentOffset.y;}} scrollEventThrottle={16} contentContainerStyle={{ padding:isDesktop?24:spacing.base, paddingBottom:24 }}>
             <AccessGuidanceBanner error={error ?? linkError} compact />
             {!!(error||linkError)&&<Text accessibilityRole="alert" style={{color:colors.statusAlert,padding:12}}>{error??linkError}</Text>}
             {isDemo&&tour==="1"&&!tourClosed&&<DemoTour onClose={()=>setTourClosed(true)}/>}
@@ -640,10 +638,19 @@ function PrWorkspace({owner,repo,number}:{owner:string;repo:string;number:string
             </View>
             </View>
 
-            {showNoteInput && <View><PrivateNotes onInputFocus={noteKeyboard.onFocus} onInputBlur={noteKeyboard.onBlur} focusRequest={noteFocus} onClose={()=>setShowNoteInput(false)} context={{kind:'pr',repo:`${owner}/${repo}`,number:Number(number)}}/></View>}
           </ScrollView>
 
-          <ExecutiveActionBar detail={{...detail,checkCursor,files:guardrailFiles}} onOpenGitHub={openInGitHub} onAddNote={()=>{setShowNoteInput(true);setNoteFocus(n=>n+1);if(showNoteInput)noteKeyboard.onFocus();}}/>
+          <ExecutiveActionBar detail={{...detail,checkCursor,files:guardrailFiles}} onOpenGitHub={openInGitHub} onAddNote={()=>{setShowNoteInput(true);setNoteFocus(n=>n+1);}}/>
+          <Modal visible={showNoteInput} transparent animationType="slide" onRequestClose={()=>setShowNoteInput(false)}>
+            <KeyboardAvoidingView behavior={Platform.OS==="ios"?"padding":undefined} style={{flex:1,justifyContent:"flex-end"}}>
+              <TouchableOpacity accessibilityRole="button" accessibilityLabel="Close notes" activeOpacity={1} onPress={()=>setShowNoteInput(false)} style={{flex:1,backgroundColor:"rgba(0,0,0,0.5)"}}/>
+              <View accessibilityViewIsModal style={{backgroundColor:colors.surface,borderTopLeftRadius:16,borderTopRightRadius:16,padding:16,maxHeight:"85%"}}>
+                <ScrollView keyboardShouldPersistTaps="handled">
+                  <PrivateNotes focusRequest={noteFocus} onClose={()=>setShowNoteInput(false)} context={{kind:'pr',repo:`${owner}/${repo}`,number:Number(number)}}/>
+                </ScrollView>
+              </View>
+            </KeyboardAvoidingView>
+          </Modal>
         </>
       )}
     </KeyboardAvoidingView>

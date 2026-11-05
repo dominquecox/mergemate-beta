@@ -4,7 +4,7 @@ import { PrSearchFilters, PrSearchPage } from '@mergemate/contracts';
 import type { WorkspaceRead } from './client';
 import { PrCheck as PrCheckSchema } from '@mergemate/contracts';
 import { z } from "zod";
-import { PrivateNotes, PrivateNote, VoiceNoteResult, SavePrivateNote, type NoteContext, InboxPreference, InboxMutation, InboxReceipt, InboxUndo, ConsentState, AiPreferences, type AiPreferenceUpdate, HighlightResult as HighlightResultSchema, InstallationList as InstallationListSchema, NotificationPage, PrDetail as PrDetailSchema, PrFile as PrFileSchema, PrThread as PrThreadSchema, PrRisk as PrRiskSchema, PrSummary as PrSummarySchema, ReviewPlan as ReviewPlanSchema, AiEngineInfo as AiEngineInfoSchema, PrAnswer as PrAnswerSchema, RepoPage, RepoPullList, RepoBranchList, TriageQueue, TriageRecord, ProjectSchema, CardSchema, LockSchema, TrackEventSchema, ProceedWithTrackResponseSchema, BrainRunResponseSchema } from "@mergemate/contracts";
+import { PrivateNotes, PrivateNote, VoiceNoteResult, SavePrivateNote, type NoteContext, InboxPreference, InboxMutation, InboxReceipt, InboxUndo, ConsentState, AiPreferences, type AiPreferenceUpdate, HighlightResult as HighlightResultSchema, InstallationList as InstallationListSchema, NotificationPage, PrDetail as PrDetailSchema, PrFile as PrFileSchema, PrThread as PrThreadSchema, PrRisk as PrRiskSchema, PrSummary as PrSummarySchema, ReviewPlan as ReviewPlanSchema, AiEngineInfo as AiEngineInfoSchema, PrAnswer as PrAnswerSchema, RepoPage, RepoPullList, RepoBranchList, TriageQueue, TriageRecord, TriageChoiceRead, NoteListPage, ProjectSchema, CardSchema, LockSchema, TrackEventSchema, ProceedWithTrackResponseSchema, BrainRunResponseSchema } from "@mergemate/contracts";
 import type { HighlightResult, InstallationList, Notification, NotificationFilter, AiEngineInfo, PrAnswer, PrDetail, PrRisk, PrSummary, Repo, ReviewPlan, TriageItem, TriageLane } from "../types";
 import type { CreateCardRequest, UpdateCardRequest, ReorderCardRequest } from "@mergemate/contracts";
 import { CreateCardRequestSchema, UpdateCardRequestSchema, ReorderCardRequestSchema } from "@mergemate/contracts";
@@ -223,6 +223,10 @@ export abstract class HttpData extends HttpSession {
     await this.actions.run(`undo:${prRef}`,()=>this.request({method:'DELETE',path:`/triage/${enc(prRef)}`}));
   }
 
+  async getTriageChoice(prRef: string): Promise<TriageLane | null> {
+    return (await this.request({ path: `/triage/${enc(prRef)}`, schema: TriageChoiceRead })).lane;
+  }
+
   async setTriageChoice(prRef: string, lane: TriageLane): Promise<void> {
     await this.actions.run(`triage:${prRef}:${lane}`, () => this.request({
       method: "POST",
@@ -240,6 +244,7 @@ export abstract class HttpData extends HttpSession {
     return (await this.request({method:'POST',path:'/voice-notes',audio:new Uint8Array(bytes).buffer,schema:VoiceNoteResult,timeoutMs:AI_TIMEOUT_MS,...(signal?{signal}:{})})).text;
   }
   async getPrivateNotes(context:NoteContext){return (await this.request({path:`/notes?context=${enc(JSON.stringify(context))}`,schema:PrivateNotes})).items;}
+  async getAllPrivateNotes(cursor?:string|null){return this.request({path:`/notes/all?limit=50${cursor?`&cursor=${enc(cursor)}`:''}`,schema:NoteListPage});}
   async savePrivateNote(input:import('@mergemate/contracts').SavePrivateNote){
     const body=SavePrivateNote.parse(input);
     return this.actions.run(`note:${body.id}`,()=>this.request({method:'POST',path:'/notes',body,schema:PrivateNote}));

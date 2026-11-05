@@ -1,4 +1,4 @@
-import { PrRef, TriageChoice, TriageQueue, TriageRecord } from "@mergemate/contracts";
+import { PrRef, TriageChoice, TriageChoiceRead, TriageQueue, TriageRecord } from "@mergemate/contracts";
 import { Hono } from "hono";
 import { requireBinding } from "../config";
 import { FIXTURE_TRIAGE, createFetchTransport, noStore } from "./ai-engine";
@@ -28,6 +28,24 @@ export const createTriageRouter = (deps: AiRouterDeps = {}) => {
       requestId: c.get("requestId"),
     });
     return c.json(items);
+  });
+
+  // The user's stored choice for one pull request (null when not triaged). Scoped to the session user.
+  router.get("/:prRef", async (c) => {
+    const session = c.get("session");
+    const userId = session.userId;
+    if (session.demo || !userId) throw new ApiError("forbidden", "Not available in the demo.");
+    const prRef = c.req.param("prRef");
+    if (!PrRef.safeParse(prRef).success) {
+      throw new ApiError("validation_failed", "That pull request reference is not valid. Send it URL-encoded as owner/repo#number.");
+    }
+    const { repo, number } = splitPrRef(prRef);
+    const row = await requireBinding(c.env, "DB")
+      .prepare("SELECT lane FROM triage_choices WHERE user_id = ? AND item_id = ?")
+      .bind(userId, triageItemId(repo, number))
+      .first<{ lane: string }>();
+    const lane = TriageChoice.shape.lane.safeParse(row?.lane);
+    return c.json(TriageChoiceRead.parse({ prRef, lane: lane.success ? lane.data : null }));
   });
 
   router.post("/:prRef", async (c) => {

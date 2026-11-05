@@ -64,7 +64,9 @@ export class MockApiClient implements ApiClient {
   async getPrCheckPage(owner:string,repo:string,number:number){return {items:(await this.getPrDetail(owner,repo,number)).checks,nextCursor:null};}
   async getPrFilePage(owner: string, repo: string, number: number, _cursor?: string | null) {return {items:(await this.getPrDetail(owner,repo,number)).files,nextCursor:null};}
   async getPrCommentPage(owner: string, repo: string, number: number, _cursor?: string | null) {return {items:(await this.getPrDetail(owner,repo,number)).comments,nextCursor:null};}
-  async undoTriageChoice(_prRef: string): Promise<void> {}
+  private triageChoices = new Map<string, TriageLane>();
+  async undoTriageChoice(prRef: string): Promise<void> { this.triageChoices.delete(prRef); }
+  async getTriageChoice(prRef: string): Promise<TriageLane | null> { return this.triageChoices.get(prRef) ?? null; }
   async getActivityHistory(){return {items:[],nextCursor:null};}
   async markActivityRead(_id:string):Promise<void>{}
   async getNotificationPage(filter: NotificationFilter = 'all', cursor?: string | null, search = '') {
@@ -79,6 +81,7 @@ export class MockApiClient implements ApiClient {
 
   async transcribeVoice():Promise<string>{throw new ApiClientError('forbidden','Recording is unavailable in demo mode.');}
   async getPrivateNotes():Promise<import('@mergemate/contracts').PrivateNote[]>{return [];}
+  async getAllPrivateNotes():Promise<import('@mergemate/contracts').NoteListPage>{return {items:[],nextCursor:null};}
   async savePrivateNote():Promise<import('@mergemate/contracts').PrivateNote>{throw new ApiClientError('forbidden','Private notes are unavailable in demo mode.');}
   async removePrivateNote():Promise<void>{throw new ApiClientError('forbidden','Private notes are unavailable in demo mode.');}
   async getInboxUndo(){return null;}
@@ -366,7 +369,8 @@ export class MockApiClient implements ApiClient {
     return [...this.triageQueue];
   }
 
-  async setTriageChoice(prRef: string, _lane: TriageLane): Promise<void> {
+  async setTriageChoice(prRef: string, lane: TriageLane): Promise<void> {
+    this.triageChoices.set(prRef, lane);
     this.triageQueue = this.triageQueue.filter((x) => x.prRef !== prRef);
   }
 

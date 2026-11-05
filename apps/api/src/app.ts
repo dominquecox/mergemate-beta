@@ -30,6 +30,7 @@ import { health } from "./routes/health";
 import { createHighlightRouter } from "./routes/highlight";
 import { createVoiceNotesRouter } from "./routes/voice-notes";
 import {notes} from "./routes/notes";
+import {notesAll} from "./routes/notes-all";
 import { notifications } from "./routes/notifications";
 import { publicContent } from "./routes/public";
 import { telemetry } from "./routes/telemetry";
@@ -87,6 +88,7 @@ export const createApp = (deps: Deps = defaultDeps) => {
   app.route("/v1", prVisual);
   app.route("/v1", prDependencies);
   app.route("/v1", notifications);
+  app.route("/v1", notesAll);
   app.route("/v1", notes);
   app.route("/v1", searchPrs);
   app.route("/v1", telemetry);

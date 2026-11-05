@@ -39,9 +39,9 @@ export function navItemsFor(flags: { brain?: boolean }): NavItem[] {
 }
 
 export interface MenuDestination {
-  key: "brain" | "workflows" | "triage" | "inbox" | "notifications";
+  key: "brain" | "workflows" | "triage" | "inbox" | "notifications" | "notes";
   label: string;
-  href: "/(tabs)/brain" | "/workflows" | "/(tabs)/triage" | "/(tabs)/inbox" | "/(tabs)/notifications";
+  href: "/(tabs)/brain" | "/workflows" | "/(tabs)/triage" | "/(tabs)/inbox" | "/(tabs)/notifications" | "/notes";
   icon: IconName;
 }
 
@@ -53,11 +53,13 @@ export function menuDestinations(flags: { brain?: boolean }): MenuDestination[] 
     { key: "triage", label: "Triage", href: "/(tabs)/triage", icon: "flash-outline" },
     { key: "inbox", label: "Inbox", href: "/(tabs)/inbox", icon: "file-tray-outline" },
     { key: "notifications", label: "Alerts", href: "/(tabs)/notifications", icon: "notifications-outline" },
+    { key: "notes", label: "Notes", href: "/notes", icon: "create-outline" },
   ];
 }
 
 /** Whether the current route is this destination. Workflows counts both its page and its tab. */
 export function isDestinationActive(segments: readonly string[], key: MenuDestination["key"]): boolean {
+  if (key === "notes") return segments[0] === "notes";
   if (key === "workflows") return segments[0] === "workflows" || (segments[0] === "(tabs)" && segments[1] === "workflows-tab");
   return segments[0] === "(tabs)" && segments[1] === key;
 }
