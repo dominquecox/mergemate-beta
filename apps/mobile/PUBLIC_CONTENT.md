@@ -1,9 +1,0 @@
-# Public News and Changelog
-
-Lists use the published index and expose bounded pagination. Read full post fetches the public single-post endpoint; refresh and direct detail URLs fetch published content again. Duplicate slugs preserve the newest indexed entry. The API serves a detail only when its slug/type/publication timestamp match the current published index, and strips draft/private metadata. Missing posts return404; malformed/unavailable index storage returns an error rather than invented updates. Live offset pagination is not a historical snapshot; refresh to see new publications.
-
-The app renders body content as selectable native text, preserving Unicode and decoded newlines. It never injects HTML, loads body images, or executes/opens Markdown URLs. API sanitization also strips raw HTML/images and unsafe links. Public requests omit account credentials. Empty, loading, unavailable, missing-post and retry states remain distinct; no sample article is substituted into a real account/build.
-
-Stable RSS paths on the public site route to the app's public full reader through fixed-target redirects; untrusted query destinations are ignored. Dev web also routes legacy News/Changelog detail paths to the reader. The public site's waitlist and existing paths are unchanged.
-
-Run `npm run check` and `node apps/site/scripts/check.mjs`. Build with `EXPO_NO_TELEMETRY=1 EXPO_PUBLIC_API_BASE_URL=<intended-public-api-url> npm run export:web -w @mergemate/mobile`, then run `PLAYWRIGHT_BROWSERS_PATH=<installed-browser-directory> node apps/mobile/scripts/check-public-posts.mjs` from the root. The browser command intercepts API calls locally, verifies list/detail, pagination, retry, refresh/direct links, missing posts, hostile text and public-header isolation at393/1440, and saves screenshots under `MM_POST_PROOF_DIR` (temporary by default). It does not call a provider or deploy. iOS/Android JavaScript exports do not replace native signed-build/device checks.

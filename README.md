@@ -85,7 +85,7 @@ MergeMate was built entirely during the Meta Global AI Developer Hackathon, as c
 Application implementation commits begin October 26, 2026. An October 14 repository initialization contained only `.gitattributes`, not application code. [SOURCE_PROVENANCE.md](SOURCE_PROVENANCE.md) records how the history was prepared; [NEW_IN_HACKATHON.md](NEW_IN_HACKATHON.md) describes the work.
 
 ## Run and review
-See [JUDGE_SETUP.md](JUDGE_SETUP.md) for a credential-free sample walkthrough, local checks and the additional setup needed for real GitHub/Meta services. Deployment identifiers in this copy are examples, not settings for the live service.
+See [JUDGE_SETUP.md](JUDGE_SETUP.md) for a sample walkthrough with no account needed, local checks, and setup for your own GitHub App and Meta key. Deployment identifiers in this copy are examples.
 
 ## Security
 See [SECURITY.md](SECURITY.md). Report vulnerabilities privately through GitHub's security tab.
