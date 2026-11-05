@@ -18,6 +18,10 @@ interface ExecutiveVerdictCardProps {
   onOpenVisualAudit?: () => void;
   riskiestFile?: string | null;
   onJumpToFile?: (file: string) => void;
+  /** Strip form for the PR page: risk, one line of impact and the next step. Guardrails, reasons and the audit shortcut live on the Risk tab. */
+  compact?: boolean;
+  impact?: string;
+  nextStep?: string;
 }
 
 export function ExecutiveVerdictCard({
@@ -29,6 +33,9 @@ export function ExecutiveVerdictCard({
   onOpenVisualAudit,
   riskiestFile,
   onJumpToFile,
+  compact = false,
+  impact,
+  nextStep,
 }: ExecutiveVerdictCardProps) {
   const { colors, typography, radius, spacing } = useTheme();
   const findings=scanAgentGuardrails(files),high=findings.some(f=>f.severity==='high');
@@ -70,7 +77,7 @@ export function ExecutiveVerdictCard({
       testID={verdict.level !== "safe" ? "risk-banner" : "executive-verdict-card"}
     >
       {/* Agent Provenance Badge */}
-      {provenance?.isAgentAuthored && (
+      {!compact && provenance?.isAgentAuthored && (
         <View
           style={[
             styles.provenancePill,
@@ -95,7 +102,7 @@ export function ExecutiveVerdictCard({
         </View>
       )}
 
-      <AgentGuardrailAlert files={files} agentAuthored={!!provenance?.isAgentAuthored} {...(totalFiles===undefined?{}:{total:totalFiles})}/>
+      {!compact && <AgentGuardrailAlert files={files} agentAuthored={!!provenance?.isAgentAuthored} {...(totalFiles===undefined?{}:{total:totalFiles})}/>}
       {/* Verdict Header Row */}
       <View style={styles.verdictHeader}>
         <View
@@ -131,8 +138,19 @@ export function ExecutiveVerdictCard({
         </View>
       </View>
 
+      {compact && !!impact && (
+        <Text style={[typography.footnote, { color: colors.textSecondary, marginTop: spacing.xs, lineHeight: 18 }]} numberOfLines={3}>
+          {impact}
+        </Text>
+      )}
+      {compact && !!nextStep && (
+        <Text style={[typography.caption, { color: toneColor, fontWeight: "700", marginTop: spacing.xs }]} accessibilityLabel={nextStep}>
+          {nextStep}
+        </Text>
+      )}
+
       {/* Rationale Bullet Points */}
-      {verdict.reasons.length > 0 && (
+      {!compact && verdict.reasons.length > 0 && (
         <View style={[styles.reasonsList, { marginTop: spacing.xs }]}>
           {verdict.reasons.map((reason, idx) => (
             <View key={idx} style={styles.reasonRow}>
@@ -156,7 +174,7 @@ export function ExecutiveVerdictCard({
       )}
 
       {/* Jump to Riskiest File */}
-      {riskiestFile && onJumpToFile && verdict.level !== "safe" && (
+      {!compact && riskiestFile && onJumpToFile && verdict.level !== "safe" && (
         <TouchableOpacity
           accessibilityRole="button"
           accessibilityLabel={`Jump to riskiest file ${riskiestFile}`}
@@ -186,7 +204,7 @@ export function ExecutiveVerdictCard({
       )}
 
       {/* Visual UI Audit Trigger (Meta SAM-3.1 Hero) */}
-      {hasVisualAssets && onOpenVisualAudit && (
+      {!compact && hasVisualAssets && onOpenVisualAudit && (
         <TouchableOpacity
           accessibilityRole="button"
           accessibilityLabel="Run Meta SAM Visual UI Audit on screenshots"

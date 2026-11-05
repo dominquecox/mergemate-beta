@@ -20,7 +20,7 @@ export function TopBar() {
   const { colors, typography } = useTheme();
   const { unreadCount } = useAlerts();
   const flags = useFeatureFlags();
-  const { actions } = useTopBarActions();
+  const { actions, highlightProject } = useTopBarActions();
   const [menuOpen, setMenuOpen] = useState(false);
   const [captureOpen, setCaptureOpen] = useState(false);
   const menuButton = useRef<React.ElementRef<typeof Pressable>>(null);
@@ -91,7 +91,7 @@ export function TopBar() {
         {iconButton("notifications-outline", "Alerts", () => router.push("/(tabs)/notifications"), unreadCount)}
         {iconButton("add-circle-outline", "Capture", () => setCaptureOpen(true))}
       </View>
-      <CaptureSheet open={captureOpen} onClose={() => setCaptureOpen(false)} />
+      <CaptureSheet open={captureOpen} onClose={() => setCaptureOpen(false)} {...(highlightProject ? { projectId: highlightProject } : {})} />
       <SideMenu open={menuOpen} onClose={closeMenu} unreadCount={unreadCount} brain={!!flags.brain} />
     </View>
   );

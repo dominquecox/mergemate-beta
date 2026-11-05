@@ -5,6 +5,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import type { Card, Project } from '@mergemate/contracts';
 import { useAuth } from '../../src/context/AuthContext';
 import { useFeatureFlags } from '../../src/hooks/useFeatureFlags';
+import { useTopBarActionSetters } from '../../src/context/TopBarActionsContext';
 import { useTheme } from '../../src/context/ThemeContext';
 import { api } from '../../src/api';
 import { BoardScreen, ProjectsListScreen, TrackTimelineScreen } from '../../src/brain/screens';
@@ -22,6 +23,12 @@ export default function BrainTab() {
   const { user } = useAuth();
   const flags = useFeatureFlags();
   const [selected, setSelected] = useState<Project | null>(null);
+  const { setHighlightProject } = useTopBarActionSetters();
+  // While a board is open, the top-bar camera starts new cards on that board.
+  useEffect(() => {
+    setHighlightProject(selected?.id ?? null);
+    return () => setHighlightProject(null);
+  }, [selected, setHighlightProject]);
 
   if (!user || !flags.brain) {
     return <EmptyState icon="lock-closed-outline" title="Board is not available" message="This feature is not enabled for your account." />;

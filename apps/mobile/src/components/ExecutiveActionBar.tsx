@@ -21,7 +21,7 @@ export function verdictMessage(detail:PrDetail){
 type Working = null | 'queue' | 'undo' | 'ship' | 'senior' | 'share';
 type Notice = { text: string; error?: ErrorDetails & { message: string } };
 
-export function ExecutiveActionBar({detail,onOpenGitHub,onAddNote}:{detail:PrDetail;onOpenGitHub:()=>void;onAddNote:()=>void}){
+export function ExecutiveActionBar({detail,onOpenGitHub,onAddNote,listen}:{detail:PrDetail;onOpenGitHub:()=>void;onAddNote:()=>void;listen?:React.ReactNode}){
  const {colors}=useTheme(),insets=useSafeAreaInsets(),verdict=getExecutiveVerdict(detail);
  const [confirm,setConfirm]=useState(false),[notice,setNotice]=useState<Notice|null>(null),[working,setWorking]=useState<Working>(null),[queued,setQueued]=useState<boolean|null>(null);
  const prRef=`${detail.owner}/${detail.repo}#${detail.number}`;
@@ -65,6 +65,7 @@ export function ExecutiveActionBar({detail,onOpenGitHub,onAddNote}:{detail:PrDet
     <Text numberOfLines={2} style={{fontWeight:'700',fontSize:14,lineHeight:18,color:colors.background,textAlign:'center'}}>{label}</Text>
     {!low&&!blocked&&<Text numberOfLines={2} style={{fontSize:11,lineHeight:14,color:colors.background,textAlign:'center'}}>Adds it to Needs you. GitHub is unchanged.</Text>}
    </TouchableOpacity>}
+   {listen}
    {([{name:'share-outline',label:'Share Verdict',action:share},{name:'create-outline',label:'Add Note',action:onAddNote},{name:'logo-github',label:'Open in GitHub',action:onOpenGitHub}] as const).map(item=><TouchableOpacity key={item.name} accessibilityRole="button" accessibilityLabel={item.label} accessibilityState={{disabled:busy&&item.name==='share-outline'}} disabled={busy&&item.name==='share-outline'} onPress={()=>void item.action()} style={{width:44,height:44,borderRadius:22,alignItems:'center',justifyContent:'center',backgroundColor:colors.surfaceElevated}}><Icon name={item.name} size={20} color={colors.textSecondary}/></TouchableOpacity>)}
   </View>
   <Modal visible={confirm} transparent animationType="slide" onRequestClose={()=>setConfirm(false)}>

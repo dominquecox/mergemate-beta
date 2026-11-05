@@ -21,7 +21,7 @@ import { BlastRadiusChips } from "../../../../src/components/BlastRadiusChips";
 import { SummarySection, ExecutiveSummaryText } from "../../../../src/components/SummarySection";
 import { GitMetadataCard } from "../../../../src/components/GitMetadataCard";
 import React, { useState, useEffect, useRef } from "react";
-import { View, ScrollView, TouchableOpacity, TextInput, StyleSheet, Linking, Share, Platform, KeyboardAvoidingView, Modal } from "react-native";
+import { View, ScrollView, TouchableOpacity, TextInput, StyleSheet, Linking, Platform, KeyboardAvoidingView, Modal } from "react-native";
 import { useAndroidBackHandler } from "../../../../src/platform/android";
 import { Text } from "../../../../src/components/Text";
 import { useLocalSearchParams, useRouter } from "expo-router";
@@ -45,9 +45,21 @@ import { ErrorState } from "../../../../src/components/ErrorState";
 import { LoadingState } from "../../../../src/components/LoadingState";
 import { Icon } from "../../../../src/components/Icon";
 import { DemoTour } from "../../../../src/components/DemoTour";
+import {AgentGuardrailAlert} from "../../../../src/components/AgentGuardrailAlert";
 import { PrivacyStrip } from "../../../../src/components/PrivacyStrip";
 import { DiffView } from "../../../../src/components/DiffView";
 import { MergeStateChip } from "../../../../src/components/MergeStateChip";
+
+const PR_TABS = [
+  { key: "summary", label: "Summary" },
+  { key: "risk", label: "Risk" },
+  { key: "files", label: "Files" },
+  { key: "ask", label: "Ask" },
+  { key: "agents", label: "Agents" },
+] as const;
+type PrTab = (typeof PR_TABS)[number]["key"];
+/** The one next step the bottom bar offers for this verdict. */
+const nextStepText = (level: string) => (level === "safe" ? "Next: Approve & Ship, in GitHub" : level === "blocked" ? "Next: ask a senior reviewer" : "Next: Review later, in Needs you");
 
 export default function PrDetailScreen(){
  const {owner,repo,number}=useLocalSearchParams<{owner:string;repo:string;number:string}>(),{user}=useAuth();
@@ -77,6 +89,34 @@ function PrWorkspace({owner,repo,number}:{owner:string;repo:string;number:string
   useEffect(()=>{setExpandedFiles([]);setCollapsedThreads([]);},[detail?.headSha]);
   useEffect(()=>{if(!detail||isLoading)return;const frame=requestAnimationFrame(()=>scroll.current?.scrollTo({y:scrollOffset.current,animated:false}));return()=>cancelAnimationFrame(frame);},[isLoading]);
   const [showNoteInput, setShowNoteInput] = useState(false),[noteFocus,setNoteFocus]=useState(0);
+  const [tab, setTab] = useState<PrTab | null>(null), [infoOpen, setInfoOpen] = useState(false);
+  const tabOffsets = useRef<Partial<Record<PrTab, number>>>({});
+  // Summary first; a High risk opens on Risk. Each tab remembers where it was scrolled to.
+  const activeTab: PrTab = tab ?? (detail?.risk?.level === "high" ? "risk" : "summary");
+  const selectTab = (next: PrTab) => {
+    if (next === activeTab) return;
+    tabOffsets.current[activeTab] = scrollOffset.current;
+    setTab(next);
+  };
+  useEffect(() => {
+    if (!detail) return;
+    const frame = requestAnimationFrame(() => scroll.current?.scrollTo({ y: tabOffsets.current[activeTab] ?? 0, animated: false }));
+    return () => cancelAnimationFrame(frame);
+  }, [activeTab, !!detail]);
+  const goToFile = (name: string) => {
+    if (activeTab === "files") { jumpToFile(name); return; }
+    tabOffsets.current[activeTab] = scrollOffset.current;
+    setTab("files");
+    setTimeout(() => jumpToFile(name), 120);
+  };
+  const openFocus = (text: string) => {
+    const hit = detail?.files?.find((file) => text.includes(file.filename) || text.includes(file.filename.split("/").pop() ?? "\u0000"));
+    if (hit) goToFile(hit.filename); else selectTab("files");
+  };
+  const provenance = detail ? detectAgentProvenance({ author: detail.author, headBranch: detail.headBranch, title: detail.title }) : null;
+  const riskChip = detail?.risk
+    ? ({ low: { label: "Low risk", color: colors.riskLow, bg: colors.riskLowBg }, medium: { label: "Medium risk", color: colors.riskMedium, bg: colors.riskMediumBg }, high: { label: "High risk", color: colors.riskHigh, bg: colors.riskHighBg } } as Record<string, { label: string; color: string; bg: string }>)[detail.risk.level] ?? null
+    : null;
 
 
   useAndroidBackHandler(() => {
@@ -91,13 +131,6 @@ function PrWorkspace({owner,repo,number}:{owner:string;repo:string;number:string
     return false;
   }, showNoteInput || assessmentOpen);
 
-  const handleShare = async () => {
-    const url=githubUrl(detail?.htmlUrl);if(detail&&url){try{await Share.share({
-        message: `${detail.title} (${detail.owner}/${detail.repo}#${detail.number})\n${url}`,
-      });}catch{setLinkError("Sharing is unavailable. Open this PR in GitHub instead.");}
-    }
-  };
-
   const openLink=async(value:string|undefined)=>{setLinkError(null);const url=githubUrl(value);if(!url){setLinkError('This GitHub link is unavailable.');return;}try{await Linking.openURL(url);}catch{setLinkError('Could not open GitHub. Try again.');}};
   const openInGitHub=()=>void openLink(detail?.htmlUrl);
 
@@ -109,15 +142,9 @@ function PrWorkspace({owner,repo,number}:{owner:string;repo:string;number:string
         onBack={()=>{if(router.canGoBack())router.back();else router.replace("/(tabs)/inbox");}}
         showBack
         rightAction={
-          <View style={{flexDirection:"row",alignItems:"center"}}>{detail&&<AudioCommuteBar sentences={prExecutiveNarration({...detail,files:guardrailFiles})}/>}<TouchableOpacity
-            onPress={handleShare}
-            accessibilityRole="button"
-            accessibilityLabel="Share pull request"
-            disabled={!detail?.htmlUrl}
-            style={styles.shareBtn}
-          >
-            <Icon name="share-outline" size={22} color={colors.textSecondary} />
-          </TouchableOpacity></View>
+          <TouchableOpacity onPress={()=>void loadPr()} disabled={isRefreshing||isLoading} accessibilityRole="button" accessibilityLabel="Refresh workspace" accessibilityState={{disabled:isRefreshing||isLoading,busy:isRefreshing}} style={{minHeight:44,minWidth:44,alignItems:"center",justifyContent:"center"}}>
+            <Icon name="refresh-outline" size={22} color={colors.textSecondary} />
+          </TouchableOpacity>
         }
       />
 
@@ -142,42 +169,33 @@ function PrWorkspace({owner,repo,number}:{owner:string;repo:string;number:string
         />
       ) : (
         <>
-          <ScrollView keyboardDismissMode={Platform.OS==="ios"?"interactive":"on-drag"} keyboardShouldPersistTaps="handled" testID="pr-workspace-scroll" ref={scroll} onScroll={event=>{scrollOffset.current=event.nativeEvent.contentOffset.y;}} scrollEventThrottle={16} contentContainerStyle={{ padding:isDesktop?24:spacing.base, paddingBottom:24 }}>
+          {(() => {
+            const headerEl = (
+              <>
+            {/* 1. Compact header */}
+            <View style={{ gap: 8 }}>
             <AccessGuidanceBanner error={error ?? linkError} compact />
             {!!(error||linkError)&&<Text accessibilityRole="alert" style={{color:colors.statusAlert,padding:12}}>{error??linkError}</Text>}
             {isDemo&&tour==="1"&&!tourClosed&&<DemoTour onClose={()=>setTourClosed(true)}/>}
-            {/* Top Bento Row on Desktop: PR Header + Zero-Whitespace Agent & Workspace Control Card */}
-            <View style={isDesktop ? styles.topBentoHeaderRow : { gap: 10 }}>
-              {/* Unified Modern PR Header Surface */}
-              <View style={[styles.headerCard, { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: 14, padding: 12, flex: isDesktop ? 7 : undefined }]}>
+              <View style={[styles.headerCard, { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: 14, padding: 12 }]}>
                 <View style={[styles.topRow, { gap: 6 }]}>
-                  <TouchableOpacity onPress={()=>void loadPr()} disabled={isRefreshing} accessibilityRole="button" accessibilityLabel="Refresh workspace" style={{minHeight:44,minWidth:44,margin:-6,alignItems:"center",justifyContent:"center"}}><Icon name="refresh-outline" size={16} color={colors.textMuted}/></TouchableOpacity>
                   <View style={{ flexDirection: "row", alignItems: "center", gap: 5, flex: 1, minWidth: 0 }}>
                     <Icon name="folder-outline" size={12} color={colors.textMuted} />
                     <Text style={[typography.caption, { color: colors.textMuted, fontFamily: typography.code.fontFamily, fontSize: 11, flexShrink: 1 }]} numberOfLines={1}>
                       {detail.owner}/{detail.repo} · #{detail.number}
                     </Text>
                   </View>
-                  <InfoTip
-                    title="PR Workspace"
-                    body="Displays live pull request status, merge readiness, branch lineage, diff metrics, and model telemetry. Tap Refresh to pull the latest head commit and check states from GitHub."
-                    size={14}
-                  />
+                  <TouchableOpacity accessibilityRole="button" accessibilityLabel="About this page: access, AI and guardrails" onPress={()=>setInfoOpen(true)} style={{minHeight:44,minWidth:44,margin:-8,alignItems:"center",justifyContent:"center"}}><Icon name="information-circle-outline" size={18} color={colors.textMuted}/></TouchableOpacity>
                 </View>
-                <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginTop: 6, flexWrap: "wrap" }}>
-                  <StatusPill status={detail.status} />
-                  {detail.mergeState && <MergeStateChip state={detail.mergeState} />}
-                </View>
-
-                <Text
-                  style={[typography.headline, { color: colors.text, marginTop: 8, fontWeight: "700", fontSize: isDesktop ? 18 : 16, lineHeight: isDesktop ? 24 : 22 }]}
-                  accessibilityRole="header"
-                  numberOfLines={3}
-                >
+                <Text style={[typography.headline, { color: colors.text, marginTop: 4, fontWeight: "700", fontSize: isDesktop ? 18 : 16, lineHeight: isDesktop ? 24 : 22 }]} accessibilityRole="header" numberOfLines={3}>
                   {detail.title}
                 </Text>
-
-                <MetaTelemetryModal compact telemetry={detail.risk?.telemetry??detail.summary?.telemetry} sample={isDemo}/>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginTop: 8, flexWrap: "wrap" }}>
+                  <StatusPill status={detail.status} />
+                  {detail.mergeState && <MergeStateChip state={detail.mergeState} />}
+                  {riskChip && <View accessibilityLabel={riskChip.label} style={{paddingHorizontal:8,paddingVertical:3,borderRadius:999,backgroundColor:riskChip.bg,borderWidth:1,borderColor:riskChip.color}}><Text style={[typography.caption,{color:riskChip.color,fontWeight:"700",fontSize:11}]}>{riskChip.label}</Text></View>}
+                  {provenance?.isAgentAuthored && <View accessibilityLabel="Co-authored by an AI agent" style={{paddingHorizontal:8,paddingVertical:3,borderRadius:999,backgroundColor:colors.brandSubtle,borderWidth:1,borderColor:colors.border}}><Text style={[typography.caption,{color:colors.brandLight,fontWeight:"600",fontSize:11}]}>Co-authored</Text></View>}
+                </View>
                 <GitMetadataCard
                   inline
                   baseBranch={detail.baseBranch}
@@ -190,37 +208,282 @@ function PrWorkspace({owner,repo,number}:{owner:string;repo:string;number:string
                   fileCount={detail.files?.length ?? detail.changedFilesCount}
                 />
               </View>
+            </View>
 
-              {/* Right Bento Column: Full-Height Unified Agent & Access Control Card */}
-              <View
-                style={[
-                  {
-                    backgroundColor: colors.surface,
-                    borderColor: colors.brandMuted,
-                    borderWidth: 1,
-                    borderRadius: 16,
-                    padding: 14,
-                    justifyContent: "space-between",
-                    gap: 10,
-                  },
-                  isDesktop ? { flex: 5 } : undefined,
-                ]}
-              >
-                <View style={{ gap: 8 }}>
-                  <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-                    <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-                      <Icon name="git-network-outline" size={15} color={colors.brandLight} />
-                      <Text style={[typography.code, { color: colors.brandLight, fontSize: 10, letterSpacing: 1 }]}>
-                        PUT AGENTS ON THE NEXT STEP
-                      </Text>
-                    </View>
-                    <InfoTip
-                      title="Agent Workflow Dispatch"
-                      body="Launch a pre-configured review or coding workflow bound to this pull request, inspect impacted blast-radius domains, and verify AI & GitHub access controls."
-                      size={15}
+              </>
+            );
+            const verdictEl = (
+              <>
+            {/* 2. Verdict strip */}
+            <View style={{ gap: 8, marginTop: 10 }}>
+              <PrSecretBanner detail={detail}/>
+            {(() => {
+              const provenance = detectAgentProvenance({
+                author: detail.author,
+                headBranch: detail.headBranch,
+                title: detail.title,
+              });
+              const verdict = getExecutiveVerdict({
+                risk: detail.risk,
+                headSha: detail.headSha,
+                files: guardrailFiles,
+                checks: detail.checks, checkCursor,
+                secretWarning: detail.secretWarning,
+                changedFilesCount: detail.changedFilesCount,
+              });
+              const hasVisualAssets = (detail.files ?? []).some((f) =>
+                /\.(png|jpe?g|webp|svg|gif)$/i.test(f.filename)
+              );
+              const riskiest = detail.files ? riskiestFile(detail.files)?.filename : null;
+
+              return (
+                <ExecutiveVerdictCard
+                  verdict={verdict}
+                  files={guardrailFiles} totalFiles={detail.changedFilesCount}
+                  compact impact={detail.summary?.whyItMatters?.replace(/^[\s•\-*]+/, "").trim()} nextStep={nextStepText(verdict.level)}
+                  hasVisualAssets={hasVisualAssets}
+                  onOpenVisualAudit={() => router.push("/highlight")}
+                  riskiestFile={riskiest}
+                  onJumpToFile={(file) => goToFile(file)}
+                />
+              );
+            })()}
+            </View>
+
+              </>
+            );
+            const tabsEl = (<>
+            {/* 3. Tabs, sticky under the header */}
+            <View accessibilityRole="tablist" style={{ flexDirection: "row", gap: 6, paddingVertical: 8, backgroundColor: colors.background }}>
+              {PR_TABS.map((item) => (
+                <TouchableOpacity
+                  key={item.key}
+                  accessibilityRole="tab"
+                  accessibilityState={{ selected: activeTab === item.key }}
+                  accessibilityLabel={item.label}
+                  onPress={() => selectTab(item.key)}
+                  style={{ flex: 1, minHeight: 44, borderRadius: 10, alignItems: "center", justifyContent: "center", backgroundColor: activeTab === item.key ? colors.brandSubtle : colors.surface, borderWidth: 1, borderColor: activeTab === item.key ? colors.brandLight : colors.border }}
+                >
+                  <Text numberOfLines={1} style={[typography.caption, { color: activeTab === item.key ? colors.brandLight : colors.textSecondary, fontWeight: "700" }]}>{item.label}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+            </>);
+            const contentEl = (<>
+            {/* 4. Tab content */}
+            <View style={{ gap: 10 }}>
+              {(() => {
+                const renderChecksCard = () => <QaEvidenceCard key={detail.headSha??"unknown"} repository={`${owner}/${repo}`} number={Number(number)} headSha={detail.headSha} checks={detail.checks} sample={isDemo} runnable={detail.status === "open" || detail.status === "draft"} cursor={checkCursor} busy={pageBusy.checks} error={pageError.checks} capped={capped.checks} onLoadMore={() => loadPage("checks")} onOpen={url => void openLink(url)}/>;
+                const askReady = Boolean(detail.summary && aiConsentGranted && aiSummaries);
+                if (activeTab === "summary") return (
+                  <>
+                    {/* AI Summary Card (US-09) */}
+                    {detail.summary && (
+                      <View style={{ marginTop: spacing.sm }}>
+                        <AIBlock title="AI Summary" coverage={detail.summary.coverage} model={detail.summary.model}>
+                          {!!detail.summary.whatChanged && (
+                            <SummarySection title="What changed" icon="swap-horizontal-outline">
+                              <ExecutiveSummaryText text={detail.summary.whatChanged} />
+                            </SummarySection>
+                          )}
+
+                          {detail.summary.suggestedFocus.length > 0 && (
+                            <SummarySection title="Suggested focus" icon="scan-outline">
+                              <View style={{ gap: 8 }}>
+                                {detail.summary.suggestedFocus.slice(0, 3).map((focus, index) => {
+                                  const cleanFocus = focus.replace(/^[\s•\-*]+/, "").trim();
+                                  return (
+                                    <TouchableOpacity
+                                      key={index}
+                                      accessibilityRole="button"
+                                      accessibilityLabel={`Open the file for: ${cleanFocus}`}
+                                      onPress={() => openFocus(cleanFocus)}
+                                      style={{
+                                        flexDirection: "row",
+                                        alignItems: "flex-start",
+                                        gap: 10,
+                                        paddingVertical: 10,
+                                        paddingHorizontal: 12,
+                                        backgroundColor: colors.surfaceElevated,
+                                        borderRadius: radius.md,
+                                        borderWidth: 1,
+                                        borderColor: colors.border,
+                                      }}
+                                    >
+                                      <View
+                                        style={{
+                                          width: 20,
+                                          height: 20,
+                                          borderRadius: 10,
+                                          backgroundColor: colors.brandSubtle,
+                                          alignItems: "center",
+                                          justifyContent: "center",
+                                          marginTop: 1,
+                                        }}
+                                      >
+                                        <Icon name="search-outline" size={12} color={colors.brandLight} />
+                                      </View>
+                                      <Text style={[typography.callout, { color: colors.text, flex: 1, lineHeight: 20 }]}>
+                                        {cleanFocus}
+                                      </Text>
+                                    </TouchableOpacity>
+                                  );
+                                })}
+                              </View>
+                            </SummarySection>
+                          )}
+                        </AIBlock>
+                      </View>
+                    )}
+
+                    {/* AI is on and the summary is still being written */}
+                    {aiConsentGranted && aiSummaries && !detail.summary && !detail.aiNotice && (
+                      <View style={{ marginTop: spacing.sm }}><AIBlockSkeleton /></View>
+                    )}
+
+                    {/* Why the AI parts are missing: not turned on, turned off, over the limit or unavailable */}
+                    {detail.aiNotice && (
+                      <View style={{ marginTop: spacing.sm }}>
+                        {detail.aiNotice.code === "consent_required" && !detail.summary ? (
+                          <AIBlock title="AI Summary">
+                            <Text style={[typography.body, { color: colors.text }]}>{detail.aiNotice.message}</Text>
+                            <Button title="Open Settings" variant="secondary" onPress={() => router.push("/(tabs)/settings")} style={{ marginTop: 12, alignSelf: "flex-start" }} />
+                          </AIBlock>
+                        ) : (
+                          <View style={[styles.card, { backgroundColor: colors.surfaceElevated, borderColor: colors.border, borderRadius: radius.lg }]}>
+                            <Text style={[typography.headline, { color: colors.text }]} accessibilityRole="header">
+                              AI summary unavailable
+                            </Text>
+                            <Text style={[typography.body, { color: colors.textSecondary, marginTop: 4 }]} accessibilityLiveRegion="polite">
+                              {detail.aiNotice.message}
+                            </Text>
+                            {aiNoticeAction(detail.aiNotice.code) === "retry" && <Button title="Try again" variant="secondary" loading={aiRetrying} onPress={retryAi} style={{ marginTop: 12, alignSelf: "flex-start" }} accessibilityLabel="Try the AI summary again" />}
+                            {aiNoticeAction(detail.aiNotice.code) === "settings" && <Button title="Open Settings" variant="secondary" onPress={() => router.push("/(tabs)/settings")} style={{ marginTop: 12, alignSelf: "flex-start" }} />}
+                            {limitReached && canUpgrade && (Platform.OS === "web" || isExternalBillingLinkAllowed(Platform.OS)) && <Button title="Upgrade to Pro" onPress={openUpgrade} style={{ marginTop: 12, alignSelf: "flex-start" }} accessibilityLabel="Upgrade to Pro for more AI actions" />}
+                          </View>
+                        )}
+                      </View>
+                    )}
+                              </>
+                );
+                if (activeTab === "risk") return (
+                  <>
+                    <PrRiskPanel detail={detail} assessmentOpen={assessmentOpen} setAssessmentOpen={setAssessmentOpen} jumpToFile={goToFile}/>
+                    <AgentGuardrailAlert files={guardrailFiles} agentAuthored={false} total={detail.changedFilesCount}/>
+                    {detail.files && detail.files.length > 0 && <BlastRadiusChips files={detail.files} />}
+                    {renderChecksCard()}
+                  </>
+                );
+                if (activeTab === "files") return (
+                  <>
+                    <PrVisualDiffSection detail={detail}/>
+            {/* Changed Files List */}
+            <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.lg, marginTop: spacing.sm, flex: isDesktop ? 1.45 : undefined, minWidth: 0 }]}>
+              <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                  <Text style={[typography.headline, { color: colors.text }]} accessibilityRole="header">
+                    Files Changed ({detail.changedFilesCount})
+                  </Text>
+                  <InfoTip
+                    title="Files Changed"
+                    body="Tap any file row to expand or collapse its line-numbered diff hunk. Diff lines wrap by default on mobile and desktop."
+                    size={15}
+                  />
+                </View>
+                {detail.files.length > 0 && (
+                  <Text style={[typography.caption, { color: colors.textMuted }]}>
+                    +{detail.additions} / -{detail.deletions}
+                  </Text>
+                )}
+              </View>
+              {detail.files.length === 0 ? (
+                <View style={{ paddingVertical: 12, alignItems: "center", gap: 8 }}>
+                  <Text style={[typography.footnote, { color: colors.textMuted }]}>
+                    {pageBusy.files ? "Loading files..." : "No changed files loaded yet."}
+                  </Text>
+                  {!!fileCursor && (
+                    <Button
+                      title="Load files"
+                      loading={pageBusy.files}
+                      onPress={() => loadPage("files")}
+                      variant="secondary"
+                      style={{ minWidth: 140, alignSelf: "center", marginTop: 4 }}
                     />
+                  )}
+                </View>
+              ) : (
+                <View style={{ marginTop: spacing.xs }}>
+                  {detail.files.map((file) => (
+                    <View testID={`workspace-file-${file.filename}`} ref={(node) => { fileRows.current[file.filename] = node; }} key={file.filename} style={{ marginTop: 10, backgroundColor: colors.surfaceElevated, borderRadius: 10, overflow: "hidden" }}>
+                      <TouchableOpacity accessibilityRole="button" accessibilityLabel={`Toggle diff for ${file.filename}`} accessibilityState={{ expanded: expandedFiles.includes(file.filename) }} aria-expanded={expandedFiles.includes(file.filename)} onPress={() => setExpandedFiles((prev) => prev.includes(file.filename) ? prev.filter((name) => name !== file.filename) : [...prev, file.filename])} style={{ flexDirection: "row", alignItems: "center", padding: 12, gap: 8, minHeight: 44 }}><Icon name={expandedFiles.includes(file.filename) ? "chevron-down" : "chevron-forward"} size={16} color={colors.textSecondary} /><Text style={[typography.code, { color: colors.text, flex: 1 }]}>{file.filename} · {file.status}</Text><Text style={[typography.code, { color: colors.riskLow, fontSize: 11 }]}>+{file.additions}</Text><Text style={[typography.code, { color: colors.riskHigh, fontSize: 11 }]}>-{file.deletions}</Text></TouchableOpacity>
+                      {!!file.previousPath && <Text style={{ color: colors.textSecondary, paddingHorizontal: 12 }}>Previously: {file.previousPath}</Text>}
+                      {expandedFiles.includes(file.filename) && file.patchState === "partial" && <Text accessibilityRole="alert" style={{ color: colors.textSecondary, padding: 12 }}>Partial patch: this is not the complete diff. Open this PR in GitHub for the full file.</Text>}
+                      {expandedFiles.includes(file.filename) && (file.patchSnippet ? <DiffView patch={file.patchSnippet} wrap={Object.prototype.hasOwnProperty.call(fileWrap, file.filename) ? fileWrap[file.filename] ?? true : true} onWrapChange={(wrap) => setFileWrap((old) => ({ ...old, [file.filename]: wrap }))} /> : <Text style={[typography.code, { color: colors.textSecondary, padding: 12, borderTopWidth: 1, borderTopColor: colors.border }]}>Patch unavailable: the file may be binary, empty or too large for GitHub to include. Open this PR in GitHub.</Text>)}
+                    </View>
+                  ))}
+                  {!!fileCursor && (
+                    <View style={{ marginTop: 14, alignItems: "center" }}>
+                      <Button
+                        title={detail.files.length ? "Load more files" : "Load files"}
+                        loading={pageBusy.files}
+                        onPress={() => loadPage("files")}
+                        variant="secondary"
+                        style={{ minWidth: 160, alignSelf: "center" }}
+                      />
+                    </View>
+                  )}
+                </View>
+              )}
+              {capped.files && <Text style={{ color: colors.textSecondary, marginTop: 8 }}>File pagination limit reached. Open this PR in GitHub for remaining files.</Text>}
+              {!!pageError.files && <Text accessibilityRole="alert" style={[typography.footnote, { color: colors.riskHigh, padding: 16 }]}>{pageError.files}</Text>}
+            </View>
+                  </>
+                );
+                if (activeTab === "ask") return (
+                  <>
+                  {askReady ? (
+                  <>
+                    <AskPrCard key={`ask-${detail.headSha}`} owner={owner} repo={repo} number={Number(number)} files={detail.files.map((file) => file.filename)} />
+                    <ReviewPlanCard key={`plan-${detail.headSha}`} owner={owner} repo={repo} number={Number(number)} files={detail.files} prTitle={detail.title} />
+                  </>
+                ) : (
+                  <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.lg }]}>
+                    <Text style={[typography.headline, { color: colors.text }]} accessibilityRole="header">Ask about this PR</Text>
+                    <Text style={[typography.body, { color: colors.textSecondary, marginTop: 4 }]}>{detail.summary ? "Turn on AI Insights in Settings to ask questions and build a review plan." : "Questions and the review plan unlock once the AI summary is ready."}</Text>
+                    {detail.summary && <Button title="Open Settings" variant="secondary" onPress={() => router.push("/(tabs)/settings")} style={{ marginTop: 12, alignSelf: "flex-start" }} />}
                   </View>
-
+                )}
+                  <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.lg, marginTop: isDesktop ? spacing.sm : 16, flex: isDesktop ? 1 : undefined, minWidth: 0 }]}>
+              <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+                <Text accessibilityRole="header" style={[typography.headline, { color: colors.text }]}>Conversation</Text>
+                <InfoTip
+                  title="PR Conversation & Reviews"
+                  body="Groups general pull request comments, submitted reviews, and inline file review threads. Tap any group header to expand or collapse."
+                  size={15}
+                />
+              </View>
+              {discussionGroups(detail.comments).map((group) => <View key={group.id} style={{ paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: colors.border }}><TouchableOpacity accessibilityRole="button" accessibilityLabel={group.kind === "conversation" ? "Toggle PR conversation" : group.kind === "review-summary" ? `Toggle submitted review by ${group.comments[0]?.author ?? "reviewer"}` : `Toggle review discussion for ${group.path ?? "file unavailable"}${group.line ? ` line ${group.line}` : ""}`} accessibilityState={{ expanded: !collapsedThreads.includes(group.id) }} aria-expanded={!collapsedThreads.includes(group.id)} onPress={() => setCollapsedThreads((old) => old.includes(group.id) ? old.filter((id) => id !== group.id) : [...old, group.id])} style={{ minHeight: 44, justifyContent: "center" }}><Text style={[typography.subhead, { color: colors.text }]}>{group.kind === "conversation" ? "PR conversation" : group.kind === "review-summary" ? `Review: ${(group.reviewState ?? "submitted").toLowerCase().replaceAll("_", " ")}` : `Review discussion · ${group.path ?? "file unavailable"}${group.line ? `:${group.line}` : ""}${group.outdated ? " (outdated)" : ""}`}</Text></TouchableOpacity>{!collapsedThreads.includes(group.id) && group.comments.map((comment) => <View key={comment.id} style={{ paddingVertical: 8 }}><Text style={[typography.footnote, { color: colors.textSecondary }]}>@{comment.author} · {relativeTime(comment.createdAt)}</Text><Text selectable style={[typography.body, { color: colors.text, marginTop: 4 }]}>{comment.body || "No review message."}</Text></View>)}</View>)}
+              {commentCursor ? (
+                <View style={{ marginTop: 12, alignItems: "center" }}>
+                  <Button
+                    title="Load comments"
+                    loading={pageBusy.comments}
+                    onPress={() => loadPage("comments")}
+                    variant="ghost"
+                    style={{ minWidth: 160, alignSelf: "center" }}
+                  />
+                </View>
+              ) : detail.comments.length === 0 ? (
+                <Text style={[typography.footnote, { color: colors.textSecondary, marginTop: 8 }]}>No comments.</Text>
+              ) : null}
+              {capped.comments && <Text style={{ color: colors.textSecondary, marginTop: 8 }}>Discussion pagination limit reached. Open this PR in GitHub for the full history.</Text>}
+              {!!pageError.comments && <Text accessibilityRole="alert" style={[typography.footnote, { color: colors.riskHigh, paddingTop: 12 }]}>{pageError.comments}</Text>}
+            </View>
+                  </>
+                );
+                return (
+                  <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.brandMuted, borderRadius: 16, gap: 8 }]}>
+                    <Text style={[typography.headline, { color: colors.text }]} accessibilityRole="header">Agents</Text>
                   <TouchableOpacity
                     accessibilityRole="button"
                     accessibilityLabel="Configure an agent workflow for this pull request"
@@ -287,360 +550,66 @@ function PrWorkspace({owner,repo,number}:{owner:string;repo:string;number:string
                       </TouchableOpacity>
                     ))}
                   </View>
-                </View>
-
-                {/* Live AI & GitHub Access Status Bar + Compact Blast Radius & Privacy */}
-                <View style={{ gap: 8, paddingTop: 6, borderTopWidth: 1, borderTopColor: colors.border }}>
-                  <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 6 }}>
-                    <View
-                      style={{
-                        flexDirection: "row",
-                        alignItems: "center",
-                        gap: 5,
-                        paddingHorizontal: 8,
-                        paddingVertical: 3,
-                        borderRadius: 999,
-                        backgroundColor: colors.statusGoodBg,
-                        borderWidth: 1,
-                        borderColor: colors.statusGood,
-                      }}
-                    >
-                      <Icon name="checkmark-circle" size={12} color={colors.statusGood} />
-                      <Text style={[typography.caption, { color: colors.statusGood, fontSize: 10, fontWeight: "700" }]}>
-                        GitHub Connected
-                      </Text>
-                    </View>
-                    <TouchableOpacity
-                      accessibilityRole="button"
-                      accessibilityLabel="Manage AI processing consent"
-                      onPress={() => router.push("/(tabs)/settings")}
-                      style={{
-                        flexDirection: "row",
-                        alignItems: "center",
-                        gap: 5,
-                        paddingHorizontal: 8,
-                        paddingVertical: 3,
-                        borderRadius: 999,
-                        backgroundColor: aiConsentGranted && aiSummaries ? colors.statusGoodBg : colors.statusWarningBg,
-                        borderWidth: 1,
-                        borderColor: aiConsentGranted && aiSummaries ? colors.statusGood : colors.statusWarning,
-                      }}
-                    >
-                      <Icon
-                        name={aiConsentGranted && aiSummaries ? "sparkles" : "warning-outline"}
-                        size={12}
-                        color={aiConsentGranted && aiSummaries ? colors.statusGood : colors.statusWarning}
-                      />
-                      <Text
-                        style={[
-                          typography.caption,
-                          {
-                            color: aiConsentGranted && aiSummaries ? colors.statusGood : colors.statusWarning,
-                            fontSize: 10,
-                            fontWeight: "700",
-                          },
-                        ]}
-                      >
-                        {aiConsentGranted && aiSummaries ? "AI Insights Active" : "Enable AI Insights →"}
-                      </Text>
-                    </TouchableOpacity>
-                  </View>
-
-                  {isDesktop && detail.files && detail.files.length > 0 && (
-                    <BlastRadiusChips files={detail.files} />
-                  )}
-
-                  <PrivacyStrip onOpenSettings={()=>router.push("/(tabs)/settings")}/>
-                </View>
-              </View>
-            </View>
-            <PrSecretBanner detail={detail}/>
-            {/* 5-Second Executive Verdict & Agent Provenance Hero */}
-            {(() => {
-              const provenance = detectAgentProvenance({
-                author: detail.author,
-                headBranch: detail.headBranch,
-                title: detail.title,
-              });
-              const verdict = getExecutiveVerdict({
-                risk: detail.risk,
-                headSha: detail.headSha,
-                files: guardrailFiles,
-                checks: detail.checks, checkCursor,
-                secretWarning: detail.secretWarning,
-                changedFilesCount: detail.changedFilesCount,
-              });
-              const hasVisualAssets = (detail.files ?? []).some((f) =>
-                /\.(png|jpe?g|webp|svg|gif)$/i.test(f.filename)
-              );
-              const riskiest = detail.files ? riskiestFile(detail.files)?.filename : null;
-
-              return (
-                <ExecutiveVerdictCard
-                  verdict={verdict}
-                  files={guardrailFiles} totalFiles={detail.changedFilesCount}
-                  provenance={provenance}
-                  hasVisualAssets={hasVisualAssets}
-                  onOpenVisualAudit={() => router.push("/highlight")}
-                  riskiestFile={riskiest}
-                  onJumpToFile={(file) => jumpToFile(file)}
-                />
-              );
-            })()}
-
-            {(() => {
-              const hasAiInsights = Boolean(detail.summary || detail.risk || detail.secretWarning || detail.aiNotice);
-
-              const renderChecksCard = () => <QaEvidenceCard key={detail.headSha??"unknown"} repository={`${owner}/${repo}`} number={Number(number)} headSha={detail.headSha} checks={detail.checks} sample={isDemo} runnable={detail.status === "open" || detail.status === "draft"} cursor={checkCursor} busy={pageBusy.checks} error={pageError.checks} capped={capped.checks} onLoadMore={() => loadPage("checks")} onOpen={url => void openLink(url)}/>;
-
-              if (!hasAiInsights) {
-                const hasBlast = Boolean(!isDesktop && detail.files && detail.files.length > 0);
-                const hasChecks = true;
-                if (!hasBlast && !hasChecks) return null;
-
-                return (
-                  <View style={{ marginTop: spacing.xs, gap: 10 }}>
-                    {hasBlast && <BlastRadiusChips files={detail.files!} />}
-                    {hasChecks && renderChecksCard()}
+                    <Text style={[typography.caption, { color: colors.textSecondary, marginTop: 4 }]} accessibilityRole="header">Permissions, privacy &amp; agent controls</Text>
+                    <PrivacyStrip onOpenSettings={()=>router.push("/(tabs)/settings")}/>
                   </View>
                 );
-              }
+              })()}
+            </View>
 
-              return (
-                <View style={isDesktop ? styles.analysisGrid : undefined}>
-                  <View style={isDesktop ? { flex: 1.45, minWidth: 0 } : undefined}>
-                    {/* Blast Radius Analysis (Impact Domains on Mobile; on Desktop rendered in Top-Right Control Card) */}
-                    {!isDesktop && detail.files && detail.files.length > 0 && (
-                      <BlastRadiusChips files={detail.files} />
-                    )}
 
-                    {/* AI Summary Card (US-09) */}
-                    {detail.summary && (
-                      <View style={{ marginTop: spacing.sm }}>
-                        <AIBlock title="AI Summary" coverage={detail.summary.coverage} model={detail.summary.model}>
-                          {/* Executive Impact Callout */}
-                          {!!detail.summary.whyItMatters && (
-                            <View
-                              style={{
-                                backgroundColor: colors.brandSubtle,
-                                borderLeftWidth: 3,
-                                borderLeftColor: colors.brandLight,
-                                borderRadius: radius.md,
-                                padding: 12,
-                                marginBottom: 4,
-                              }}
-                            >
-                              <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 4 }}>
-                                <Icon name="shield-checkmark-outline" size={14} color={colors.brandLight} />
-                                <Text style={[typography.caption, { color: colors.brandLight, fontWeight: "700", letterSpacing: 0.5 }]}>
-                                  EXECUTIVE IMPACT
-                                </Text>
-                              </View>
-                              <Text style={[typography.callout, { color: colors.text, lineHeight: 20 }]}>
-                                {detail.summary.whyItMatters.replace(/^[\s•\-*]+/, "").trim()}
-                              </Text>
-                            </View>
-                          )}
-
-                          {!!detail.summary.whatChanged && (
-                            <SummarySection title="What changed" icon="swap-horizontal-outline">
-                              <ExecutiveSummaryText text={detail.summary.whatChanged} />
-                            </SummarySection>
-                          )}
-
-                          {detail.summary.suggestedFocus.length > 0 && (
-                            <SummarySection title="Suggested focus" icon="scan-outline">
-                              <View style={{ gap: 8 }}>
-                                {detail.summary.suggestedFocus.slice(0, 3).map((focus, index) => {
-                                  const cleanFocus = focus.replace(/^[\s•\-*]+/, "").trim();
-                                  return (
-                                    <View
-                                      key={index}
-                                      style={{
-                                        flexDirection: "row",
-                                        alignItems: "flex-start",
-                                        gap: 10,
-                                        paddingVertical: 10,
-                                        paddingHorizontal: 12,
-                                        backgroundColor: colors.surfaceElevated,
-                                        borderRadius: radius.md,
-                                        borderWidth: 1,
-                                        borderColor: colors.border,
-                                      }}
-                                    >
-                                      <View
-                                        style={{
-                                          width: 20,
-                                          height: 20,
-                                          borderRadius: 10,
-                                          backgroundColor: colors.brandSubtle,
-                                          alignItems: "center",
-                                          justifyContent: "center",
-                                          marginTop: 1,
-                                        }}
-                                      >
-                                        <Icon name="search-outline" size={12} color={colors.brandLight} />
-                                      </View>
-                                      <Text style={[typography.callout, { color: colors.text, flex: 1, lineHeight: 20 }]}>
-                                        {cleanFocus}
-                                      </Text>
-                                    </View>
-                                  );
-                                })}
-                              </View>
-                            </SummarySection>
-                          )}
-                        </AIBlock>
-                      </View>
-                    )}
-
-                    {/* Reviewer co-pilot: read-only, built on request */}
-                    {detail.summary && aiConsentGranted && aiSummaries && (
-                      <>
-                        <ReviewPlanCard
-                          key={`plan-${detail.headSha}`}
-                          owner={owner}
-                          repo={repo}
-                          number={Number(number)}
-                          files={detail.files}
-                          prTitle={detail.title}
-                        />
-                        <AskPrCard key={`ask-${detail.headSha}`} owner={owner} repo={repo} number={Number(number)} files={detail.files.map((file) => file.filename)} />
-                      </>
-                    )}
-
-                    {/* AI is on and the summary is still being written */}
-                    {aiConsentGranted && aiSummaries && !detail.summary && !detail.aiNotice && (
-                      <View style={{ marginTop: spacing.sm }}><AIBlockSkeleton /></View>
-                    )}
-
-                    {/* Why the AI parts are missing: not turned on, turned off, over the limit or unavailable */}
-                    {detail.aiNotice && (
-                      <View style={{ marginTop: spacing.sm }}>
-                        {detail.aiNotice.code === "consent_required" && !detail.summary ? (
-                          <AIBlock title="AI Summary">
-                            <Text style={[typography.body, { color: colors.text }]}>{detail.aiNotice.message}</Text>
-                            <Button title="Open Settings" variant="secondary" onPress={() => router.push("/(tabs)/settings")} style={{ marginTop: 12, alignSelf: "flex-start" }} />
-                          </AIBlock>
-                        ) : (
-                          <View style={[styles.card, { backgroundColor: colors.surfaceElevated, borderColor: colors.border, borderRadius: radius.lg }]}>
-                            <Text style={[typography.headline, { color: colors.text }]} accessibilityRole="header">
-                              AI summary unavailable
-                            </Text>
-                            <Text style={[typography.body, { color: colors.textSecondary, marginTop: 4 }]} accessibilityLiveRegion="polite">
-                              {detail.aiNotice.message}
-                            </Text>
-                            {aiNoticeAction(detail.aiNotice.code) === "retry" && <Button title="Try again" variant="secondary" loading={aiRetrying} onPress={retryAi} style={{ marginTop: 12, alignSelf: "flex-start" }} accessibilityLabel="Try the AI summary again" />}
-                            {aiNoticeAction(detail.aiNotice.code) === "settings" && <Button title="Open Settings" variant="secondary" onPress={() => router.push("/(tabs)/settings")} style={{ marginTop: 12, alignSelf: "flex-start" }} />}
-                            {limitReached && canUpgrade && (Platform.OS === "web" || isExternalBillingLinkAllowed(Platform.OS)) && <Button title="Upgrade to Pro" onPress={openUpgrade} style={{ marginTop: 12, alignSelf: "flex-start" }} accessibilityLabel="Upgrade to Pro for more AI actions" />}
-                          </View>
-                        )}
-                      </View>
-                    )}
+            </>);
+            // Desktop: one main pane (tabs plus the active tab) and a narrow rail with only the verdict and quick actions. No independent columns of cards.
+            if (isDesktop) return (
+              <ScrollView keyboardShouldPersistTaps="handled" testID="pr-workspace-scroll" ref={scroll} onScroll={event=>{scrollOffset.current=event.nativeEvent.contentOffset.y;}} scrollEventThrottle={16} contentContainerStyle={{ padding: 24, paddingBottom: 24 }}>
+                <View style={{ flexDirection: "row", gap: 20, alignItems: "flex-start" }}>
+                  <View style={{ flex: 1, minWidth: 0, gap: 8 }}>
+                    {headerEl}
+                    {tabsEl}
+                    {contentEl}
                   </View>
-
-                  <View style={isDesktop ? { flex: 1, minWidth: 0 } : undefined}>
-                    <PrRiskPanel detail={detail} assessmentOpen={assessmentOpen} setAssessmentOpen={setAssessmentOpen} jumpToFile={jumpToFile}/>
-                    {renderChecksCard()}
+                  <View style={{ width: 320, gap: 10 }}>
+                    {verdictEl}
+              <View style={{ gap: 8, padding: 12, borderRadius: 14, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface }}>
+                <Text style={[typography.caption, { color: colors.textMuted, fontWeight: "700", letterSpacing: 0.6 }]}>QUICK ACTIONS</Text>
+                <Button title="Add note" variant="secondary" onPress={() => { setShowNoteInput(true); setNoteFocus((n) => n + 1); }} />
+                <Button title="Open in GitHub" variant="secondary" onPress={openInGitHub} />
+                <Button title="Configure workflow" variant="secondary" onPress={() => router.push({ pathname: "/workflows", params: { target: detail.htmlUrl, mode: "review", template: "review" } })} />
+              </View>
                   </View>
                 </View>
-              );
-            })()}
+              </ScrollView>
+            );
+            return (
+              <ScrollView stickyHeaderIndices={[2]} keyboardDismissMode={Platform.OS==="ios"?"interactive":"on-drag"} keyboardShouldPersistTaps="handled" testID="pr-workspace-scroll" ref={scroll} onScroll={event=>{scrollOffset.current=event.nativeEvent.contentOffset.y;}} scrollEventThrottle={16} contentContainerStyle={{ padding: spacing.base, paddingBottom: 24 }}>
+                <View>{headerEl}</View>
+                <View style={{ marginTop: 10 }}>{verdictEl}</View>
+                <View style={{ backgroundColor: colors.background }}>{tabsEl}</View>
+                <View>{contentEl}</View>
+              </ScrollView>
+            );
+          })()}
 
-            <PrVisualDiffSection detail={detail}/>
-            <View style={isDesktop ? styles.bottomBentoGrid : undefined}>
-            {/* Changed Files List */}
-            <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.lg, marginTop: spacing.sm, flex: isDesktop ? 1.45 : undefined, minWidth: 0 }]}>
-              <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-                <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-                  <Text style={[typography.headline, { color: colors.text }]} accessibilityRole="header">
-                    Files Changed ({detail.changedFilesCount})
-                  </Text>
-                  <InfoTip
-                    title="Files Changed"
-                    body="Tap any file row to expand or collapse its line-numbered diff hunk. Diff lines wrap by default on mobile and desktop."
-                    size={15}
-                  />
-                </View>
-                {detail.files.length > 0 && (
-                  <Text style={[typography.caption, { color: colors.textMuted }]}>
-                    +{detail.additions} / -{detail.deletions}
-                  </Text>
-                )}
+          <ExecutiveActionBar detail={{...detail,checkCursor,files:guardrailFiles}} listen={<AudioCommuteBar sentences={prExecutiveNarration({...detail,files:guardrailFiles})}/>} onOpenGitHub={openInGitHub} onAddNote={()=>{setShowNoteInput(true);setNoteFocus(n=>n+1);}}/>
+          <Modal visible={infoOpen} transparent animationType="slide" onRequestClose={()=>setInfoOpen(false)}>
+            <View style={{flex:1,justifyContent:"flex-end"}}>
+              <TouchableOpacity accessibilityRole="button" accessibilityLabel="Close information" activeOpacity={1} onPress={()=>setInfoOpen(false)} style={{flex:1,backgroundColor:"rgba(0,0,0,0.5)"}}/>
+              <View accessibilityViewIsModal style={{backgroundColor:colors.surface,borderTopLeftRadius:16,borderTopRightRadius:16,padding:16,maxHeight:"85%"}}>
+                <ScrollView contentContainerStyle={{gap:10}}>
+                  <Text accessibilityRole="header" style={[typography.headline,{color:colors.text}]}>About this page</Text>
+                  <Text style={[typography.footnote,{color:colors.textSecondary}]}>Live pull request status, merge readiness, branch lineage and diff size from GitHub. Use Refresh at the top to pull the latest commit and checks. MergeMate reads GitHub and never approves or merges.</Text>
+                  <View style={{flexDirection:"row",flexWrap:"wrap",gap:8}}>
+                    <View style={{flexDirection:"row",alignItems:"center",gap:5,paddingHorizontal:8,paddingVertical:3,borderRadius:999,backgroundColor:colors.statusGoodBg,borderWidth:1,borderColor:colors.statusGood}}><Icon name="checkmark-circle" size={12} color={colors.statusGood}/><Text style={[typography.caption,{color:colors.statusGood,fontWeight:"700"}]}>GitHub connected</Text></View>
+                    <TouchableOpacity accessibilityRole="button" accessibilityLabel="Manage AI processing consent" onPress={()=>{setInfoOpen(false);router.push("/(tabs)/settings");}} style={{minHeight:44,flexDirection:"row",alignItems:"center",gap:5,paddingHorizontal:8,borderRadius:999,backgroundColor:aiConsentGranted&&aiSummaries?colors.statusGoodBg:colors.statusWarningBg,borderWidth:1,borderColor:aiConsentGranted&&aiSummaries?colors.statusGood:colors.statusWarning}}><Icon name={aiConsentGranted&&aiSummaries?"sparkles":"warning-outline"} size={12} color={aiConsentGranted&&aiSummaries?colors.statusGood:colors.statusWarning}/><Text style={[typography.caption,{color:aiConsentGranted&&aiSummaries?colors.statusGood:colors.statusWarning,fontWeight:"700"}]}>{aiConsentGranted&&aiSummaries?"AI insights active":"Enable AI insights →"}</Text></TouchableOpacity>
+                  </View>
+                  {provenance?.isAgentAuthored&&<Text style={[typography.footnote,{color:colors.textSecondary}]}>{provenance.badgeLabel}</Text>}
+                  <AgentGuardrailAlert files={guardrailFiles} agentAuthored={!!provenance?.isAgentAuthored} total={detail.changedFilesCount}/>
+                  <MetaTelemetryModal compact telemetry={detail.risk?.telemetry??detail.summary?.telemetry} sample={isDemo}/>
+                  <Button title="Close" variant="secondary" onPress={()=>setInfoOpen(false)}/>
+                </ScrollView>
               </View>
-              {detail.files.length === 0 ? (
-                <View style={{ paddingVertical: 12, alignItems: "center", gap: 8 }}>
-                  <Text style={[typography.footnote, { color: colors.textMuted }]}>
-                    {pageBusy.files ? "Loading files..." : "No changed files loaded yet."}
-                  </Text>
-                  {!!fileCursor && (
-                    <Button
-                      title="Load files"
-                      loading={pageBusy.files}
-                      onPress={() => loadPage("files")}
-                      variant="secondary"
-                      style={{ minWidth: 140, alignSelf: "center", marginTop: 4 }}
-                    />
-                  )}
-                </View>
-              ) : (
-                <View style={{ marginTop: spacing.xs }}>
-                  {detail.files.map((file) => (
-                    <View testID={`workspace-file-${file.filename}`} ref={(node) => { fileRows.current[file.filename] = node; }} key={file.filename} style={{ marginTop: 10, backgroundColor: colors.surfaceElevated, borderRadius: 10, overflow: "hidden" }}>
-                      <TouchableOpacity accessibilityRole="button" accessibilityLabel={`Toggle diff for ${file.filename}`} accessibilityState={{ expanded: expandedFiles.includes(file.filename) }} aria-expanded={expandedFiles.includes(file.filename)} onPress={() => setExpandedFiles((prev) => prev.includes(file.filename) ? prev.filter((name) => name !== file.filename) : [...prev, file.filename])} style={{ flexDirection: "row", alignItems: "center", padding: 12, gap: 8, minHeight: 44 }}><Icon name={expandedFiles.includes(file.filename) ? "chevron-down" : "chevron-forward"} size={16} color={colors.textSecondary} /><Text style={[typography.code, { color: colors.text, flex: 1 }]}>{file.filename} · {file.status}</Text><Text style={[typography.code, { color: colors.riskLow, fontSize: 11 }]}>+{file.additions}</Text><Text style={[typography.code, { color: colors.riskHigh, fontSize: 11 }]}>-{file.deletions}</Text></TouchableOpacity>
-                      {!!file.previousPath && <Text style={{ color: colors.textSecondary, paddingHorizontal: 12 }}>Previously: {file.previousPath}</Text>}
-                      {expandedFiles.includes(file.filename) && file.patchState === "partial" && <Text accessibilityRole="alert" style={{ color: colors.textSecondary, padding: 12 }}>Partial patch: this is not the complete diff. Open this PR in GitHub for the full file.</Text>}
-                      {expandedFiles.includes(file.filename) && (file.patchSnippet ? <DiffView patch={file.patchSnippet} wrap={Object.prototype.hasOwnProperty.call(fileWrap, file.filename) ? fileWrap[file.filename] ?? true : true} onWrapChange={(wrap) => setFileWrap((old) => ({ ...old, [file.filename]: wrap }))} /> : <Text style={[typography.code, { color: colors.textSecondary, padding: 12, borderTopWidth: 1, borderTopColor: colors.border }]}>Patch unavailable: the file may be binary, empty or too large for GitHub to include. Open this PR in GitHub.</Text>)}
-                    </View>
-                  ))}
-                  {!!fileCursor && (
-                    <View style={{ marginTop: 14, alignItems: "center" }}>
-                      <Button
-                        title={detail.files.length ? "Load more files" : "Load files"}
-                        loading={pageBusy.files}
-                        onPress={() => loadPage("files")}
-                        variant="secondary"
-                        style={{ minWidth: 160, alignSelf: "center" }}
-                      />
-                    </View>
-                  )}
-                </View>
-              )}
-              {capped.files && <Text style={{ color: colors.textSecondary, marginTop: 8 }}>File pagination limit reached. Open this PR in GitHub for remaining files.</Text>}
-              {!!pageError.files && <Text accessibilityRole="alert" style={[typography.footnote, { color: colors.riskHigh, padding: 16 }]}>{pageError.files}</Text>}
             </View>
-
-            <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.lg, marginTop: isDesktop ? spacing.sm : 16, flex: isDesktop ? 1 : undefined, minWidth: 0 }]}>
-              <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-                <Text accessibilityRole="header" style={[typography.headline, { color: colors.text }]}>Conversation</Text>
-                <InfoTip
-                  title="PR Conversation & Reviews"
-                  body="Groups general pull request comments, submitted reviews, and inline file review threads. Tap any group header to expand or collapse."
-                  size={15}
-                />
-              </View>
-              {discussionGroups(detail.comments).map((group) => <View key={group.id} style={{ paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: colors.border }}><TouchableOpacity accessibilityRole="button" accessibilityLabel={group.kind === "conversation" ? "Toggle PR conversation" : group.kind === "review-summary" ? `Toggle submitted review by ${group.comments[0]?.author ?? "reviewer"}` : `Toggle review discussion for ${group.path ?? "file unavailable"}${group.line ? ` line ${group.line}` : ""}`} accessibilityState={{ expanded: !collapsedThreads.includes(group.id) }} aria-expanded={!collapsedThreads.includes(group.id)} onPress={() => setCollapsedThreads((old) => old.includes(group.id) ? old.filter((id) => id !== group.id) : [...old, group.id])} style={{ minHeight: 44, justifyContent: "center" }}><Text style={[typography.subhead, { color: colors.text }]}>{group.kind === "conversation" ? "PR conversation" : group.kind === "review-summary" ? `Review: ${(group.reviewState ?? "submitted").toLowerCase().replaceAll("_", " ")}` : `Review discussion · ${group.path ?? "file unavailable"}${group.line ? `:${group.line}` : ""}${group.outdated ? " (outdated)" : ""}`}</Text></TouchableOpacity>{!collapsedThreads.includes(group.id) && group.comments.map((comment) => <View key={comment.id} style={{ paddingVertical: 8 }}><Text style={[typography.footnote, { color: colors.textSecondary }]}>@{comment.author} · {relativeTime(comment.createdAt)}</Text><Text selectable style={[typography.body, { color: colors.text, marginTop: 4 }]}>{comment.body || "No review message."}</Text></View>)}</View>)}
-              {commentCursor ? (
-                <View style={{ marginTop: 12, alignItems: "center" }}>
-                  <Button
-                    title="Load comments"
-                    loading={pageBusy.comments}
-                    onPress={() => loadPage("comments")}
-                    variant="ghost"
-                    style={{ minWidth: 160, alignSelf: "center" }}
-                  />
-                </View>
-              ) : detail.comments.length === 0 ? (
-                <Text style={[typography.footnote, { color: colors.textSecondary, marginTop: 8 }]}>No comments.</Text>
-              ) : null}
-              {capped.comments && <Text style={{ color: colors.textSecondary, marginTop: 8 }}>Discussion pagination limit reached. Open this PR in GitHub for the full history.</Text>}
-              {!!pageError.comments && <Text accessibilityRole="alert" style={[typography.footnote, { color: colors.riskHigh, paddingTop: 12 }]}>{pageError.comments}</Text>}
-            </View>
-            </View>
-
-          </ScrollView>
-
-          <ExecutiveActionBar detail={{...detail,checkCursor,files:guardrailFiles}} onOpenGitHub={openInGitHub} onAddNote={()=>{setShowNoteInput(true);setNoteFocus(n=>n+1);}}/>
+          </Modal>
           <Modal visible={showNoteInput} transparent animationType="slide" onRequestClose={()=>setShowNoteInput(false)}>
             <KeyboardAvoidingView behavior={Platform.OS==="ios"?"padding":undefined} style={{flex:1,justifyContent:"flex-end"}}>
               <TouchableOpacity accessibilityRole="button" accessibilityLabel="Close notes" activeOpacity={1} onPress={()=>setShowNoteInput(false)} style={{flex:1,backgroundColor:"rgba(0,0,0,0.5)"}}/>
