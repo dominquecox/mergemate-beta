@@ -21,6 +21,7 @@ import { TopBarActionsProvider } from "../src/context/TopBarActionsContext";
 import { SIDEBAR_WIDTH, resolveShell, requiresSession } from "../src/layout/breakpoints";
 import { resolveHardwareBackAction, useAndroidBackHandler } from "../src/platform/android";
 import { registerServiceWorker } from "../src/platform/serviceWorker";
+import { installChunkReloadGuard } from "../src/platform/chunkReload";
 
 function AppContent() {
   const reducedMotion=useReducedMotion();
@@ -173,6 +174,8 @@ function AppContent() {
 }
 
 export default function RootLayout() {
+  // A tab open across a deploy reloads once instead of rendering blank when old chunks are gone.
+  useEffect(() => installChunkReloadGuard(), []);
   return (
     <AppFonts>
     <SafeAreaProvider>
