@@ -78,9 +78,14 @@ describe("MM-035 UI Polish & Accessibility", () => {
     for (const file of screens) {
       const route = fs.readFileSync(file, "utf8");
       // Public reader routes delegate their real state branches to a shared component.
+      // Capture routes delegate to the screenshot screen or the shared capture-note screen.
       const src = route.includes('components/PublicPostReader')
         ? route + fs.readFileSync(path.resolve(__dirname, '../src/components/PublicPostReader.tsx'), 'utf8')
-        : route;
+        : route.includes("from '../highlight'")
+          ? route + fs.readFileSync(path.resolve(__dirname, '../app/highlight.tsx'), 'utf8')
+          : route.includes('brain/CaptureNoteScreen')
+            ? route + fs.readFileSync(path.resolve(__dirname, '../src/brain/CaptureNoteScreen.tsx'), 'utf8')
+            : route;
       expect(src, `${path.basename(file)} missing LoadingState`).toContain("LoadingState");
       expect(src, `${path.basename(file)} missing EmptyState`).toContain("EmptyState");
       expect(src, `${path.basename(file)} missing ErrorState`).toContain("ErrorState");

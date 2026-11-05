@@ -9,6 +9,7 @@ import { useReducedMotion } from "../hooks/useReducedMotion";
 import { useTopBarActions } from "../context/TopBarActionsContext";
 import { Text } from "./Text";
 import { Icon, type IconName } from "./Icon";
+import { CaptureSheet } from "./CaptureSheet";
 import { isDestinationActive, menuDestinations } from "../navigation/items";
 
 const MENU_WIDTH = 288;
@@ -21,6 +22,7 @@ export function TopBar() {
   const flags = useFeatureFlags();
   const { actions } = useTopBarActions();
   const [menuOpen, setMenuOpen] = useState(false);
+  const [captureOpen, setCaptureOpen] = useState(false);
   const menuButton = useRef<React.ElementRef<typeof Pressable>>(null);
 
   const closeMenu = () => {
@@ -87,8 +89,9 @@ export function TopBar() {
         {actions}
         {iconButton("file-tray-outline", "Inbox", () => router.push("/(tabs)/inbox"))}
         {iconButton("notifications-outline", "Alerts", () => router.push("/(tabs)/notifications"), unreadCount)}
-        {flags.highlight && iconButton("camera-outline", "Highlight screenshot", () => router.push("/highlight"))}
+        {iconButton("add-circle-outline", "Capture", () => setCaptureOpen(true))}
       </View>
+      <CaptureSheet open={captureOpen} onClose={() => setCaptureOpen(false)} />
       <SideMenu open={menuOpen} onClose={closeMenu} unreadCount={unreadCount} brain={!!flags.brain} />
     </View>
   );

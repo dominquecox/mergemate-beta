@@ -2,8 +2,9 @@ import {MetaTelemetryModal} from '../src/components/MetaTelemetryModal';
 import {PrAssetInspection} from "../src/components/PrAssetInspection";
 import {useLocalSearchParams} from "expo-router";
 import { DemoHighlightGallery } from "../src/components/DemoHighlightGallery";
-import {PrivateNotes} from "../src/components/PrivateNotes";
 import {AddToBoard,cardTitle} from "../src/brain/AddToBoard";
+import {BoardPicker} from "../src/brain/BoardPicker";
+import type {Project} from "@mergemate/contracts";
 import {useFocusEffect,useRouter} from "expo-router";
 import {useConsent} from "../src/context/ConsentContext";
 import {AI_CONSENT_VERSION} from "../src/config/consent";
@@ -33,10 +34,10 @@ const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 
 export default function HighlightScreen() {
   const context=useLocalSearchParams<{owner?:string;repo?:string;number?:string;asset?:string;headSha?:string;project?:string}>();
-  // Two clear actions: a screenshot for the AI, or a private voice note. The screen always opens at the top.
-  const [mode,setMode]=useState<"screenshot"|"voice">("screenshot");
+  // Screenshot insight only (voice and text notes are their own Capture screens). Opens at the top.
   const scrollRef=useRef<React.ComponentRef<typeof ScrollView>>(null);
-  useEffect(()=>{scrollRef.current?.scrollTo({y:0,animated:false});},[mode]);
+  useEffect(()=>{scrollRef.current?.scrollTo({y:0,animated:false});},[]);
+  const [board,setBoard]=useState<Project|null>(null);
   const { colors, typography, spacing, radius } = useTheme();
 
   const flags=useFeatureFlags();const {aiConsentGranted}=useConsent(),{isDemo,user}=useAuth();const router=useRouter();
@@ -104,24 +105,11 @@ export default function HighlightScreen() {
 
   return (
     <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={[styles.root, { backgroundColor: colors.background }]}>
-      <Header title="Screenshot Insight" showBack />
+      <Header title="Screenshot insight" showBack />
       <ScrollView ref={scrollRef} contentContainerStyle={{ padding: spacing.base, paddingBottom: 60 }}>
-        <View accessibilityRole="tablist" style={{ flexDirection: "row", gap: 8, marginBottom: spacing.md }}>
-          {(["screenshot", "voice"] as const).map((value) => (
-            <TouchableOpacity key={value} onPress={() => setMode(value)} accessibilityRole="tab" accessibilityState={{ selected: mode === value }} accessibilityLabel={value === "screenshot" ? "Screenshot" : "Voice note"}
-              style={{ flex: 1, minHeight: 48, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, borderRadius: radius.md, borderWidth: 1, borderColor: mode === value ? colors.brandLight : colors.border, backgroundColor: mode === value ? colors.brandSubtle : colors.surface }}>
-              <Icon name={value === "screenshot" ? "image-outline" : "mic-outline"} size={18} color={mode === value ? colors.brandLight : colors.textSecondary} />
-              <Text style={[typography.subhead, { color: mode === value ? colors.text : colors.textSecondary, fontWeight: "600" }]}>{value === "screenshot" ? "Screenshot" : "Voice note"}</Text>
-            </TouchableOpacity>
-          ))}
+        <View style={{ marginBottom: spacing.md }}>
+          <BoardPicker defaultProjectId={typeof context.project==="string"?context.project:undefined} value={board} onChange={setBoard}/>
         </View>
-
-        {mode === "voice" ? (
-          <Section title="Voice note" icon="mic-outline">
-            <Text style={[typography.body, { color: colors.textSecondary, marginBottom: spacing.md }]}>Saved to your private notes. Not attached to a screenshot or posted to GitHub.</Text>
-            <PrivateNotes context={{kind:"highlight"}} noteActions={(note)=><AddToBoard defaultProjectId={typeof context.project==="string"?context.project:undefined} draft={()=>({title:cardTitle(note.text,"Voice note"),details:note.text})}/>}/>
-          </Section>
-        ) : <>
         <Section title="Meta AI Vision Analysis" icon="image-outline">
           <Text style={[typography.body, { color: colors.textSecondary }]}>
             Capture or upload a PR screenshot or UI diff. Get an explanation and suggested areas to inspect. Boxes are approximate AI suggestions, not precise measurements.
@@ -250,7 +238,7 @@ export default function HighlightScreen() {
               </View>
               <View style={{ marginTop: spacing.md }}>
                 <AddToBoard
-                  defaultProjectId={typeof context.project==="string"?context.project:undefined}
+                  defaultProjectId={board?.id}
                   draft={()=>({
                     title: cardTitle(cleanInsight(result.insight), "Fix from screenshot"),
                     details: [note.trim(), cleanInsight(result.insight), result.regions.map((reg,index)=>`${index+1}. ${reg.label} (${reg.x},${reg.y},${reg.width},${reg.height})`).join("\n")].filter(Boolean).join("\n\n"),
@@ -260,7 +248,6 @@ export default function HighlightScreen() {
             </Card>
           </View>
         ) : null}
-        </>}
       </ScrollView>
     </KeyboardAvoidingView>
   );
