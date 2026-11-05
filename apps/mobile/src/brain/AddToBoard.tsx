@@ -13,7 +13,9 @@ export interface CardDraftText { title: string; details: string }
 
 export const TITLE_MAX = 160;
 export const cardTitle = (finding: string, fallback: string): string => {
-  const first = finding.split(/(?<=[.!?])\s|\n/)[0]?.trim() ?? '';
+  // No regex lookbehind: older Safari rejects it at parse time, which would stop the whole web bundle from loading.
+  const line = finding.split('\n')[0] ?? '';
+  const first = (/^(.*?[.!?])(?:\s|$)/.exec(line)?.[1] ?? line).trim();
   const text = first || fallback;
   return text.length > TITLE_MAX ? `${text.slice(0, TITLE_MAX - 1).trimEnd()}…` : text;
 };
