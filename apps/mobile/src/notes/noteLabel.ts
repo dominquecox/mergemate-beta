@@ -3,7 +3,7 @@ import type { NoteListContext } from '@mergemate/contracts';
 /** Plain-words label for where a note was written. Unknown kinds read as "Note". */
 export function noteContextLabel(context: NoteListContext): string {
   if (context.kind === 'pr') return `${context.repo}#${context.number}`;
-  if (context.kind === 'highlight') return 'Camera';
+  if (context.kind === 'highlight') return 'Camera (older)';
   if (context.kind === 'card') return 'Card';
   return 'Note';
 }

@@ -14,6 +14,7 @@ import { Header } from '../src/components/Header';
 import { Text } from '../src/components/Text';
 import { Button } from '../src/components/Button';
 import { EmptyState } from '../src/components/EmptyState';
+import { ErrorState } from '../src/components/ErrorState';
 import { LoadingState } from '../src/components/LoadingState';
 import { CopyDetailsButton } from '../src/components/CopyDetailsButton';
 
@@ -51,11 +52,11 @@ export default function NotesScreen() {
   const body = loading ? (
     <LoadingState title="Loading notes" message="Fetching your private notes." />
   ) : error && items.length === 0 ? (
-    <View style={{ padding: spacing.base, gap: 8 }} accessibilityRole="alert">
-      <Text style={[typography.subhead, { color: colors.riskHigh }]}>{error.message}</Text>
-      <Text style={[typography.footnote, { color: colors.textSecondary }]}>Check your connection and try again.</Text>
-      <Button title="Try again" onPress={() => void load(null)} />
-      <CopyDetailsButton report={{ ...(error.info ?? {}), message: error.message, step: 'Load notes', at: error.info?.at ?? new Date() }} />
+    <View>
+      <ErrorState title="Could not load your notes" message={`${error.message} Check your connection and press Retry.`} onRetry={() => void load(null)} retryLabel="Retry" />
+      <View style={{ paddingHorizontal: spacing.base }}>
+        <CopyDetailsButton report={{ ...(error.info ?? {}), message: error.message, step: 'Load notes', at: error.info?.at ?? new Date() }} />
+      </View>
     </View>
   ) : items.length === 0 ? (
     <EmptyState icon="create-outline" title="No notes yet" message="Notes you add on a pull request or a screenshot show up here." />
