@@ -2,7 +2,7 @@
 
 **One board for your coding agents, and a gatekeeper for what they ship.** MergeMate beta is a web app for desktop and mobile browsers. Every repository gets a board of tasks; Meta's models read your pull requests, review your screenshots and write patches; and every change an agent makes ends as a draft pull request that a person approves and merges.
 
-**Live beta:** [app.mergemate.dev](https://app.mergemate.dev) · Built by [Ploonu LLC](https://mergemate.dev) for the Meta Global AI Developer Hackathon.
+**Live beta:** [mergemate.dev](https://mergemate.dev) · Built by [Ploonu LLC](https://mergemate.dev) for the Meta Global AI Developer Hackathon.
 
 ## Built on Meta's models
 

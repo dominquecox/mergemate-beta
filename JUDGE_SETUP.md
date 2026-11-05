@@ -11,7 +11,7 @@ NODE_PATH="$PWD/apps/mobile/node_modules" npm run web -w @mergemate/mobile
 
 The `NODE_PATH` setting lets the Expo CLI resolve the workspace-local router after a clean npm install; it does not disable TypeScript checking or change the app. Keep `EXPO_PUBLIC_API_BASE_URL` unset and do not copy `.env.example` for this sample-only path. Open the localhost address printed by Expo (normally http://localhost:8081). Development mode uses built-in, labeled samples when no API base is set. An exported production build deliberately refuses a missing API URL.
 
-Open the sample Inbox, then PR7 (low risk), PR412 (auth and database risk) and PR9 (visual sample). Try the Triage deck with keys 1, 2, 3 and Z. Samples make no GitHub or model calls. The live beta is at [app.mergemate.dev](https://app.mergemate.dev).
+Open the sample Inbox, then PR7 (low risk), PR412 (auth and database risk) and PR9 (visual sample). Try the Triage deck with keys 1, 2, 3 and Z. Samples make no GitHub or model calls. The live beta is at [mergemate.dev](https://mergemate.dev).
 
 ## Checks
 
