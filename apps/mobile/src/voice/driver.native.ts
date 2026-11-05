@@ -1,7 +1,7 @@
 import {AudioModule,requestRecordingPermissionsAsync,setAudioModeAsync,createAudioPlayer} from 'expo-audio';
 import {File,Directory,Paths} from 'expo-file-system';
 import * as Crypto from 'expo-crypto';
-import {PcmRecording,type VoiceCapture,type VoicePreview} from './pcm';
+import {PcmRecording,VOICE_RATE,type VoiceCapture,type VoicePreview,type VoiceStatus} from './pcm';
 let captureLease=Promise.resolve();
 let captureUnavailable=false;
 function clearAbandonedPreviewFiles(){for(const item of new Directory(Paths.cache).list())if(item instanceof File && /^voice-[0-9a-f-]+\.wav$/.test(item.name))item.delete();}
@@ -42,6 +42,17 @@ export async function createVoicePreview(bytes:Uint8Array):Promise<VoicePreview>
  try{
   file.create();file.write(bytes);
   const player=createAudioPlayer(file.uri);
-  return {async play(){await player.seekTo(0);player.play();},pause(){player.pause();},async dispose(){try{player.remove();}finally{if(file.exists)file.delete();}}};
+  const exact=Math.max(0,(bytes.length-44)/(VOICE_RATE*2));
+  const listeners=new Set<(status:VoiceStatus)=>void>();
+  const status=():VoiceStatus=>({position:player.currentTime||0,duration:player.duration>0?player.duration:exact,playing:player.playing});
+  const subscription=player.addListener('playbackStatusUpdate',()=>{const value=status();for(const listener of listeners)listener(value);});
+  return {
+   async play(){if(status().duration-status().position<0.05)await player.seekTo(0);player.play();},
+   pause(){player.pause();},
+   seek(seconds){void player.seekTo(Math.max(0,Math.min(seconds,status().duration)));},
+   status,
+   onStatus(listener){listeners.add(listener);return()=>{listeners.delete(listener);};},
+   async dispose(){listeners.clear();try{subscription.remove();player.remove();}finally{if(file.exists)file.delete();}},
+  };
  }catch(error){if(file.exists)file.delete();throw error;}
 }

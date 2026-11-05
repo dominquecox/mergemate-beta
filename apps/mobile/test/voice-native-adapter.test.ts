@@ -6,7 +6,7 @@ vi.mock('expo-audio',()=>({
   addListener(_event:string,listener:typeof fixture.listener){fixture.listener=listener;return {remove(){fixture.removed++;}};}
   async start(){} stop(){fixture.stopped++;} release(){fixture.released++;}
  }},
- createAudioPlayer:()=>({async seekTo(){},play(){fixture.played++;},pause(){},remove(){fixture.removed++;}}),
+ createAudioPlayer:()=>({currentTime:0,duration:0,playing:false,addListener:()=>({remove(){}}),async seekTo(){},play(){fixture.played++;},pause(){},remove(){fixture.removed++;}}),
 }));
 vi.mock('expo-crypto',()=>({randomUUID:()=> 'f417382c-f246-46d8-b648-b47c595e7788'}));
 vi.mock('expo-file-system',()=>({Paths:{cache:'cache/'},Directory:class{list(){return [];}},File:class{

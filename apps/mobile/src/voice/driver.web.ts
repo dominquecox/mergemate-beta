@@ -1,4 +1,4 @@
-import {PcmRecording,type VoiceCapture,type VoicePreview} from './pcm';
+import {PcmRecording,VOICE_RATE,type VoiceCapture,type VoicePreview,type VoiceStatus} from './pcm';
 /** Web Audio captures PCM directly; no compressed signature is passed off as validated audio. */
 export async function startVoiceCapture(onLimit:()=>void,onProgress?:(seconds:number)=>void,signal?:AbortSignal):Promise<VoiceCapture>{
  if(!navigator.mediaDevices?.getUserMedia || !globalThis.AudioContext)throw new Error('Recording is unavailable in this browser. Type a private note instead.');
@@ -20,6 +20,22 @@ export async function startVoiceCapture(onLimit:()=>void,onProgress?:(seconds:nu
  }catch(error){for(const track of stream.getTracks())track.stop();await context?.close().catch(()=>{});throw error;}
 }
 export async function createVoicePreview(bytes:Uint8Array):Promise<VoicePreview>{
- const url=URL.createObjectURL(new Blob([new Uint8Array(bytes)],{type:'audio/wav'}));const audio=new Audio(url);
- return {async play(){audio.currentTime=0;await audio.play();},pause(){audio.pause();},async dispose(){audio.pause();audio.removeAttribute('src');audio.load();URL.revokeObjectURL(url);}};
+ const url=URL.createObjectURL(new Blob([new Uint8Array(bytes)],{type:'audio/wav'}));const audio=new Audio();
+ audio.preload='auto';audio.src=url;
+ // The WAV length is known exactly; it shows before metadata loads and covers browsers that report Infinity.
+ const exact=Math.max(0,(bytes.length-44)/(VOICE_RATE*2));
+ const listeners=new Set<(status:VoiceStatus)=>void>();let error:string|undefined;
+ const status=():VoiceStatus=>({position:Number.isFinite(audio.currentTime)?audio.currentTime:0,duration:Number.isFinite(audio.duration)&&audio.duration>0?audio.duration:exact,playing:!audio.paused&&!audio.ended,...(error?{error}:{})});
+ const emit=()=>{const value=status();for(const listener of listeners)listener(value);};
+ const onError=()=>{error='This recording could not be played in this browser. You can still transcribe it or record again.';emit();};
+ const events=['loadedmetadata','durationchange','timeupdate','play','pause','ended'] as const;
+ for(const name of events)audio.addEventListener(name,emit);audio.addEventListener('error',onError);
+ return {
+  async play(){if(audio.ended)audio.currentTime=0;await audio.play();},
+  pause(){audio.pause();},
+  seek(seconds){audio.currentTime=Math.max(0,Math.min(seconds,status().duration));emit();},
+  status,
+  onStatus(listener){listeners.add(listener);return()=>{listeners.delete(listener);};},
+  async dispose(){listeners.clear();for(const name of events)audio.removeEventListener(name,emit);audio.removeEventListener('error',onError);audio.pause();audio.removeAttribute('src');audio.load();URL.revokeObjectURL(url);},
+ };
 }

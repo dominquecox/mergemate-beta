@@ -12,10 +12,11 @@ describe('voice PCM normalization',()=>{
   recording.clear();expect(recording.seconds).toBe(0);expect(()=>recording.wav()).toThrow();
  });
  it('stops exactly at two minutes regardless of chunk overshoot, below the upload cap',()=>{
-  const recording=new PcmRecording();for(let i=0;i<119;i++)expect(recording.add(new Float32Array(VOICE_RATE),VOICE_RATE,1)).toBe(false);
-  expect(recording.add(new Float32Array(VOICE_RATE*3),VOICE_RATE,1)).toBe(true);expect(recording.seconds).toBe(120);expect(recording.wav().length).toBe(3840044);recording.clear();
+  // A quiet but real signal: silence is now refused as an empty recording (tested below).
+  const recording=new PcmRecording();for(let i=0;i<119;i++)expect(recording.add(new Float32Array(VOICE_RATE).fill(0.1),VOICE_RATE,1)).toBe(false);
+  expect(recording.add(new Float32Array(VOICE_RATE*3).fill(0.1),VOICE_RATE,1)).toBe(true);expect(recording.seconds).toBe(120);expect(recording.wav().length).toBe(3840044);recording.clear();
  });
- it('refuses unusable hardware metadata and empty recordings',()=>{const recording=new PcmRecording();expect(()=>recording.add(new Float32Array(100),0,1)).toThrow();expect(()=>recording.add(new Float32Array(100),48000,0)).toThrow();expect(()=>recording.wav()).toThrow();});
+ it('refuses unusable hardware metadata and empty recordings',()=>{const recording=new PcmRecording();expect(()=>recording.add(new Float32Array(100),0,1)).toThrow();expect(()=>recording.add(new Float32Array(100),48000,0)).toThrow();expect(()=>recording.wav()).toThrow();const silent=new PcmRecording();silent.add(new Float32Array(VOICE_RATE),VOICE_RATE,1);expect(()=>silent.wav()).toThrow('The recording is empty');});
 });
 describe.each(['web','native'] as const)('voice and private notes over %s transport',platform=>{
  it('uploads actual WAV bytes with credentials and no multipart native Blob assumption',async()=>{
