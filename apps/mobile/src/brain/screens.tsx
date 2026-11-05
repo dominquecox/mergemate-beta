@@ -184,6 +184,14 @@ export function CardDetailModal({
   agent?: Omit<AgentPanelProps, 'card' | 'lock' | 'onLeave'>;
 }) {
   const styles = useBrainStyles();
+  const { colors } = useTheme();
+  const [moreOpen, setMoreOpen] = useState(false);
+  const [notesOpen, setNotesOpen] = useState(false);
+  const chip = (label: string, tint?: string) => (
+    <View key={label} style={[styles.badge, tint ? { borderColor: tint } : null]}>
+      <Text style={[styles.badgeText, tint ? { color: tint } : null]}>{label}</Text>
+    </View>
+  );
   return (
     <Modal visible={true} animationType="slide" transparent={false}>
       <SafeAreaView style={styles.modalContainer} edges={['left', 'right', 'bottom']}>
@@ -192,52 +200,54 @@ export function CardDetailModal({
             <Text style={styles.closeButton}>Back</Text>
           </TouchableOpacity>
           <Text style={styles.modalTitle} numberOfLines={1} accessibilityRole="header">{card.title}</Text>
-          <View style={styles.spacer} />
+          <TouchableOpacity onPress={() => setMoreOpen((open) => !open)} style={styles.closeTarget} accessibilityRole="button" accessibilityLabel="More card options" accessibilityState={{ expanded: moreOpen }}>
+            <Text style={styles.closeButton}>⋯</Text>
+          </TouchableOpacity>
         </View>
+        {moreOpen ? <View style={{ paddingHorizontal: 16, paddingBottom: 8 }}><CardIdLine id={card.id} /></View> : null}
 
         <ScrollView style={styles.modalContent}>
           <View style={styles.section}>
             <Text style={styles.title}>{card.title}</Text>
             <View style={styles.badges}>
-              <View style={styles.badge}>
-                <Text style={styles.badgeText}>{card.priority}</Text>
-              </View>
-              <View style={styles.badge}>
-                <Text style={styles.badgeText}>{card.status}</Text>
-              </View>
+              {chip(card.priority)}
+              {chip(card.status)}
+              {lock ? chip(`Locked by ${lock.agent}`, colors.brandLight) : null}
             </View>
-            <CardIdLine id={card.id} />
           </View>
 
           {card.details && (
             <View style={styles.section}>
-              <Text style={styles.sectionLabel}>Details</Text>
-              <Text style={styles.text}>{card.details}</Text>
+              <Text style={styles.sectionLabel}>What to do</Text>
+              <Text style={[styles.text, { fontSize: 16, lineHeight: 24 }]}>{card.details}</Text>
             </View>
           )}
 
           {card.doneWhen && (
-            <View style={styles.section}>
-              <Text style={styles.sectionLabel}>Done When</Text>
-              <Text style={styles.text}>{card.doneWhen}</Text>
+            <View style={[styles.section, { flexDirection: 'row', gap: 10, alignItems: 'flex-start', borderLeftWidth: 3, borderLeftColor: colors.statusGood, backgroundColor: colors.statusGoodBg, borderRadius: 10, padding: 12 }]}>
+              <Text style={{ fontSize: 16, color: colors.statusGood }} accessibilityElementsHidden importantForAccessibility="no">✓</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.sectionLabel, { color: colors.statusGood }]}>Done when</Text>
+                <Text style={styles.text}>{card.doneWhen}</Text>
+              </View>
             </View>
           )}
 
-          {lock && (
-            <View style={[styles.section, styles.lockSection]}>
-              <Text style={styles.sectionLabel}>Locked</Text>
-              <Text style={styles.text}>Agent: {lock.agent}</Text>
-              <Text style={styles.text}>Tool: {lock.tool}</Text>
-              <Text style={styles.text}>
-                Expires: {new Date(lock.expiresAt).toLocaleString()}
-              </Text>
-            </View>
-          )}
+          {lock ? (
+            <Text style={[styles.text, { fontSize: 12, color: colors.textMuted, paddingHorizontal: 16 }]}>Lock held by {lock.agent} ({lock.tool}) until {new Date(lock.expiresAt).toLocaleTimeString()}.</Text>
+          ) : null}
 
           <View style={styles.section}>
-            <Text style={styles.sectionLabel}>Notes</Text>
-            <Text style={styles.text}>Private to you: typed or recorded notes for this card. Not posted to GitHub.</Text>
-            <PrivateNotes context={{ kind: 'card', projectId: card.projectId, cardId: card.id }} />
+            <TouchableOpacity onPress={() => setNotesOpen((open) => !open)} accessibilityRole="button" accessibilityState={{ expanded: notesOpen }} accessibilityLabel={notesOpen ? 'Hide notes' : 'Notes, add a note'} style={{ minHeight: 44, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+              <Text style={[styles.sectionLabel, { marginBottom: 0 }]}>Notes</Text>
+              <Text style={{ color: colors.brandLight, fontWeight: '600' }}>{notesOpen ? 'Hide' : 'Add note'}</Text>
+            </TouchableOpacity>
+            {notesOpen ? (
+              <>
+                <Text style={styles.text}>Private to you: typed or recorded notes for this card. Not posted to GitHub.</Text>
+                <PrivateNotes context={{ kind: 'card', projectId: card.projectId, cardId: card.id }} />
+              </>
+            ) : null}
           </View>
           {trackEvents.length > 0 && (
             <View style={styles.section}>

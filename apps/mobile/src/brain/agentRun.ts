@@ -58,6 +58,7 @@ export function useAgentRun({ api, project, card, onChanged }: UseAgentRunOption
   const [lockedId, setLockedId] = useState<string | null>(null);
   const [lockedTitle, setLockedTitle] = useState<string | null>(null);
   const [planning, setPlanning] = useState(false);
+  const [locking, setLocking] = useState(false);
   const [run, setRun] = useState<BrainRunResponse | null>(null);
   const [watch, setWatch] = useState<RunWatch | null>(null);
   const alive = useRef(true);
@@ -82,7 +83,9 @@ export function useAgentRun({ api, project, card, onChanged }: UseAgentRunOption
   const proceed = useCallback(
     () =>
       guarded('Proceed', async () => {
-        const res = await api.proceedBrain(project.id);
+        setLocking(true);
+        let res: Awaited<ReturnType<ApiClient['proceedBrain']>>;
+        try { res = await api.proceedBrain(project.id); } finally { if (alive.current) setLocking(false); }
         if (alive.current) {
           setLockedId(res.card.id);
           setLockedTitle(res.card.title);
@@ -138,7 +141,30 @@ export function useAgentRun({ api, project, card, onChanged }: UseAgentRunOption
     // Restart only when a new running run starts.
   }, [api, project.id, polledCardId, run?.runId]);
 
-  return { busy, error, errorInfo, lockedId, lockedTitle, planning, run, watch, proceed, plan, retry: plan, card };
+  /** Plan again on an unlocked card: lock it (Proceed), then plan, in one tap. Proceed may lock a different card first. */
+  const proceedThenPlan = useCallback(
+    () =>
+      guarded('Plan with agent', async () => {
+        setLocking(true);
+        let locked: Card;
+        try { locked = (await api.proceedBrain(project.id)).card; } finally { if (alive.current) setLocking(false); }
+        if (!alive.current) return;
+        if (locked.id !== card.id) { setLockedId(locked.id); setLockedTitle(locked.title); onChanged(); return; }
+        setPlanning(true);
+        try {
+          const res = await api.runBrain(project.id);
+          if (!alive.current) return;
+          setRun(res);
+          setWatch(res.status === 'running' ? nextWatch(res.card, 0) : null);
+          onChanged();
+        } finally {
+          if (alive.current) setPlanning(false);
+        }
+      }),
+    [api, project.id, card.id, guarded, onChanged],
+  );
+
+  return { busy, error, errorInfo, lockedId, lockedTitle, planning, locking, run, watch, proceed, plan, proceedThenPlan, retry: plan, card };
 }
 
 export interface RunSummary {
@@ -181,4 +207,46 @@ export function runSummary(input: {
     return { heading: 'No change needed', tone: 'info', summary: run.summary, files: [], branch: null, primary: null };
   }
   return { heading: 'Patch ready', tone: 'info', summary: run.summary || 'Approve it to open a draft PR.', files: run.files, branch, primary: { kind: 'approve', label: 'Approve the patch' } };
+}
+
+export type CardAction = 'proceed' | 'plan' | 'proceed_plan' | 'approve' | 'open_pr';
+export interface CardAgentState { tone: 'info' | 'good' | 'bad' | 'muted'; line: string; action: CardAction | null; label: string; subline?: string }
+
+/**
+ * The card's one line and one button, from everything known about it. Exactly one primary action, or none.
+ * `branchRun` is the server's view of the run on the card's agent branch, used when this screen has no run in memory.
+ */
+export function cardAgentState(input: {
+  cardStatus: Card['status'];
+  locked: boolean;
+  busy: 'locking' | 'planning' | null;
+  run: BrainRunResponse | null;
+  prNumber?: number;
+  prLink: string | null;
+  branchRun: { state: string; message?: string };
+}): CardAgentState {
+  const planAgain = (line: string, tone: CardAgentState['tone']): CardAgentState => ({ tone, line, action: input.locked ? 'plan' : 'proceed_plan', label: 'Plan again' });
+  if (input.busy === 'locking') return { tone: 'info', line: 'Locking this card for you…', action: null, label: 'Locking…' };
+  if (input.busy === 'planning') return { tone: 'info', line: 'The agent is reading the repo and writing a patch. This takes about a minute.', action: null, label: 'Planning…' };
+  if (input.prNumber) return { tone: 'good', line: `Draft PR #${input.prNumber} opened. Merging stays with you on GitHub.`, action: input.prLink ? 'open_pr' : null, label: 'Open draft PR' };
+  if (input.cardStatus !== 'open' && input.cardStatus !== 'active') return { tone: 'muted', line: `This card is ${input.cardStatus}.`, action: null, label: '' };
+  const run = input.run;
+  if (run) {
+    if (run.status === 'running') return { tone: 'info', line: 'Patch ready. Approve it to open a draft PR.', action: 'approve', label: 'Review & approve patch' };
+    if (run.status === 'failed') return planAgain(`Failed: ${agentErrorCopy(run.message ?? run.summary).message}`, 'bad');
+    if (run.status === 'no_change') return planAgain(`No change needed. ${run.summary}`.trim(), 'muted');
+  }
+  switch (input.branchRun.state) {
+    case 'loading': return { tone: 'muted', line: 'Checking the agent run…', action: null, label: '' };
+    case 'waiting': return { tone: 'info', line: 'Patch ready. Approve it to open a draft PR.', action: 'approve', label: 'Review & approve patch' };
+    case 'working': return { tone: 'info', line: 'The agent run is working. Open it to follow along.', action: 'approve', label: 'Open the agent run' };
+    case 'stopped': return planAgain('Stopped. Plan again to get a new patch.', 'muted');
+    case 'failed': return planAgain(`Failed: ${agentErrorCopy(input.branchRun.message).message}`, 'bad');
+    case 'done': return { tone: 'good', line: 'The draft PR was opened.', action: null, label: '' };
+    case 'unknown': return { tone: 'muted', line: 'This card has an agent run. Open it to see where it stands.', action: 'approve', label: 'Open the agent run' };
+    default: break;
+  }
+  return input.locked
+    ? { tone: 'info', line: 'Locked for you. Plan with the agent to get a patch.', action: 'plan', label: 'Plan with agent' }
+    : { tone: 'muted', line: 'No agent run yet.', action: 'proceed', label: 'Proceed', subline: 'Locks this card so you can plan with the agent' };
 }
